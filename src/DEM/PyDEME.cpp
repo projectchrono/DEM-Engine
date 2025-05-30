@@ -24,6 +24,64 @@
 
 namespace py = pybind11;
 
+// Custom type caster for float3 and float4
+namespace pybind11 {
+namespace detail {
+template <>
+struct type_caster<float3> {
+  public:
+    PYBIND11_TYPE_CASTER(float3, _("float3"));
+
+    // Python -> C++
+    bool load(handle src, bool) {
+        if (!isinstance<py::sequence>(src))
+            return false;
+        auto seq = reinterpret_borrow<py::sequence>(src);
+        if (seq.size() != 3)
+            return false;
+        value.x = seq[0].cast<float>();
+        value.y = seq[1].cast<float>();
+        value.z = seq[2].cast<float>();
+        return true;
+    }
+
+    // C++ -> Python
+    static handle cast(const float3& src, return_value_policy, handle) {
+        return py::make_tuple(src.x, src.y, src.z).release();
+    }
+};
+
+template <>
+struct type_caster<float4> {
+  public:
+    PYBIND11_TYPE_CASTER(float4, _("float4"));
+
+    // Python -> C++
+    bool load(handle src, bool) {
+        if (!isinstance<py::sequence>(src))
+            return false;
+        auto seq = reinterpret_borrow<py::sequence>(src);
+        if (seq.size() != 3)
+            return false;
+        value.x = seq[0].cast<float>();
+        value.y = seq[1].cast<float>();
+        value.z = seq[2].cast<float>();
+        value.w = seq[3].cast<float>();
+        return true;
+    }
+
+    // C++ -> Python
+    static handle cast(const float4& src, return_value_policy, handle) {
+        return py::make_tuple(src.x, src.y, src.z, src.w).release();
+    }
+};
+}  // namespace detail
+}  // namespace pybind11
+
+// Allow pybind11 to convert std::vector<float3 or 4> using the custom type caster
+// PYBIND11_DECLARE_VECTOR_SPECIALIZATION(std::vector<float3>, true);
+// PYBIND11_DECLARE_VECTOR_SPECIALIZATION(std::vector<float4>, true);
+
 PYBIND11_MODULE(DEME, obj) {
     // Obtaining the location of python's site-packages dynamically and setting it
     // as path prefix
@@ -565,6 +623,51 @@ PYBIND11_MODULE(DEME, obj) {
                  &deme::DEMSolver::LoadClumpType),
              "Load a clump type into the API-level cache")
 
+        .def("GetOwnerContactClumps", &deme::DEMSolver::GetOwnerContactClumps,
+             "Get the clumps that are in contact with this owner as a vector.")
+        .def("GetOwnerPosition", &deme::DEMSolver::GetOwnerPosition, "Get position of n consecutive owners.",
+             py::arg("ownerID"), py::arg("n") = 1)
+        .def("GetOwnerAngVel", &deme::DEMSolver::GetOwnerAngVel, "Get angular velocity of n consecutive owners.",
+             py::arg("ownerID"), py::arg("n") = 1)
+        .def("GetOwnerOriQ", &deme::DEMSolver::GetOwnerOriQ, "Get quaternion of n consecutive owners.",
+             py::arg("ownerID"), py::arg("n") = 1)
+        .def("GetOwnerVelocity", &deme::DEMSolver::GetOwnerVelocity, "Get velocity of n consecutive owners.",
+             py::arg("ownerID"), py::arg("n") = 1)
+        .def("GetOwnerAcc", &deme::DEMSolver::GetOwnerAcc, "Get the acceleration of n consecutive owners.",
+             py::arg("ownerID"), py::arg("n") = 1)
+        .def("GetOwnerAngAcc", &deme::DEMSolver::GetOwnerAngAcc,
+             "Get the angular acceleration of n consecutive owners.", py::arg("ownerID"), py::arg("n") = 1)
+        .def("GetOwnerFamily", &deme::DEMSolver::GetOwnerFamily, "Get the family number of n consecutive owners.",
+             py::arg("ownerID"), py::arg("n") = 1)
+        .def("GetOwnerMass", &deme::DEMSolver::GetOwnerMass, "Get the mass of n consecutive owners.",
+             py::arg("ownerID"), py::arg("n") = 1)
+        .def("GetOwnerMOI", &deme::DEMSolver::GetOwnerMOI,
+             "Get the moment of inertia (in principal axis frame) of n consecutive owners.", py::arg("ownerID"),
+             py::arg("n") = 1)
+
+        .def("SetOwnerPosition", &deme::DEMSolver::SetOwnerPosition,
+             "Set position of consecutive owners starting from ownerID, based on input position vector. N (the size of "
+             "the input vector) elements will be modified.")
+        .def("SetOwnerAngVel", &deme::DEMSolver::SetOwnerAngVel,
+             "Set angular velocity of consecutive owners starting from ownerID, based on input angular velocity "
+             "vector. N (the size of the input vector) elements will be modified.")
+        .def("SetOwnerVelocity", &deme::DEMSolver::SetOwnerVelocity,
+             "Set velocity of consecutive owners starting from ownerID, based on input velocity vector. N (the size of "
+             "the input vector) elements will be modified.")
+        .def("SetOwnerOriQ", &deme::DEMSolver::SetOwnerOriQ,
+             "Set quaternion of consecutive owners starting from ownerID, based on input quaternion vector. N (the "
+             "size of the input vector) elements will be modified.")
+        .def("SetOwnerFamily", &deme::DEMSolver::SetOwnerFamily, "Set the family number of consecutive owners.",
+             py::arg("ownerID"), py::arg("fam"), py::arg("n") = 1)
+
+        .def("SetTriNodeRelPos", &deme::DEMSolver::SetTriNodeRelPos,
+             "Rewrite the relative positions of the flattened triangle soup.")
+        .def("UpdateTriNodeRelPos", &deme::DEMSolver::UpdateTriNodeRelPos,
+             "Update the relative positions of the flattened triangle soup.")
+        .def("GetCachedMesh", &deme::DEMSolver::GetCachedMesh, "Get a handle for the mesh this tracker is tracking.")
+        .def("GetMeshNodesGlobal", &deme::DEMSolver::GetMeshNodesGlobal,
+             "Get the current locations of all the nodes in the mesh being tracked.")
+
         .def("GetClumpContacts",
              static_cast<std::vector<std::pair<deme::bodyID_t, deme::bodyID_t>> (deme::DEMSolver::*)() const>(
                  &deme::DEMSolver::GetClumpContacts),
@@ -579,6 +682,16 @@ PYBIND11_MODULE(DEME, obj) {
              static_cast<std::vector<std::pair<deme::bodyID_t, deme::bodyID_t>> (deme::DEMSolver::*)(
                  std::vector<std::pair<deme::family_t, deme::family_t>>&) const>(&deme::DEMSolver::GetClumpContacts),
              "Get all clump--clump contacts in the simulation system.")
+
+        .def("GetHostMemUsageDynamic", &deme::DEMSolver::GetHostMemUsageDynamic,
+             "Get the host memory usage (in bytes) on dT.")
+        .def("GetDeviceMemUsageDynamic", &deme::DEMSolver::GetDeviceMemUsageDynamic,
+             "Get the device memory usage (in bytes) on dT.")
+        .def("GetHostMemUsageKinematic", &deme::DEMSolver::GetHostMemUsageKinematic,
+             "Get the host memory usage (in bytes) on kT.")
+        .def("GetDeviceMemUsageKinematic", &deme::DEMSolver::GetDeviceMemUsageKinematic,
+             "Get the device memory usage (in bytes) on kT.")
+        .def("ShowMemStats", &deme::DEMSolver::ShowMemStats, "Print the current memory usage in pretty format.")
 
         .def("AddClumps",
              static_cast<std::shared_ptr<deme::DEMClumpBatch> (deme::DEMSolver::*)(deme::DEMClumpBatch&)>(
@@ -718,6 +831,66 @@ PYBIND11_MODULE(DEME, obj) {
              "other is in N2.")
         .def("SetContactWildcardValue", &deme::DEMSolver::SetContactWildcardValue,
              "Change the value of contact wildcards to val. Apply to all simulation bodies that are present.")
+
+        .def("MarkFamilyPersistentContactEither", &deme::DEMSolver::MarkFamilyPersistentContactEither,
+             "Make it so that for any currently-existing contact, if one of its contact geometries is in family N, "
+             "then this contact will never be removed.")
+        .def("MarkFamilyPersistentContactBoth", &deme::DEMSolver::MarkFamilyPersistentContactBoth,
+             "Make it so that for any currently-existing contact, if both of its contact geometries are in family N, "
+             "then this contact will never be removed.")
+        .def("MarkFamilyPersistentContact", &deme::DEMSolver::MarkFamilyPersistentContact,
+             "Make it so that if for any currently-existing contact, if its two contact geometries are in family N1 "
+             "and N2 respectively, this contact will never be removed.")
+        .def("MarkPersistentContact", &deme::DEMSolver::MarkPersistentContact,
+             "Make it so that all currently-existing contacts in this simulation will never be removed.")
+
+        .def("RemoveFamilyPersistentContactEither", &deme::DEMSolver::RemoveFamilyPersistentContactEither,
+             "Cancel contact persistence qualification. Work like the inverse of MarkFamilyPersistentContactEither.")
+        .def("RemoveFamilyPersistentContactBoth", &deme::DEMSolver::RemoveFamilyPersistentContactBoth,
+             "Cancel contact persistence qualification. Work like the inverse of MarkFamilyPersistentContactBoth.")
+        .def("RemoveFamilyPersistentContact", &deme::DEMSolver::RemoveFamilyPersistentContact,
+             "Cancel contact persistence qualification. Work like the inverse of MarkFamilyPersistentContact.")
+        .def("RemovePersistentContact", &deme::DEMSolver::RemovePersistentContact,
+             "Cancel contact persistence qualification. Work like the inverse of MarkPersistentContact.")
+
+        .def("GetOwnerContactForces",
+             static_cast<size_t (deme::DEMSolver::*)(const std::vector<deme::bodyID_t>& ownerIDs,
+                                                     std::vector<float3>& points, std::vector<float3>& forces)>(
+                 &deme::DEMSolver::GetOwnerContactForces),
+             "Get all contact forces that concern a list of owners.")
+        .def("GetOwnerContactForces",
+             static_cast<size_t (deme::DEMSolver::*)(
+                 const std::vector<deme::bodyID_t>& ownerIDs, std::vector<float3>& points, std::vector<float3>& forces,
+                 std::vector<float3>& torques, bool torque_in_local)>(&deme::DEMSolver::GetOwnerContactForces),
+             "Get all contact forces and torque that concern a list of owners.", py::arg("ownerIDs"), py::arg("points"),
+             py::arg("forces"), py::arg("poitorquesnts"), py::arg("torque_in_local") = false)
+
+        .def("SetTriWildcardValue", &deme::DEMSolver::SetTriWildcardValue, "Set the wildcard values of some triangles.")
+        .def("SetSphereWildcardValue", &deme::DEMSolver::SetSphereWildcardValue,
+             "Set the wildcard values of some spheres.")
+        .def("SetAnalWildcardValue", &deme::DEMSolver::SetAnalWildcardValue,
+             "Set the wildcard values of some analytical components.")
+
+        .def("GetOwnerWildcardValue",
+             static_cast<std::vector<float> (deme::DEMSolver::*)(deme::bodyID_t ownerID, const std::string& name,
+                                                                 deme::bodyID_t n)>(
+                 &deme::DEMSolver::GetOwnerWildcardValue),
+             "Get the owner wildcard's values of some owners.", py::arg("ownerID"), py::arg("name"), py::arg("n") = 1)
+        .def("GetAllOwnerWildcardValue", &deme::DEMSolver::GetAllOwnerWildcardValue,
+             "Get the owner wildcard's values of all entities.")
+        .def("GetFamilyOwnerWildcardValue", &deme::DEMSolver::GetFamilyOwnerWildcardValue,
+             "Get the owner wildcard's values of all entities in family N.")
+
+        .def("GetTriWildcardValue", &deme::DEMSolver::GetTriWildcardValue,
+             "Get the geometry wildcard's values of a series of triangles.")
+        .def("GetSphereWildcardValue", &deme::DEMSolver::GetSphereWildcardValue,
+             "Get the geometry wildcard's values of a series of spheres.")
+        .def("GetAnalWildcardValue", &deme::DEMSolver::GetAnalWildcardValue,
+             "Get the geometry wildcard's values of a series of analytical entities.")
+
+        .def("SyncMemoryTransfer", &deme::DEMSolver::SyncMemoryTransfer,
+             "If the user used async-ed version of a tracker's get/set methods (to get a speed boost in many piecemeal "
+             "accesses of a long array), this method should be called to mark the end of to-host transactions.")
 
         .def("SetFamilyOwnerWildcardValue",
              static_cast<void (deme::DEMSolver::*)(unsigned int N, const std::string& name,
