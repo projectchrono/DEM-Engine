@@ -216,59 +216,89 @@ PYBIND11_MODULE(DEME, obj) {
 
     py::class_<deme::DEMTracker, std::shared_ptr<deme::DEMTracker>>(obj, "Tracker")
         .def(py::init<deme::DEMSolver*>())
-        .def("GetContactForcesAndLocalTorque",
-             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(size_t)>(
-                 &deme::DEMTracker::GetContactForcesAndLocalTorque),
-             "Get all contact forces and local torques that concern this track object, as a list.",
-             py::arg("offset") = 0)
-        .def("GetContactForcesAndGlobalTorque",
-             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(size_t)>(
-                 &deme::DEMTracker::GetContactForcesAndGlobalTorque),
-             "Get all contact forces and global torques that concern this track object, as a list.",
-             py::arg("offset") = 0)
-        .def("GetContactForces",
-             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(size_t)>(
-                 &deme::DEMTracker::GetContactForces),
-             "Get all contact forces that concern this track object, as a list.", py::arg("offset") = 0)
         .def("GetOwnerID", &deme::DEMTracker::GetOwnerID, "Get the owner ID of the tracked obj.", py::arg("offset") = 0)
+        .def("GetOwnerIDs", &deme::DEMTracker::GetOwnerIDs, "Get the owner IDs of all the tracked objects.")
 
         .def("Pos", &deme::DEMTracker::GetPos, "Get the position of this tracked object.", py::arg("offset") = 0)
+        .def("Positions", &deme::DEMTracker::GetPositions, "Get the positions of all tracked objects.")
+
         .def("AngVelLocal", &deme::DEMTracker::GetAngVelLocal,
              "Get the angular velocity of this tracked object in its own local coordinate system. Applying OriQ to it "
              "would give you the ang vel in global frame.",
              py::arg("offset") = 0)
+        .def("AngularVelocitiesLocal", &deme::DEMTracker::GetAngularVelocitiesLocal,
+             "Get the angular velocity of all tracked objects in their own local coordinate system. Applying OriQ to "
+             "it would give you the ang vel in global frame.")
+
         .def("AngVelGlobal", &deme::DEMTracker::GetAngVelGlobal,
              "Get the angular velocity of this tracked object in global coordinate system.", py::arg("offset") = 0)
+        .def("AngularVelocitiesGlobal", &deme::DEMTracker::GetAngularVelocitiesGlobal,
+             "Get the angular velocity of all objects tracked by this tracker, in global coordinate system.")
+
         .def("Vel", &deme::DEMTracker::GetVel, "Get the velocity of this tracked object in global frame.",
              py::arg("offset") = 0)
+        .def("Velocities", &deme::DEMTracker::GetVelocities,
+             "Get the velocities of all objects tracked by this tracker, in global frame.")
+
         .def("OriQ", &deme::DEMTracker::GetOriQ,
-             "Get the quaternion that represents the orientation of this tracked object's own coordinate system.",
+             "Get the quaternion that represents the orientation of this tracked object's own coordinate system. "
+             "Returns a vector of 4 floats. The order is (x, y, z, w). If compared against Chrono naming convention, "
+             "then it is saying our ordering here is (e1, e2, e3, e0).",
              py::arg("offset") = 0)
-        .def("MOI", &deme::DEMTracker::GetMOI,
-             "Get the moment of inertia (in principal axis frame) of the tracked object.", py::arg("offset") = 0)
-        .def("Mass", &deme::DEMTracker::Mass, "Get the mass of the tracked object.", py::arg("offset") = 0)
+        .def("OrientationQuaternions", &deme::DEMTracker::GetOrientationQuaternions,
+             "Get all quaternions that represent the orientation of all the tracked objects' own coordinate systems. "
+             "Returns a vector of 4-float vectors. The order is (x, y, z, w). If compared against Chrono naming "
+             "convention, then it is saying our ordering here is (e1, e2, e3, e0).")
+
         .def("GetFamily", &deme::DEMTracker::GetFamily, "Get the family number of the tracked object.",
              py::arg("offset") = 0)
+        .def("GetFamilies", &deme::DEMTracker::GetFamilies, "Get the family numbers of all the tracked object.")
+
+        .def("MOI", &deme::DEMTracker::GetMOI,
+             "Get the moment of inertia (in principal axis frame) of the tracked object.", py::arg("offset") = 0)
+        .def("MOIs", &deme::DEMTracker::GetMOIs,
+             "Get the moment of inertia (in principal axis frame) of all the tracked objects.")
+
+        .def("Mass", &deme::DEMTracker::Mass, "Get the mass of the tracked object.", py::arg("offset") = 0)
+        .def("Masses", &deme::DEMTracker::Masses, "Get the masses of all the tracked objects.")
+
         .def("GetContactClumps", &deme::DEMTracker::GetContactClumps,
              "Get the clumps that are in contact with this tracked owner as a vector.", py::arg("offset") = 0)
+
         .def("ContactAcc", &deme::DEMTracker::GetContactAcc,
              "Get the a portion of the acceleration of this tracked object, that is the result of its contact with "
              "other simulation entities. In most cases, this means excluding the gravitational acceleration. The "
              "acceleration is in global frame.",
              py::arg("offset") = 0)
+        .def("ContactAccelerations", &deme::DEMTracker::GetContactAccelerations,
+             "Get the acceleration experienced by all objects tracked by this tracker, that is the result of their "
+             "contact with other simulation entities. The acceleration is in global frame. In most cases, this means "
+             "excluding the gravitational acceleration. The acceleration is in global frame.")
+
         .def("ContactAngAccLocal", &deme::DEMTracker::GetContactAngAccLocal,
              "Get the a portion of the angular acceleration of this tracked object, that is the result of its contact "
              "with other simulation entities. The acceleration is in this object's local frame.",
              py::arg("offset") = 0)
+        .def("ContactAngularAccelerationsLocal", &deme::DEMTracker::GetContactAngularAccelerationsLocal,
+             "Get the angular acceleration experienced by all objects tracked by this tracker, that is the result of "
+             "their contact with other simulation entities. The acceleration is in this object's local frame.")
+
         .def("ContactAngAccGlobal", &deme::DEMTracker::GetContactAngAccGlobal,
              "Get the a portion of the angular acceleration of this tracked object, that is the result of its contact "
              "with other simulation entities. The acceleration is in this object's global frame.",
              py::arg("offset") = 0)
+        .def("ContactAngularAccelerationsGlobal", &deme::DEMTracker::GetContactAngularAccelerationsGlobal,
+             "Get the angular acceleration experienced by all objects tracked by this tracker, that is the result of "
+             "their contact with other simulation entities. The acceleration is in this object's global frame.")
 
         .def("GetOwnerWildcardValue",
              static_cast<float (deme::DEMTracker::*)(const std::string&, size_t)>(
                  &deme::DEMTracker::GetOwnerWildcardValue),
              "Get the owner's wildcard value.", py::arg("name"), py::arg("offset") = 0)
+        .def("GetOwnerWildcardValues",
+             static_cast<std::vector<float> (deme::DEMTracker::*)(const std::string&)>(
+                 &deme::DEMTracker::GetOwnerWildcardValues),
+             "Get the owner wildcard values for all the owners entities tracked by this tracker.", py::arg("name"))
         .def("GetGeometryWildcardValues",
              static_cast<std::vector<float> (deme::DEMTracker::*)(const std::string&)>(
                  &deme::DEMTracker::GetGeometryWildcardValues),
@@ -279,30 +309,50 @@ PYBIND11_MODULE(DEME, obj) {
              "Get the geometry wildcard values for a geometry entity tracked by this tracker.", py::arg("name"),
              py::arg("offset"))
 
-        .def("SetPos",
-             static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::SetPos),
+        .def("SetPos", static_cast<void (deme::DEMTracker::*)(float3, size_t)>(&deme::DEMTracker::SetPos),
              "Set the position of this tracked object.", py::arg("pos"), py::arg("offset") = 0)
-        .def("SetAngVel",
-             static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::SetAngVel),
+        .def("SetPos", static_cast<void (deme::DEMTracker::*)(const std::vector<float3>&)>(&deme::DEMTracker::SetPos),
+             "Set the positions of consecutive tracked objects.", py::arg("pos"))
+
+        .def("SetAngVel", static_cast<void (deme::DEMTracker::*)(float3, size_t)>(&deme::DEMTracker::SetAngVel),
              "Set the angular velocity of this tracked object in its own local coordinate system.", py::arg("angVel"),
              py::arg("offset") = 0)
-        .def("SetVel",
-             static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::SetVel),
+        .def("SetAngVel",
+             static_cast<void (deme::DEMTracker::*)(const std::vector<float3>&)>(&deme::DEMTracker::SetAngVel),
+             "Set the angular velocity of consecutive tracked objects in their own local coordinate systems.",
+             py::arg("angVel"))
+
+        .def("SetVel", static_cast<void (deme::DEMTracker::*)(float3, size_t)>(&deme::DEMTracker::SetVel),
              "Set the velocity of this tracked object in global frame.", py::arg("vel"), py::arg("offset") = 0)
-        .def("SetOriQ",
-             static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::SetOriQ),
+        .def("SetVel", static_cast<void (deme::DEMTracker::*)(const std::vector<float3>&)>(&deme::DEMTracker::SetVel),
+             "Set the velocity of consecutive tracked objects in global frame.", py::arg("vel"))
+
+        .def("SetOriQ", static_cast<void (deme::DEMTracker::*)(float4, size_t)>(&deme::DEMTracker::SetOriQ),
              "Set the quaternion which represents the orientation of this tracked object's coordinate system.",
              py::arg("oriQ"), py::arg("offset") = 0)
-        .def("AddAcc",
-             static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::AddAcc),
+        .def("SetOriQ", static_cast<void (deme::DEMTracker::*)(const std::vector<float4>&)>(&deme::DEMTracker::SetOriQ),
+             "Set the quaternion which represents the orientation of consecutive tracked objects' coordinate systems.",
+             py::arg("oriQ"))
+
+        .def("AddAcc", static_cast<void (deme::DEMTracker::*)(float3, size_t)>(&deme::DEMTracker::AddAcc),
              "Add an extra acc to the tracked body, for the next time step. Note if the user intends to add a "
              "persistent external force, then using family prescription is the better method.",
              py::arg("acc"), py::arg("offset") = 0)
-        .def("AddAngAcc",
-             static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::AddAngAcc),
+        .def("AddAcc", static_cast<void (deme::DEMTracker::*)(const std::vector<float3>&)>(&deme::DEMTracker::AddAcc),
+             "Add an extra acc to consecutive tracked objects, (only) for the next time step. Note if the user intends "
+             "to add a persistent external force, then using family prescription is the better method.",
+             py::arg("acc"))
+
+        .def("AddAngAcc", static_cast<void (deme::DEMTracker::*)(float3, size_t)>(&deme::DEMTracker::AddAngAcc),
              "Add an extra angular acceleration to the tracked body, for the next time step. Note if the user intends "
              "to add a persistent external torque, then using family prescription is the better method.",
              py::arg("angAcc"), py::arg("offset") = 0)
+        .def("AddAngAcc",
+             static_cast<void (deme::DEMTracker::*)(const std::vector<float3>&)>(&deme::DEMTracker::AddAngAcc),
+             "Add an extra angular acceleration to consecutive tracked objects, (only) for the next time step. Note if "
+             "the user intends to add a persistent external torque, then using family prescription is the better "
+             "method.",
+             py::arg("angAcc"))
 
         .def("SetFamily", static_cast<void (deme::DEMTracker::*)(unsigned int)>(&deme::DEMTracker::SetFamily),
              "Change the family numbers of all the entities tracked by this tracker.", py::arg("fam_num"))
@@ -310,18 +360,16 @@ PYBIND11_MODULE(DEME, obj) {
              "Change the family number of one entities tracked by this tracker.", py::arg("fam_num"), py::arg("offset"))
 
         .def("UpdateMesh",
-             static_cast<void (deme::DEMTracker::*)(const std::vector<std::vector<float>>&)>(
-                 &deme::DEMTracker::UpdateMesh),
+             static_cast<void (deme::DEMTracker::*)(const std::vector<float3>&)>(&deme::DEMTracker::UpdateMesh),
              "Apply the new mesh node positions such that the tracked mesh is replaced by the new_nodes.",
              py::arg("new_nodes"))
         .def("UpdateMeshByIncrement",
-             static_cast<void (deme::DEMTracker::*)(const std::vector<std::vector<float>>&)>(
+             static_cast<void (deme::DEMTracker::*)(const std::vector<float3>&)>(
                  &deme::DEMTracker::UpdateMeshByIncrement),
              "Change the coordinates of each mesh node by the given amount.", py::arg("deformation"))
 
         .def("GetMeshNodesGlobal",
-             static_cast<std::vector<std::vector<float>> (deme::DEMTracker::*)()>(
-                 &deme::DEMTracker::GetMeshNodesGlobalAsVectorOfVector),
+             static_cast<std::vector<float3> (deme::DEMTracker::*)()>(&deme::DEMTracker::GetMeshNodesGlobal),
              "Get the current locations of all the nodes in the mesh being tracked.")
 
         .def("GetMesh", &deme::DEMTracker::GetMesh, "Get a handle for the mesh this tracker is tracking.")
@@ -335,7 +383,22 @@ PYBIND11_MODULE(DEME, obj) {
              "Set a wildcard value of the geometry entity this tracker is tracking.", py::arg("name"), py::arg("wc"),
              py::arg("offset") = 0)
         .def("SetGeometryWildcardValues", &deme::DEMTracker::SetGeometryWildcardValues,
-             "Set a wildcard value of the geometry entities this tracker is tracking.", py::arg("name"), py::arg("wc"));
+             "Set a wildcard value of the geometry entities this tracker is tracking.", py::arg("name"), py::arg("wc"))
+
+        .def("GetContactForcesAndLocalTorque",
+             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(size_t)>(
+                 &deme::DEMTracker::GetContactForcesAndLocalTorque),
+             "Get all contact forces and local torques that concern this tracked object, as a list.",
+             py::arg("offset") = 0)
+        .def("GetContactForcesAndGlobalTorque",
+             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(size_t)>(
+                 &deme::DEMTracker::GetContactForcesAndGlobalTorque),
+             "Get all contact forces and global torques that concern this tracked object, as a list.",
+             py::arg("offset") = 0)
+        .def("GetContactForces",
+             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(size_t)>(
+                 &deme::DEMTracker::GetContactForces),
+             "Get all contact forces that concern this tracked object, as a list.", py::arg("offset") = 0);
 
     py::class_<deme::DEMForceModel, std::shared_ptr<deme::DEMForceModel>>(obj, "DEMForceModel")
         .def(py::init<deme::FORCE_MODEL>())
