@@ -694,15 +694,6 @@ std::vector<float3> DEMTracker::GetMeshNodesGlobal() {
     assertMesh("GetMeshNodesGlobal");
     return sys->GetMeshNodesGlobal(obj->ownerID);
 }
-std::vector<std::vector<float>> DEMTracker::GetMeshNodesGlobalAsVectorOfVector() {
-    std::vector<float3> res = GetMeshNodesGlobal();
-    std::vector<std::vector<float>> vector_nodes(res.size());
-    for (size_t i = 0; i < res.size(); i++) {
-        std::vector<float> float_elem = {res[i].x, res[i].y, res[i].z};
-        vector_nodes[i] = float_elem;
-    }
-    return vector_nodes;
-}
 
 void DEMTracker::SetOwnerWildcardValue(const std::string& name, float wc, size_t offset) {
     assertOwnerOffsetValid(offset, "SetOwnerWildcardValue");
