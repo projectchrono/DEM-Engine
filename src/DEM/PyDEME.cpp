@@ -390,15 +390,29 @@ PYBIND11_MODULE(DEME, obj) {
                  &deme::DEMTracker::GetContactForcesAndLocalTorque),
              "Get all contact forces and local torques that concern this tracked object, as a list.",
              py::arg("offset") = 0)
+        .def("GetContactForcesAndLocalTorqueForAll",
+             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)()>(
+                 &deme::DEMTracker::GetContactForcesAndLocalTorqueForAll),
+             "Get all contact forces and local torques that concern all objects tracked by this tracker, as a list.")
+
         .def("GetContactForcesAndGlobalTorque",
              static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(size_t)>(
                  &deme::DEMTracker::GetContactForcesAndGlobalTorque),
              "Get all contact forces and global torques that concern this tracked object, as a list.",
              py::arg("offset") = 0)
+        .def("GetContactForcesAndGlobalTorqueForAll",
+             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)()>(
+                 &deme::DEMTracker::GetContactForcesAndGlobalTorqueForAll),
+             "Get all contact forces and global torques that concern all objects tracked by this tracker, as a list.")
+
         .def("GetContactForces",
              static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(size_t)>(
                  &deme::DEMTracker::GetContactForces),
-             "Get all contact forces that concern this tracked object, as a list.", py::arg("offset") = 0);
+             "Get all contact forces that concern this tracked object, as a list.", py::arg("offset") = 0)
+        .def("GetContactForcesForAll",
+             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)()>(
+                 &deme::DEMTracker::GetContactForcesForAll),
+             "Get all contact forces that concern all objects tracked by this tracker, as a list.");
 
     py::class_<deme::DEMForceModel, std::shared_ptr<deme::DEMForceModel>>(obj, "DEMForceModel")
         .def(py::init<deme::FORCE_MODEL>())
