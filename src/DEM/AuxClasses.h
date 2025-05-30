@@ -307,9 +307,6 @@ class DEMTracker {
     /// @brief Get the current locations of all the nodes in the mesh being tracked.
     /// @return A vector of float3 representing the global coordinates of the mesh nodes.
     std::vector<float3> GetMeshNodesGlobal();
-    /// @brief Get the current locations of all the nodes in the mesh being tracked.
-    /// @details C++ users do not have to use this method. This is mainly for python wrapper.
-    std::vector<std::vector<float>> GetMeshNodesGlobalAsVectorOfVector();
 
     /// @brief Set owner wildcard value of a owner this tracker is tracking.
     /// @param name Name of the wildcard.
