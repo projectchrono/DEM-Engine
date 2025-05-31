@@ -4,7 +4,14 @@
 #define DEME_HELPER_KERNELS_CU
 
 #include <DEM/Defines.h>
-#include <kernel/CUDAMathHelpers.cuh>
+
+// CUDAMathHelpers.cuh is used in static compilation, and that needs to be found through src then kernel. But at
+// runtime, we ask jitify to find include files only at same level of all other fellow kernel files.
+#ifdef DEME_BEING_CMAKE_COMPILED
+    #include <kernel/CUDAMathHelpers.cuh>
+#else
+    #include <CUDAMathHelpers.cuh>
+#endif
 
 // inline __device__ voxelID_t position2VoxelID
 
