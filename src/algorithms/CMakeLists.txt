@@ -7,8 +7,6 @@ message(STATUS "==== Configuring GPU Algorithm Components ====")
 
 set (algorithms_message "[algorithms]")
 
-
-
 add_library(algorithms OBJECT)
 
 target_include_directories(
