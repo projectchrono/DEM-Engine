@@ -235,49 +235,37 @@ class DEMTracker {
 
     /// @brief Set the position of this tracked object.
     void SetPos(float3 pos, size_t offset = 0);
-    void SetPos(const std::vector<float>& pos, size_t offset = 0);
     /// @brief Set the positions of n consecutive tracked objects.
     void SetPos(const std::vector<float3>& pos);
-    void SetPos(const std::vector<std::vector<float>>& pos);
 
     /// @brief Set the angular velocity of this tracked object in its own local coordinate system.
     void SetAngVel(float3 angVel, size_t offset = 0);
-    void SetAngVel(const std::vector<float>& angVel, size_t offset = 0);
     /// @brief Set the angular velocity of n consecutive tracked objects in their own local coordinate systems.
     void SetAngVel(const std::vector<float3>& angVel);
-    void SetAngVel(const std::vector<std::vector<float>>& angVel);
 
     /// @brief Set the velocity of this tracked object in global frame.
     void SetVel(float3 vel, size_t offset = 0);
-    void SetVel(const std::vector<float>& vel, size_t offset = 0);
     /// @brief Set the velocity of n consecutive tracked objects in global frame.
     void SetVel(const std::vector<float3>& vel);
-    void SetVel(const std::vector<std::vector<float>>& vel);
 
     /// @brief Set the quaternion which represents the orientation of this tracked object's coordinate system.
     void SetOriQ(float4 oriQ, size_t offset = 0);
-    void SetOriQ(const std::vector<float>& oriQ, size_t offset = 0);
     /// @brief Set the quaternion which represents the orientation of n consecutive tracked objects' coordinate systems.
     void SetOriQ(const std::vector<float4>& oriQ);
-    void SetOriQ(const std::vector<std::vector<float>>& oriQ);
 
     /// Add an extra acc to the tracked body, (only) for the next time step. Note if the user intends to add a
     /// persistent external force, then using family prescription is the better method.
     void AddAcc(float3 acc, size_t offset = 0);
-    void AddAcc(const std::vector<float>& acc, size_t offset = 0);
     /// Add an extra acc to n consecutive tracked objects, (only) for the next time step. Note if the user intends to
     /// add a persistent external force, then using family prescription is the better method.
     void AddAcc(const std::vector<float3>& acc);
-    void AddAcc(const std::vector<std::vector<float>>& acc);
 
     /// Add an extra angular acceleration to the tracked body, (only) for the next time step. Note if the user intends
     /// to add a persistent external torque, then using family prescription is the better method.
     void AddAngAcc(float3 angAcc, size_t offset = 0);
-    void AddAngAcc(const std::vector<float>& angAcc, size_t offset = 0);
     /// Add an extra angular acceleration to n consecutive tracked objects, (only) for the next time step. Note if the
     /// user intends to add a persistent external torque, then using family prescription is the better method.
     void AddAngAcc(const std::vector<float3>& angAcc);
-    void AddAngAcc(const std::vector<std::vector<float>>& angAcc);
 
     /// @brief Change the family numbers of all the entities tracked by this tracker.
     /// @param fam_num Family number to change to.
@@ -300,7 +288,7 @@ class DEMTracker {
     /// @param new_nodes New locations of mesh nodes. The length of the argument vector must agree with the number of
     /// nodes in the tracked mesh.
     void UpdateMesh(const std::vector<float3>& new_nodes);
-    void UpdateMesh(const std::vector<std::vector<float>>& new_nodes);
+
     /// @brief Change the coordinates of each mesh node by the given amount.
     /// @details This affects triangle facets' relative positions wrt the mesh center (CoM) only; mesh's overall
     /// position/rotation in simulation is not affected. So if provided input is the mesh deformation with
@@ -310,16 +298,13 @@ class DEMTracker {
     /// @param deformation Deformation of mesh nodes. The length of the argument vector must agree with the number of
     /// nodes in the tracked mesh.
     void UpdateMeshByIncrement(const std::vector<float3>& deformation);
-    void UpdateMeshByIncrement(const std::vector<std::vector<float>>& deformation);
+
     /// @brief Get a handle for the mesh this tracker is tracking.
     /// @return Pointer to the mesh.
     std::shared_ptr<DEMMeshConnected>& GetMesh();
     /// @brief Get the current locations of all the nodes in the mesh being tracked.
     /// @return A vector of float3 representing the global coordinates of the mesh nodes.
     std::vector<float3> GetMeshNodesGlobal();
-    /// @brief Get the current locations of all the nodes in the mesh being tracked.
-    /// @details C++ users do not have to use this method. This is mainly for python wrapper.
-    std::vector<std::vector<float>> GetMeshNodesGlobalAsVectorOfVector();
 
     /// @brief Set owner wildcard value of a owner this tracker is tracking.
     /// @param name Name of the wildcard.
@@ -349,9 +334,7 @@ class DEMTracker {
     /// @param offset The offset to this owner (where to start querying). If first entity, input 0.
     /// @return Number of force pairs.
     size_t GetContactForces(std::vector<float3>& points, std::vector<float3>& forces, size_t offset = 0);
-    size_t GetContactForces(std::vector<std::vector<float>>& points,
-                            std::vector<std::vector<float>>& forces,
-                            size_t offset = 0);
+
     /// @brief Get all contact forces that concern all objects tracked by this tracker, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
     /// experiences. If a contact involves two owners this tracker tracks, then the force for that contact will be given
@@ -360,7 +343,6 @@ class DEMTracker {
     /// @param forces The force in XYZ as float3 vector. The force in global frame.
     /// @return Number of force pairs.
     size_t GetContactForcesForAll(std::vector<float3>& points, std::vector<float3>& forces);
-    size_t GetContactForcesForAll(std::vector<std::vector<float>>& points, std::vector<std::vector<float>>& forces);
 
     /// @brief Get all contact forces and global torques that concern this track object, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
@@ -378,10 +360,7 @@ class DEMTracker {
                                            std::vector<float3>& forces,
                                            std::vector<float3>& torques,
                                            size_t offset = 0);
-    size_t GetContactForcesAndGlobalTorque(std::vector<std::vector<float>>& points,
-                                           std::vector<std::vector<float>>& forces,
-                                           std::vector<std::vector<float>>& torques,
-                                           size_t offset = 0);
+
     /// @brief Get all contact forces and global torques that concern all objects tracked by this tracker, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
     /// experiences. Since we are getting all force pairs, the torque should be considered as `extra torque', since you
@@ -398,9 +377,6 @@ class DEMTracker {
     size_t GetContactForcesAndGlobalTorqueForAll(std::vector<float3>& points,
                                                  std::vector<float3>& forces,
                                                  std::vector<float3>& torques);
-    size_t GetContactForcesAndGlobalTorqueForAll(std::vector<std::vector<float>>& points,
-                                                 std::vector<std::vector<float>>& forces,
-                                                 std::vector<std::vector<float>>& torques);
 
     /// @brief Get all contact forces and local torques that concern this track object, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
@@ -418,10 +394,7 @@ class DEMTracker {
                                           std::vector<float3>& forces,
                                           std::vector<float3>& torques,
                                           size_t offset = 0);
-    size_t GetContactForcesAndLocalTorque(std::vector<std::vector<float>>& points,
-                                          std::vector<std::vector<float>>& forces,
-                                          std::vector<std::vector<float>>& torques,
-                                          size_t offset = 0);
+
     /// @brief Get all contact forces and local torques that concern all objects tracked by this tracker, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
     /// experiences. Since we are getting all force pairs, the torque should be considered as `extra torque', since you
@@ -438,9 +411,6 @@ class DEMTracker {
     size_t GetContactForcesAndLocalTorqueForAll(std::vector<float3>& points,
                                                 std::vector<float3>& forces,
                                                 std::vector<float3>& torques);
-    size_t GetContactForcesAndLocalTorqueForAll(std::vector<std::vector<float>>& points,
-                                                std::vector<std::vector<float>>& forces,
-                                                std::vector<std::vector<float>>& torques);
 };
 
 class DEMForceModel {

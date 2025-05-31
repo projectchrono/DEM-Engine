@@ -26,6 +26,9 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "RelWithDebInfo" "MinSizeRel")
 endif()
 
+# Mark compile time (not runtime), affects how some kernel files include
+add_compile_definitions(DEME_BEING_CMAKE_COMPILED)
+
 # ---------------------------------------------------------------------------- #
 # Additional Packages
 # ---------------------------------------------------------------------------- #
