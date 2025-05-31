@@ -1021,7 +1021,7 @@ PYBIND11_MODULE(DEME, obj) {
         .def("SetExpandSafetyMultiplier", &deme::DEMSolver::SetExpandSafetyMultiplier,
              "Assign a multiplier to our estimated maximum system velocity, when deriving the thinckness of the "
              "contact `safety' margin.")
-        .def("Initialize", &deme::DEMSolver::Initialize, "Initializes the system.")
+        .def("Initialize", &deme::DEMSolver::Initialize, "Initializes the system.", py::arg("dry_run") = false)
         .def("WriteSphereFile",
              static_cast<void (deme::DEMSolver::*)(const std::string&) const>(&deme::DEMSolver::WriteSphereFile),
              "Writes the current status of clumps (but decomposed as spheres) file.")
