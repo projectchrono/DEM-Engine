@@ -218,6 +218,6 @@ if __name__ == "__main__":
         t += step_size
 
     DEMSim.ShowTimingStats()
-    DEMSim.ShowAnomalies()
+    DEMSim.ShowMemStats()
 
     print("WheelDPSimpilified demo exiting...")

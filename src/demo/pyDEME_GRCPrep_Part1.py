@@ -157,6 +157,7 @@ if __name__ == "__main__":
 
     DEMSim.ShowThreadCollaborationStats()
     DEMSim.ClearThreadCollaborationStats()
+    DEMSim.ShowMemStats()
 
     cp_filename = os.path.join(out_dir, f"GRC_3e5.csv")
     cnt_filename = os.path.join(out_dir, f"Contact_pairs_3e5.csv")

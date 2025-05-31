@@ -392,4 +392,5 @@ if __name__ == "__main__":
         rod_tracker.SetPos([0, 0, rod_length / 2. + current_height])
 
     DEMSim.ShowTimingStats()
+    DEMSim.ShowMemStats()
     print("Electrostatic demo exiting...")

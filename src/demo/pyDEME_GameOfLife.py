@@ -123,4 +123,6 @@ if __name__ == "__main__":
 
         DEMSim.DoDynamicsThenSync(1.)
 
+    DEMSim.ShowMemStats()
+
     print("DEMdemo_GameOfLife exiting...")

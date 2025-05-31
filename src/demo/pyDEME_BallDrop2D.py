@@ -318,6 +318,8 @@ if __name__ == "__main__":
 
         DEMSim.ShowTimingStats()
 
+    DEMSim.ShowMemStats()
+
     final_pos = proj_tracker.Pos()
     print(f"Ball density: {ball_density}")
     print(f"Ball rad: {R}")

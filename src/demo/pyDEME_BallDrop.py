@@ -125,5 +125,5 @@ if __name__ == "__main__":
         t += frame_time
 
     DEMSim.ShowTimingStats()
-    DEMSim.ShowAnomalies()
+    DEMSim.ShowMemStats()
     print("BallDrop demo exiting...")

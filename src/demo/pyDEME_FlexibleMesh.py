@@ -272,4 +272,5 @@ if __name__ == "__main__":
         step_count += 1
 
     DEMSim.ShowTimingStats()
+    DEMSim.ShowMemStats()
     print("FlexibleMesh demo exiting...")

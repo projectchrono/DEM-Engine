@@ -267,4 +267,5 @@ if __name__ == "__main__":
         frame_count += 1
         t += frame_time
 
+    DEMSim.ShowMemStats()
     print(f"ConePenetration demo exiting...")

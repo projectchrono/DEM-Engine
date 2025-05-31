@@ -181,6 +181,6 @@ if __name__ == "__main__":
     DEMSim.ClearThreadCollaborationStats()
 
     DEMSim.ShowTimingStats()
-    DEMSim.ShowAnomalies()
+    DEMSim.ShowMemStats()
 
     print("DEMdemo_Centrifuge exiting...")
