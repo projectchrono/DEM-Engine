@@ -6,6 +6,7 @@ from pathlib import Path
 
 from setuptools import Extension, setup
 from pybind11.setup_helpers import Pybind11Extension, build_ext
+
 # from setuptools.command.build_ext import build_ext
 
 # Convert distutils Windows platform specifiers to CMake -A arguments
@@ -23,12 +24,21 @@ PLAT_TO_CMAKE = {
 
 class CMakeExtension(Pybind11Extension):
     def __init__(self, name: str, sourcedir: str = "") -> None:
-
         # Obtaining conda_prefix environment variable
         conda_prefix = os.environ.get("CONDA_PREFIX")
 
-        super().__init__(name, sources=[], extra_link_args=['--no-as-needed', '-Wl,-rpath,' + conda_prefix + '/lib/python3.10/site-packages/lib'], runtime_library_dirs=[conda_prefix +
-                                                                                                                                                                         '/lib/python3.10/site-packages/lib'], libraries=["libDEMERuntimeDataHelper"], include_dirs=["./src/DEM/", "./src/DEM/VariableTypes"], extra_objects=["./build"])
+        py_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+        rpath = f"{conda_prefix}/lib/python{py_version}/site-packages/lib"
+
+        super().__init__(
+            name,
+            sources=[],
+            extra_link_args=["--no-as-needed", f"-Wl,-rpath,{rpath}"],
+            runtime_library_dirs=[rpath],
+            libraries=["libDEMERuntimeDataHelper"],
+            include_dirs=["./src/DEM/", "./src/DEM/VariableTypes"],
+            extra_objects=["./build"],
+        )
         self.sourcedir = os.fspath(Path(sourcedir).resolve())
 
 
@@ -37,14 +47,12 @@ class CMakeBuild(build_ext):
         # Must be in this form due to bug in .resolve() only fixed in Python 3.10+
         ext_fullpath = Path.cwd() / self.get_ext_fullpath(ext.name)
 
-        extdir = os.path.abspath(os.path.dirname(
-            self.get_ext_fullpath(ext.name)))
+        extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
 
         # Using this requires trailing slash for auto-detection & inclusion of
         # auxiliary "native" libs
 
-        debug = int(os.environ.get("DEBUG", 0)
-                    ) if self.debug is None else self.debug
+        debug = int(os.environ.get("DEBUG", 0)) if self.debug is None else self.debug
         cfg = "Debug" if debug else "Release"
 
         # CMake lets you override the generator - we need to check this.
@@ -67,12 +75,10 @@ class CMakeBuild(build_ext):
         # Adding CMake arguments set as environment variable
         # (needed e.g. to build for ARM OSx on conda-forge)
         if "CMAKE_ARGS" in os.environ:
-            cmake_args += [
-                item for item in os.environ["CMAKE_ARGS"].split(" ") if item]
+            cmake_args += [item for item in os.environ["CMAKE_ARGS"].split(" ") if item]
 
         # In this example, we pass in the version to C++. You might not need to.
-        cmake_args += [
-            f"-DEXAMPLE_VERSION_INFO={self.distribution.get_version()}"]
+        cmake_args += [f"-DEXAMPLE_VERSION_INFO={self.distribution.get_version()}"]
 
         if self.compiler.compiler_type != "msvc":
             # Using Ninja-build since it a) is available as a wheel and b)
@@ -94,8 +100,7 @@ class CMakeBuild(build_ext):
 
         else:
             # Single config generators are handled "normally"
-            single_config = any(
-                x in cmake_generator for x in {"NMake", "Ninja"})
+            single_config = any(x in cmake_generator for x in {"NMake", "Ninja"})
 
             # CMake allows an arch-in-generator style for backward compatibility
             contains_arch = any(x in cmake_generator for x in {"ARM", "Win64"})
@@ -117,8 +122,7 @@ class CMakeBuild(build_ext):
             # Cross-compile support for macOS - respect ARCHFLAGS if set
             archs = re.findall(r"-arch (\S+)", os.environ.get("ARCHFLAGS", ""))
             if archs:
-                cmake_args += [
-                    "-DCMAKE_OSX_ARCHITECTURES={}".format(";".join(archs))]
+                cmake_args += ["-DCMAKE_OSX_ARCHITECTURES={}".format(";".join(archs))]
 
         # Set CMAKE_BUILD_PARALLEL_LEVEL to control the parallel build level
         # across all generators.
@@ -148,7 +152,7 @@ class CMakeBuild(build_ext):
 # logic and declaration, and simpler if you include description/version in a file.
 setup(
     name="deme",
-    version="2.0.2",
+    version="2.0.3",
     author="Ruochun Zhang",
     author_email="ruochunz@gmail.com",
     description="PyBind Wrapper Library for DEM-Engine",
@@ -158,6 +162,6 @@ setup(
     zip_safe=False,
     include_package_data=True,
     sources=["./src/"],
-    install_requires=['numpy', 'pybind11'],
-    extras_require={"dev": ['pybind11'], "test": ["pytest>=6.0"]},
+    install_requires=["numpy", "pybind11"],
+    extras_require={"dev": ["pybind11"], "test": ["pytest>=6.0"]},
 )
