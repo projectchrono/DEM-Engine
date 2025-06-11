@@ -2182,12 +2182,16 @@ void DEMSolver::UpdateSimParams() {
     // Now that all params prepared, we need to migrate that imformation to the device
     migrateSimParamsToDevice();
 
-    // Jitify max vel finder, in case the policy there changed
-    m_approx_max_vel_func->Initialize(m_subs, true);
-    dT->approxMaxVelFunc = m_approx_max_vel_func;
-
-    // Updating sim environment is critical
-    dT->announceCritical();
+    // JItify may require a defined device to decide the arch
+    std::thread dT_build([&]() {
+        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+        // Jitify max vel finder, in case the policy there changed
+        m_approx_max_vel_func->Initialize(m_subs, true);
+        dT->approxMaxVelFunc = m_approx_max_vel_func;
+        // Updating sim environment is critical
+        dT->announceCritical();
+    });
+    dT_build.join();
 }
 
 void DEMSolver::UpdateStepSize(double ts) {
@@ -2301,11 +2305,9 @@ void DEMSolver::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::ve
 void DEMSolver::PurgeFamily(unsigned int family_num) {}
 
 void DEMSolver::DoDynamics(double thisCallDuration) {
-    // Is it needed here??
-    // dT->packDataPointers(kT->granData);
-
-    // TODO: Return if nSphere == 0
-    // TODO: Check if initialized
+    if (!sys_initialized) {
+        Initialize();
+    }
 
     // Tell dT how long this call is
     dT->setCycleDuration(thisCallDuration);
