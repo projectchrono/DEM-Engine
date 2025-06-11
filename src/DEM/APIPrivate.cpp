@@ -302,19 +302,30 @@ void DEMSolver::jitifyKernels() {
     equipForceModel(m_subs);
     equipIntegrationScheme(m_subs);
     equipKernelIncludes(m_subs);
-    kT->jitifyKernels(m_subs);
-    dT->jitifyKernels(m_subs);
 
-    // Now, inspectors need to be jitified too... but the current design jitify inspector kernels at the first time they
-    // are used. for (auto& insp : m_inspectors) {
-    //     insp->Initialize(m_subs);
-    // }
+    // Jitify may require a defined device to derive the arch
+    std::thread kT_build([&]() {
+        DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
+        kT->jitifyKernels(m_subs);
+    });
 
-    // Solver system's own max vel inspector should be init-ed. Don't bother init-ing it while using, because it is
-    // called at high frequency, let's save an if check. Forced initialization (since doing it before system completes
-    // init).
-    m_approx_max_vel_func->Initialize(m_subs, true);
-    dT->approxMaxVelFunc = m_approx_max_vel_func;
+    std::thread dT_build([&]() {
+        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+        dT->jitifyKernels(m_subs);
+
+        // Now, inspectors need to be jitified too... but the current design jitify inspector kernels at the first time
+        // they are used. for (auto& insp : m_inspectors) {
+        //     insp->Initialize(m_subs);
+        // }
+
+        // Solver system's own max vel inspector should be init-ed. Don't bother init-ing it while using, because it is
+        // called at high frequency, let's save an if check. Forced initialization (since doing it before system
+        // completes init).
+        m_approx_max_vel_func->Initialize(m_subs, true);
+        dT->approxMaxVelFunc = m_approx_max_vel_func;
+    });
+    kT_build.join();
+    dT_build.join();
 }
 
 void DEMSolver::getContacts_impl(std::vector<bodyID_t>& idA,
