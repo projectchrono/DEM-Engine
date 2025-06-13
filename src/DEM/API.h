@@ -88,8 +88,11 @@ class DEMSolver {
     /// Set the initial time step size. If using constant step size, then this will be used throughout; otherwise, the
     /// actual step size depends on the variable step strategy.
     void SetInitTimeStep(double ts_size) { m_ts_size = ts_size; }
-    /// Return the number of clumps that are currently in the simulation.
+    /// Return the number of clumps that are currently in the simulation. Must be used after initialization.
     size_t GetNumClumps() const { return nOwnerClumps; }
+    /// Return the total number of owners (clumps + meshes + analytical objects) that are currently in the simulation.
+    /// Must be used after initialization.
+    size_t GetNumOwners() const { return nOwnerBodies; }
     /// @brief Get the number of kT-reported potential contact pairs.
     /// @return Number of potential contact pairs.
     size_t GetNumContacts() const { return dT->getNumContacts(); }
