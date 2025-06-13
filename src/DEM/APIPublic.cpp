@@ -399,6 +399,64 @@ std::vector<std::pair<bodyID_t, bodyID_t>> DEMSolver::GetClumpContacts(
     return out_pair;
 }
 
+std::vector<std::pair<bodyID_t, bodyID_t>> DEMSolver::GetContacts() const {
+    std::vector<bodyID_t> idA_tmp, idB_tmp;
+    std::vector<family_t> famA_tmp, famB_tmp;
+    std::vector<contact_t> cnt_type_tmp;
+    // Getting sphere contacts is enough
+    getContacts_impl(idA_tmp, idB_tmp, cnt_type_tmp, famA_tmp, famB_tmp, [](contact_t type) { return true; });
+    auto idx = hostSortIndices(idA_tmp);
+    std::vector<std::pair<bodyID_t, bodyID_t>> out_pair(idx.size());
+    for (size_t i = 0; i < idx.size(); i++) {
+        out_pair[i] = std::pair<bodyID_t, bodyID_t>(idA_tmp[idx[i]], idB_tmp[idx[i]]);
+    }
+    return out_pair;
+}
+
+std::vector<std::pair<bodyID_t, bodyID_t>> DEMSolver::GetContacts(const std::set<family_t>& family_to_include) const {
+    std::vector<bodyID_t> idA_tmp, idB_tmp;
+    std::vector<family_t> famA_tmp, famB_tmp;
+    std::vector<contact_t> cnt_type_tmp;
+    // Getting sphere contacts is enough
+    getContacts_impl(idA_tmp, idB_tmp, cnt_type_tmp, famA_tmp, famB_tmp, [](contact_t type) { return true; });
+    // Exclude the families that are not in the set
+    std::vector<bool> elem_to_remove(idA_tmp.size(), false);
+    for (size_t i = 0; i < idA_tmp.size(); i++) {
+        if (!check_exist(family_to_include, famA_tmp.at(i)) || !check_exist(family_to_include, famB_tmp.at(i))) {
+            elem_to_remove[i] = true;
+        }
+    }
+    idA_tmp = hostRemoveElem(idA_tmp, elem_to_remove);
+    idB_tmp = hostRemoveElem(idB_tmp, elem_to_remove);
+    famA_tmp = hostRemoveElem(famA_tmp, elem_to_remove);
+    famB_tmp = hostRemoveElem(famB_tmp, elem_to_remove);
+    cnt_type_tmp = hostRemoveElem(cnt_type_tmp, elem_to_remove);
+
+    auto idx = hostSortIndices(idA_tmp);
+    std::vector<std::pair<bodyID_t, bodyID_t>> out_pair(idx.size());
+    for (size_t i = 0; i < idx.size(); i++) {
+        out_pair[i] = std::pair<bodyID_t, bodyID_t>(idA_tmp[idx[i]], idB_tmp[idx[i]]);
+    }
+    return out_pair;
+}
+
+std::vector<std::pair<bodyID_t, bodyID_t>> DEMSolver::GetContacts(
+    std::vector<std::pair<family_t, family_t>>& family_pair) const {
+    std::vector<bodyID_t> idA_tmp, idB_tmp;
+    std::vector<family_t> famA_tmp, famB_tmp;
+    std::vector<contact_t> cnt_type_tmp;
+    // Getting sphere contacts is enough
+    getContacts_impl(idA_tmp, idB_tmp, cnt_type_tmp, famA_tmp, famB_tmp, [](contact_t type) { return true; });
+    auto idx = hostSortIndices(idA_tmp);
+    std::vector<std::pair<bodyID_t, bodyID_t>> out_pair(idx.size());
+    family_pair.resize(idx.size());
+    for (size_t i = 0; i < idx.size(); i++) {
+        out_pair[i] = std::pair<bodyID_t, bodyID_t>(idA_tmp[idx[i]], idB_tmp[idx[i]]);
+        family_pair[i] = std::pair<family_t, family_t>(famA_tmp[idx[i]], famB_tmp[idx[i]]);
+    }
+    return out_pair;
+}
+
 std::vector<float3> DEMSolver::GetOwnerPosition(bodyID_t ownerID, bodyID_t n) const {
     return dT->getOwnerPos(ownerID, n);
 }
