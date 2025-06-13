@@ -1002,11 +1002,6 @@ PYBIND11_MODULE(DEME, obj) {
              "Add an extra contact margin to entities in a family so they are registered as potential contact pairs "
              "earlier.")
 
-        .def("GetAllOwnerWildcardValue", &deme::DEMSolver::GetAllOwnerWildcardValue,
-             "Get the owner wildcard's values of all entities.")
-        .def("GetFamilyOwnerWildcardValue", &deme::DEMSolver::GetFamilyOwnerWildcardValue,
-             "Get the owner wildcard's values of all entities in family N.")
-
         .def("ClearCache", &deme::DEMSolver::ClearCache,
              "Remove host-side cached vectors (so you can re-define them, and then re-initialize system).")
 
@@ -1015,7 +1010,11 @@ PYBIND11_MODULE(DEME, obj) {
                  &deme::DEMSolver::CreateInspector),
              "Create a inspector object that can help query some statistical info of the clumps in the simulation.",
              py::arg("quantity") = "clump_max_z")
-        .def("GetNumClumps", &deme::DEMSolver::GetNumClumps)
+        .def("GetNumClumps", &deme::DEMSolver::GetNumClumps,
+             "Return the number of clumps that are currently in the simulation. Must be used after initialization.")
+        .def("GetNumOwners", &deme::DEMSolver::GetNumOwners,
+             "Return the total number of owners (clumps + meshes + analytical objects) that are currently in the "
+             "simulation. Must be used after initialization.")
         .def("CreateInspector",
              static_cast<std::shared_ptr<deme::DEMInspector> (deme::DEMSolver::*)(
                  const std::string&, const std::string&)>(&deme::DEMSolver::CreateInspector),
