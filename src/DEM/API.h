@@ -413,7 +413,7 @@ class DEMSolver {
 
     /// @brief Get the clumps that are in contact with this owner as a vector.
     /// @details No multi-owner bulk version. This is due to efficiency concerns. If getting multiple owners' contacting
-    /// clumps is needed, use family-based GetClumpContacts method, then the owner ID list-based c method if you further
+    /// clumps is needed, use family-based GetContacts method, then the owner ID list-based c method if you further
     /// need the contact forces information.
     /// @param ownerID The ID of the owner that is being queried.
     /// @return Clump owner IDs in contact with this owner.
@@ -504,6 +504,25 @@ class DEMSolver {
     /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
     /// body A, and Second is that of contact body B.
     std::vector<std::pair<bodyID_t, bodyID_t>> GetClumpContacts(
+        std::vector<std::pair<family_t, family_t>>& family_pair) const;
+
+    /// @brief Get all contacts in the simulation system.
+    /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
+    /// body A, and Second is that of contact body B.
+    std::vector<std::pair<bodyID_t, bodyID_t>> GetContacts() const;
+
+    /// @brief Get all contacts in the simulation system.
+    /// @param family_to_include Contacts that involve a body in a family not listed in this argument are ignored.
+    /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
+    /// body A, and Second is that of contact body B.
+    std::vector<std::pair<bodyID_t, bodyID_t>> GetContacts(const std::set<family_t>& family_to_include) const;
+
+    /// @brief Get all contacts in the simulation system.
+    /// @param family_pair Functions returns a vector of contact body family number pairs. First is the family number of
+    /// contact body A, and Second is that of contact body B.
+    /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
+    /// body A, and Second is that of contact body B.
+    std::vector<std::pair<bodyID_t, bodyID_t>> GetContacts(
         std::vector<std::pair<family_t, family_t>>& family_pair) const;
 
     /// @brief Get the host memory usage (in bytes) on dT.
