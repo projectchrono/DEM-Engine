@@ -748,17 +748,32 @@ PYBIND11_MODULE(DEME, obj) {
         .def("GetClumpContacts",
              static_cast<std::vector<std::pair<deme::bodyID_t, deme::bodyID_t>> (deme::DEMSolver::*)() const>(
                  &deme::DEMSolver::GetClumpContacts),
-             "Get all clump--clump contacts in the simulation system.")
-
+             "Get all clump--clump contacts in the simulation system as a list of pairs.")
         .def("GetClumpContacts",
              static_cast<std::vector<std::pair<deme::bodyID_t, deme::bodyID_t>> (deme::DEMSolver::*)(
                  const std::set<deme::family_t>&) const>(&deme::DEMSolver::GetClumpContacts),
-             "Get all clump--clump contacts in the simulation system.")
-
+             "Get all clump--clump contacts in the simulation system as a list of pairs, that involves entities with "
+             "the family numbers supplied with the argument.")
         .def("GetClumpContacts",
              static_cast<std::vector<std::pair<deme::bodyID_t, deme::bodyID_t>> (deme::DEMSolver::*)(
                  std::vector<std::pair<deme::family_t, deme::family_t>>&) const>(&deme::DEMSolver::GetClumpContacts),
-             "Get all clump--clump contacts in the simulation system.")
+             "Get all clump--clump contacts in the simulation system as a list of pairs, and update the supplied "
+             "argument with the corresponding family numbers of each contact.")
+
+        .def("GetContacts",
+             static_cast<std::vector<std::pair<deme::bodyID_t, deme::bodyID_t>> (deme::DEMSolver::*)() const>(
+                 &deme::DEMSolver::GetContacts),
+             "Get all contacts in the simulation system as a list of pairs.")
+        .def("GetContacts",
+             static_cast<std::vector<std::pair<deme::bodyID_t, deme::bodyID_t>> (deme::DEMSolver::*)(
+                 const std::set<deme::family_t>&) const>(&deme::DEMSolver::GetContacts),
+             "Get all contacts in the simulation system as a list of pairs, that involves entities with the family "
+             "numbers supplied with the argument.")
+        .def("GetContacts",
+             static_cast<std::vector<std::pair<deme::bodyID_t, deme::bodyID_t>> (deme::DEMSolver::*)(
+                 std::vector<std::pair<deme::family_t, deme::family_t>>&) const>(&deme::DEMSolver::GetContacts),
+             "Get all contacts in the simulation system as a list of pairs, and update the supplied argument with the "
+             "corresponding family numbers of each contact.")
 
         .def("GetHostMemUsageDynamic", &deme::DEMSolver::GetHostMemUsageDynamic,
              "Get the host memory usage (in bytes) on dT.")
