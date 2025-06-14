@@ -1615,50 +1615,24 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
     ptFile << outstrstream.str();
 }
 
-void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thres) {
-    std::ostringstream outstrstream;
-
+std::shared_ptr<ContactInfoContainer> DEMDynamicThread::generateContactInfo(float force_thres) {
+    // Migrate contact info to host
     migrateFamilyToHost();
     migrateClumpPosInfoToHost();
     migrateContactInfoToHost();
 
-    outstrstream << OUTPUT_FILE_CNT_TYPE_NAME;
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::OWNER) {
-        outstrstream << "," + OUTPUT_FILE_OWNER_1_NAME + "," + OUTPUT_FILE_OWNER_2_NAME;
+    size_t total_contacts = *(solverScratchSpace.numContacts);
+    // Wildcards supports only floats now
+    std::vector<std::pair<std::string, std::string>> existing_wildcards(m_contact_wildcard_names.size());
+    size_t name_i = 0;
+    for (const auto& name : m_contact_wildcard_names) {
+        existing_wildcards[name_i++] = {name, "float"};
     }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::GEO_ID) {
-        outstrstream << "," + OUTPUT_FILE_GEO_ID_1_NAME + "," + OUTPUT_FILE_GEO_ID_2_NAME;
-    }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::FORCE) {
-        outstrstream << "," + OUTPUT_FILE_FORCE_X_NAME + "," + OUTPUT_FILE_FORCE_Y_NAME + "," +
-                            OUTPUT_FILE_FORCE_Z_NAME;
-    }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::DEME_POINT) {
-        outstrstream << "," + OUTPUT_FILE_X_COL_NAME + "," + OUTPUT_FILE_Y_COL_NAME + "," + OUTPUT_FILE_Z_COL_NAME;
-    }
-    // if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::COMPONENT) {
-    //     outstrstream << ","+OUTPUT_FILE_COMP_1_NAME+","+OUTPUT_FILE_COMP_2_NAME;
-    // }
-    // if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NICKNAME) {
-    //     outstrstream << ","+OUTPUT_FILE_OWNER_NICKNAME_1_NAME+","+OUTPUT_FILE_OWNER_NICKNAME_2_NAME;
-    // }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NORMAL) {
-        outstrstream << "," + OUTPUT_FILE_NORMAL_X_NAME + "," + OUTPUT_FILE_NORMAL_Y_NAME + "," +
-                            OUTPUT_FILE_NORMAL_Z_NAME;
-    }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE) {
-        outstrstream << "," + OUTPUT_FILE_TORQUE_X_NAME + "," + OUTPUT_FILE_TORQUE_Y_NAME + "," +
-                            OUTPUT_FILE_TORQUE_Z_NAME;
-    }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_WILDCARD) {
-        // Write all wildcard names as header
-        for (const auto& w_name : m_contact_wildcard_names) {
-            outstrstream << "," + w_name;
-        }
-    }
-    outstrstream << "\n";
+    ContactInfoContainer contactInfo(solverFlags.cntOutFlags, existing_wildcards);
+    contactInfo.ResizeAll(total_contacts);
 
-    for (size_t i = 0; i < *(solverScratchSpace.numContacts); i++) {
+    size_t useful_cnt = 0;
+    for (size_t i = 0; i < total_contacts; i++) {
         // Geos that are involved in this contact
         auto geoA = idGeometryA[i];
         auto geoB = idGeometryB[i];
@@ -1681,19 +1655,29 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
         ownerB = getGeoOwnerID(geoB, type);
 
         // Type is mapped to SS, SM and such....
-        outstrstream << contact_type_out_name_map.at(type);
+        contactInfo.Get<std::string>("ContactType")[useful_cnt] = contact_type_out_name_map.at(type);
+
+        // Add family, always
+        {
+            family_t familyA = familyID[ownerA];
+            family_t familyB = familyID[ownerB];
+            contactInfo.Get<family_t>("AOwnerFamily")[useful_cnt] = familyA;
+            contactInfo.Get<family_t>("BOwnerFamily")[useful_cnt] = familyB;
+        }
 
         // (Internal) ownerID and/or geometry ID
         if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::OWNER) {
-            outstrstream << "," << ownerA << "," << ownerB;
+            contactInfo.Get<bodyID_t>("AOwner")[useful_cnt] = ownerA;
+            contactInfo.Get<bodyID_t>("BOwner")[useful_cnt] = ownerB;
         }
         if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::GEO_ID) {
-            outstrstream << "," << geoA << "," << geoB;
+            contactInfo.Get<bodyID_t>("AGeo")[useful_cnt] = geoA;
+            contactInfo.Get<bodyID_t>("BGeo")[useful_cnt] = geoB;
         }
 
         // Force is already in global...
         if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::FORCE) {
-            outstrstream << "," << forcexyz.x << "," << forcexyz.y << "," << forcexyz.z;
+            contactInfo.Get<float3>("Force")[useful_cnt] = forcexyz;
         }
 
         // Contact point is in local frame. To make it global, first map that vector to axis-aligned global frame, then
@@ -1720,10 +1704,10 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
             applyOriQToVector3(cntPntA.x, cntPntA.y, cntPntA.z, oriQA.w, oriQA.x, oriQA.y, oriQA.z);
             cntPntA += CoM;
         }
-        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::DEME_POINT) {
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_POINT) {
             // oriQ is updated already... whereas the contact point is effectively last step's... That's unfortunate.
             // Should we do somthing ahout it?
-            outstrstream << "," << cntPntA.x << "," << cntPntA.y << "," << cntPntA.z;
+            contactInfo.Get<float3>("Point")[useful_cnt] = cntPntA;
         }
 
         // To get contact normal: it's just contact point - sphereA center, that gives you the outward normal for body A
@@ -1737,7 +1721,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
                                              oriQA.x, oriQA.y, oriQA.z);
             float3 pos = CoM + this_sp_deviation;
             float3 normal = normalize(cntPntA - pos);
-            outstrstream << "," << normal.x << "," << normal.y << "," << normal.z;
+            contactInfo.Get<float3>("Normal")[useful_cnt] = normal;
         }
 
         // Torque is in global already...
@@ -1750,15 +1734,104 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
                 // back to global
                 applyOriQToVector3(torque.x, torque.y, torque.z, oriQA.w, oriQA.x, oriQA.y, oriQA.z);
             }
-            outstrstream << "," << torque.x << "," << torque.y << "," << torque.z;
+            contactInfo.Get<float3>("Torque")[useful_cnt] = torque;
         }
 
         // Contact wildcards
         if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_WILDCARD) {
             // The order shouldn't be an issue... the same set is being processed here and in equip_contact_wildcards,
             // see Model.h
-            for (unsigned int j = 0; j < m_contact_wildcard_names.size(); j++) {
-                outstrstream << "," << (*contactWildcards[j])[i];
+            size_t name_i = 0;
+            for (const auto& name : m_contact_wildcard_names) {
+                contactInfo.Get<float>(name)[useful_cnt] = (*contactWildcards[name_i++])[i];
+            }
+        }
+
+        useful_cnt++;
+    }
+    contactInfo.ResizeAll(useful_cnt);
+    return std::make_shared<ContactInfoContainer>(std::move(contactInfo));
+}
+
+void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thres) {
+    std::ostringstream outstrstream;
+
+    std::shared_ptr<ContactInfoContainer> contactInfo = generateContactInfo(force_thres);
+
+    outstrstream << OUTPUT_FILE_CNT_TYPE_NAME;
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::OWNER) {
+        outstrstream << "," + OUTPUT_FILE_OWNER_1_NAME + "," + OUTPUT_FILE_OWNER_2_NAME;
+    }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::GEO_ID) {
+        outstrstream << "," + OUTPUT_FILE_GEO_ID_1_NAME + "," + OUTPUT_FILE_GEO_ID_2_NAME;
+    }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::FORCE) {
+        outstrstream << "," + OUTPUT_FILE_FORCE_X_NAME + "," + OUTPUT_FILE_FORCE_Y_NAME + "," +
+                            OUTPUT_FILE_FORCE_Z_NAME;
+    }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_POINT) {
+        outstrstream << "," + OUTPUT_FILE_X_COL_NAME + "," + OUTPUT_FILE_Y_COL_NAME + "," + OUTPUT_FILE_Z_COL_NAME;
+    }
+    // if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::COMPONENT) {
+    //     outstrstream << ","+OUTPUT_FILE_COMP_1_NAME+","+OUTPUT_FILE_COMP_2_NAME;
+    // }
+    // if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NICKNAME) {
+    //     outstrstream << ","+OUTPUT_FILE_OWNER_NICKNAME_1_NAME+","+OUTPUT_FILE_OWNER_NICKNAME_2_NAME;
+    // }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NORMAL) {
+        outstrstream << "," + OUTPUT_FILE_NORMAL_X_NAME + "," + OUTPUT_FILE_NORMAL_Y_NAME + "," +
+                            OUTPUT_FILE_NORMAL_Z_NAME;
+    }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE) {
+        outstrstream << "," + OUTPUT_FILE_TORQUE_X_NAME + "," + OUTPUT_FILE_TORQUE_Y_NAME + "," +
+                            OUTPUT_FILE_TORQUE_Z_NAME;
+    }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_WILDCARD) {
+        // Write all wildcard names as header
+        for (const auto& w_name : m_contact_wildcard_names) {
+            outstrstream << "," + w_name;
+        }
+    }
+    outstrstream << "\n";
+
+    for (size_t i = 0; i < contactInfo->Size(); i++) {
+        outstrstream << contactInfo->Get<std::string>("ContactType")[i];
+
+        // (Internal) ownerID and/or geometry ID
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::OWNER) {
+            outstrstream << "," << contactInfo->Get<bodyID_t>("AOwner")[i] << ","
+                         << contactInfo->Get<bodyID_t>("BOwner")[i];
+        }
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::GEO_ID) {
+            outstrstream << "," << contactInfo->Get<bodyID_t>("AGeo")[i] << ","
+                         << contactInfo->Get<bodyID_t>("BGeo")[i];
+        }
+
+        // Force is already in global...
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::FORCE) {
+            outstrstream << "," << contactInfo->Get<float3>("Force")[i].x << ","
+                         << contactInfo->Get<float3>("Force")[i].y << "," << contactInfo->Get<float3>("Force")[i].z;
+        }
+
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_POINT) {
+            // oriQ is updated already... whereas the contact point is effectively last step's... That's unfortunate.
+            // Should we do somthing ahout it?
+            outstrstream << "," << contactInfo->Get<float3>("Point")[i].x << ","
+                         << contactInfo->Get<float3>("Point")[i].y << "," << contactInfo->Get<float3>("Point")[i].z;
+        }
+
+        // Torque is in global already...
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE) {
+            outstrstream << "," << contactInfo->Get<float3>("Torque")[i].x << ","
+                         << contactInfo->Get<float3>("Torque")[i].y << "," << contactInfo->Get<float3>("Torque")[i].z;
+        }
+
+        // Contact wildcards
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_WILDCARD) {
+            // The order shouldn't be an issue... the same set is being processed here and in equip_contact_wildcards,
+            // see Model.h
+            for (const auto& name : m_contact_wildcard_names) {
+                outstrstream << "," << contactInfo->Get<float>(name)[i];
             }
         }
 

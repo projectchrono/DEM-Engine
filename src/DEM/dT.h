@@ -583,6 +583,9 @@ class DEMDynamicThread {
     void migrateDataToDevice();
     // void migrateDataToHost();
 
+    // Generate contact info container based on the current contact array, and return it.
+    std::shared_ptr<ContactInfoContainer> generateContactInfo(float force_thres);
+
 #ifdef DEME_USE_CHPF
     void writeSpheresAsChpf(std::ofstream& ptFile);
     void writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy = 10);

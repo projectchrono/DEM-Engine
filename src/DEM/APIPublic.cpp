@@ -209,7 +209,7 @@ void DEMSolver::SetContactOutputContent(const std::vector<std::string>& content)
                 m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::FORCE;
                 break;
             case ("POINT"_):
-                m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::DEME_POINT;
+                m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::CNT_POINT;
                 break;
             case ("COMPONENT"_):
                 m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::COMPONENT;
@@ -451,6 +451,10 @@ std::vector<std::pair<bodyID_t, bodyID_t>> DEMSolver::GetContacts(
         family_pair[i] = std::pair<family_t, family_t>(famA_tmp[idx[i]], famB_tmp[idx[i]]);
     }
     return out_pair;
+}
+
+std::shared_ptr<ContactInfoContainer> DEMSolver::GetContactDetailedInfo(float force_thres) const {
+    return dT->generateContactInfo(force_thres);
 }
 
 std::vector<float3> DEMSolver::GetOwnerPosition(bodyID_t ownerID, bodyID_t n) const {

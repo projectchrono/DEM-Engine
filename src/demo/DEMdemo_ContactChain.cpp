@@ -31,7 +31,7 @@ int main() {
     DEMSim.SetOutputFormat("CSV");
     DEMSim.SetOutputContent({"ABSV"});
     DEMSim.SetMeshOutputFormat("VTK");
-    DEMSim.SetContactOutputContent(DEME_POINT | OWNER | FORCE | CNT_WILDCARD);
+    DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT", "CNT_WILDCARD"});
 
     std::cout << "============================================================" << std::endl;
     std::cout << "Initializing DEMdemo_ContactChain demo." << std::endl;
