@@ -205,6 +205,31 @@ PYBIND11_MODULE(DEME, obj) {
 
         .def("GetSeparation", &deme::HCPSampler::GetSeparation);
 
+    // Have to forward declare this templated method so pybind can see it
+    std::vector<float>& (deme::DataContainer::*get_float_dc)(const std::string&) = &deme::DataContainer::Get<float>;
+    py::class_<deme::DataContainer, std::shared_ptr<deme::DataContainer>>(obj, "DataContainer")
+        .def(py::init<>())
+        .def("Get", get_float_dc, py::return_value_policy::reference_internal,
+             "Get a float value from the container by name. Should be used for getting wildcard by name.");
+
+    py::class_<deme::ContactInfoContainer, deme::DataContainer, std::shared_ptr<deme::ContactInfoContainer>>(
+        obj, "ContactInfoContainer")
+        .def(py::init<unsigned int&, const std::vector<std::pair<std::string, std::string>>&>())
+        .def("GetContactType", &deme::ContactInfoContainer::GetContactType,
+             "Get contact type as strings from the container.")
+        .def("GetPoint", &deme::ContactInfoContainer::GetPoint, "Get contact points as vectors from the container.")
+        .def("GetAOwner", &deme::ContactInfoContainer::GetAOwner, "Get AOwner number from the container.")
+        .def("GetBOwner", &deme::ContactInfoContainer::GetBOwner, "Get BOwner number from the container.")
+        .def("GetAGeo", &deme::ContactInfoContainer::GetAGeo, "Get AGeo number from the container.")
+        .def("GetBGeo", &deme::ContactInfoContainer::GetBGeo, "Get BGeo number from the container.")
+        .def("GetAOwnerFamily", &deme::ContactInfoContainer::GetAOwnerFamily,
+             "Get AOwnerFamily number from the container.")
+        .def("GetBOwnerFamily", &deme::ContactInfoContainer::GetBOwnerFamily,
+             "Get BOwnerFamily number from the container.")
+        .def("GetForce", &deme::ContactInfoContainer::GetForce, "Get force as vectors from the container.")
+        .def("GetTorque", &deme::ContactInfoContainer::GetTorque, "Get torque as vectors from the container.")
+        .def("GetNormal", &deme::ContactInfoContainer::GetNormal, "Get contact normal as vectors from the container.");
+
     py::class_<deme::DEMInspector, std::shared_ptr<deme::DEMInspector>>(obj, "DEMInspector")
         .def(py::init<deme::DEMSolver*, deme::DEMDynamicThread*, const std::string&>())
         .def("GetValue", &deme::DEMInspector::GetValue);
@@ -748,32 +773,50 @@ PYBIND11_MODULE(DEME, obj) {
         .def("GetClumpContacts",
              static_cast<std::vector<std::pair<deme::bodyID_t, deme::bodyID_t>> (deme::DEMSolver::*)() const>(
                  &deme::DEMSolver::GetClumpContacts),
-             "Get all clump--clump contacts in the simulation system as a list of pairs.")
+             "Get all clump--clump contact ID pairs in the simulation system. Note all GetContact-like methods reports "
+             "potential contacts (not necessarily confirmed contacts), meaning they are similar to what "
+             "WriteContactFileIncludingPotentialPairs does, not what WriteContactFile does.")
         .def("GetClumpContacts",
              static_cast<std::vector<std::pair<deme::bodyID_t, deme::bodyID_t>> (deme::DEMSolver::*)(
                  const std::set<deme::family_t>&) const>(&deme::DEMSolver::GetClumpContacts),
-             "Get all clump--clump contacts in the simulation system as a list of pairs, that involves entities with "
-             "the family numbers supplied with the argument.")
+             "Get all clump--clump contact ID pairs in the simulation system. Note all GetContact-like methods reports "
+             "potential contacts (not necessarily confirmed contacts), meaning they are similar to what "
+             "WriteContactFileIncludingPotentialPairs does, not what WriteContactFile does. Use the argument to "
+             "include only these families in the output.")
         .def("GetClumpContacts",
              static_cast<std::vector<std::pair<deme::bodyID_t, deme::bodyID_t>> (deme::DEMSolver::*)(
                  std::vector<std::pair<deme::family_t, deme::family_t>>&) const>(&deme::DEMSolver::GetClumpContacts),
-             "Get all clump--clump contacts in the simulation system as a list of pairs, and update the supplied "
-             "argument with the corresponding family numbers of each contact.")
+             "Get all clump--clump contact ID pairs in the simulation system. Note all GetContact-like methods reports "
+             "potential contacts (not necessarily confirmed contacts), meaning they are similar to what "
+             "WriteContactFileIncludingPotentialPairs does, not what WriteContactFile does.")
 
         .def("GetContacts",
              static_cast<std::vector<std::pair<deme::bodyID_t, deme::bodyID_t>> (deme::DEMSolver::*)() const>(
                  &deme::DEMSolver::GetContacts),
-             "Get all contacts in the simulation system as a list of pairs.")
+             "Get all contact ID pairs in the simulation system. Note all GetContact-like methods reports potential "
+             "contacts (not necessarily confirmed contacts), meaning they are similar to what "
+             "WriteContactFileIncludingPotentialPairs does, not what WriteContactFile does.")
         .def("GetContacts",
              static_cast<std::vector<std::pair<deme::bodyID_t, deme::bodyID_t>> (deme::DEMSolver::*)(
                  const std::set<deme::family_t>&) const>(&deme::DEMSolver::GetContacts),
-             "Get all contacts in the simulation system as a list of pairs, that involves entities with the family "
-             "numbers supplied with the argument.")
+             "Get all contact ID pairs in the simulation system. Note all GetContact-like methods reports potential "
+             "contacts (not necessarily confirmed contacts), meaning they are similar to what "
+             "WriteContactFileIncludingPotentialPairs does, not what WriteContactFile does. Use the argument to "
+             "include only these families in the output.")
         .def("GetContacts",
              static_cast<std::vector<std::pair<deme::bodyID_t, deme::bodyID_t>> (deme::DEMSolver::*)(
                  std::vector<std::pair<deme::family_t, deme::family_t>>&) const>(&deme::DEMSolver::GetContacts),
-             "Get all contacts in the simulation system as a list of pairs, and update the supplied argument with the "
-             "corresponding family numbers of each contact.")
+             "Get all contact ID pairs in the simulation system. Note all GetContact-like methods reports potential "
+             "contacts (not necessarily confirmed contacts), meaning they are similar to what "
+             "WriteContactFileIncludingPotentialPairs does, not what WriteContactFile does.")
+
+        .def("GetContactDetailedInfo", &deme::DEMSolver::GetContactDetailedInfo,
+             "Get all contact pairs' detailed information (actual content based on the setting with "
+             "SetContactOutputContent; default are owner IDs, contact point location, contact force, and associated "
+             "wildcard values) in the simulation system. Note all GetContact-like methods reports potential contacts "
+             "(not necessarily confirmed contacts), meaning they are similar to what "
+             "WriteContactFileIncludingPotentialPairs does, not what WriteContactFile does.",
+             py::arg("force_thres") = -1.0)
 
         .def("GetHostMemUsageDynamic", &deme::DEMSolver::GetHostMemUsageDynamic,
              "Get the host memory usage (in bytes) on dT.")
@@ -1050,7 +1093,14 @@ PYBIND11_MODULE(DEME, obj) {
             "WriteContactFile",
             static_cast<void (deme::DEMSolver::*)(const std::string&, float) const>(&deme::DEMSolver::WriteContactFile),
             "Write all contact pairs to a file. Forces smaller than threshold will not be outputted.",
-            py::arg("outfilename"), py::arg("force_thres") = 1e-15)
+            py::arg("outfilename"), py::arg("force_thres") = 1e-30)
+        .def("WriteContactFileIncludingPotentialPairs",
+             static_cast<void (deme::DEMSolver::*)(const std::string&) const>(
+                 &deme::DEMSolver::WriteContactFileIncludingPotentialPairs),
+             "Write all contact pairs kT-supplied to a file, thus including the potential ones (those are not yet in "
+             "contact, or recently used to be in contact).",
+             py::arg("outfilename"))
+
         // Maybe add checkpoint-reading methods here...
         .def("DoDynamics", &deme::DEMSolver::DoDynamics,
              "Advance simulation by this amount of time (but does not attempt to sync kT and dT). This can work with "
@@ -1350,7 +1400,7 @@ PYBIND11_MODULE(DEME, obj) {
     py::enum_<deme::CNT_OUTPUT_CONTENT>(obj, "CNT_OUTPUT_CONTENT")
         .value("CNT_TYPE", deme::CNT_OUTPUT_CONTENT::CNT_TYPE)
         .value("FORCE", deme::CNT_OUTPUT_CONTENT::FORCE)
-        .value("POINT", deme::CNT_OUTPUT_CONTENT::DEME_POINT)
+        .value("POINT", deme::CNT_OUTPUT_CONTENT::CNT_POINT)
         .value("COMPONENT", deme::CNT_OUTPUT_CONTENT::COMPONENT)
         .value("NORMAL", deme::CNT_OUTPUT_CONTENT::NORMAL)
         .value("TORQUE", deme::CNT_OUTPUT_CONTENT::TORQUE)
