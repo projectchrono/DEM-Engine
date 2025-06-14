@@ -26,7 +26,15 @@ inline void buildContactMap(std::vector<std::vector<bodyID_t>>& map,
                             const DEMSolver& DEMSim,
                             std::shared_ptr<DEMTracker>& particle_tracker,
                             unsigned int num_particles) {
-    auto cnt_pairs = DEMSim.GetClumpContacts();
+    // You could easily get the clump contact pairs' A and B IDs, but we go the long way to show some APIs
+    // auto cnt_pairs = DEMSim.GetClumpContacts();
+    // Now you could also get the full contact pair information. We also use DEME_TINY_FLOAT to exclude contacts that
+    // are not producing any force, thus being only a potential contact (preemptively detected).
+    std::shared_ptr<ContactInfoContainer> cnt_pairs_container = DEMSim.GetContactDetailedInfo(DEME_TINY_FLOAT);
+    std::vector<std::string>& cnt_type = cnt_pairs_container->GetContactType();
+    std::vector<bodyID_t>& owner_A = cnt_pairs_container->GetAOwner();
+    std::vector<bodyID_t>& owner_B = cnt_pairs_container->GetBOwner();
+
     map.clear();
     relative_pos.clear();
     map.resize(num_particles);
@@ -38,12 +46,15 @@ inline void buildContactMap(std::vector<std::vector<bodyID_t>>& map,
     std::vector<float3> particle_xyz = particle_tracker->Positions();
     assert(particle_xyz.size() == num_particles);
 
-    for (unsigned int i = 0; i < cnt_pairs.size(); i++) {
-        const auto& pair = cnt_pairs.at(i);
+    for (unsigned int i = 0; i < cnt_type.size(); i++) {
+        if (cnt_type[i] != "SS") {
+            // We only care about SS contacts, so skip the rest
+            continue;
+        }
         // Here, what we store is the ID of contact partners but starting from 0 (rather than whatever the system
         // assigns them), so we subtract the offset
-        map[pair.first - clump_ID_offset].push_back(pair.second - clump_ID_offset);
-        map[pair.second - clump_ID_offset].push_back(pair.first - clump_ID_offset);
+        map[owner_A[i] - clump_ID_offset].push_back(owner_B[i] - clump_ID_offset);
+        map[owner_B[i] - clump_ID_offset].push_back(owner_A[i] - clump_ID_offset);
     }
     for (unsigned int i = 0; i < num_particles; i++) {
         // Main particle location
@@ -65,6 +76,8 @@ int main() {
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
+    // We will query the contact info later, so at least we need owners
+    DEMSim.SetContactOutputContent({"OWNER"});
     // You can enforce owner wildcard output by the following call, or directly include OUTPUT_CONTENT::OWNER_WILDCARD
     // in SetOutputContent
     DEMSim.EnableOwnerWildcardOutput();

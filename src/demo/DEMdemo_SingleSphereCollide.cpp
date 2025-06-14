@@ -25,7 +25,7 @@ int main() {
     DEMSolver DEMSim;
     DEMSim.SetVerbosity("STEP_METRIC");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT", "COMPONENT", "NORMAL", "TORQUE"});
+    DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT", "NORMAL", "TORQUE", "CNT_WILDCARD"});
     DEMSim.EnsureKernelErrMsgLineNum();
     // DEMSim.SetNoForceRecord();
 
@@ -146,7 +146,7 @@ int main() {
 
         char cnt_filename[100];
         sprintf(cnt_filename, "Contact_pairs_%04d.csv", i);
-        // DEMSim.WriteContactFile(out_dir / cnt_filename);
+        DEMSim.WriteContactFile(out_dir / cnt_filename);
 
         char meshfilename[100];
         sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk", i);

@@ -14,18 +14,22 @@
 #include <core/utils/DataMigrationHelper.hpp>
 #include <core/utils/Timer.hpp>
 #include <core/utils/RuntimeData.h>
+#include <kernel/DEMHelperKernels.cuh>
+#include <DEM/HostSideHelpers.hpp>
 
 #include <sstream>
 #include <exception>
+#include <memory>
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
 #include <unordered_map>
-#include <kernel/DEMHelperKernels.cuh>
-#include <DEM/HostSideHelpers.hpp>
 #include <filesystem>
 #include <cstring>
+#include <string>
 #include <cassert>
+#include <typeinfo>
+#include <typeindex>
 
 namespace deme {
 
@@ -93,10 +97,23 @@ const std::unordered_map<contact_t, std::string> contact_type_out_name_map = {
     {SPHERE_CONE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME}};
 
 // Possible force model ingredients. This map is used to ensure we don't double-add them.
-const std::unordered_map<std::string, bool> force_kernel_ingredient_stats = {
-    {"ts", false},        {"time", false},      {"AOwnerFamily", true}, {"BOwnerFamily", true}, {"ALinVel", false},
-    {"BLinVel", false},   {"ARotVel", false},   {"BRotVel", false},     {"AOwner", false},      {"BOwner", false},
-    {"AOwnerMOI", false}, {"BOwnerMOI", false}, {"AGeo", false},        {"BGeo", false}};
+const std::unordered_map<std::string, bool> force_kernel_ingredient_stats = {{"ts", false},
+                                                                             {"time", false},
+                                                                             {"AOwnerFamily", true},
+                                                                             {"BOwnerFamily", true},
+                                                                             {"ALinVel", false},
+                                                                             {"BLinVel", false},
+                                                                             {"ARotVel", false},
+                                                                             {"BRotVel", false},
+                                                                             {"AOwner", false},
+                                                                             {"BOwner", false},
+                                                                             {"AOwnerMOI", false},
+                                                                             {"BOwnerMOI", false},
+                                                                             {"AGeo", false},
+                                                                             {"BGeo", false},
+                                                                             {"ContactType", true},
+                                                                             {"force", true},
+                                                                             {"torque_only_force", true}};
 
 // Structs defined here will be used by some host classes in DEM.
 // NOTE: Data structs here need to be those complex ones (such as needing to include CudaAllocator.hpp), which may
@@ -950,6 +967,159 @@ class DEMTrackedObj : public DEMInitializer {
     // The number of geometric entities (sphere components, triangles or analytical components) the tracked objects
     // have.
     size_t nGeos;
+};
+
+// General-purpose data container that can hold any type of data, indexed by string keys.
+class DataContainer {
+  public:
+    virtual ~DataContainer() = default;
+
+    template <typename T>
+    void Insert(const std::string& key, std::vector<T> vec) {
+        if (data_.count(key))
+            throw std::runtime_error("Key already exists: " + key);
+        data_[key] = std::make_shared<Holder<T>>(std::move(vec));
+        types_[key] = &typeid(T);
+    }
+
+    template <typename T>
+    std::vector<T>& Get(const std::string& key) {
+        check_type<T>(key);
+        return static_cast<Holder<T>&>(*data_[key]).data;
+    }
+
+    template <typename T>
+    const std::vector<T>& Get(const std::string& key) const {
+        check_type<T>(key);
+        return static_cast<const Holder<T>&>(*data_.at(key)).data;
+    }
+
+    bool Contains(const std::string& key) const { return data_.count(key) > 0; }
+
+    const std::type_info& type_of(const std::string& key) const {
+        if (!Contains(key))
+            throw std::runtime_error("Key not found: " + key);
+        return *types_.at(key);  // dereference the pointer
+    }
+
+    std::vector<std::string> keys() const {
+        std::vector<std::string> out;
+        for (const auto& kv : data_)
+            out.push_back(kv.first);
+        return out;
+    }
+
+    void ResizeAll(std::size_t n) {
+        for (auto& [key, holder] : data_) {
+            holder->Resize(n);
+        }
+    }
+
+    size_t Size(const std::string& key) const {
+        if (!Contains(key)) {
+            on_missing_key(key);
+        }
+        return data_.at(key)->Size();
+    }
+    size_t Size() const {
+        if (data_.empty()) {
+            throw std::runtime_error("DataContainer is empty.");
+        }
+        return data_.begin()->second->Size();
+    }
+
+  protected:
+    struct IHolder {
+        virtual ~IHolder() = default;
+        virtual void Resize(std::size_t n) = 0;
+        virtual std::size_t Size() const = 0;
+    };
+
+    template <typename T>
+    struct Holder : IHolder {
+        explicit Holder(std::vector<T> d) : data(std::move(d)) {}
+        std::vector<T> data;
+
+        void Resize(std::size_t n) override { data.resize(n); }
+        std::size_t Size() const override { return data.size(); }
+    };
+
+    virtual void on_missing_key(const std::string& key) const {
+        throw std::runtime_error("Key not found: '" + key + "'");
+    }
+
+    template <typename T>
+    void check_type(const std::string& key) const {
+        if (!Contains(key)) {
+            on_missing_key(key);
+        }
+        if (*types_.at(key) != typeid(T)) {
+            throw std::runtime_error("Type mismatch for key: " + key);
+        }
+    }
+
+    std::unordered_map<std::string, std::shared_ptr<IHolder>> data_;
+    std::unordered_map<std::string, const std::type_info*> types_;
+};
+
+class ContactInfoContainer : public DataContainer {
+  public:
+    ContactInfoContainer(unsigned int cnt_out_content,
+                         const std::vector<std::pair<std::string, std::string>>& runtime_keys)
+        : m_cnt_out_content(cnt_out_content) {
+        // Always output the contact type, no need to check
+        Insert<std::string>("ContactType", {});
+        if (cnt_out_content & CNT_OUTPUT_CONTENT::CNT_POINT)
+            Insert<float3>("Point", {});
+        if (cnt_out_content & CNT_OUTPUT_CONTENT::GEO_ID) {
+            Insert<bodyID_t>("AGeo", {});
+            Insert<bodyID_t>("BGeo", {});
+        }
+        if (cnt_out_content & CNT_OUTPUT_CONTENT::OWNER) {
+            Insert<bodyID_t>("AOwner", {});
+            Insert<bodyID_t>("BOwner", {});
+        }
+        // Don't bother, just add the owner family info
+        {
+            Insert<family_t>("AOwnerFamily", {});
+            Insert<family_t>("BOwnerFamily", {});
+        }
+        if (cnt_out_content & CNT_OUTPUT_CONTENT::FORCE)
+            Insert<float3>("Force", {});
+        if (cnt_out_content & CNT_OUTPUT_CONTENT::TORQUE)
+            Insert<float3>("Torque", {});
+        if (cnt_out_content & CNT_OUTPUT_CONTENT::NORMAL)
+            Insert<float3>("Normal", {});
+
+        if (cnt_out_content & CNT_OUTPUT_CONTENT::CNT_WILDCARD) {
+            for (const auto& [name, type] : runtime_keys) {
+                // Wildcard for now can only be float, so type is not used
+                Insert<float>(name, {});
+            }
+        }
+    }
+
+    std::vector<std::string>& GetContactType() { return Get<std::string>("ContactType"); }
+    std::vector<float3>& GetPoint() { return Get<float3>("Point"); }
+    std::vector<bodyID_t>& GetAOwner() { return Get<bodyID_t>("AOwner"); }
+    std::vector<bodyID_t>& GetBOwner() { return Get<bodyID_t>("BOwner"); }
+    std::vector<bodyID_t>& GetAGeo() { return Get<bodyID_t>("AGeo"); }
+    std::vector<bodyID_t>& GetBGeo() { return Get<bodyID_t>("BGeo"); }
+    std::vector<family_t>& GetAOwnerFamily() { return Get<family_t>("AOwnerFamily"); }
+    std::vector<family_t>& GetBOwnerFamily() { return Get<family_t>("BOwnerFamily"); }
+    std::vector<float3>& GetForce() { return Get<float3>("Force"); }
+    std::vector<float3>& GetTorque() { return Get<float3>("Torque"); }
+    std::vector<float3>& GetNormal() { return Get<float3>("Normal"); }
+
+  protected:
+    void on_missing_key(const std::string& key) const override {
+        throw std::runtime_error("ContactInfoContainer does not have field: '" + key +
+                                 "', you may need to turn on the output of this field by correctly calling "
+                                 "SetContactOutputContent before Initialize().");
+    }
+
+  private:
+    unsigned int m_cnt_out_content;
 };
 
 }  // namespace deme
