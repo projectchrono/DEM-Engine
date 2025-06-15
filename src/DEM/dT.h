@@ -629,7 +629,8 @@ class DEMDynamicThread {
     void setSimTime(double time);
 
     // Jitify dT kernels (at initialization) based on existing knowledge of this run
-    void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs);
+    void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs,
+                       const std::vector<std::string>& JitifyOptions);
 
     // Execute this kernel, then return the reduced value
     float* inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,

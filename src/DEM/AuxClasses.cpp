@@ -186,11 +186,13 @@ float* DEMInspector::dT_GetValue() {
 
 void DEMInspector::assertInit() {
     if (!initialized) {
-        Initialize(sys->GetJitStringSubs());
+        Initialize(sys->GetJitStringSubs(), sys->GetJitifyOptions());
     }
 }
 
-void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>& Subs, bool force) {
+void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>& Subs,
+                              const std::vector<std::string>& options,
+                              bool force) {
     if (!(sys->GetInitStatus()) && !force) {
         std::stringstream ss;
         ss << "Inspector should only be initialized or used after the simulation system is initialized (because it "
@@ -221,12 +223,11 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
     my_subs["_inRegionPolicy_"] = in_region_specifier;
     my_subs["_quantityQueryProcess_"] = inspection_code;
     if (thing_to_insp == INSPECT_ENTITY_TYPE::SPHERE) {
-        inspection_kernel = std::make_shared<jitify::Program>(std::move(
-            JitHelper::buildProgram("DEMSphereQueryKernels", JitHelper::KERNEL_DIR / "DEMSphereQueryKernels.cu",
-                                    my_subs, DEME_JITIFY_OPTIONS)));
+        inspection_kernel = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMSphereQueryKernels", JitHelper::KERNEL_DIR / "DEMSphereQueryKernels.cu", my_subs, options)));
     } else if (thing_to_insp == INSPECT_ENTITY_TYPE::CLUMP || thing_to_insp == INSPECT_ENTITY_TYPE::EVERYTHING) {
         inspection_kernel = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMOwnerQueryKernels", JitHelper::KERNEL_DIR / "DEMOwnerQueryKernels.cu", my_subs, DEME_JITIFY_OPTIONS)));
+            "DEMOwnerQueryKernels", JitHelper::KERNEL_DIR / "DEMOwnerQueryKernels.cu", my_subs, options)));
     } else {
         std::stringstream ss;
         ss << "Sorry, an inspector object you are using is not implemented yet.\nConsider letting the developers know "
@@ -781,6 +782,17 @@ int DEMForceModel::ReadCustomModelFile(const std::filesystem::path& sourcefile) 
     m_must_have_mat_props.clear();
     type = FORCE_MODEL::CUSTOM;
     m_force_model = read_file_to_string(sourcefile);
+    return 0;
+}
+
+void DEMForceModel::DefineCustomModelPrerequisites(const std::string& util) {
+    m_model_prerequisites = util;
+}
+int DEMForceModel::ReadCustomModelPrerequisitesFile(const std::filesystem::path& sourcefile) {
+    if (!std::filesystem::exists(sourcefile)) {
+        return 1;
+    }
+    m_model_prerequisites = read_file_to_string(sourcefile);
     return 0;
 }
 
