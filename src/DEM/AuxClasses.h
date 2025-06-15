@@ -70,7 +70,9 @@ class DEMInspector {
     void SetInspectionCode(const std::string& code) { inspection_code = code; }
 
     // Initialize with the DEM simulation system (user should not call this)
-    void Initialize(const std::unordered_map<std::string, std::string>& Subs, bool force = false);
+    void Initialize(const std::unordered_map<std::string, std::string>& Subs,
+                    const std::vector<std::string>& options,
+                    bool force = false);
 
     /// Get the reduce value of the quantity that you wish to inspect.
     float GetValue();
@@ -434,6 +436,8 @@ class DEMForceModel {
     FORCE_MODEL type = FORCE_MODEL::CUSTOM;
     // The model
     std::string m_force_model = " ";
+    // Mainly for device util functions this model might need.
+    std::string m_model_prerequisites = " ";
     // Quatity names that we want to associate each contact pair with. An array will be allocated for storing this, and
     // it lives and die with contact pairs.
     std::set<std::string> m_contact_wildcards;
@@ -451,13 +455,19 @@ class DEMForceModel {
     DEMForceModel() {}
     ~DEMForceModel() {}
 
-    /// Set the contact force model type
+    /// Set the contact force model type.
     void SetForceModelType(FORCE_MODEL model_type);
-    /// Define user-custom force model with a string which is your force calculation code
+    /// Define user-custom force model with a string which is your force calculation code.
     void DefineCustomModel(const std::string& model);
     /// Read user-custom force model from a file (which by default should reside in kernel/DEMUserScripts), which
     /// contains your force calculation code. Returns 0 if read successfully, otherwise 1.
     int ReadCustomModelFile(const std::filesystem::path& sourcefile);
+
+    /// Define user-custom force model's utility __device__ functions with a string.
+    void DefineCustomModelPrerequisites(const std::string& util);
+    /// Read user-custom force model's utility __device__ functions from a file (which by default should reside in
+    /// kernel/DEMUserScripts). Returns 0 if read successfully, otherwise 1.
+    int ReadCustomModelPrerequisitesFile(const std::filesystem::path& sourcefile);
 
     /// @brief Specifiy the material properties that this force model will use.
     /// @param props Material property names.

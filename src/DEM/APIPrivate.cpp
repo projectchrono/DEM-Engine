@@ -306,12 +306,12 @@ void DEMSolver::jitifyKernels() {
     // Jitify may require a defined device to derive the arch
     std::thread kT_build([&]() {
         DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
-        kT->jitifyKernels(m_subs);
+        kT->jitifyKernels(m_subs, m_jitify_options);
     });
 
     std::thread dT_build([&]() {
         DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
-        dT->jitifyKernels(m_subs);
+        dT->jitifyKernels(m_subs, m_jitify_options);
 
         // Now, inspectors need to be jitified too... but the current design jitify inspector kernels at the first time
         // they are used. for (auto& insp : m_inspectors) {
@@ -321,7 +321,7 @@ void DEMSolver::jitifyKernels() {
         // Solver system's own max vel inspector should be init-ed. Don't bother init-ing it while using, because it is
         // called at high frequency, let's save an if check. Forced initialization (since doing it before system
         // completes init).
-        m_approx_max_vel_func->Initialize(m_subs, true);
+        m_approx_max_vel_func->Initialize(m_subs, m_jitify_options, true);
         dT->approxMaxVelFunc = m_approx_max_vel_func;
     });
     kT_build.join();
@@ -1379,6 +1379,7 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     std::set<std::string> added_owner_wildcards, added_geo_wildcards;
     // Analyze this model... what does it require?
     std::string model = m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_force_model;
+    std::string model_prerequisites = m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_model_prerequisites;
     const std::set<std::string> contact_wildcard_names = m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_contact_wildcards;
     const std::set<std::string> owner_wildcard_names = m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_owner_wildcards;
     const std::set<std::string> geo_wildcard_names = m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_geo_wildcards;
@@ -1539,6 +1540,7 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         contact_info_write_strat = compact_code(contact_info_write_strat);
     }
     strMap["_DEMForceModel_"] = model;
+    strMap["_forceModelPrerequisites_;"] = model_prerequisites;
     strMap["_forceModelIngredientDefinition_"] = ingredient_definition;
     strMap["_forceModelIngredientAcqForA_"] = ingredient_acquisition_A;
     strMap["_forceModelIngredientAcqForB_"] = ingredient_acquisition_B;

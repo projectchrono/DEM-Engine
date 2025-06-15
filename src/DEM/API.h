@@ -128,6 +128,10 @@ class DEMSolver {
     /// Get the jitification string substitution laundary list. It is needed by some of this simulation system's friend
     /// classes.
     std::unordered_map<std::string, std::string> GetJitStringSubs() const { return m_subs; }
+    /// Get current jitification options. It is needed by some of this simulation system's friend classes.
+    std::vector<std::string> GetJitifyOptions() const { return m_jitify_options; }
+    /// Set the jitification options. It is only needed by advanced users.
+    void SetJitifyOptions(const std::vector<std::string>& options) { m_jitify_options = options; }
 
     /// Explicitly instruct the bin size (for contact detection) that the solver should use.
     void SetInitBinSize(double bin_size) {
@@ -1642,6 +1646,8 @@ class DEMSolver {
 
     // A big fat tab for all string replacement that the JIT compiler needs to consider
     std::unordered_map<std::string, std::string> m_subs;
+    // jitify's compilation options
+    std::vector<std::string> m_jitify_options = DEME_JITIFY_DEFAULT_OPTIONS;
 
     // A map that records the numbering for user-defined owner wildcards
     std::unordered_map<std::string, unsigned int> m_owner_wc_num;

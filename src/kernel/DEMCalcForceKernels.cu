@@ -13,6 +13,8 @@ _materialDefs_;
 // If mass properties are jitified, then they are below
 _massDefs_;
 _moiDefs_;
+// If the user has some utility functions, they will be included here
+_forceModelPrerequisites_;
 
 template <typename T1>
 inline __device__ void equipOwnerPosRot(deme::DEMSimParams* simParams,

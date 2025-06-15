@@ -442,11 +442,18 @@ PYBIND11_MODULE(DEME, obj) {
     py::class_<deme::DEMForceModel, std::shared_ptr<deme::DEMForceModel>>(obj, "DEMForceModel")
         .def(py::init<deme::FORCE_MODEL>())
         .def("SetForceModelType", &deme::DEMForceModel::SetForceModelType, "Set the contact force model type")
+
         .def("DefineCustomModel", &deme::DEMForceModel::DefineCustomModel,
-             "Define user-custom force model with a string which is your force calculation code")
+             "Define user-custom force model with a string which is your force calculation code.")
         .def("ReadCustomModelFile", &deme::DEMForceModel::ReadCustomModelFile,
              "Read user-custom force model from a file (which by default should reside in kernel/DEMUserScripts), "
              "which contains your force calculation code. Returns 0 if read successfully, otherwise 1.")
+        .def("DefineCustomModelPrerequisites", &deme::DEMForceModel::DefineCustomModelPrerequisites,
+             "Define user-custom force model's utility __device__ functions with a string.")
+        .def("ReadCustomModelPrerequisitesFile", &deme::DEMForceModel::ReadCustomModelPrerequisitesFile,
+             "Read user-custom force model's utility __device__ functions from a file (which by default should reside "
+             "in kernel/DEMUserScripts). Returns 0 if read successfully, otherwise 1.")
+
         .def("SetMustHaveMatProp", &deme::DEMForceModel::SetMustHaveMatProp,
              "Specifiy the material properties that this force model will use")
         .def("SetMustPairwiseMatProp", &deme::DEMForceModel::SetMustPairwiseMatProp,
@@ -516,6 +523,10 @@ PYBIND11_MODULE(DEME, obj) {
         .def("GetJitStringSubs", &deme::DEMSolver::GetJitStringSubs,
              "Get the jitification string substitution laundary list. It is needed by some of this simulation system's "
              "friend classes.")
+        .def("GetJitifyOptions", &deme::DEMSolver::GetJitifyOptions,
+             "Get current jitification options. It is needed by some of this simulation system's friend classes.")
+        .def("SetJitifyOptions", &deme::DEMSolver::SetJitifyOptions,
+             "Set the jitification options. It is only needed by advanced users.")
 
         .def("SetInitBinSizeAsMultipleOfSmallestSphere", &deme::DEMSolver::SetInitBinSizeAsMultipleOfSmallestSphere,
              "Explicitly instruct the bin size (for contact detection) that the solver should use, as a multiple of "
@@ -1005,6 +1016,18 @@ PYBIND11_MODULE(DEME, obj) {
              "Set the wildcard values of some spheres.")
         .def("SetAnalWildcardValue", &deme::DEMSolver::SetAnalWildcardValue,
              "Set the wildcard values of some analytical components.")
+
+        .def("SetOwnerWildcardValue",
+             static_cast<void (deme::DEMSolver::*)(deme::bodyID_t ownerID, const std::string& name,
+                                                   const std::vector<float>& vals)>(
+                 &deme::DEMSolver::SetOwnerWildcardValue),
+             "Set the wildcard values of some owners using a list.", py::arg("ownerIDs"), py::arg("name"),
+             py::arg("vals"))
+        .def("SetOwnerWildcardValue",
+             static_cast<void (deme::DEMSolver::*)(deme::bodyID_t ownerID, const std::string& name, float val,
+                                                   size_t n)>(&deme::DEMSolver::SetOwnerWildcardValue),
+             "Set the wildcard values of some owners using a list.", py::arg("ownerIDs"), py::arg("name"),
+             py::arg("val"), py::arg("n") = 1)
 
         .def("GetOwnerWildcardValue",
              static_cast<std::vector<float> (deme::DEMSolver::*)(deme::bodyID_t ownerID, const std::string& name,

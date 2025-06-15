@@ -370,7 +370,8 @@ class DEMKinematicThread {
     void changeOwnerSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors);
 
     // Jitify kT kernels (at initialization) based on existing knowledge of this run
-    void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs);
+    void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs,
+                       const std::vector<std::string>& JitifyOptions);
 
     /// Set this owner's family number, for n consecutive items.
     void setOwnerFamily(bodyID_t ownerID, family_t fam, bodyID_t n = 1);
