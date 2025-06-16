@@ -214,6 +214,8 @@ int main() {
 
     DEMSim.ShowThreadCollaborationStats();
     DEMSim.ShowTimingStats();
+    // Testing this debug function...
+    DEMSim.PrintKinematicScratchSpaceUsage();
     std::cout << "DEMdemo_SingleSphereCollide exiting..." << std::endl;
     return 0;
 }

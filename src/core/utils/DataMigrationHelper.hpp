@@ -192,6 +192,9 @@ class DualStruct : private NonCopyable {
 
     // Getter for the host pointer
     T* getHostPointer() { return host_data; }
+
+    // Get host or device size in bytes
+    size_t getNumBytes() const { return sizeof(T); }
 };
 
 #ifndef DEME_USE_MANAGED_ARRAYS
@@ -403,6 +406,9 @@ class DualArray : private NonCopyable {
     // Array's in-use data range is always stored on host by size()
     size_t size() const { return m_host_vec_ptr ? m_host_vec_ptr->size() : 0; }
 
+    // Get host or device size in bytes
+    size_t getNumBytes() const { return m_host_vec_ptr ? m_host_vec_ptr->size() * sizeof(T) : 0; }
+
     T* host() { return m_host_vec_ptr ? m_host_vec_ptr->data() : nullptr; }
 
     T* device() { return m_device_ptr; }
@@ -594,6 +600,9 @@ class DualArray : private NonCopyable {
     // Array's in-use data range is always stored on host by size()
     size_t size() const { return m_host_vec_ptr ? m_host_vec_ptr->size() : 0; }
 
+    // Get host or device size in bytes
+    size_t getNumBytes() const { return m_host_vec_ptr ? m_host_vec_ptr->size() * sizeof(T) : 0; }
+
     T* host() { return m_host_vec_ptr ? m_host_vec_ptr->data() : nullptr; }
 
     T* device() { return host(); }
@@ -694,6 +703,9 @@ class DeviceArray : private NonCopyable {
 
     size_t size() const { return m_capacity; }
 
+    // Get host or device size in bytes
+    size_t getNumBytes() const { return m_capacity * sizeof(T); }
+
     T* data() { return m_data; }
 
     const T* data() const { return m_data; }
@@ -760,10 +772,15 @@ class ResourcePool : private NonCopyable {
 
     void printStatus() const {
         for (size_t i = 0; i < in_use.size(); ++i) {
-            if (in_use[i])
-                std::cout << "Storage vector[" << i << "] in use as \"" << *in_use[i] << "\"\n";
-            else
+            if (in_use[i]) {
+                const std::string& name = *in_use[i];
+                const size_t index = name_to_index.at(name);
+                const auto& vec = vectors[index];
+                std::cout << "Storage vector[" << i << "] in use as \"" << name << "\", using " << vec->getNumBytes()
+                          << " bytes.\n";
+            } else {
                 std::cout << "Storage vector[" << i << "] is free\n";
+            }
         }
     }
 };

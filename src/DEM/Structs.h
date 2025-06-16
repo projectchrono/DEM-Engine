@@ -187,7 +187,7 @@ class DEMSolverScratchData {
     void finishUsingDualStruct(const std::string& name) { m_dualStructPool.unclaim(name); }
 
     // Debug util
-    void printVectorUsage() {
+    void printVectorUsage() const {
         m_deviceVecPool.printStatus();
         m_dualArrPool.printStatus();
         m_dualStructPool.printStatus();
