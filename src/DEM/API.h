@@ -1363,6 +1363,9 @@ class DEMSolver {
     /// @brief Remove all extra libraries that the kernels `include' in their headers.
     void RemoveKernelInclude() { kernel_includes = " "; }
 
+    /// @brief Print kT's scratch space usage. This is a debug method.
+    void PrintKinematicScratchSpaceUsage() const { kT->printScratchSpaceUsage(); }
+
     /// Let dT do this call and return the reduce value of the inspected quantity.
     float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
                           const std::string& kernel_name,

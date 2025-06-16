@@ -386,6 +386,12 @@ class DEMKinematicThread {
     /// Update (overwrite) kT's previous contact array based on input
     void updatePrevContactArrays(DualStruct<DEMDataDT>& dT_data, size_t nContacts);
 
+    /// Print temporary arrays' memory usage. This is for debugging purposes only.
+    void printScratchSpaceUsage() const {
+        std::cout << Name << " scratch space usage: " << std::endl;
+        solverScratchSpace.printVectorUsage();
+    }
+
   private:
     const std::string Name = "kT";
 
