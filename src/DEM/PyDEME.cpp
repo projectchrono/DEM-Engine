@@ -1156,6 +1156,8 @@ PYBIND11_MODULE(DEME, obj) {
              "steps that dT should be allowed to be in advance of kT.")
         .def("ShowTimingStats", &deme::DEMSolver::ShowTimingStats,
              "Show the wall time and percentages of wall time spend on various solver tasks.")
+        .def("PrintKinematicScratchSpaceUsage", &deme::DEMSolver::PrintKinematicScratchSpaceUsage,
+             "Print kT's scratch space usage. This is a debug method.")
         .def("ShowAnomalies", &deme::DEMSolver::ShowAnomalies,
              "Show potential anomalies that may have been there in the simulation, then clear the anomaly log.")
         .def("ClearThreadCollaborationStats", &deme::DEMSolver::ClearThreadCollaborationStats,
