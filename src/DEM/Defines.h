@@ -26,7 +26,7 @@ namespace deme {
 // It is better to keep DEME_NUM_SPHERES_PER_CD_BATCH == DEME_KT_CD_NTHREADS_PER_BLOCK for better performance
 #define DEME_NUM_SPHERES_PER_CD_BATCH 512    ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
 #define DEME_NUM_TRIANGLES_PER_CD_BATCH 256  ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
-#define DEME_TINY_FLOAT 1e-15
+#define DEME_TINY_FLOAT 1e-12                ///< Appears to be very sensitive to even smaller values...
 #define DEME_HUGE_FLOAT 1e15
 #define DEME_BITS_PER_BYTE 8
 #define DEME_CUDA_WARP_SIZE 32
