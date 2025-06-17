@@ -42,7 +42,7 @@ __global__ void computeMarginFromAbsv(deme::DEMSimParams* simParams,
     if (ownerID < n) {
         float absv = granData->marginSize[ownerID];
         unsigned int my_family = granData->familyID[ownerID];
-        if (absv > simParams->approxMaxVel) {
+        if (absv > simParams->approxMaxVel || (!isfinite(absv))) {
             absv = simParams->approxMaxVel;
         }
         // User-specified extra margin also needs to be added here. This marginSize is used for bin--sph or bin--tri
