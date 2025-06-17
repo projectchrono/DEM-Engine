@@ -134,7 +134,7 @@ inline void DEMKinematicThread::unpackMyBuffer() {
                         solverScratchSpace);
     // Get the reduced maxVel value
     stateParams.maxVel.toHost();
-    if (*(stateParams.maxVel) > simParams->errOutVel) {
+    if (*(stateParams.maxVel) > simParams->errOutVel || (!std::isfinite(*(stateParams.maxVel)))) {
         DEME_ERROR(
             "System max velocity is %.7g, exceeded max allowance (%.7g).\nIf this velocity is not abnormal and you "
             "want to increase this allowance, use SetErrorOutVelocity before initializing simulation.\nOtherwise, the "
