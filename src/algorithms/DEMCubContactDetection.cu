@@ -387,7 +387,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             cubDEMMax<trianglesBinTouches_t>(numTrianglesBinTouches, pMaxGeoInBin, *pNumActiveBinsForTri, this_stream,
                                              scratchPad);
             scratchPad.syncDualStructDeviceToHost("maxGeoInBin");
-            stateParams.maxSphFoundInBin = *((trianglesBinTouches_t*)scratchPad.getDualStructHost("maxGeoInBin"));
+            // Find the max tri number. Hmm... this only works in little-endian systems... I don't use undefined
+            // behavior that often but this one...
+            stateParams.maxTriFoundInBin = *((trianglesBinTouches_t*)scratchPad.getDualStructHost("maxGeoInBin"));
             scratchPad.finishUsingDualStruct("maxGeoInBin");
 
             // 6th step: map activeBinIDsForTri to activeBinIDs, so that when we are processing the bins in

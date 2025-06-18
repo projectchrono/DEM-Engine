@@ -209,7 +209,7 @@ void DEMSolver::SetContactOutputContent(const std::vector<std::string>& content)
                 m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::FORCE;
                 break;
             case ("POINT"_):
-                m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::DEME_POINT;
+                m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::CNT_POINT;
                 break;
             case ("COMPONENT"_):
                 m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::COMPONENT;
@@ -393,6 +393,68 @@ std::vector<std::pair<bodyID_t, bodyID_t>> DEMSolver::GetClumpContacts(
         family_pair[i] = std::pair<family_t, family_t>(famA_tmp[idx[i]], famB_tmp[idx[i]]);
     }
     return out_pair;
+}
+
+std::vector<std::pair<bodyID_t, bodyID_t>> DEMSolver::GetContacts() const {
+    std::vector<bodyID_t> idA_tmp, idB_tmp;
+    std::vector<family_t> famA_tmp, famB_tmp;
+    std::vector<contact_t> cnt_type_tmp;
+    // Getting sphere contacts is enough
+    getContacts_impl(idA_tmp, idB_tmp, cnt_type_tmp, famA_tmp, famB_tmp, [](contact_t type) { return true; });
+    auto idx = hostSortIndices(idA_tmp);
+    std::vector<std::pair<bodyID_t, bodyID_t>> out_pair(idx.size());
+    for (size_t i = 0; i < idx.size(); i++) {
+        out_pair[i] = std::pair<bodyID_t, bodyID_t>(idA_tmp[idx[i]], idB_tmp[idx[i]]);
+    }
+    return out_pair;
+}
+
+std::vector<std::pair<bodyID_t, bodyID_t>> DEMSolver::GetContacts(const std::set<family_t>& family_to_include) const {
+    std::vector<bodyID_t> idA_tmp, idB_tmp;
+    std::vector<family_t> famA_tmp, famB_tmp;
+    std::vector<contact_t> cnt_type_tmp;
+    // Getting sphere contacts is enough
+    getContacts_impl(idA_tmp, idB_tmp, cnt_type_tmp, famA_tmp, famB_tmp, [](contact_t type) { return true; });
+    // Exclude the families that are not in the set
+    std::vector<bool> elem_to_remove(idA_tmp.size(), false);
+    for (size_t i = 0; i < idA_tmp.size(); i++) {
+        if (!check_exist(family_to_include, famA_tmp.at(i)) || !check_exist(family_to_include, famB_tmp.at(i))) {
+            elem_to_remove[i] = true;
+        }
+    }
+    idA_tmp = hostRemoveElem(idA_tmp, elem_to_remove);
+    idB_tmp = hostRemoveElem(idB_tmp, elem_to_remove);
+    famA_tmp = hostRemoveElem(famA_tmp, elem_to_remove);
+    famB_tmp = hostRemoveElem(famB_tmp, elem_to_remove);
+    cnt_type_tmp = hostRemoveElem(cnt_type_tmp, elem_to_remove);
+
+    auto idx = hostSortIndices(idA_tmp);
+    std::vector<std::pair<bodyID_t, bodyID_t>> out_pair(idx.size());
+    for (size_t i = 0; i < idx.size(); i++) {
+        out_pair[i] = std::pair<bodyID_t, bodyID_t>(idA_tmp[idx[i]], idB_tmp[idx[i]]);
+    }
+    return out_pair;
+}
+
+std::vector<std::pair<bodyID_t, bodyID_t>> DEMSolver::GetContacts(
+    std::vector<std::pair<family_t, family_t>>& family_pair) const {
+    std::vector<bodyID_t> idA_tmp, idB_tmp;
+    std::vector<family_t> famA_tmp, famB_tmp;
+    std::vector<contact_t> cnt_type_tmp;
+    // Getting sphere contacts is enough
+    getContacts_impl(idA_tmp, idB_tmp, cnt_type_tmp, famA_tmp, famB_tmp, [](contact_t type) { return true; });
+    auto idx = hostSortIndices(idA_tmp);
+    std::vector<std::pair<bodyID_t, bodyID_t>> out_pair(idx.size());
+    family_pair.resize(idx.size());
+    for (size_t i = 0; i < idx.size(); i++) {
+        out_pair[i] = std::pair<bodyID_t, bodyID_t>(idA_tmp[idx[i]], idB_tmp[idx[i]]);
+        family_pair[i] = std::pair<family_t, family_t>(famA_tmp[idx[i]], famB_tmp[idx[i]]);
+    }
+    return out_pair;
+}
+
+std::shared_ptr<ContactInfoContainer> DEMSolver::GetContactDetailedInfo(float force_thres) const {
+    return dT->generateContactInfo(force_thres);
 }
 
 std::vector<float3> DEMSolver::GetOwnerPosition(bodyID_t ownerID, bodyID_t n) const {
@@ -2182,12 +2244,16 @@ void DEMSolver::UpdateSimParams() {
     // Now that all params prepared, we need to migrate that imformation to the device
     migrateSimParamsToDevice();
 
-    // Jitify max vel finder, in case the policy there changed
-    m_approx_max_vel_func->Initialize(m_subs, true);
-    dT->approxMaxVelFunc = m_approx_max_vel_func;
-
-    // Updating sim environment is critical
-    dT->announceCritical();
+    // JItify may require a defined device to decide the arch
+    std::thread dT_build([&]() {
+        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+        // Jitify max vel finder, in case the policy there changed
+        m_approx_max_vel_func->Initialize(m_subs, m_jitify_options, true);
+        dT->approxMaxVelFunc = m_approx_max_vel_func;
+        // Updating sim environment is critical
+        dT->announceCritical();
+    });
+    dT_build.join();
 }
 
 void DEMSolver::UpdateStepSize(double ts) {
@@ -2301,11 +2367,9 @@ void DEMSolver::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::ve
 void DEMSolver::PurgeFamily(unsigned int family_num) {}
 
 void DEMSolver::DoDynamics(double thisCallDuration) {
-    // Is it needed here??
-    // dT->packDataPointers(kT->granData);
-
-    // TODO: Return if nSphere == 0
-    // TODO: Check if initialized
+    if (!sys_initialized) {
+        Initialize();
+    }
 
     // Tell dT how long this call is
     dT->setCycleDuration(thisCallDuration);

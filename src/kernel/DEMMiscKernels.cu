@@ -1,5 +1,6 @@
 // DEM misc. kernels
 #include <DEM/Defines.h>
+#include <DEMHelperKernels.cuh>
 
 __global__ void markOwnerToChange(deme::notStupidBool_t* idBool,
                                   float* ownerFactors,
@@ -42,6 +43,11 @@ __global__ void computeMarginFromAbsv(deme::DEMSimParams* simParams,
     if (ownerID < n) {
         float absv = granData->marginSize[ownerID];
         unsigned int my_family = granData->familyID[ownerID];
+        if (!isfinite(absv)) {
+            // May produce messy error messages, but it's still good to know what entities went wrong
+            DEME_ABORT_KERNEL("Absolute velocity for ownerID %llu is not finite. This happened at time %.9g.\n",
+                              static_cast<unsigned long long>(ownerID), simParams->timeElapsed);
+        }
         if (absv > simParams->approxMaxVel) {
             absv = simParams->approxMaxVel;
         }

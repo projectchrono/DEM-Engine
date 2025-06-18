@@ -370,7 +370,8 @@ class DEMKinematicThread {
     void changeOwnerSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors);
 
     // Jitify kT kernels (at initialization) based on existing knowledge of this run
-    void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs);
+    void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs,
+                       const std::vector<std::string>& JitifyOptions);
 
     /// Set this owner's family number, for n consecutive items.
     void setOwnerFamily(bodyID_t ownerID, family_t fam, bodyID_t n = 1);
@@ -384,6 +385,12 @@ class DEMKinematicThread {
 
     /// Update (overwrite) kT's previous contact array based on input
     void updatePrevContactArrays(DualStruct<DEMDataDT>& dT_data, size_t nContacts);
+
+    /// Print temporary arrays' memory usage. This is for debugging purposes only.
+    void printScratchSpaceUsage() const {
+        std::cout << Name << " scratch space usage: " << std::endl;
+        solverScratchSpace.printVectorUsage();
+    }
 
   private:
     const std::string Name = "kT";

@@ -13,6 +13,8 @@ _materialDefs_;
 // If mass properties are jitified, then they are below
 _massDefs_;
 _moiDefs_;
+// If the user has some utility functions, they will be included here
+_forceModelPrerequisites_;
 
 template <typename T1>
 inline __device__ void equipOwnerPosRot(deme::DEMSimParams* simParams,
@@ -43,7 +45,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
     deme::contactPairs_t myContactID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myContactID < nContactPairs) {
         // Identify contact type first
-        deme::contact_t myContactType = granData->contactType[myContactID];
+        deme::contact_t ContactType = granData->contactType[myContactID];
         // The following quantities are always calculated, regardless of force model
         double3 contactPnt;
         float3 B2A;  // Unit vector pointing from body B to body A (contact normal)
@@ -90,7 +92,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
         }
 
         // Then B, location and velocity
-        if (myContactType == deme::SPHERE_SPHERE_CONTACT) {
+        if (ContactType == deme::SPHERE_SPHERE_CONTACT) {
             deme::bodyID_t sphereID = granData->idGeometryB[myContactID];
             deme::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
 
@@ -129,10 +131,10 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             // If overlapDepth is negative then it might still be considered in contact, if the extra margins of A and B
             // combined is larger than abs(overlapDepth)
             if (overlapDepth < -extraMarginSize) {
-                myContactType = deme::NOT_A_CONTACT;
+                ContactType = deme::NOT_A_CONTACT;
             }
 
-        } else if (myContactType == deme::SPHERE_MESH_CONTACT) {
+        } else if (ContactType == deme::SPHERE_MESH_CONTACT) {
             // Geometry ID here is called sphereID, although it is not a sphere, it's more like triID. But naming it
             // sphereID makes the acquisition process cleaner.
             deme::bodyID_t sphereID = granData->idGeometryB[myContactID];
@@ -183,10 +185,10 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             // that case, overlapDepth is very negative and this will be considered in-contact. So the cases we exclude
             // are: too far away while at the positive direction; not in contact while at the negative side.
             if ((overlapDepth > extraMarginSize) || (!in_contact && overlapDepth < 0.)) {
-                myContactType = deme::NOT_A_CONTACT;
+                ContactType = deme::NOT_A_CONTACT;
             }
             overlapDepth = -overlapDepth;  // triangle_sphere_CD gives neg. number for overlapping cases
-        } else if (myContactType > deme::SPHERE_ANALYTICAL_CONTACT) {
+        } else if (ContactType > deme::SPHERE_ANALYTICAL_CONTACT) {
             // Geometry ID here is called sphereID, although it is not a sphere, it's more like analyticalID. But naming
             // it sphereID makes the acquisition process cleaner.
             deme::objID_t sphereID = granData->idGeometryB[myContactID];
@@ -223,14 +225,14 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             checkSphereEntityOverlap<double3, float, double>(bodyAPos, ARadius, objType[sphereID], bodyBPos, bodyBRot,
                                                              objSize1[sphereID], objSize2[sphereID], objSize3[sphereID],
                                                              objNormal[sphereID], 0.0, contactPnt, B2A, overlapDepth);
-            // Fix myContactType if needed
+            // Fix ContactType if needed
             if (overlapDepth < -extraMarginSize) {
-                myContactType = deme::NOT_A_CONTACT;
+                ContactType = deme::NOT_A_CONTACT;
             }
         }  // else it must be NOT_A_CONTACT
 
         _forceModelContactWildcardAcq_;
-        if (myContactType != deme::NOT_A_CONTACT) {
+        if (ContactType != deme::NOT_A_CONTACT) {
             float3 force = make_float3(0, 0, 0);
             float3 torque_only_force = make_float3(0, 0, 0);
             // Local position of the contact point is always a piece of info we require... regardless of force model

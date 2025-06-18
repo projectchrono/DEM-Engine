@@ -583,6 +583,9 @@ class DEMDynamicThread {
     void migrateDataToDevice();
     // void migrateDataToHost();
 
+    // Generate contact info container based on the current contact array, and return it.
+    std::shared_ptr<ContactInfoContainer> generateContactInfo(float force_thres);
+
 #ifdef DEME_USE_CHPF
     void writeSpheresAsChpf(std::ofstream& ptFile);
     void writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy = 10);
@@ -626,7 +629,8 @@ class DEMDynamicThread {
     void setSimTime(double time);
 
     // Jitify dT kernels (at initialization) based on existing knowledge of this run
-    void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs);
+    void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs,
+                       const std::vector<std::string>& JitifyOptions);
 
     // Execute this kernel, then return the reduced value
     float* inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,

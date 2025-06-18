@@ -1,6 +1,10 @@
 build*
 .vscode/
+*.vtk
+*.csv
+*.egg-info/
 .cache/
+dist/
 output/*
 post/*
 

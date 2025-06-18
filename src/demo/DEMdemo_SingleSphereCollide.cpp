@@ -25,7 +25,7 @@ int main() {
     DEMSolver DEMSim;
     DEMSim.SetVerbosity("STEP_METRIC");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT", "COMPONENT", "NORMAL", "TORQUE"});
+    DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT", "NORMAL", "TORQUE", "CNT_WILDCARD"});
     DEMSim.EnsureKernelErrMsgLineNum();
     // DEMSim.SetNoForceRecord();
 
@@ -109,6 +109,15 @@ int main() {
     DEMSim.SetExpandSafetyMultiplier(1.2);
     DEMSim.SetIntegrator("centered_difference");
 
+    // Testing modifying jitify options and force model prerequisites
+    auto jitify_options = DEMSim.GetJitifyOptions();
+    jitify_options.pop_back();  // Remove a warning suppression option
+    // DEMSim.SetJitifyOptions(jitify_options);
+    my_force_model->DefineCustomModelPrerequisites(
+        "float3 __device__ GetContactForce(float3 AOwner, float3 BOwner, float3 ALinVel, float3 BLinVel, "
+        "float3 ARotVel, float3 BRotVel, float delta_time, float delta_tan_x, float delta_tan_y, "
+        "float delta_tan_z) { return make_float3(0.0f); }");
+
     DEMSim.Initialize();
 
     DEMSim.UpdateSimParams();  // Not needed; just testing if this function works...
@@ -146,7 +155,7 @@ int main() {
 
         char cnt_filename[100];
         sprintf(cnt_filename, "Contact_pairs_%04d.csv", i);
-        // DEMSim.WriteContactFile(out_dir / cnt_filename);
+        DEMSim.WriteContactFile(out_dir / cnt_filename);
 
         char meshfilename[100];
         sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk", i);
@@ -205,6 +214,8 @@ int main() {
 
     DEMSim.ShowThreadCollaborationStats();
     DEMSim.ShowTimingStats();
+    // Testing this debug function...
+    DEMSim.PrintKinematicScratchSpaceUsage();
     std::cout << "DEMdemo_SingleSphereCollide exiting..." << std::endl;
     return 0;
 }

@@ -88,8 +88,11 @@ class DEMSolver {
     /// Set the initial time step size. If using constant step size, then this will be used throughout; otherwise, the
     /// actual step size depends on the variable step strategy.
     void SetInitTimeStep(double ts_size) { m_ts_size = ts_size; }
-    /// Return the number of clumps that are currently in the simulation.
+    /// Return the number of clumps that are currently in the simulation. Must be used after initialization.
     size_t GetNumClumps() const { return nOwnerClumps; }
+    /// Return the total number of owners (clumps + meshes + analytical objects) that are currently in the simulation.
+    /// Must be used after initialization.
+    size_t GetNumOwners() const { return nOwnerBodies; }
     /// @brief Get the number of kT-reported potential contact pairs.
     /// @return Number of potential contact pairs.
     size_t GetNumContacts() const { return dT->getNumContacts(); }
@@ -125,6 +128,10 @@ class DEMSolver {
     /// Get the jitification string substitution laundary list. It is needed by some of this simulation system's friend
     /// classes.
     std::unordered_map<std::string, std::string> GetJitStringSubs() const { return m_subs; }
+    /// Get current jitification options. It is needed by some of this simulation system's friend classes.
+    std::vector<std::string> GetJitifyOptions() const { return m_jitify_options; }
+    /// Set the jitification options. It is only needed by advanced users.
+    void SetJitifyOptions(const std::vector<std::string>& options) { m_jitify_options = options; }
 
     /// Explicitly instruct the bin size (for contact detection) that the solver should use.
     void SetInitBinSize(double bin_size) {
@@ -413,7 +420,7 @@ class DEMSolver {
 
     /// @brief Get the clumps that are in contact with this owner as a vector.
     /// @details No multi-owner bulk version. This is due to efficiency concerns. If getting multiple owners' contacting
-    /// clumps is needed, use family-based GetClumpContacts method, then the owner ID list-based c method if you further
+    /// clumps is needed, use family-based GetContacts method, then the owner ID list-based c method if you further
     /// need the contact forces information.
     /// @param ownerID The ID of the owner that is being queried.
     /// @return Clump owner IDs in contact with this owner.
@@ -487,24 +494,76 @@ class DEMSolver {
     /// @return A vector of float3 representing the global coordinates of the mesh nodes.
     std::vector<float3> GetMeshNodesGlobal(bodyID_t ownerID);
 
-    /// @brief Get all clump--clump contacts in the simulation system.
+    /// @brief Get all clump--clump contact ID pairs in the simulation system. Note all GetContact-like methods reports
+    /// potential contacts (not necessarily confirmed contacts), meaning they are similar to what
+    /// WriteContactFileIncludingPotentialPairs does, not what WriteContactFile does.
+    /// @details Do not call this method with high frequency, as it is not efficient.
     /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
     /// body A, and Second is that of contact body B.
     std::vector<std::pair<bodyID_t, bodyID_t>> GetClumpContacts() const;
-
-    /// @brief Get all clump--clump contacts in the simulation system.
+    /// @brief Get all clump--clump contact ID pairs in the simulation system. Note all GetContact-like methods reports
+    /// potential contacts (not necessarily confirmed contacts), meaning they are similar to what
+    /// WriteContactFileIncludingPotentialPairs does, not what WriteContactFile does.
+    /// @details Do not call this method with high frequency, as it is not efficient.
     /// @param family_to_include Contacts that involve a body in a family not listed in this argument are ignored.
     /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
     /// body A, and Second is that of contact body B.
     std::vector<std::pair<bodyID_t, bodyID_t>> GetClumpContacts(const std::set<family_t>& family_to_include) const;
-
-    /// @brief Get all clump--clump contacts in the simulation system.
+    /// @brief Get all clump--clump contact ID pairs in the simulation system. Note all GetContact-like methods reports
+    /// potential contacts (not necessarily confirmed contacts), meaning they are similar to what
+    /// WriteContactFileIncludingPotentialPairs does, not what WriteContactFile does.
+    /// @details Do not call this method with high frequency, as it is not efficient.
     /// @param family_pair Functions returns a vector of contact body family number pairs. First is the family number of
     /// contact body A, and Second is that of contact body B.
     /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
     /// body A, and Second is that of contact body B.
     std::vector<std::pair<bodyID_t, bodyID_t>> GetClumpContacts(
         std::vector<std::pair<family_t, family_t>>& family_pair) const;
+
+    /// @brief Get all contact ID pairs in the simulation system. Note all GetContact-like methods reports potential
+    /// contacts (not necessarily confirmed contacts), meaning they are similar to what
+    /// WriteContactFileIncludingPotentialPairs does, not what WriteContactFile does.
+    /// @details Do not call this method with high frequency, as it is not efficient.
+    /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
+    /// body A, and Second is that of contact body B.
+    std::vector<std::pair<bodyID_t, bodyID_t>> GetContacts() const;
+    /// @brief Get all contact ID pairs in the simulation system. Note all GetContact-like methods reports potential
+    /// contacts (not necessarily confirmed contacts), meaning they are similar to what
+    /// WriteContactFileIncludingPotentialPairs does, not what WriteContactFile does.
+    /// @details Do not call this method with high frequency, as it is not efficient.
+    /// @param family_to_include Contacts that involve a body in a family not listed in this argument are ignored.
+    /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
+    /// body A, and Second is that of contact body B.
+    std::vector<std::pair<bodyID_t, bodyID_t>> GetContacts(const std::set<family_t>& family_to_include) const;
+    /// @brief Get all contact ID pairs in the simulation system. Note all GetContact-like methods reports potential
+    /// contacts (not necessarily confirmed contacts), meaning they are similar to what
+    /// WriteContactFileIncludingPotentialPairs does, not what WriteContactFile does.
+    /// @details Do not call this method with high frequency, as it is not efficient.
+    /// @param family_pair Functions returns a vector of contact body family number pairs. First is the family number of
+    /// contact body A, and Second is that of contact body B.
+    /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
+    /// body A, and Second is that of contact body B.
+    std::vector<std::pair<bodyID_t, bodyID_t>> GetContacts(
+        std::vector<std::pair<family_t, family_t>>& family_pair) const;
+
+    /// @brief Get all contact pairs' detailed information (actual content based on the setting with
+    /// SetContactOutputContent; default are owner IDs, contact point location, contact force, and associated wildcard
+    /// values) in the simulation system. Note all GetContact-like methods reports potential contacts (not necessarily
+    /// confirmed contacts), meaning they are similar to what WriteContactFileIncludingPotentialPairs does, not what
+    /// WriteContactFile does.
+    /// @details Do not call this method with high frequency, as it is not efficient.
+    /// @param force_thres Only contacts with force larger than this value are returned. Setting it to a small positive
+    /// number to, instead of getting all potential contacts, only get the ones that are currently confirmed to generate
+    /// force.
+    /// @return A map that may have the following keys: "ContactType", "Point", "AOwner", "BOwner", "AOwnerFamily",
+    /// "BOwnerFamily", "Force", "Torque", "Normal" and wildcard names, each corresponding to a vector of values. The
+    /// "ContactType" is a vector of strings, each indicating the type of contact (e.g., "sphere-sphere",
+    /// "sphere-triangle", etc.). The "Point" is a vector of float3s, each indicating the contact point location in
+    /// global coordinates. The "AOwner" and "BOwner" are vectors of body IDs for the two bodies in contact. The "Force"
+    /// is a vector of float3s, each indicating the contact force at the contact point. The "Torque" is a vector of
+    /// float3s, each indicating the torque at the contact point. The "Normal" is a vector of float3s, each indicating
+    /// the normal direction at the contact point.
+    std::shared_ptr<ContactInfoContainer> GetContactDetailedInfo(float force_thres = -1.0) const;
 
     /// @brief Get the host memory usage (in bytes) on dT.
     /// @return Number of bytes.
@@ -1045,7 +1104,17 @@ class DEMSolver {
     /// @param force_thres Forces with magnitude smaller than this amount will not be outputted.
     void WriteContactFile(const std::string& outfilename, float force_thres = DEME_TINY_FLOAT) const;
     void WriteContactFile(const std::filesystem::path& outfilename) const { WriteContactFile(outfilename.string()); }
-    /// Write the current status of all meshes to a file
+    /// @brief Write all contact pairs kT-supplied to a file, thus including the potential ones (those are not yet in
+    /// contact, or recently used to be in contact).
+    /// @details The outputted torque using this method is in global, rather than each object's local coordinate system.
+    /// @param outfilename Output filename.
+    void WriteContactFileIncludingPotentialPairs(const std::string& outfilename) const {
+        WriteContactFile(outfilename, -1.0);
+    }
+    void WriteContactFileIncludingPotentialPairs(const std::filesystem::path& outfilename) const {
+        WriteContactFileIncludingPotentialPairs(outfilename.string());
+    }
+    /// Write the current status of all meshes to a file.
     void WriteMeshFile(const std::string& outfilename) const;
     void WriteMeshFile(const std::filesystem::path& outfilename) const { WriteMeshFile(outfilename.string()); }
 
@@ -1294,6 +1363,9 @@ class DEMSolver {
     /// @brief Remove all extra libraries that the kernels `include' in their headers.
     void RemoveKernelInclude() { kernel_includes = " "; }
 
+    /// @brief Print kT's scratch space usage. This is a debug method.
+    void PrintKinematicScratchSpaceUsage() const { kT->printScratchSpaceUsage(); }
+
     /// Let dT do this call and return the reduce value of the inspected quantity.
     float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
                           const std::string& kernel_name,
@@ -1344,8 +1416,8 @@ class DEMSolver {
     // The output file format for contact pairs
     OUTPUT_FORMAT m_cnt_out_format = OUTPUT_FORMAT::CSV;
     // The output file content for contact pairs
-    unsigned int m_cnt_out_content = CNT_OUTPUT_CONTENT::GEO_ID | CNT_OUTPUT_CONTENT::FORCE |
-                                     CNT_OUTPUT_CONTENT::DEME_POINT | CNT_OUTPUT_CONTENT::CNT_WILDCARD;
+    unsigned int m_cnt_out_content = CNT_OUTPUT_CONTENT::OWNER | CNT_OUTPUT_CONTENT::FORCE |
+                                     CNT_OUTPUT_CONTENT::CNT_POINT | CNT_OUTPUT_CONTENT::CNT_WILDCARD;
     // The output file format for meshes
     MESH_FORMAT m_mesh_out_format = MESH_FORMAT::VTK;
     // If the solver should output wildcards to file
@@ -1577,6 +1649,8 @@ class DEMSolver {
 
     // A big fat tab for all string replacement that the JIT compiler needs to consider
     std::unordered_map<std::string, std::string> m_subs;
+    // jitify's compilation options
+    std::vector<std::string> m_jitify_options = DEME_JITIFY_DEFAULT_OPTIONS;
 
     // A map that records the numbering for user-defined owner wildcards
     std::unordered_map<std::string, unsigned int> m_owner_wc_num;

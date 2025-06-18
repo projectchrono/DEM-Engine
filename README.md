@@ -85,6 +85,8 @@ pip3 install DEME
 
 Then [Python scripts](https://github.com/projectchrono/DEM-Engine/tree/pyDEME_demo/src/demo) can be executed in this environment. To understand the content of each Python demo, refer to the explanations of the C++ demos with the same names in <a href="#examples">Numerical examples</a> section.
 
+If you use _pyDEME_ in conjunction with PyChrono, you should `import pyDEME` first, then PyChrono.
+
 <h2 id="compilation">Compilation</h2>
 
 You can also build C++ _DEME_ from source. It allows for potentially more performance and more tailoring.
