@@ -1148,6 +1148,12 @@ void DEMSolver::setSimParams() {
     }
     DEME_DEBUG_PRINTF("%u contact wildcards are in the force model.", nContactWildcards);
 
+    // Error-out velocity should be no smaller than the max velocity we can expect
+    if (threshold_error_out_vel < m_approx_max_vel) {
+        // Silently bring down m_approx_max_vel
+        m_approx_max_vel = threshold_error_out_vel;
+    }
+
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
                      m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_expand_safety_multi,
                      m_expand_base_vel, m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards,
