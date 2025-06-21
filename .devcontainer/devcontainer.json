@@ -1,0 +1,127 @@
+{
+    "name": "DEM-Engine Development",
+    "dockerComposeFile": "docker-compose.yml",
+    "service": "deme-dev",
+    "workspaceFolder": "/workspace/DEM-Engine",
+    
+    "features": {
+        // Only essential features
+        "ghcr.io/devcontainers/features/common-utils:2": {
+            "installZsh": true,
+            "configureZshAsDefaultShell": true,
+            "installOhMyZsh": true,
+            "upgradePackages": false
+        }
+    },
+    
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                // C++ development
+                "ms-vscode.cpptools",
+                "ms-vscode.cpptools-extension-pack",
+                "ms-vscode.cmake-tools",
+                "ms-vscode.makefile-tools",
+                
+                // CUDA support
+                "nvidia.nsight-vscode-edition",
+                
+                // Python support
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "ms-python.debugpy",
+
+                // Docker support
+                "ms-azuretools.vscode-docker",
+
+                // Visualization 
+                "echatroner.rainbow-csv"
+            ],
+            
+            "settings": {
+                // Terminal
+                "terminal.integrated.defaultProfile.linux": "zsh",
+                
+                // CMake - optimized for DEM-Engine
+                "cmake.configureOnOpen": false,  // Manual control
+                "cmake.buildDirectory": "${workspaceFolder}/build",
+                "cmake.generator": "Ninja",
+                "cmake.configureArgs": [
+                    "-DCMAKE_BUILD_TYPE=${env:CMAKE_BUILD_TYPE}",
+                    "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+                    "-DCMAKE_CUDA_ARCHITECTURES=native"  // Auto-detect GPU
+                ],
+                "cmake.parallelJobs": 0,  // Use all cores
+                
+                // C++ 
+                "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+                "C_Cpp.default.cppStandard": "c++17",
+                "C_Cpp.formatting": "clangFormat",
+                "C_Cpp.autocompleteAddParentheses": true,
+                
+                // File associations
+                "files.associations": {
+                    "*.cu": "cuda-cpp",
+                    "*.cuh": "cuda-cpp"
+                },
+                
+                // Python
+                "python.defaultInterpreterPath": "/usr/bin/python3",
+                
+                // Editor
+                "editor.formatOnSave": false,  // Only format manually
+                "editor.rulers": [100],        // Single ruler at 100
+                "editor.minimap.enabled": false,  // Save screen space
+                
+                // Performance optimizations
+                "files.watcherExclude": {
+                    "**/build/**": true,
+                    "**/output/**": true,
+                    "**/.git/**": true,
+                    "**/thirdparty/**": true
+                },
+                
+                "search.exclude": {
+                    "**/build": true,
+                    "**/output": true,
+                    "**/thirdparty": true,
+                    "**/*.o": true,
+                    "**/*.so": true
+                },
+                
+                // Disable telemetry for privacy
+                "telemetry.telemetryLevel": "off"
+            }
+        }
+    },
+    
+    // Optimized mounts - only essential ones
+    "mounts": [
+        // Cache build artifacts
+        "source=deme-build-cache,target=/workspace/DEM-Engine/build,type=volume",
+        // Persist extensions
+        "source=deme-vscode-extensions,target=/root/.vscode-server/extensions,type=volume"
+    ],
+    
+    // Simplified lifecycle commands
+    "postCreateCommand": "echo '🚀 DEM-Engine Dev Environment Ready' && nvcc --version",
+    
+    "postStartCommand": "git config --global --add safe.directory /workspace/DEM-Engine",
+    
+    // Only forward ports you actually use
+    "forwardPorts": [],
+    
+    // Environment variables
+    "containerEnv": {
+        "CUDA_VISIBLE_DEVICES": "all",
+        "NVIDIA_DRIVER_CAPABILITIES": "all"
+    },
+    
+    "remoteUser": "root",
+    
+    "remoteEnv": {
+        "CMAKE_BUILD_TYPE": "${localEnv:CMAKE_BUILD_TYPE:Debug}",
+        "OMP_NUM_THREADS": "${localEnv:OMP_NUM_THREADS:8}",
+        "CUDA_LAUNCH_BLOCKING": "${localEnv:CUDA_LAUNCH_BLOCKING:0}"
+    }
+}

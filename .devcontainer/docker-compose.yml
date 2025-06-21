@@ -1,0 +1,55 @@
+services:
+  # production service
+  deme-production:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+      target: production
+    image: deme:production
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - ..:/workspace/DEM-Engine
+      - ../output:/workspace/DEM-Engine/build/output # change this line to your desired output directory
+    command: ["/workspace/DEM-Engine/build/bin/DEMdemo_Mixer"] # replace with your production command
+
+  # develop service
+  deme-dev:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+      target: development
+    image: deme:development
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - ..:/workspace/DEM-Engine
+      - ../output:/workspace/DEM-Engine/build/output
+      - deme-build-cache:/workspace/DEM-Engine/build
+      - deme-ccache:/root/.ccache
+      - deme-vscode-extensions:/root/.vscode-server/extensions
+    stdin_open: true
+    tty: true
+    command: ["/bin/bash"]
+    cap_add:
+      - SYS_PTRACE  # gdb debugging
+      - SYS_ADMIN   # advanced debugging
+    security_opt:
+      - seccomp:unconfined  # strace debugging
+    privileged: false
+    # extra options
+    shm_size: '2gb'  # allow larger shared memory
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      stack:
+        soft: 67108864
+        hard: 67108864
+
+volumes:
+  deme-build-cache:
+  deme-ccache:
+  deme-vscode-extensions:
