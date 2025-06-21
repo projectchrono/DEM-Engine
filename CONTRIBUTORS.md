@@ -10,3 +10,5 @@
 	- Joined: April 2023
 - Shlok Sabarwal
 	- Joined: June 2023
+- Peize Li (李沛泽)
+	- Joined: June 2025
