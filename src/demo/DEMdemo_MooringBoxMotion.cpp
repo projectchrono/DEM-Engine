@@ -26,7 +26,7 @@ int main() {
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::VEL | FAMILY | OWNER_WILDCARD);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
-    DEMSim.SetContactOutputContent(DEME_POINT | OWNER | FORCE | CNT_WILDCARD);
+    DEMSim.SetContactOutputContent(CNT_POINT | OWNER | FORCE | CNT_WILDCARD);
 
     DEMSim.SetErrorOutAvgContacts(20);
     // DEMSim.SetForceCalcThreadsPerBlock(256);

@@ -136,7 +136,7 @@ int main() {
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::VEL | FAMILY);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
-    DEMSim.SetContactOutputContent(DEME_POINT | OWNER | FORCE | CNT_WILDCARD);
+    DEMSim.SetContactOutputContent(CNT_POINT | OWNER | FORCE | CNT_WILDCARD);
 
     Eigen::Matrix3d m = Eigen::Matrix3d::Random();
     m = (m + Eigen::Matrix3d::Constant(1.2)) * 50;
