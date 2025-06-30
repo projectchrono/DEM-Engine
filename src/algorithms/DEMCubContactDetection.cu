@@ -57,7 +57,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       SolverTimers& timers,
                       kTStateParams& stateParams) {
     // A dumb check
-    if (simParams->nSpheresGM == 0) {
+    if (simParams->nSpheresGM == 0 && simParams->nTriGM == 0) {
         *(scratchPad.numContacts) = 0;
         *scratchPad.numPrevContacts = 0;
         *scratchPad.numPrevSpheres = 0;
@@ -244,7 +244,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // displayDeviceArray<binSphereTouchPairs_t>(sphereIDsLookUpTable, *pNumActiveBins);
 
         ////////////////////////////////////////////////////////////////////////////////
-        // Triangle-related discretization
+        // Triangle-related discretization and triangle--analytical contact detection
         ////////////////////////////////////////////////////////////////////////////////
 
         // If there are meshes, they need to be processed too

@@ -56,11 +56,13 @@ typedef unsigned int binsTriangleTouchPairs_t;
 typedef unsigned short int trianglesBinTouches_t;
 
 typedef uint8_t notStupidBool_t;  ///< Ad-hoc bool (array) type
-typedef uint8_t contact_t;        ///< Contact type (sphere--sphere is 1, etc.)
 typedef uint8_t family_t;         ///< Data type for clump presecription type
-typedef uint8_t ownerType_t;      ///< The type of a owner entity
+typedef uint8_t ownerType_t;      ///< The type of a owner entity (clump, analytical, mesh...)
+typedef uint8_t geoType_t;        ///< The type of a geometry entity (sphere, triangles...)
+typedef uint8_t contact_t;        ///< Contact type as concatenation of geoType_t
 
-typedef uint8_t objType_t;
+typedef uint8_t objType_t;  ///< Analytical object type, such as plane, plate, cylinder, cone... Can be seen as even
+                            ///< finer grain of geoType_t's analytical case
 typedef bool objNormal_t;
 }  // namespace deme
 

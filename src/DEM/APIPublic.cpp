@@ -292,8 +292,8 @@ std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
                 if (cnt_type == SPHERE_MESH_CONTACT) {
                     clumps_in_cnt.push_back(dT->ownerClumpBody[idA]);
                 }
-            } else {  // If analytical, then contact type larger than PLANE is fine
-                if (cnt_type >= SPHERE_PLANE_CONTACT) {
+            } else {  // If it is an analytical object, then contact type needs to match
+                if (cnt_type == SPHERE_ANALYTICAL_CONTACT) {
                     clumps_in_cnt.push_back(dT->ownerClumpBody[idA]);
                 }
             }

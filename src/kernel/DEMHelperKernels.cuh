@@ -455,60 +455,9 @@ inline __host__ __device__ void matProxy2ContactParam(T1& E_eff,
     E_eff = (T1)1 / invE;
 }
 
-/*
-// This version of checkSphereEntityOverlap is not used anymore for code clarity, and the fact that every use case now
-// requires overlapDepth.
-template <typename T1, typename T2>
-inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
-                                                           const T2& radA,
-                                                           const deme::objType_t& typeB,
-                                                           const T1& B,
-                                                           const float3& dirB,
-                                                           const float& size1B,
-                                                           const float& size2B,
-                                                           const float& size3B,
-                                                           const float& normal_sign,
-                                                           const float& beta4Entity) {
-    deme::contact_t contactType;
-    switch (typeB) {
-        case (deme::ANAL_OBJ_TYPE_PLANE): {
-            const T1 plane2sph = A - B;
-            // Plane is directional, and the direction is given by plane rotation
-            const double dist = dot(plane2sph, dirB);
-            const double overlapDepth = (radA + beta4Entity - dist);
-            if (overlapDepth < 0.0) {
-                contactType = deme::NOT_A_CONTACT;
-            } else {
-                contactType = deme::SPHERE_PLANE_CONTACT;
-            }
-            return contactType;
-        }
-        case (deme::ANAL_OBJ_TYPE_PLATE): {
-            return deme::NOT_A_CONTACT;
-        }
-        case (deme::ANAL_OBJ_TYPE_CYL_INF): {
-            T1 sph2cyl = B - A;
-            // Projection along cyl axis direction
-            const double proj_dist = dot(sph2cyl, dirB);
-            // Radial vector from cylinder center to sphere center, along inward direction
-            sph2cyl -= proj_dist * dirB;
-            const double dist_delta_r = length(sph2cyl);
-            const double overlapDepth = radA - abs(size1B - dist_delta_r - beta4Entity);
-            if (overlapDepth <= DEME_TINY_FLOAT) {
-                contactType = deme::NOT_A_CONTACT;
-            } else {
-                contactType = deme::SPHERE_CYL_CONTACT;
-            }
-            return contactType;
-        }
-        default:
-            return deme::NOT_A_CONTACT;
-    }
-}
-*/
-
 // Check whether a sphere and an analytical boundary are in contact, and gives overlap depth, contact point and contact
-// normal.
+// normal. Returned contact type is only useful for kT to sort contact types, as for dT's force calculation, the flavor
+// used is determined by type B's actual objType.
 template <typename T1, typename T2, typename T3>
 inline __host__ __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
                                                                     const T2& radA,
@@ -533,7 +482,7 @@ inline __host__ __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             if (overlapDepth < 0.0) {
                 contactType = deme::NOT_A_CONTACT;
             } else {
-                contactType = deme::SPHERE_PLANE_CONTACT;
+                contactType = deme::SPHERE_ANALYTICAL_CONTACT;
             }
             // From sphere center, go along negative plane normal for (dist + overlapDepth / 2)
             CP = A - to_real3<float3, T1>(dirB * (dist + overlapDepth / 2.0));
@@ -555,7 +504,7 @@ inline __host__ __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             if (overlapDepth <= DEME_TINY_FLOAT) {
                 contactType = deme::NOT_A_CONTACT;
             } else {
-                contactType = deme::SPHERE_CYL_CONTACT;
+                contactType = deme::SPHERE_ANALYTICAL_CONTACT;
             }
             // dist_delta_r is 0 only when cylinder is thinner than sphere rad...
             cntNormal = to_real3<T1, float3>(normal_sign / dist_delta_r * sph2cyl);

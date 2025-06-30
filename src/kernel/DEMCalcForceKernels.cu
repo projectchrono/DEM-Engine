@@ -188,7 +188,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                 ContactType = deme::NOT_A_CONTACT;
             }
             overlapDepth = -overlapDepth;  // triangle_sphere_CD gives neg. number for overlapping cases
-        } else if (ContactType > deme::SPHERE_ANALYTICAL_CONTACT) {
+        } else if (ContactType == deme::SPHERE_ANALYTICAL_CONTACT) {
             // Geometry ID here is called sphereID, although it is not a sphere, it's more like analyticalID. But naming
             // it sphereID makes the acquisition process cleaner.
             deme::objID_t sphereID = granData->idGeometryB[myContactID];

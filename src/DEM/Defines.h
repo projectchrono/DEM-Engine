@@ -65,29 +65,48 @@ constexpr int64_t MAX_SUBVOXEL = (int64_t)1 << VOXEL_RES_POWER2;
 constexpr clumpComponentOffset_t NUM_ACTIVE_TEMPLATE_LOADING_THREADS =
     DEME_MIN(DEME_MIN(DEME_CUDA_WARP_SIZE, DEME_KT_CD_NTHREADS_PER_BLOCK), DEME_NUM_BODIES_PER_BLOCK);
 
+// Codes for owner types. We just have a handful of types...
+const ownerType_t OWNER_T_CLUMP = 1;
+const ownerType_t OWNER_T_MESH = 2;
+const ownerType_t OWNER_T_ANALYTICAL = 4;  ///< Must be 4, not 3, as used in bitwise operations
+
+const geoType_t GEO_T_SPHERE = 1;
+const geoType_t GEO_T_TRIANGLE = 2;
+const geoType_t GEO_T_ANALYTICAL = 4;  ///< Analytical components
+
+// Encodes a canonical contact type (min(typeA, typeB) << 4 | max(typeA, typeB))
+// The smaller of the two types is always stored in the high 4 bits
+inline __device__ __host__ constexpr contact_t encodeContactType(geoType_t typeA, geoType_t typeB) {
+    return (typeA < typeB) ? static_cast<contact_t>((typeA << 4) | (typeB & 0xF))
+                           : static_cast<contact_t>((typeB << 4) | (typeA & 0xF));
+}
+
+// Decodes typeA (always the smaller of the two, due to canonical ordering)
+inline __device__ __host__ constexpr geoType_t decodeTypeA(contact_t id) {
+    return id >> 4;
+}
+
+// Decodes typeB (always the larger of the two)
+inline __device__ __host__ constexpr geoType_t decodeTypeB(contact_t id) {
+    return id & 0xF;
+}
+
+const contact_t NOT_A_CONTACT = 0;
+const contact_t SPHERE_SPHERE_CONTACT = encodeContactType(GEO_T_SPHERE, GEO_T_SPHERE);
+const contact_t SPHERE_MESH_CONTACT = encodeContactType(GEO_T_SPHERE, GEO_T_TRIANGLE);
+const contact_t SPHERE_ANALYTICAL_CONTACT = encodeContactType(GEO_T_SPHERE, GEO_T_ANALYTICAL);
+const contact_t MESH_MESH_CONTACT = encodeContactType(GEO_T_TRIANGLE, GEO_T_TRIANGLE);
+const contact_t MESH_ANALYTICAL_CONTACT = encodeContactType(GEO_T_TRIANGLE, GEO_T_ANALYTICAL);
+
+// Can be seen as even finer grain type identifiers of the analytical component type
 const objType_t ANAL_OBJ_TYPE_PLANE = 0;
 const objType_t ANAL_OBJ_TYPE_PLATE = 1;
 const objType_t ANAL_OBJ_TYPE_CYL_INF = 2;
 const objNormal_t ENTITY_NORMAL_INWARD = 0;
 const objNormal_t ENTITY_NORMAL_OUTWARD = 1;
 
-const contact_t NOT_A_CONTACT = 0;
-const contact_t SPHERE_SPHERE_CONTACT = 1;
-const contact_t SPHERE_MESH_CONTACT = 2;
-// Aux contact types (contact with analytical objects) must be larger than SPHERE_ANALYTICAL_CONTACT!
-const contact_t SPHERE_ANALYTICAL_CONTACT = 10;
-const contact_t SPHERE_PLANE_CONTACT = 11;
-const contact_t SPHERE_PLATE_CONTACT = 12;
-const contact_t SPHERE_CYL_CONTACT = 13;
-const contact_t SPHERE_CONE_CONTACT = 14;
-
 const notStupidBool_t DONT_PREVENT_CONTACT = 0;
 const notStupidBool_t PREVENT_CONTACT = 1;
-
-// Codes for owner types. We just have a handful of types...
-const ownerType_t OWNER_T_CLUMP = 1;
-const ownerType_t OWNER_T_ANALYTICAL = 2;
-const ownerType_t OWNER_T_MESH = 4;
 
 // Contact persistency marker consts...
 const notStupidBool_t CONTACT_NOT_PERSISTENT = 0;
