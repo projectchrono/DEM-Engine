@@ -515,8 +515,8 @@ struct SolverFlags {
     // recommended)
     bool useClumpJitify = false;
     bool useMassJitify = false;
-    // Whether the simulation involves meshes
-    bool hasMeshes = false;
+    // Whether meshes can have contacts with entities other than spheres
+    bool meshUniversalContact = true;
     // Whether the force collection (acceleration calc and reduction) process should be using CUB
     bool useCubForceCollect = false;
     // Does not record contact forces, contact point etc.

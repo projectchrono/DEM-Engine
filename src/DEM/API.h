@@ -314,6 +314,15 @@ class DEMSolver {
     /// Set the number of threads per block in force calculation (default 256).
     void SetForceCalcThreadsPerBlock(unsigned int nTh) { dT->DT_FORCE_CALC_NTHREADS_PER_BLOCK = nTh; }
 
+    /// @brief Set whether the meshes should have contacts with other meshes and analytical objects.
+    /// @param use If true, meshes can have contacts with clumps, other meshes and analytical objects. If false, meshes
+    /// can have contacts only with clumps.
+    /// @details Set to false to speedup the simulation if its involved meshes are not expected to have contacts.
+    void SetMeshUniversalContact(bool use = true) {
+        kT->solverFlags.meshUniversalContact = use;
+        dT->solverFlags.meshUniversalContact = use;
+    }
+
     /// @brief Load a clump type into the API-level cache.
     /// @return the shared ptr to the clump type just loaded.
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,

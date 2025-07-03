@@ -1017,10 +1017,6 @@ void DEMSolver::setSolverParams() {
     kT->verbosity = verbosity;
     dT->verbosity = verbosity;
 
-    // Whether there are meshes in the simulation
-    kT->solverFlags.hasMeshes = (nTriObjLoad > 0);
-    dT->solverFlags.hasMeshes = (nTriObjLoad > 0);
-
     // I/O policies (only output content, not file format, matters for worker threads)
     auto output_level = m_out_content;
     if (m_is_out_owner_wildcards) {

@@ -27,6 +27,7 @@ int main() {
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT", "NORMAL", "TORQUE", "CNT_WILDCARD"});
     DEMSim.EnsureKernelErrMsgLineNum();
+    // DEMSim.SetMeshUniversalContact(false);
     // DEMSim.SetNoForceRecord();
 
     // srand(time(NULL));
