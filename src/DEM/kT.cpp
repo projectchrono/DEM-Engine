@@ -898,7 +898,7 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
     // Then sphere--triangle contact detection-related kernels
     {
         sphTri_contact_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMContactKernels_SphereTriangle", JitHelper::KERNEL_DIR / "DEMContactKernels_SphereTriangle.cu", Subs,
+            "DEMContactKernels_SphTri_TriTri", JitHelper::KERNEL_DIR / "DEMContactKernels_SphTri_TriTri.cu", Subs,
             JitifyOptions)));
     }
     // Then contact history mapping kernels

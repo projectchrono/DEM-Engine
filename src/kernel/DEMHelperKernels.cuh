@@ -457,7 +457,7 @@ inline __host__ __device__ void matProxy2ContactParam(T1& E_eff,
 
 // Singed distance from a point to a plane defined by a point and a normal vector
 template <typename T1, typename T2>
-inline __host__ __device__ T1 signedDistance(const T2& point, const T2& planePoint, const float3& planeNormal) {
+inline __host__ __device__ T1 planeSignedDistance(const T2& point, const T2& planePoint, const float3& planeNormal) {
     // The distance is positive if the point is above the plane, and negative if below
     // The distance is 0 if the point is on the plane
     return (T1)(dot(point - planePoint, planeNormal));
@@ -465,7 +465,7 @@ inline __host__ __device__ T1 signedDistance(const T2& point, const T2& planePoi
 
 // Radial distance vector from cylinder axis to a point
 template <typename T1>
-inline __host__ __device__ T1 radialDistanceVec(const T1& point, const T1& cylPoint, const float3& cylDir) {
+inline __host__ __device__ T1 cylRadialDistanceVec(const T1& point, const T1& cylPoint, const float3& cylDir) {
     // Projection of the point onto the cylinder axis
     float proj_dist = dot(point - cylPoint, cylDir);
     // Radial vector from cylinder center to point
@@ -494,7 +494,7 @@ inline __host__ __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
     switch (typeB) {
         case (deme::ANAL_OBJ_TYPE_PLANE): {
             // Plane is directional, and the direction is given by plane rotation
-            const T3 dist = signedDistance<T3>(A, B, dirB);
+            const T3 dist = planeSignedDistance<T3>(A, B, dirB);
             overlapDepth = (radA + beta4Entity - dist);
             if (overlapDepth < 0.0) {
                 contactType = deme::NOT_A_CONTACT;
@@ -511,7 +511,7 @@ inline __host__ __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             return deme::NOT_A_CONTACT;
         }
         case (deme::ANAL_OBJ_TYPE_CYL_INF): {
-            T1 cyl2sph = radialDistanceVec<T1>(A, B, dirB);
+            T1 cyl2sph = cylRadialDistanceVec<T1>(A, B, dirB);
             const T3 dist_delta_r = length(cyl2sph);
             overlapDepth = radA - abs(size1B - dist_delta_r - beta4Entity);
             if (overlapDepth <= DEME_TINY_FLOAT) {
@@ -551,7 +551,7 @@ inline __host__ __device__ deme::contact_t checkTriEntityOverlap(const T1& A,
         case (deme::ANAL_OBJ_TYPE_PLANE): {
             for (const T1*& v : tri) {
                 // Always cast to double
-                double d = signedDistance<double>(*v, entityLoc, dirB);
+                double d = planeSignedDistance<double>(*v, entityLoc, dirB);
                 double overlapDepth = beta4Entity - d;
                 if (overlapDepth >= 0.0)
                     return deme::MESH_ANALYTICAL_CONTACT;
@@ -564,7 +564,7 @@ inline __host__ __device__ deme::contact_t checkTriEntityOverlap(const T1& A,
         case (deme::ANAL_OBJ_TYPE_CYL_INF): {
             for (const T1*& v : tri) {
                 // Radial distance vector is from cylinder axis to a point
-                double3 vec = radialDistanceVec<double3>(*v, entityLoc, dirB);
+                double3 vec = cylRadialDistanceVec<double3>(*v, entityLoc, dirB);
                 // Also, inward normal is 1, outward is -1, so it's the signed dist from point to cylinder wall
                 // (positive if same orientation, negative if opposite)
                 double signed_dist = (size1B - length(vec)) * normal_sign;

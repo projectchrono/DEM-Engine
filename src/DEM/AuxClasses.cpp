@@ -117,7 +117,7 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
         //     kernel_name = "inspectOwnerProperty";
         //     break;
         //// TODO: Void ratio here is a very rough approximation and should only work when domain is large and particles
-        ///are small
+        /// are small
         case ("clump_volume"_):
             inspection_code = INSP_CODE_CLUMP_APPROX_VOL;
             reduce_flavor = CUB_REDUCE_FLAVOR::SUM;

@@ -206,6 +206,7 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
 __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                                                  deme::DEMDataKT* granData,
                                                  deme::binsTriangleTouchPairs_t* numBinsTriTouchesScan,
+                                                 deme::binsTriangleTouchPairs_t* numAnalGeoTriTouchesScan,
                                                  deme::binID_t* binIDsEachTriTouches,
                                                  deme::bodyID_t* triIDsEachBinTouches,
                                                  float3* nodeA1,
@@ -213,7 +214,11 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                                                  float3* nodeC1,
                                                  float3* nodeA2,
                                                  float3* nodeB2,
-                                                 float3* nodeC2) {
+                                                 float3* nodeC2,
+                                                 deme::bodyID_t* idGeoA,
+                                                 deme::bodyID_t* idGeoB,
+                                                 deme::contact_t* contactType,
+                                                 bool meshUniversalContact) {
     deme::bodyID_t triID = blockIdx.x * blockDim.x + threadIdx.x;
     if (triID < simParams->nTriGM) {
         // 3 vertices of the triangle
@@ -243,6 +248,9 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
         for (deme::binID_t i = L1[0]; i <= U1[0]; i++) {
             for (deme::binID_t j = L1[1]; j <= U1[1]; j++) {
                 for (deme::binID_t k = L1[2]; k <= U1[2]; k++) {
+                    if (myReportOffset >= myReportOffset_end) {
+                        continue;  // Don't step on the next triangle's domain
+                    }
                     BinCenter[0] = simParams->binSize * i + simParams->binSize / 2.;
                     BinCenter[1] = simParams->binSize * j + simParams->binSize / 2.;
                     BinCenter[2] = simParams->binSize * k + simParams->binSize / 2.;
@@ -253,9 +261,6 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                             binIDFrom3Indices<deme::binID_t>(i, j, k, simParams->nbX, simParams->nbY, simParams->nbZ);
                         triIDsEachBinTouches[myReportOffset] = triID;
                         myReportOffset++;
-                        if (myReportOffset >= myReportOffset_end) {
-                            return;  // Don't step on the next triangle's domain
-                        }
                     }
                 }
             }
@@ -264,6 +269,74 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
         for (; myReportOffset < myReportOffset_end; myReportOffset++) {
             binIDsEachTriTouches[myReportOffset] = deme::NULL_BINID;
             triIDsEachBinTouches[myReportOffset] = triID;
+        }
+
+        // No need to do the following if meshUniversalContact is false
+        if (meshUniversalContact) {
+            deme::binsTriangleTouchPairs_t myTriGeoReportOffset = numAnalGeoTriTouchesScan[triID];
+            deme::binsTriangleTouchPairs_t myTriGeoReportOffset_end = numAnalGeoTriTouchesScan[triID + 1];
+            for (deme::objID_t objB = 0; objB < simParams->nAnalGM; objB++) {
+                deme::bodyID_t objBOwner = objOwner[objB];
+                // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
+                unsigned int objFamilyNum = granData->familyID[objBOwner];
+                deme::bodyID_t triOwnerID = granData->ownerMesh[triID];
+                unsigned int triFamilyNum = granData->familyID[triOwnerID];
+                unsigned int maskMatID = locateMaskPair<unsigned int>(triFamilyNum, objFamilyNum);
+                // If marked no contact, skip ths iteration
+                if (granData->familyMasks[maskMatID] != deme::DONT_PREVENT_CONTACT) {
+                    continue;
+                }
+                double3 ownerXYZ;
+                voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
+                    ownerXYZ.x, ownerXYZ.y, ownerXYZ.z, granData->voxelID[objBOwner], granData->locX[objBOwner],
+                    granData->locY[objBOwner], granData->locZ[objBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
+                const float ownerOriQw = granData->oriQw[objBOwner];
+                const float ownerOriQx = granData->oriQx[objBOwner];
+                const float ownerOriQy = granData->oriQy[objBOwner];
+                const float ownerOriQz = granData->oriQz[objBOwner];
+                float objBRelPosX = objRelPosX[objB];
+                float objBRelPosY = objRelPosY[objB];
+                float objBRelPosZ = objRelPosZ[objB];
+                float objBRotX = objRotX[objB];
+                float objBRotY = objRotY[objB];
+                float objBRotZ = objRotZ[objB];
+                applyOriQToVector3<float, deme::oriQ_t>(objBRelPosX, objBRelPosY, objBRelPosZ, ownerOriQw, ownerOriQx,
+                                                        ownerOriQy, ownerOriQz);
+                applyOriQToVector3<float, deme::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx,
+                                                        ownerOriQy, ownerOriQz);
+                double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
+
+                double3 nodeA, nodeB, nodeC;
+                nodeA = to_real3<float3, double3>(nodeA1[triID]);
+                nodeB = to_real3<float3, double3>(nodeB1[triID]);
+                nodeC = to_real3<float3, double3>(nodeC1[triID]);
+                deme::contact_t contact_type = checkTriEntityOverlap<double3>(
+                    nodeA, nodeB, nodeC, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner]);
+                if (contact_type == deme::NOT_A_CONTACT) {
+                    nodeA = to_real3<float3, double3>(nodeA2[triID]);
+                    nodeB = to_real3<float3, double3>(nodeB2[triID]);
+                    nodeC = to_real3<float3, double3>(nodeC2[triID]);
+                    contact_type = checkTriEntityOverlap<double3>(nodeA, nodeB, nodeC, objType[objB], objBPosXYZ,
+                                                                  make_float3(objBRotX, objBRotY, objBRotZ),
+                                                                  objSize1[objB], objSize2[objB], objSize3[objB],
+                                                                  objNormal[objB], granData->marginSize[objBOwner]);
+                }
+                // Unlike the sphere-X contact case, we do not test against family extra margin here.
+                if (contact_type == deme::MESH_ANALYTICAL_CONTACT) {
+                    idGeoA[myTriGeoReportOffset] = triID;
+                    idGeoB[myTriGeoReportOffset] = (deme::bodyID_t)objB;
+                    contactType[myTriGeoReportOffset] = contact_type;
+                    myTriGeoReportOffset++;
+                    if (myTriGeoReportOffset >= myTriGeoReportOffset_end) {
+                        return;  // Don't step on the next triangle's domain
+                    }
+                }
+            }
+            // Take care of potentially unfilled slots in the report
+            for (; myTriGeoReportOffset < myTriGeoReportOffset_end; myTriGeoReportOffset++) {
+                contactType[myTriGeoReportOffset] = deme::NOT_A_CONTACT;
+            }
         }
     }
 }

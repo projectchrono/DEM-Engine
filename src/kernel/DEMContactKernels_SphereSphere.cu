@@ -214,7 +214,6 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
                 }
             }
         }
-        __syncthreads();
 
         // Take care of the left-overs. If there are left-overs, then this is a full block. But we still need to do the
         // check, because we could have more threads in a block than max_sphere_num.
@@ -229,7 +228,7 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
                     deme::bodyID_t cur_sphereID = sphereIDsEachBinTouches_sorted[thisBodiesTableEntry + cur_ind];
 
                     // Get the info of this sphere in question here. Note this is a broadcast so should be relatively
-                    // fast.
+                    // fast. And it's not really shared mem filling, just using that function to get the info.
                     fillSharedMemSpheres<float, double>(simParams, granData, 0, cur_sphereID, &cur_ownerID, &cur_bodyID,
                                                         &cur_ownerFamily, &cur_radii, &cur_bodyX, &cur_bodyY,
                                                         &cur_bodyZ);
@@ -265,7 +264,7 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
     }
 }
 
-__global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
+__global__ void populateSphereContactPairsEachBin(deme::DEMSimParams* simParams,
                                                   deme::DEMDataKT* granData,
                                                   deme::bodyID_t* sphereIDsEachBinTouches_sorted,
                                                   deme::binID_t* activeBinIDs,
@@ -348,7 +347,7 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
                 unsigned int bodyAFamily = ownerFamilies[bodyA];
                 unsigned int bodyBFamily = ownerFamilies[bodyB];
                 unsigned int maskMatID = locateMaskPair<unsigned int>(bodyAFamily, bodyBFamily);
-                // If marked no contact, skip ths iteration
+                // If marked no contact, skip this iteration
                 if (granData->familyMasks[maskMatID] != deme::DONT_PREVENT_CONTACT) {
                     continue;
                 }
