@@ -173,9 +173,9 @@ inline T1 findPerpendicular(const T1& input_vec) {
 /// Generate a mapping between arr1 and arr2, where this mapping has the same length as arr1, and each element i in the
 /// mapping is arr1[i]'s corresponding (same) element number in arr2. Both arr1 and arr2 need to be sorted.
 template <typename T1>
-inline void hostMergeSearchMapGen(T1* arr1, T1* arr2, T1* map, size_t size1, size_t size2, T1 NULL_ID) {
-    size_t ind2 = 0;
-    for (size_t ind1 = 0; ind1 < size1; ind1++) {
+inline void hostMergeSearchMapGen(const T1* arr1, const T1* arr2, T1* map, size_t size1, size_t size2, T1 NULL_ID) {
+    T1 ind2 = 0;
+    for (T1 ind1 = 0; ind1 < size1; ind1++) {
         map[ind1] = NULL_ID;
         while (ind2 < size2) {
             if (arr1[ind1] < arr2[ind2]) {

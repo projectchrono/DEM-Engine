@@ -191,6 +191,10 @@ class DEMSolverScratchData {
     void finishUsingDualArray(const std::string& name) { m_dualArrPool.unclaim(name); }
     void finishUsingDualStruct(const std::string& name) { m_dualStructPool.unclaim(name); }
 
+    bool existDualArray(const std::string& name) { return m_dualArrPool.exist(name); }
+    bool existDualStruct(const std::string& name) { return m_dualStructPool.exist(name); }
+    bool existTempVector(const std::string& name) { return m_deviceVecPool.exist(name); }
+
     // Debug util
     void printVectorUsage() const {
         m_deviceVecPool.printStatus();
@@ -516,7 +520,7 @@ struct SolverFlags {
     bool useClumpJitify = false;
     bool useMassJitify = false;
     // Whether meshes can have contacts with entities other than spheres
-    bool meshUniversalContact = true;
+    bool meshUniversalContact = false;
     // Whether the force collection (acceleration calc and reduction) process should be using CUB
     bool useCubForceCollect = false;
     // Does not record contact forces, contact point etc.

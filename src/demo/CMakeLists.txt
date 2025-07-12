@@ -19,6 +19,7 @@ SET(DEMOS
 		DEMdemo_Plow
 		DEMdemo_Sieve
 		DEMdemo_SingleSphereCollide
+		DEMdemo_MeshCollide
 		DEMdemo_TestPack
 		DEMdemo_RotatingDrum
 		DEMdemo_Centrifuge

@@ -317,7 +317,8 @@ class DEMSolver {
     /// @brief Set whether the meshes should have contacts with other meshes and analytical objects.
     /// @param use If true, meshes can have contacts with clumps, other meshes and analytical objects. If false, meshes
     /// can have contacts only with clumps.
-    /// @details Set to false to speedup the simulation if its involved meshes are not expected to have contacts.
+    /// @details Set to false to speedup the simulation if its involved meshes are not expected to have contacts. The
+    /// default is false.
     void SetMeshUniversalContact(bool use = true) {
         kT->solverFlags.meshUniversalContact = use;
         dT->solverFlags.meshUniversalContact = use;
@@ -1504,7 +1505,7 @@ class DEMSolver {
     // Whether the GPU-side systems have been initialized
     bool sys_initialized = false;
     // Smallest sphere radius (used to let the user know whether the expand factor is sufficient)
-    float m_smallest_radius = FLT_MAX;
+    float m_smallest_radius = DEME_HUGE_FLOAT;
 
     // The number of dT steps before it waits for a kT update. The default value means every dT step will wait for a
     // newly produced contact-pair info (from kT) before proceeding.

@@ -516,6 +516,11 @@ void DEMSolver::decideBinSize() {
         }
     }
 
+    // m_binSize sanity check
+    m_binSize = clampBetween<double, double>(m_binSize, 1000. * DEME_TINY_FLOAT, m_boxX);
+    m_binSize = clampBetween<double, double>(m_binSize, 1000. * DEME_TINY_FLOAT, m_boxY);
+    m_binSize = clampBetween<double, double>(m_binSize, 1000. * DEME_TINY_FLOAT, m_boxZ);
+
     m_num_bins = hostCalcBinNum(nbX, nbY, nbZ, m_voxelSize, m_binSize, nvXp2, nvYp2, nvZp2);
     // It's better to compute num of bins this way, rather than...
     // (uint64_t)(m_boxX / m_binSize + 1) * (uint64_t)(m_boxY / m_binSize + 1) * (uint64_t)(m_boxZ / m_binSize + 1);
@@ -1842,13 +1847,17 @@ inline void DEMSolver::equipMassMoiVolume(std::unordered_map<std::string, std::s
 
     // Right now we always jitify clump volume info. This is because we don't use volume that often, probably only at
     // void ratio computation. So let's save some memory...
+    //// TODO: Add support for non-jitified volume properties, and for meshes
     std::string volumeDefs = "__constant__ __device__ float volumeProperties[] = {";
     for (unsigned int i = 0; i < m_template_clump_volume.size(); i++) {
         volumeDefs += to_string_with_precision(m_template_clump_volume.at(i)) + ",";
     }
-    if (nDistinctMassProperties == 0) {
+    if (m_template_clump_volume.size() == 0) {
         volumeDefs += "0";
     }
+    // if (nDistinctMassProperties == 0) {
+    //     volumeDefs += "0";
+    // }
     volumeDefs += "};\n";
 
     if (ensure_kernel_line_num) {

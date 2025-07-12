@@ -744,6 +744,15 @@ class ResourcePool : private NonCopyable {
         vectors[it->second]->resize(new_size);
     }
 
+    bool exist(const std::string& name) {
+        auto it = this->name_to_index.find(name);
+        if (it == this->name_to_index.end()) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+
     void unclaim(const std::string& name) {
         auto it = name_to_index.find(name);
         if (it == name_to_index.end())

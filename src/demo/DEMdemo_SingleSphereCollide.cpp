@@ -27,8 +27,10 @@ int main() {
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT", "NORMAL", "TORQUE", "CNT_WILDCARD"});
     DEMSim.EnsureKernelErrMsgLineNum();
-    // DEMSim.SetMeshUniversalContact(false);
-    // DEMSim.SetNoForceRecord();
+    // Note!! If you want meshes to have contacts, set this to true!!
+    // If not, meshes will not have contacts with each other or analytical boundaries (but still have contacts with
+    // clumps).
+    DEMSim.SetMeshUniversalContact(true);
 
     // srand(time(NULL));
     srand(4150);
@@ -41,6 +43,8 @@ int main() {
     std::shared_ptr<DEMMaterial> mat_type_3 = DEMSim.Duplicate(mat_type_2);
     // If you don't have this line, then CoR between thw 2 materials will take average when they are in contact
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_1, mat_type_2, 0.6);
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_2, mat_type_3, 0.6);
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_1, mat_type_3, 0.6);
     // Even though set elsewhere to be 50, this pairwise value takes precedence when two different materials are in
     // contact.
     DEMSim.SetMaterialPropertyPair("Cohesion", mat_type_1, mat_type_2, 100.);

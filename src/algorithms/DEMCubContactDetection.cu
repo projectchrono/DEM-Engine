@@ -88,7 +88,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
 
         // If there are spheres, the following information needs to be extracted and kept...
         scratchPad.allocateDualStruct("numActiveBins");
-        size_t* pNumActiveBins = scratchPad.getDualStructDevice("numActiveBins");
+        *scratchPad.getDualStructHost("numActiveBins") = 0;  // Need a default value on host for no-sphere case
+        size_t* pNumActiveBins;                              // Can be host or device pointers
         bodyID_t* sphereIDsEachBinTouches_sorted;
         binID_t* activeBinIDs;
         spheresBinTouches_t* numSpheresBinTouches;
@@ -204,6 +205,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // Also, binIDsEachSphereTouches is large enough for a unique scan because total sphere--bin pairs are more
             // than active bins.
             binID_t* binIDsUnique = (binID_t*)binIDsEachSphereTouches;
+            pNumActiveBins = scratchPad.getDualStructDevice("numActiveBins");
             cubDEMUnique<binID_t>(binIDsEachSphereTouches_sorted, binIDsUnique, pNumActiveBins,
                                   *pNumBinSphereTouchPairs, this_stream, scratchPad);
             // Allocate space for encoding output, and run it. Note the (unsorted) binIDsEachSphereTouches and
@@ -264,7 +266,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
 
         // If there are meshes, they need to be processed too
         scratchPad.allocateDualStruct("numActiveBinsForTri");
-        size_t* pNumActiveBinsForTri = scratchPad.getDualStructDevice("numActiveBinsForTri");
+        *scratchPad.getDualStructHost("numActiveBinsForTri") =
+            0;                         // May need a default value on host for no-triangle case
+        size_t* pNumActiveBinsForTri;  // Can be host or device pointers
         bodyID_t* triIDsEachBinTouches_sorted;
         trianglesBinTouches_t* numTrianglesBinTouches;
         binsTriangleTouchPairs_t* triIDsLookUpTable;
@@ -407,6 +411,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // Also, binIDsEachTriTouches is large enough for a unique scan because total sphere--bin pairs are more
             // than active bins.
             binID_t* binIDsUnique = (binID_t*)binIDsEachTriTouches;
+            pNumActiveBinsForTri = scratchPad.getDualStructDevice("numActiveBinsForTri");
             cubDEMUnique<binID_t>(binIDsEachTriTouches_sorted, binIDsUnique, pNumActiveBinsForTri,
                                   *pNumBinTriTouchPairs, this_stream, scratchPad);
             // Allocate space for encoding output, and run it. Note the (unsorted) binIDsEachTriTouches and
@@ -456,14 +461,17 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 // temporarily and use them. Don't worry about the temporary part, as it's only in logic, no actual
                 // memory allocation, as vectorPool handles it.
                 scratchPad.syncDualArrayDeviceToHost("activeBinIDsForTri");
-                scratchPad.syncDualArrayDeviceToHost("activeBinIDs");
                 binID_t* activeBinIDsForTri = (binID_t*)scratchPad.getDualArrayHost("activeBinIDsForTri");
-                binID_t* activeBinIDs = (binID_t*)scratchPad.getDualArrayHost("activeBinIDs");
+                // There has to be spheres for activeBinIDs to exist, so we have to check
+                binID_t* activeBinIDs;
+                if (scratchPad.existDualArray("activeBinIDs")) {
+                    scratchPad.syncDualArrayDeviceToHost("activeBinIDs");
+                    activeBinIDs = (binID_t*)scratchPad.getDualArrayHost("activeBinIDs");
+                }
                 binID_t* mapTriActBinToSphActBin = (binID_t*)scratchPad.getDualArrayHost("mapTriActBinToSphActBin");
                 hostMergeSearchMapGen(activeBinIDsForTri, activeBinIDs, mapTriActBinToSphActBin, *pNumActiveBinsForTri,
                                       *pNumActiveBins, deme::NULL_BINID);
-                scratchPad.syncDualArrayHostToDevice("activeBinIDsForTri");
-                scratchPad.syncDualArrayHostToDevice("activeBinIDs");
+                // activeBinIDsForTri and activeBinIDs are not changed, so no need to sync them back
                 scratchPad.syncDualArrayHostToDevice("mapTriActBinToSphActBin");
             }
             // Bind back some of the device pointers is not necessary as they are not changed
