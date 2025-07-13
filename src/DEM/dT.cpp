@@ -1975,6 +1975,8 @@ inline void DEMDynamicThread::unpackMyBuffer() {
             (contactPairs_t*)solverScratchSpace.allocateTempVector("contactMapping", mapping_bytes);
         DEME_GPU_CALL(cudaMemcpy(granData->contactMapping, contactMapping_buffer.data(), mapping_bytes,
                                  cudaMemcpyDeviceToDevice));
+        // std::cout << "Unpacked contactMapping: " << std::endl;
+        // displayDeviceArray<contactPairs_t>(granData->contactMapping, *solverScratchSpace.numContacts);
     }
     // Prepare for kernel calls immediately after
     granData.toDevice();

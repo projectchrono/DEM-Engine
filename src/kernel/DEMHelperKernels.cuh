@@ -553,6 +553,8 @@ inline __host__ __device__ deme::contact_t checkTriEntityOverlap(const T1& A,
                 // Always cast to double
                 double d = planeSignedDistance<double>(*v, entityLoc, dirB);
                 double overlapDepth = beta4Entity - d;
+                // printf("v point %f %f %f, entityLoc %f %f %f\n", v->x, v->y, v->z, entityLoc.x, entityLoc.y,
+                // entityLoc.z);
                 if (overlapDepth >= 0.0)
                     return deme::MESH_ANALYTICAL_CONTACT;
             }
@@ -579,12 +581,12 @@ inline __host__ __device__ deme::contact_t checkTriEntityOverlap(const T1& A,
 }
 
 /// Takes in a triangle ID and figures out an SD AABB for broadphase use
-__inline__ __device__ void boundingBoxIntersectBin(deme::binID_t* L,
-                                                   deme::binID_t* U,
-                                                   const float3& vA,
-                                                   const float3& vB,
-                                                   const float3& vC,
-                                                   deme::DEMSimParams* simParams) {
+inline __device__ void boundingBoxIntersectBin(deme::binID_t* L,
+                                               deme::binID_t* U,
+                                               const float3& vA,
+                                               const float3& vB,
+                                               const float3& vC,
+                                               deme::DEMSimParams* simParams) {
     float3 min_pt;
     min_pt.x = DEME_MIN(vA.x, DEME_MIN(vB.x, vC.x));
     min_pt.y = DEME_MIN(vA.y, DEME_MIN(vB.y, vC.y));
@@ -592,9 +594,8 @@ __inline__ __device__ void boundingBoxIntersectBin(deme::binID_t* L,
 
     // Enlarge bounding box, so that no triangle lies right between 2 layers of bins
     min_pt -= DEME_BIN_ENLARGE_RATIO_FOR_FACETS * simParams->binSize;
-    // A point on a mesh can be out of the simulation world. In this case, becasue we only need to detect their contact
-    // with spheres, and spheres are all in the simulation world, so we just clamp out the bins that are outside the
-    // simulation world.
+    // A point on a mesh can be out of the simulation world. In this case, becasue we only need to detect contacts
+    // inside the simulation world, so we just clamp out the bins that are outside the simulation world.
     int3 min_bin =
         clampBetween3Comp<float3, int3>(min_pt / simParams->binSize, make_int3(0, 0, 0),
                                         make_int3(simParams->nbX - 1, simParams->nbY - 1, simParams->nbZ - 1));

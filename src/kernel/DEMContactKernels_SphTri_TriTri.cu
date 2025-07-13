@@ -285,7 +285,7 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                     // Same treatment for B...
                     in_contact_B = in_contact_B && (-depth > artificialMargin);
 
-                    // Note the contact point must be calculated through the original triangle, not the 2 phantom
+                    // Note the contact point must be calculated through one triangle, not the 2 phantom
                     // triangles; or we will have double count problems. Use the first triangle as standard.
                     if (in_contact_A || in_contact_B) {
                         snap_to_face(triANode1[ind], triANode2[ind], triANode3[ind], sphXYZ, cntPnt);
@@ -335,28 +335,6 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                     simParams, triANode1[bodyA], triANode2[bodyA], triANode3[bodyA], triBNode1[bodyA], triBNode2[bodyA],
                     triBNode3[bodyA], triANode1[bodyB], triANode2[bodyB], triANode3[bodyB], triBNode1[bodyB],
                     triBNode2[bodyB], triBNode3[bodyB], contactPntBin);
-                /*
-                if (in_contact) {
-                    printf("Contact point I see: %e, %e, %e\n", contactPntX, contactPntY, contactPntZ);
-                } else {
-                    printf("Distance: %e\n", sqrt( (bodyX[bodyA]-bodyX[bodyB])*(bodyX[bodyA]-bodyX[bodyB])
-                                                    + (bodyY[bodyA]-bodyY[bodyB])*(bodyY[bodyA]-bodyY[bodyB])
-                                                    + (bodyZ[bodyA]-bodyZ[bodyB])*(bodyZ[bodyA]-bodyZ[bodyB])  ));
-                    printf("Sum of radii: %e\n", radii[bodyA] + radii[bodyB]);
-                }
-
-                printf("contactPntBin: %u, %u, %u\n", (unsigned int)(contactPntX/_binSize_),
-                                                        (unsigned int)(contactPntY/_binSize_),
-                                                        (unsigned int)(contactPntZ/_binSize_));
-                unsigned int ZZ = binID/(_nbX_*_nbY_);
-                unsigned int YY = binID%(_nbX_*_nbY_)/_nbX_;
-                unsigned int XX = binID%(_nbX_*_nbY_)%_nbX_;
-                printf("binID: %u, %u, %u\n", XX,YY,ZZ);
-                printf("bodyA: %f, %f, %f\n", bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA]);
-                printf("bodyB: %f, %f, %f\n", bodyX[bodyB], bodyY[bodyB], bodyZ[bodyB]);
-                printf("contactPnt: %f, %f, %f\n", contactPntX, contactPntY, contactPntZ);
-                printf("contactPntBin: %u\n", contactPntBin);
-                */
 
                 if (in_contact && (contactPntBin == binID)) {
                     atomicAdd(&blockTriTriPairCnt, 1);
@@ -541,7 +519,7 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                     // Same treatment for B...
                     in_contact_B = in_contact_B && (-depth > artificialMargin);
 
-                    // Note the contact point must be calculated through the original triangle, not the 2 phantom
+                    // Note the contact point must be calculated through one triangle, not the 2 phantom
                     // triangles; or we will have double count problems. Use the first triangle as standard.
                     if (in_contact_A || in_contact_B) {
                         snap_to_face(triANode1[ind], triANode2[ind], triANode3[ind], sphXYZ, cntPnt);

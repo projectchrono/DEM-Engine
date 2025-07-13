@@ -4,6 +4,7 @@
 #define DEME_COLLI_KERNELS_CU
 
 #include <DEM/Defines.h>
+#include <DEMHelperKernels.cuh>
 
 /// This utility function takes the location 'P' and snaps it to the closest
 /// point on the triangular face with given vertices (A, B, and C). The result
@@ -237,16 +238,6 @@ __device__ bool triangle_sphere_CD_directional(const T1& A,           ///< First
 // Prism contact detection using the Separating Axis Theorem (SAT)
 ////////////////////////////////////////////////////////////////////////////////
 
-// Lexicographic comparator
-template <typename T>
-inline __device__ T lex_less(T a, T b) {
-    if (a.x != b.x)
-        return (a.x < b.x) ? a : b;
-    if (a.y != b.y)
-        return (a.y < b.y) ? a : b;
-    return (a.z < b.z) ? a : b;
-}
-
 template <typename T1, typename T2>
 inline __device__ void select_projection(const T1& pts, const T1& axis, T2& min_p, T2& max_p) {
     T2 p = dot(pts, axis);
@@ -283,19 +274,19 @@ inline __device__ bool projections_overlap(T minA, T maxA, T minB, T maxB) {
 }
 
 template <typename T1>
-bool calc_prism_contact(const T1& prismAFaceANode1,
-                        const T1& prismAFaceANode2,
-                        const T1& prismAFaceANode3,
-                        const T1& prismAFaceBNode1,
-                        const T1& prismAFaceBNode2,
-                        const T1& prismAFaceBNode3,
-                        const T1& prismBFaceANode1,
-                        const T1& prismBFaceANode2,
-                        const T1& prismBFaceANode3,
-                        const T1& prismBFaceBNode1,
-                        const T1& prismBFaceBNode2,
-                        const T1& prismBFaceBNode3,
-                        T1& contactPointOut) {
+inline __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
+                                          const T1& prismAFaceANode2,
+                                          const T1& prismAFaceANode3,
+                                          const T1& prismAFaceBNode1,
+                                          const T1& prismAFaceBNode2,
+                                          const T1& prismAFaceBNode3,
+                                          const T1& prismBFaceANode1,
+                                          const T1& prismBFaceANode2,
+                                          const T1& prismBFaceANode3,
+                                          const T1& prismBFaceBNode1,
+                                          const T1& prismBFaceBNode2,
+                                          const T1& prismBFaceBNode3,
+                                          T1& contactPointOut) {
     float3 axes[11];
     unsigned short int axisCount = 0;
 
@@ -307,19 +298,22 @@ bool calc_prism_contact(const T1& prismAFaceANode1,
     axes[axisCount++] = normalize(B_faceNormal);
 
     // Edges of each prism base
-    T1 A_edges[3] = {prismAFaceANode2 - prismAFaceANode1, prismAFaceANode3 - prismAFaceANode2,
-                     prismAFaceANode1 - prismAFaceANode3};
-    T1 B_edges[3] = {prismBFaceANode2 - prismBFaceANode1, prismBFaceANode3 - prismBFaceANode2,
-                     prismBFaceANode1 - prismBFaceANode3};
+    {
+        T1 A_edges[3] = {prismAFaceANode2 - prismAFaceANode1, prismAFaceANode3 - prismAFaceANode2,
+                         prismAFaceANode1 - prismAFaceANode3};
+        T1 B_edges[3] = {prismBFaceANode2 - prismBFaceANode1, prismBFaceANode3 - prismBFaceANode2,
+                         prismBFaceANode1 - prismBFaceANode3};
 
-    // Edge–edge cross products
-    for (unsigned short int i = 0; i < 3; ++i)
-        for (unsigned short int j = 0; j < 3; ++j) {
-            T1 cp = cross(A_edges[i], B_edges[j]);
-            float len2 = dot(cp, cp);
-            if (len2 > DEME_TINY_FLOAT)
-                axes[axisCount++] = normalize(cp);
+        // Edge–edge cross products
+        for (unsigned short int i = 0; i < 3; ++i) {
+            for (unsigned short int j = 0; j < 3; ++j) {
+                T1 cp = cross(A_edges[i], B_edges[j]);
+                float len2 = dot(cp, cp);
+                if (len2 > DEME_TINY_FLOAT)
+                    axes[axisCount++] = normalize(cp);
+            }
         }
+    }
 
     // SAT test
     for (unsigned short int i = 0; i < axisCount; ++i) {
@@ -332,22 +326,22 @@ bool calc_prism_contact(const T1& prismAFaceANode1,
             return false;  // separating axis found -> no contact
     }
 
-    // Contact confirmed — find lex smallest point from both prisms, used for the contact point
+    // Contact confirmed... find lex smallest point from both prisms, used for the contact point
     // The contact point does not need to be accurate, but consistent in terms of two metrics:
     // 1. It should be the same for the same pair of prisms, regardless of their order.
     // 2. It should be in the bin that one of the triangles lives
     T1 minV = prismAFaceANode1;
-    minV = lex_less(minV, prismAFaceANode2);
-    minV = lex_less(minV, prismAFaceANode3);
-    minV = lex_less(minV, prismAFaceBNode1);
-    minV = lex_less(minV, prismAFaceBNode2);
-    minV = lex_less(minV, prismAFaceBNode3);
-    minV = lex_less(minV, prismBFaceANode1);
-    minV = lex_less(minV, prismBFaceANode2);
-    minV = lex_less(minV, prismBFaceANode3);
-    minV = lex_less(minV, prismBFaceBNode1);
-    minV = lex_less(minV, prismBFaceBNode2);
-    minV = lex_less(minV, prismBFaceBNode3);
+    minV = (minV < prismAFaceANode2) ? minV : prismAFaceANode2;
+    minV = (minV < prismAFaceANode3) ? minV : prismAFaceANode3;
+    minV = (minV < prismAFaceBNode1) ? minV : prismAFaceBNode1;
+    minV = (minV < prismAFaceBNode2) ? minV : prismAFaceBNode2;
+    minV = (minV < prismAFaceBNode3) ? minV : prismAFaceBNode3;
+    minV = (minV < prismBFaceANode1) ? minV : prismBFaceANode1;
+    minV = (minV < prismBFaceANode2) ? minV : prismBFaceANode2;
+    minV = (minV < prismBFaceANode3) ? minV : prismBFaceANode3;
+    minV = (minV < prismBFaceBNode1) ? minV : prismBFaceBNode1;
+    minV = (minV < prismBFaceBNode2) ? minV : prismBFaceBNode2;
+    minV = (minV < prismBFaceBNode3) ? minV : prismBFaceBNode3;
 
     contactPointOut = minV;
     return true;

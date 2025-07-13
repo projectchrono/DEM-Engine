@@ -99,8 +99,10 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
                                                    float3* nodeC2,
                                                    bool meshUniversalContact) {
     deme::bodyID_t triID = blockIdx.x * blockDim.x + threadIdx.x;
+
     if (triID < simParams->nTriGM) {
-        // 3 vertices of the triangle
+        // 3 vertices of the triangle, in true space location but without adding LBF point (since purely voxel- and
+        // bin-based locations don't need that)
         float3 vA1, vB1, vC1, vA2, vB2, vC2;
         deme::binID_t L1[3], L2[3], U1[3], U2[3];
         figureOutNodeAndBoundingBox(simParams, granData, triID, vA1, vB1, vC1, L1, U1, nodeA1[triID], nodeB1[triID],
@@ -176,16 +178,16 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
                 double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
 
                 double3 nodeA, nodeB, nodeC;
-                nodeA = to_real3<float3, double3>(nodeA1[triID]);
-                nodeB = to_real3<float3, double3>(nodeB1[triID]);
-                nodeC = to_real3<float3, double3>(nodeC1[triID]);
+                nodeA = to_real3<float3, double3>(vA1);
+                nodeB = to_real3<float3, double3>(vB1);
+                nodeC = to_real3<float3, double3>(vC1);
                 deme::contact_t contact_type = checkTriEntityOverlap<double3>(
                     nodeA, nodeB, nodeC, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
                     objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner]);
                 if (contact_type == deme::NOT_A_CONTACT) {
-                    nodeA = to_real3<float3, double3>(nodeA2[triID]);
-                    nodeB = to_real3<float3, double3>(nodeB2[triID]);
-                    nodeC = to_real3<float3, double3>(nodeC2[triID]);
+                    nodeA = to_real3<float3, double3>(vA2);
+                    nodeB = to_real3<float3, double3>(vB2);
+                    nodeC = to_real3<float3, double3>(vC2);
                     contact_type = checkTriEntityOverlap<double3>(nodeA, nodeB, nodeC, objType[objB], objBPosXYZ,
                                                                   make_float3(objBRotX, objBRotY, objBRotZ),
                                                                   objSize1[objB], objSize2[objB], objSize3[objB],
@@ -307,16 +309,16 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                 double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
 
                 double3 nodeA, nodeB, nodeC;
-                nodeA = to_real3<float3, double3>(nodeA1[triID]);
-                nodeB = to_real3<float3, double3>(nodeB1[triID]);
-                nodeC = to_real3<float3, double3>(nodeC1[triID]);
+                nodeA = to_real3<float3, double3>(vA1);
+                nodeB = to_real3<float3, double3>(vB1);
+                nodeC = to_real3<float3, double3>(vC1);
                 deme::contact_t contact_type = checkTriEntityOverlap<double3>(
                     nodeA, nodeB, nodeC, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
                     objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner]);
                 if (contact_type == deme::NOT_A_CONTACT) {
-                    nodeA = to_real3<float3, double3>(nodeA2[triID]);
-                    nodeB = to_real3<float3, double3>(nodeB2[triID]);
-                    nodeC = to_real3<float3, double3>(nodeC2[triID]);
+                    nodeA = to_real3<float3, double3>(vA2);
+                    nodeB = to_real3<float3, double3>(vB2);
+                    nodeC = to_real3<float3, double3>(vC2);
                     contact_type = checkTriEntityOverlap<double3>(nodeA, nodeB, nodeC, objType[objB], objBPosXYZ,
                                                                   make_float3(objBRotX, objBRotY, objBRotZ),
                                                                   objSize1[objB], objSize2[objB], objSize3[objB],

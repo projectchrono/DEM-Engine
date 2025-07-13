@@ -547,8 +547,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 DEME_GPU_CALL_WATCH_BETA(cudaStreamSynchronize(this_stream));
                 // std::cout << "numTriSphContactsInEachBin: " << std::endl;
                 // displayDeviceArray<binContactPairs_t>(numTriSphContactsInEachBin, *pNumActiveBinsForTri);
-                // std::cout << "numTriTriContactsInEachBin: " << std::endl;
-                // displayDeviceArray<binContactPairs_t>(numTriTriContactsInEachBin, *pNumActiveBinsForTri);
+                std::cout << "numTriTriContactsInEachBin: " << std::endl;
+                displayDeviceArray<binContactPairs_t>(numTriTriContactsInEachBin, *pNumActiveBinsForTri);
             }
 
             //// TODO: sphere should have jitified and non-jitified part. Use a component ID > max_comp_id to signal

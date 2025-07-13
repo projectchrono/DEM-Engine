@@ -24,6 +24,7 @@ using namespace std::filesystem;
 int main() {
     DEMSolver DEMSim;
     DEMSim.SetVerbosity("STEP_METRIC");
+    DEMSim.UseFrictionlessHertzianModel();
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT", "NORMAL", "TORQUE", "CNT_WILDCARD"});
     DEMSim.InstructBoxDomainDimension(10, 10, 4);
@@ -39,7 +40,7 @@ int main() {
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_1, mat_type_2, 0.6);
 
     // Add a bottom plane
-    DEMSim.AddBCPlane(make_float3(0, 0, -1.9), make_float3(0, 0, 1), mat_type_1);
+    DEMSim.AddBCPlane(make_float3(0, 0, -1.8), make_float3(0, 0, 1), mat_type_1);
 
     auto particles1 = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cube.obj").string(), mat_type_1);
     particles1->SetFamily(0);
@@ -91,7 +92,7 @@ int main() {
         // If a contact involves at least one of the owner IDs provided as the first arg of GetOwnerContactForces, it
         // will be outputted. Note if a contact involves two IDs of the user-provided list, then the force for that
         // contact will be given as the force experienced by whichever owner that appears earlier in the ID list.
-        DEMSim.GetOwnerContactForces({ID1, ID2}, points_mesh, forces_mesh);
+        // DEMSim.GetOwnerContactForces({ID1, ID2}, points_mesh, forces_mesh);
 
         std::cout << "----------------------------------------" << std::endl;
         std::cout << "Particle 1 X coord is " << pos1.x << std::endl;

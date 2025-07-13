@@ -914,8 +914,11 @@ inline __host__ __device__ uint4 max(uint4 a, uint4 b) {
 // logical
 ////////////////////////////////////////////////////////////////////////////////
 
-inline __host__ __device__ bool floatNear(const float& a, const float& b, float tol = 1e-6f) {
+inline __host__ __device__ bool float_near(const float& a, const float& b, float tol = 1e-6f) {
     return fabs(a - b) < tol;
+}
+inline __host__ __device__ bool float3_near(const float3& a, const float3& b, float tol = 1e-6f) {
+    return float_near(a.x, b.x, tol) && float_near(a.y, b.y, tol) && float_near(a.z, b.z, tol);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1362,17 +1365,23 @@ inline __host__ __device__ double3 normalize(double3 v) {
     return v * invLen;
 }
 
+// Lexicographic comparator
+template <typename T>
+inline __host__ __device__ bool lex_less(T a, T b) {
+    if (a.x != b.x)
+        return a.x < b.x;
+    if (a.y != b.y)
+        return a.y < b.y;
+    return a.z < b.z;
+}
+
 // Float3 < is an element-wise comparison where x, y, z components are assigned priorities in that order.
 // Must be in global namespace for std::less to pick it up.
 inline __host__ __device__ bool operator<(const float3& a, const float3& b) {
-    if (floatNear(a.x, b.x))  // x component being different
-        return a.x < b.x;
-    else if (floatNear(a.y, b.y))  // x comp. same but y different
-        return a.y < b.y;
-    else if (floatNear(a.z, b.z))  // y comp. same but z different
-        return a.z < b.z;
-    else               // all components same
-        return false;  // for constructing a set
+    return lex_less(a, b);
+}
+inline __host__ __device__ bool operator<(const double3& a, const double3& b) {
+    return lex_less(a, b);
 }
 
 // Assignment
