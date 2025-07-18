@@ -515,10 +515,9 @@ struct SolverFlags {
     bool isExpandFactorFixed = false;
     // The strategy for selecting the variable time step size
     VAR_TS_STRAT stepSizeStrat = VAR_TS_STRAT::DEME_CONST;
-    // Whether instructed to use jitification for mass properties and clump components (default to no and it is
-    // recommended)
-    bool useClumpJitify = false;
-    bool useMassJitify = false;
+    // Whether instructed to use jitification for mass properties and clump components 
+    bool useClumpJitify = true;
+    bool useMassJitify = true;
     // Whether meshes can have contacts with entities other than spheres
     bool meshUniversalContact = false;
     // Whether the force collection (acceleration calc and reduction) process should be using CUB
