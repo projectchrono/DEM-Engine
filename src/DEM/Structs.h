@@ -140,6 +140,8 @@ class DEMSolverScratchData {
     DualStruct<size_t> numPrevContacts = DualStruct<size_t>(0);
     // Number of spheres in the previous CD step (in case user added/removed clumps from the system)
     DualStruct<size_t> numPrevSpheres = DualStruct<size_t>(0);
+    // Prev number of triangles
+    DualStruct<size_t> numPrevTriangles = DualStruct<size_t>(0);
 
     DEMSolverScratchData(size_t* external_host_counter = nullptr, size_t* external_device_counter = nullptr)
         : m_deviceVecPool(external_device_counter), m_dualArrPool(external_host_counter, external_device_counter) {
@@ -515,7 +517,7 @@ struct SolverFlags {
     bool isExpandFactorFixed = false;
     // The strategy for selecting the variable time step size
     VAR_TS_STRAT stepSizeStrat = VAR_TS_STRAT::DEME_CONST;
-    // Whether instructed to use jitification for mass properties and clump components 
+    // Whether instructed to use jitification for mass properties and clump components
     bool useClumpJitify = true;
     bool useMassJitify = true;
     // Whether meshes can have contacts with entities other than spheres

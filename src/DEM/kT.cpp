@@ -282,10 +282,9 @@ void DEMKinematicThread::workerThread() {
             // For auto-adjusting bin size, this part of code is encapsuled in an accumulative timer.
             CDAccumTimer.Begin();
             contactDetection(bin_sphere_kernels, bin_triangle_kernels, sphere_contact_kernels, sphTri_contact_kernels,
-                             history_kernels, granData, simParams, solverFlags, verbosity, idGeometryA, idGeometryB,
-                             contactType, previous_idGeometryA, previous_idGeometryB, previous_contactType,
-                             contactPersistency, contactMapping, streamInfo.stream, solverScratchSpace, timers,
-                             stateParams);
+                             granData, simParams, solverFlags, verbosity, idGeometryA, idGeometryB, contactType,
+                             previous_idGeometryA, previous_idGeometryB, previous_contactType, contactPersistency,
+                             contactMapping, streamInfo.stream, solverScratchSpace, timers, stateParams);
             CDAccumTimer.End();
 
             timers.GetTimer("Send to dT buffer").start();
@@ -900,11 +899,6 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
         sphTri_contact_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMContactKernels_SphTri_TriTri", JitHelper::KERNEL_DIR / "DEMContactKernels_SphTri_TriTri.cu", Subs,
             JitifyOptions)));
-    }
-    // Then contact history mapping kernels
-    {
-        history_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMHistoryMappingKernels", JitHelper::KERNEL_DIR / "DEMHistoryMappingKernels.cu", Subs, JitifyOptions)));
     }
     // Then misc kernels
     {

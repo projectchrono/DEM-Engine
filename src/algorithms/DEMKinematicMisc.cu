@@ -1,7 +1,6 @@
 // DEM history mapping related custom kernels
 #include <DEM/Defines.h>
-#include <DEMHelperKernels.cuh>
-_kernelIncludes_;
+#include <kernel/DEMHelperKernels.cuh>
 
 __global__ void fillRunLengthArray(deme::geoSphereTouches_t* runlength_full,
                                    deme::bodyID_t* unique_ids,
@@ -20,9 +19,9 @@ __global__ void buildPersistentMap(deme::geoSphereTouches_t* new_idA_runlength_f
                                    deme::contactPairs_t* old_idA_scanned_runlength,
                                    deme::contactPairs_t* mapping,
                                    deme::DEMDataKT* granData,
-                                   size_t nSpheresSafe) {
+                                   size_t nGeoSafe) {
     deme::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (myID < nSpheresSafe) {
+    if (myID < nGeoSafe) {
         deme::geoSphereTouches_t new_cnt_count = new_idA_runlength_full[myID];
         deme::geoSphereTouches_t old_cnt_count = old_idA_runlength_full[myID];
         // If this idA has non-zero runlength in new: a potential enduring sphere

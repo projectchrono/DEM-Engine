@@ -414,7 +414,6 @@ class DEMKinematicThread {
     std::shared_ptr<jitify::Program> bin_triangle_kernels;
     std::shared_ptr<jitify::Program> sphTri_contact_kernels;
     std::shared_ptr<jitify::Program> sphere_contact_kernels;
-    std::shared_ptr<jitify::Program> history_kernels;
     std::shared_ptr<jitify::Program> misc_kernels;
 
     // Adjuster for bin size
