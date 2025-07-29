@@ -530,7 +530,7 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                             if (inBlockOffset < myReportOffset_end) {
                                 idSphA[inBlockOffset] = sphereID;
                                 idTriB[inBlockOffset] = triIDs[ind];
-                                dType[inBlockOffset] = deme::SPHERE_MESH_CONTACT;
+                                dType[inBlockOffset] = deme::SPHERE_TRIANGLE_CONTACT;
                             }
                         }
                     }

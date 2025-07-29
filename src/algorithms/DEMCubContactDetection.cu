@@ -919,12 +919,15 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // DEME_DEBUG_EXEC(displayDeviceArray<bodyID_t>(granData->idGeometryB, *scratchPad.numContacts));
         // DEME_DEBUG_PRINTF("New contact types:");
         // DEME_DEBUG_EXEC(displayDeviceArray<contact_t>(granData->contactType, *scratchPad.numContacts));
-        // DEME_DEBUG_PRINTF("Old contact IDs (A):");
-        // DEME_DEBUG_EXEC(displayDeviceArray<bodyID_t>(granData->previous_idGeometryA, *scratchPad.numPrevContacts));
-        // DEME_DEBUG_PRINTF("Old contact IDs (B):");
-        // DEME_DEBUG_EXEC(displayDeviceArray<bodyID_t>(granData->previous_idGeometryB, *scratchPad.numPrevContacts));
-        // DEME_DEBUG_PRINTF("Old contact types:");
-        // DEME_DEBUG_EXEC(displayDeviceArray<contact_t>(granData->previous_contactType, *scratchPad.numPrevContacts));
+        // if (!solverFlag.isHistoryless) {
+        //     DEME_DEBUG_PRINTF("Old contact IDs (A):");
+        //     DEME_DEBUG_EXEC(displayDeviceArray<bodyID_t>(granData->previous_idGeometryA,
+        //     *scratchPad.numPrevContacts)); DEME_DEBUG_PRINTF("Old contact IDs (B):");
+        //     DEME_DEBUG_EXEC(displayDeviceArray<bodyID_t>(granData->previous_idGeometryB,
+        //     *scratchPad.numPrevContacts)); DEME_DEBUG_PRINTF("Old contact types:");
+        //     DEME_DEBUG_EXEC(displayDeviceArray<contact_t>(granData->previous_contactType,
+        //     *scratchPad.numPrevContacts));
+        // }
 
         // For history-based models, construct the enduring contact map. bodyA can be sphere or triangle.
         // This CD run and previous CD run could have different number of geos in them. We pick the larger
@@ -1036,8 +1039,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
             // DEME_DEBUG_PRINTF("Contact mapping:");
-            // DEME_DEBUG_EXEC(displayDeviceArray<contactPairs_t>(granData->contactMapping,
-            // *scratchPad.numContacts));
+            // DEME_DEBUG_EXEC(displayDeviceArray<contactPairs_t>(granData->contactMapping, *scratchPad.numContacts));
             scratchPad.finishUsingTempVector("new_idA_runlength_full");
             scratchPad.finishUsingTempVector("old_idA_runlength_full");
             scratchPad.finishUsingTempVector("new_idA_scanned_runlength");

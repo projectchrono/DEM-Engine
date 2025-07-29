@@ -56,12 +56,20 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
         deme::materialsOffset_t bodyAMatType, bodyBMatType;
         // The user-specified extra margin size (how much we should be lenient in determining `in-contact')
         float extraMarginSize = 0.;
+        // Triangle A's three points are defined outside, as may be reused in B's acquisition and penetration calc.
+        double3 triANode1, triANode2, triANode3;
         // Then allocate the optional quantities that will be needed in the force model (note: this one can't be in a
         // curly bracket, obviously...)
         _forceModelIngredientDefinition_;
         // Take care of 2 bodies in order, bodyA first, grab location and velocity to local cache
-        // We know in this kernel, bodyA will be a sphere; B can be something else
-        {
+        // Decompose ContactType to get the types of A and B
+        deme::geoType_t AType = deme::decodeTypeA(ContactType);
+        deme::geoType_t BType = deme::decodeTypeB(ContactType);
+
+        // ----------------------------------------------------------------
+        // Based on A's type, equip info
+        // ----------------------------------------------------------------
+        if (AType == deme::GEO_T_SPHERE) {
             deme::bodyID_t sphereID = granData->idGeometryA[myContactID];
             deme::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
 
@@ -83,16 +91,60 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
 
             // Optional force model ingredients are loaded here...
             _forceModelIngredientAcqForA_;
+            _forceModelGeoWildcardAcqForASph_;
 
             equipOwnerPosRot(simParams, granData, myOwner, myRelPos, AOwnerPos, bodyAPos, AOriQ);
 
             ARadius = myRadius;
             bodyAMatType = granData->sphereMaterialOffset[sphereID];
             extraMarginSize = granData->familyExtraMarginSize[AOwnerFamily];
+        } else if (AType == deme::GEO_T_TRIANGLE) {
+            // Geometry ID here is called sphereID, although it is not a sphere, it's more like triID. But naming it
+            // sphereID makes the acquisition process cleaner.
+            deme::bodyID_t sphereID = granData->idGeometryA[myContactID];
+            deme::bodyID_t myOwner = granData->ownerMesh[sphereID];
+            //// TODO: Is this OK?
+            ARadius = DEME_HUGE_FLOAT;
+            bodyAMatType = granData->triMaterialOffset[sphereID];
+
+            // As the grace margin, the distance (negative overlap) just needs to be within the grace margin. So we pick
+            // the larger of the 2 familyExtraMarginSize.
+            extraMarginSize = granData->familyExtraMarginSize[AOwnerFamily];
+
+            triANode1 = to_double3(granData->relPosNode1[sphereID]);
+            triANode2 = to_double3(granData->relPosNode2[sphereID]);
+            triANode3 = to_double3(granData->relPosNode3[sphereID]);
+
+            // Get my mass info from either jitified arrays or global memory
+            // Outputs myMass
+            // Use an input named exactly `myOwner' which is the id of this owner
+            {
+                float myMass;
+                _massAcqStrat_;
+                AOwnerMass = myMass;
+            }
+            _forceModelIngredientAcqForA_;
+            _forceModelGeoWildcardAcqForATri_;
+
+            // bodyBPos is for a place holder for the outcome triANode1 position
+            equipOwnerPosRot(simParams, granData, myOwner, triANode1, BOwnerPos, bodyBPos, BOriQ);
+            triANode1 = bodyBPos;
+            // Do this to node 2 and 3 as well
+            applyOriQToVector3(triANode2.x, triANode2.y, triANode2.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
+            triANode2 += BOwnerPos;
+            applyOriQToVector3(triANode3.x, triANode3.y, triANode3.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
+            triANode3 += BOwnerPos;
+            // Assign the correct bodyBPos
+            bodyBPos = triangleCentroid<double3>(triANode1, triANode2, triANode3);
+        } else {
+            // Currently, we only support sphere and mesh for body A
+            ContactType = deme::NOT_A_CONTACT;
         }
 
-        // Then B, location and velocity
-        if (ContactType == deme::SPHERE_SPHERE_CONTACT) {
+        // ----------------------------------------------------------------
+        // Then B, location and velocity, depending on type
+        // ----------------------------------------------------------------
+        if (BType == deme::GEO_T_SPHERE) {
             deme::bodyID_t sphereID = granData->idGeometryB[myContactID];
             deme::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
 
@@ -112,7 +164,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                 BOwnerMass = myMass;
             }
             _forceModelIngredientAcqForB_;
-            _forceModelGeoWildcardAcqForSph_;
+            _forceModelGeoWildcardAcqForBSph_;
 
             equipOwnerPosRot(simParams, granData, myOwner, myRelPos, BOwnerPos, bodyBPos, BOriQ);
 
@@ -125,6 +177,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                                   ? extraMarginSize
                                   : granData->familyExtraMarginSize[BOwnerFamily];
 
+            // If B is a sphere, then A can only be a sphere
             checkSpheresOverlap<double, float>(bodyAPos.x, bodyAPos.y, bodyAPos.z, ARadius, bodyBPos.x, bodyBPos.y,
                                                bodyBPos.z, BRadius, contactPnt.x, contactPnt.y, contactPnt.z, B2A.x,
                                                B2A.y, B2A.z, overlapDepth);
@@ -134,7 +187,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                 ContactType = deme::NOT_A_CONTACT;
             }
 
-        } else if (ContactType == deme::SPHERE_MESH_CONTACT) {
+        } else if (BType == deme::GEO_T_TRIANGLE) {
             // Geometry ID here is called sphereID, although it is not a sphere, it's more like triID. But naming it
             // sphereID makes the acquisition process cleaner.
             deme::bodyID_t sphereID = granData->idGeometryB[myContactID];
@@ -149,9 +202,9 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                                   ? extraMarginSize
                                   : granData->familyExtraMarginSize[BOwnerFamily];
 
-            double3 triNode1 = to_double3(granData->relPosNode1[sphereID]);
-            double3 triNode2 = to_double3(granData->relPosNode2[sphereID]);
-            double3 triNode3 = to_double3(granData->relPosNode3[sphereID]);
+            double3 triBNode1 = to_double3(granData->relPosNode1[sphereID]);
+            double3 triBNode2 = to_double3(granData->relPosNode2[sphereID]);
+            double3 triBNode3 = to_double3(granData->relPosNode3[sphereID]);
 
             // Get my mass info from either jitified arrays or global memory
             // Outputs myMass
@@ -162,33 +215,42 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                 BOwnerMass = myMass;
             }
             _forceModelIngredientAcqForB_;
-            _forceModelGeoWildcardAcqForTri_;
+            _forceModelGeoWildcardAcqForBTri_;
 
-            // bodyBPos is for a place holder for the outcome triNode1 position
-            equipOwnerPosRot(simParams, granData, myOwner, triNode1, BOwnerPos, bodyBPos, BOriQ);
-            triNode1 = bodyBPos;
+            // bodyBPos is for a place holder for the outcome triBNode1 position
+            equipOwnerPosRot(simParams, granData, myOwner, triBNode1, BOwnerPos, bodyBPos, BOriQ);
+            triBNode1 = bodyBPos;
             // Do this to node 2 and 3 as well
-            applyOriQToVector3(triNode2.x, triNode2.y, triNode2.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
-            triNode2 += BOwnerPos;
-            applyOriQToVector3(triNode3.x, triNode3.y, triNode3.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
-            triNode3 += BOwnerPos;
+            applyOriQToVector3(triBNode2.x, triBNode2.y, triBNode2.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
+            triBNode2 += BOwnerPos;
+            applyOriQToVector3(triBNode3.x, triBNode3.y, triBNode3.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
+            triBNode3 += BOwnerPos;
             // Assign the correct bodyBPos
-            bodyBPos = triangleCentroid<double3>(triNode1, triNode2, triNode3);
+            bodyBPos = triangleCentroid<double3>(triBNode1, triBNode2, triBNode3);
 
-            double3 contact_normal;
-            bool in_contact = triangle_sphere_CD<double3, double>(triNode1, triNode2, triNode3, bodyAPos, ARadius,
-                                                                  contact_normal, overlapDepth, contactPnt);
-            B2A = to_float3(contact_normal);
+            // If B is a triangle, then A can be a sphere or a triangle. But this branching is not too bad, as most
+            // threads in this block will have the same ContactType.
+            if (AType == deme::GEO_T_SPHERE) {
+                double3 contact_normal;
+                bool in_contact = triangle_sphere_CD<double3, double>(
+                    triBNode1, triBNode2, triBNode3, bodyAPos, ARadius, contact_normal, overlapDepth, contactPnt);
+                B2A = to_float3(contact_normal);
 
-            // Sphere--triangle is a bit tricky. Extra margin should only take effect when it comes from the positive
-            // direction of the mesh facet. If not, sphere-setting-on-needle case will give huge penetration since in
-            // that case, overlapDepth is very negative and this will be considered in-contact. So the cases we exclude
-            // are: too far away while at the positive direction; not in contact while at the negative side.
-            if ((overlapDepth > extraMarginSize) || (!in_contact && overlapDepth < 0.)) {
+                // Sphere--triangle is a bit tricky. Extra margin should only take effect when it comes from the
+                // positive direction of the mesh facet. If not, sphere-setting-on-needle case will give huge
+                // penetration since in that case, overlapDepth is very negative and this will be considered in-contact.
+                // So the cases we exclude are: too far away while at the positive direction; not in contact while at
+                // the negative side.
+                if ((overlapDepth > extraMarginSize) || (!in_contact && overlapDepth < 0.)) {
+                    ContactType = deme::NOT_A_CONTACT;
+                }
+                overlapDepth = -overlapDepth;  // triangle_sphere_CD gives neg. number for overlapping cases
+            } else if (AType == deme::GEO_T_TRIANGLE) {
+                // Triangle--triangle contact is not supported yet, so we just skip it.
                 ContactType = deme::NOT_A_CONTACT;
             }
-            overlapDepth = -overlapDepth;  // triangle_sphere_CD gives neg. number for overlapping cases
-        } else if (ContactType == deme::SPHERE_ANALYTICAL_CONTACT) {
+
+        } else if (BType == deme::GEO_T_ANALYTICAL) {
             // Geometry ID here is called sphereID, although it is not a sphere, it's more like analyticalID. But naming
             // it sphereID makes the acquisition process cleaner.
             deme::objID_t sphereID = granData->idGeometryB[myContactID];
@@ -204,7 +266,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             myRelPos.y = objRelPosY[sphereID];
             myRelPos.z = objRelPosZ[sphereID];
             _forceModelIngredientAcqForB_;
-            _forceModelGeoWildcardAcqForAnal_;
+            _forceModelGeoWildcardAcqForBAnal_;
 
             equipOwnerPosRot(simParams, granData, myOwner, myRelPos, BOwnerPos, bodyBPos, BOriQ);
 
@@ -221,15 +283,22 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             applyOriQToVector3<float, deme::oriQ_t>(bodyBRot.x, bodyBRot.y, bodyBRot.z, BOriQ.w, BOriQ.x, BOriQ.y,
                                                     BOriQ.z);
 
-            // Note for this test on dT side we don't enlarge entities
-            checkSphereEntityOverlap<double3, float, double>(bodyAPos, ARadius, objType[sphereID], bodyBPos, bodyBRot,
-                                                             objSize1[sphereID], objSize2[sphereID], objSize3[sphereID],
-                                                             objNormal[sphereID], 0.0, contactPnt, B2A, overlapDepth);
-            // Fix ContactType if needed
-            if (overlapDepth < -extraMarginSize) {
+            // If B is an analytical entity, then A can be a sphere or a triangle. But this branching is not too bad, as
+            // most threads in this block will have the same ContactType.
+            if (AType == deme::GEO_T_SPHERE) {
+                // Note for this test on dT side we don't enlarge entities
+                checkSphereEntityOverlap<double3, float, double>(
+                    bodyAPos, ARadius, objType[sphereID], bodyBPos, bodyBRot, objSize1[sphereID], objSize2[sphereID],
+                    objSize3[sphereID], objNormal[sphereID], 0.0, contactPnt, B2A, overlapDepth);
+                // Fix ContactType if needed
+                if (overlapDepth < -extraMarginSize) {
+                    ContactType = deme::NOT_A_CONTACT;
+                }
+            } else if (AType == deme::GEO_T_TRIANGLE) {
+                // Triangle--analytical contact is not supported yet, so we just skip it.
                 ContactType = deme::NOT_A_CONTACT;
             }
-        }  // else it must be NOT_A_CONTACT
+        }
 
         _forceModelContactWildcardAcq_;
         if (ContactType != deme::NOT_A_CONTACT) {

@@ -279,7 +279,8 @@ std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
     dT->syncMemoryTransfer();
 
     std::vector<bodyID_t> clumps_in_cnt;
-    // If this is not clump, then checking idB for it is enough
+    // If this is not clump, then checking idB for it is enough, b/c we are interested in clump contacts only, and if
+    // one contact entity is clump, it must be in idA
     if (this_type != OWNER_T_CLUMP) {
         for (size_t i = 0; i < dT->getNumContacts(); i++) {
             auto idA = dT->idGeometryA[i];
@@ -289,7 +290,7 @@ std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
             auto cnt_type = dT->contactType[i];
             // If it is a mesh facet, then contact type needs to match
             if (this_type == OWNER_T_MESH) {
-                if (cnt_type == SPHERE_MESH_CONTACT) {
+                if (cnt_type == SPHERE_TRIANGLE_CONTACT) {
                     clumps_in_cnt.push_back(dT->ownerClumpBody[idA]);
                 }
             } else {  // If it is an analytical object, then contact type needs to match

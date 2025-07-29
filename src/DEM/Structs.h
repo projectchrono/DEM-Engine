@@ -76,7 +76,7 @@ const std::string OUTPUT_FILE_NORMAL_Z_NAME = std::string("n_z");
 const std::string OUTPUT_FILE_SPH_SPH_CONTACT_NAME = std::string("SS");
 const std::string OUTPUT_FILE_SPH_ANAL_CONTACT_NAME = std::string("SA");
 const std::string OUTPUT_FILE_SPH_MESH_CONTACT_NAME = std::string("SM");
-const std::string OUTPUT_FILE_MESH_MESH_CONTACT_NAME = std::string("MM");
+const std::string OUTPUT_FILE_TRIANGLE_TRIANGLE_CONTACT_NAME = std::string("MM");
 const std::string OUTPUT_FILE_MESH_ANAL_CONTACT_NAME = std::string("MA");
 const std::set<std::string> CNT_FILE_KNOWN_COL_NAMES = {
     OUTPUT_FILE_OWNER_1_NAME,          OUTPUT_FILE_OWNER_2_NAME,
@@ -89,17 +89,17 @@ const std::set<std::string> CNT_FILE_KNOWN_COL_NAMES = {
     OUTPUT_FILE_TORQUE_Z_NAME,         OUTPUT_FILE_NORMAL_X_NAME,
     OUTPUT_FILE_NORMAL_Y_NAME,         OUTPUT_FILE_NORMAL_Z_NAME,
     OUTPUT_FILE_SPH_SPH_CONTACT_NAME,  OUTPUT_FILE_SPH_ANAL_CONTACT_NAME,
-    OUTPUT_FILE_SPH_MESH_CONTACT_NAME, OUTPUT_FILE_MESH_MESH_CONTACT_NAME,
+    OUTPUT_FILE_SPH_MESH_CONTACT_NAME, OUTPUT_FILE_TRIANGLE_TRIANGLE_CONTACT_NAME,
     OUTPUT_FILE_MESH_ANAL_CONTACT_NAME};
 
 // Map contact type identifier to their names
 const std::unordered_map<contact_t, std::string> contact_type_out_name_map = {
     {NOT_A_CONTACT, "fake"},
     {SPHERE_SPHERE_CONTACT, OUTPUT_FILE_SPH_SPH_CONTACT_NAME},
-    {SPHERE_MESH_CONTACT, OUTPUT_FILE_SPH_MESH_CONTACT_NAME},
+    {SPHERE_TRIANGLE_CONTACT, OUTPUT_FILE_SPH_MESH_CONTACT_NAME},
     {SPHERE_ANALYTICAL_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
-    {MESH_MESH_CONTACT, OUTPUT_FILE_MESH_MESH_CONTACT_NAME},
-    {MESH_ANALYTICAL_CONTACT, OUTPUT_FILE_MESH_ANAL_CONTACT_NAME}};
+    {TRIANGLE_TRIANGLE_CONTACT, OUTPUT_FILE_TRIANGLE_TRIANGLE_CONTACT_NAME},
+    {TRIANGLE_ANALYTICAL_CONTACT, OUTPUT_FILE_MESH_ANAL_CONTACT_NAME}};
 
 // Possible force model ingredients. This map is used to ensure we don't double-add them.
 const std::unordered_map<std::string, bool> force_kernel_ingredient_stats = {{"ts", false},
@@ -119,154 +119,6 @@ const std::unordered_map<std::string, bool> force_kernel_ingredient_stats = {{"t
                                                                              {"ContactType", true},
                                                                              {"force", true},
                                                                              {"torque_only_force", true}};
-
-// Structs defined here will be used by some host classes in DEM.
-// NOTE: Data structs here need to be those complex ones (such as needing to include CudaAllocator.hpp), which may
-// not be jitifiable.
-
-// DEMSolverScratchData mainly contains space allocated as system scratch pad and as thread temporary arrays
-class DEMSolverScratchData {
-  private:
-    // NOTE! The type MUST be scratch_t, since all DEMSolverScratchData's allocation methods use num of bytes as
-    // arguments, but DeviceVectorPool's resize considers number of elements
-    DeviceVectorPool<scratch_t> m_deviceVecPool;
-    DualArrayPool<scratch_t> m_dualArrPool;
-    DualStructPool<size_t> m_dualStructPool;
-
-  public:
-    // Number of contacts in this CD step
-    DualStruct<size_t> numContacts = DualStruct<size_t>(0);
-    // Number of contacts in the previous CD step
-    DualStruct<size_t> numPrevContacts = DualStruct<size_t>(0);
-    // Number of spheres in the previous CD step (in case user added/removed clumps from the system)
-    DualStruct<size_t> numPrevSpheres = DualStruct<size_t>(0);
-    // Prev number of triangles
-    DualStruct<size_t> numPrevTriangles = DualStruct<size_t>(0);
-
-    DEMSolverScratchData(size_t* external_host_counter = nullptr, size_t* external_device_counter = nullptr)
-        : m_deviceVecPool(external_device_counter), m_dualArrPool(external_host_counter, external_device_counter) {
-        m_deviceVecPool.claim("ScratchSpace", 42);
-    }
-    ~DEMSolverScratchData() { releaseMemory(); }
-
-    // Return raw pointer to swath of device memory that is at least "sizeNeeded" large
-    scratch_t* allocateScratchSpace(size_t sizeNeeded) {
-        m_deviceVecPool.resize("ScratchSpace", sizeNeeded);
-        return m_deviceVecPool.get("ScratchSpace");
-    }
-
-    // This flavor does not prevent you from forgeting to recycle before this time step ends
-    scratch_t* allocateVector(const std::string& name, size_t sizeNeeded) {
-        return m_deviceVecPool.claim(name, sizeNeeded, /*allow_duplicate=*/true);
-    }
-
-    // This flavor prevents you from forgeting to recycle before this time step ends
-    scratch_t* allocateTempVector(const std::string& name, size_t sizeNeeded) {
-        return m_deviceVecPool.claim(name, sizeNeeded);
-    }
-
-    // Dual arrays allocated here will always be temporary. If you need permanent dual array, create it as a member of
-    // your worker.
-    DualArray<scratch_t>* allocateDualArray(const std::string& name, size_t sizeNeeded) {
-        return m_dualArrPool.claim(name, sizeNeeded);
-    }
-    scratch_t* getDualArrayHost(const std::string& name) { return m_dualArrPool.getHost(name); }
-    scratch_t* getDualArrayDevice(const std::string& name) { return m_dualArrPool.getDevice(name); }
-    void syncDualArrayDeviceToHost(const std::string& name) { m_dualArrPool.get(name)->toHost(); }
-    void syncDualArrayHostToDevice(const std::string& name) { m_dualArrPool.get(name)->toDevice(); }
-    // When using these methods, remember the type is scratch_t
-    void syncDualArrayDeviceToHost(const std::string& name, size_t start, size_t n) {
-        m_dualArrPool.get(name)->toHost(start, n);
-    }
-    void syncDualArrayHostToDevice(const std::string& name, size_t start, size_t n) {
-        m_dualArrPool.get(name)->toDevice(start, n);
-    }
-    // Likewise, all DualStruct allocated using this class will be temporary
-    DualStruct<size_t>* allocateDualStruct(const std::string& name) { return m_dualStructPool.claim(name); }
-    size_t* getDualStructHost(const std::string& name) { return m_dualStructPool.getHost(name); }
-    size_t* getDualStructDevice(const std::string& name) { return m_dualStructPool.getDevice(name); }
-    void syncDualStructDeviceToHost(const std::string& name) { m_dualStructPool.get(name)->toHost(); }
-    void syncDualStructHostToDevice(const std::string& name) { m_dualStructPool.get(name)->toDevice(); }
-
-    void finishUsingTempVector(const std::string& name) { m_deviceVecPool.unclaim(name); }
-    void finishUsingVector(const std::string& name) { finishUsingTempVector(name); }
-    void finishUsingDualArray(const std::string& name) { m_dualArrPool.unclaim(name); }
-    void finishUsingDualStruct(const std::string& name) { m_dualStructPool.unclaim(name); }
-
-    bool existDualArray(const std::string& name) { return m_dualArrPool.exist(name); }
-    bool existDualStruct(const std::string& name) { return m_dualStructPool.exist(name); }
-    bool existTempVector(const std::string& name) { return m_deviceVecPool.exist(name); }
-
-    // Debug util
-    void printVectorUsage() const {
-        m_deviceVecPool.printStatus();
-        m_dualArrPool.printStatus();
-        m_dualStructPool.printStatus();
-    }
-
-    void releaseMemory() {
-        m_deviceVecPool.releaseAll();
-        m_dualArrPool.releaseAll();
-        m_dualStructPool.releaseAll();
-    }
-};
-
-struct kTStateParams {
-    // The `top speed' of the change of bin size
-    float binTopChangeRate = 0.05;
-    // The `current speed' fo the change of bin size
-    float binCurrentChangeRate = 0.0;
-    // The `acceleration' of bin size change rate, (0, 1]: 1 means each time a change is applied, it's at top speed
-    float binChangeRateAcc = 0.1;
-    // Number of CD steps before the solver makes a decision on how to change the bin size
-    unsigned int binChangeObserveSteps = 25;
-    // Past the point that (this number * error out bin geometry count)-many geometries found in a bin, the solver will
-    // force the bin to shrink
-    float binChangeUpperSafety = 0.25;
-    // Past the point that (this number * max num of bin)-many bins in the domain, the solver will force the bin to
-    // expand
-    float binChangeLowerSafety = 0.3;
-
-    // The max num of geometries in a bin that appeared in the CD process
-    size_t maxSphFoundInBin;
-    size_t maxTriFoundInBin;
-
-    // Num of bins, currently
-    size_t numBins = 0;
-
-    // Current average num of contacts per sphere has.
-    float avgCntsPerSphere = 0.;
-
-    // float maxVel_buffer; // buffer for the current max vel sent by dT
-    DualStruct<float> maxVel = DualStruct<float>(0.f);  // kT's own storage of max vel
-    DualStruct<float> ts_buffer;                        // buffer for the current ts size sent by dT
-    DualStruct<float> ts;                               // kT's own storage of ts size
-    DualStruct<unsigned int> maxDrift_buffer;           // buffer for max dT future drift steps
-    DualStruct<unsigned int> maxDrift;                  // kT's own storage for max future drift
-};
-
-struct dTStateParams {};
-
-inline std::string pretty_format_bytes(size_t bytes) {
-    // set up byte prefixes
-    constexpr size_t KIBI = 1024;
-    constexpr size_t MEBI = KIBI * KIBI;
-    constexpr size_t GIBI = KIBI * KIBI * KIBI;
-    float gibival = float(bytes) / GIBI;
-    float mebival = float(bytes) / MEBI;
-    float kibival = float(bytes) / KIBI;
-    std::stringstream ret;
-    if (gibival > 1) {
-        ret << gibival << " GiB";
-    } else if (mebival > 1) {
-        ret << mebival << " MiB";
-    } else if (kibival > 1) {
-        ret << kibival << " KiB";
-    } else {
-        ret << bytes << " B";
-    }
-    return ret.str();
-}
 
 // =============================================================================
 // SOME HOST-SIDE ENUMS
@@ -573,6 +425,131 @@ class DEMTriangle {
     float3 p1;
     float3 p2;
     float3 p3;
+};
+
+// Structs defined here will be used by some host classes in DEM.
+// NOTE: Data structs here need to be those complex ones (such as needing to include CudaAllocator.hpp), which may
+// not be jitifiable.
+
+// DEMSolverScratchData mainly contains space allocated as system scratch pad and as thread temporary arrays
+class DEMSolverScratchData {
+  private:
+    // NOTE! The type MUST be scratch_t, since all DEMSolverScratchData's allocation methods use num of bytes as
+    // arguments, but DeviceVectorPool's resize considers number of elements
+    DeviceVectorPool<scratch_t> m_deviceVecPool;
+    DualArrayPool<scratch_t> m_dualArrPool;
+    DualStructPool<size_t> m_dualStructPool;
+
+  public:
+    // Number of contacts in this CD step
+    DualStruct<size_t> numContacts = DualStruct<size_t>(0);
+    // Number of contacts in the previous CD step
+    DualStruct<size_t> numPrevContacts = DualStruct<size_t>(0);
+    // Number of spheres in the previous CD step (in case user added/removed clumps from the system)
+    DualStruct<size_t> numPrevSpheres = DualStruct<size_t>(0);
+    // Prev number of triangles
+    DualStruct<size_t> numPrevTriangles = DualStruct<size_t>(0);
+
+    DEMSolverScratchData(size_t* external_host_counter = nullptr, size_t* external_device_counter = nullptr)
+        : m_deviceVecPool(external_device_counter), m_dualArrPool(external_host_counter, external_device_counter) {
+        m_deviceVecPool.claim("ScratchSpace", 42);
+    }
+    ~DEMSolverScratchData() { releaseMemory(); }
+
+    // Return raw pointer to swath of device memory that is at least "sizeNeeded" large
+    scratch_t* allocateScratchSpace(size_t sizeNeeded) {
+        m_deviceVecPool.resize("ScratchSpace", sizeNeeded);
+        return m_deviceVecPool.get("ScratchSpace");
+    }
+
+    // This flavor does not prevent you from forgeting to recycle before this time step ends
+    scratch_t* allocateVector(const std::string& name, size_t sizeNeeded) {
+        return m_deviceVecPool.claim(name, sizeNeeded, /*allow_duplicate=*/true);
+    }
+
+    // This flavor prevents you from forgeting to recycle before this time step ends
+    scratch_t* allocateTempVector(const std::string& name, size_t sizeNeeded) {
+        return m_deviceVecPool.claim(name, sizeNeeded);
+    }
+
+    // Dual arrays allocated here will always be temporary. If you need permanent dual array, create it as a member of
+    // your worker.
+    DualArray<scratch_t>* allocateDualArray(const std::string& name, size_t sizeNeeded) {
+        return m_dualArrPool.claim(name, sizeNeeded);
+    }
+    scratch_t* getDualArrayHost(const std::string& name) { return m_dualArrPool.getHost(name); }
+    scratch_t* getDualArrayDevice(const std::string& name) { return m_dualArrPool.getDevice(name); }
+    void syncDualArrayDeviceToHost(const std::string& name) { m_dualArrPool.get(name)->toHost(); }
+    void syncDualArrayHostToDevice(const std::string& name) { m_dualArrPool.get(name)->toDevice(); }
+    // When using these methods, remember the type is scratch_t
+    void syncDualArrayDeviceToHost(const std::string& name, size_t start, size_t n) {
+        m_dualArrPool.get(name)->toHost(start, n);
+    }
+    void syncDualArrayHostToDevice(const std::string& name, size_t start, size_t n) {
+        m_dualArrPool.get(name)->toDevice(start, n);
+    }
+    // Likewise, all DualStruct allocated using this class will be temporary
+    DualStruct<size_t>* allocateDualStruct(const std::string& name) { return m_dualStructPool.claim(name); }
+    size_t* getDualStructHost(const std::string& name) { return m_dualStructPool.getHost(name); }
+    size_t* getDualStructDevice(const std::string& name) { return m_dualStructPool.getDevice(name); }
+    void syncDualStructDeviceToHost(const std::string& name) { m_dualStructPool.get(name)->toHost(); }
+    void syncDualStructHostToDevice(const std::string& name) { m_dualStructPool.get(name)->toDevice(); }
+
+    void finishUsingTempVector(const std::string& name) { m_deviceVecPool.unclaim(name); }
+    void finishUsingVector(const std::string& name) { finishUsingTempVector(name); }
+    void finishUsingDualArray(const std::string& name) { m_dualArrPool.unclaim(name); }
+    void finishUsingDualStruct(const std::string& name) { m_dualStructPool.unclaim(name); }
+
+    bool existDualArray(const std::string& name) { return m_dualArrPool.exist(name); }
+    bool existDualStruct(const std::string& name) { return m_dualStructPool.exist(name); }
+    bool existTempVector(const std::string& name) { return m_deviceVecPool.exist(name); }
+
+    // Debug util
+    void printVectorUsage() const {
+        m_deviceVecPool.printStatus();
+        m_dualArrPool.printStatus();
+        m_dualStructPool.printStatus();
+    }
+
+    void releaseMemory() {
+        m_deviceVecPool.releaseAll();
+        m_dualArrPool.releaseAll();
+        m_dualStructPool.releaseAll();
+    }
+};
+
+struct kTStateParams {
+    // The `top speed' of the change of bin size
+    float binTopChangeRate = 0.05;
+    // The `current speed' fo the change of bin size
+    float binCurrentChangeRate = 0.0;
+    // The `acceleration' of bin size change rate, (0, 1]: 1 means each time a change is applied, it's at top speed
+    float binChangeRateAcc = 0.1;
+    // Number of CD steps before the solver makes a decision on how to change the bin size
+    unsigned int binChangeObserveSteps = 25;
+    // Past the point that (this number * error out bin geometry count)-many geometries found in a bin, the solver will
+    // force the bin to shrink
+    float binChangeUpperSafety = 0.25;
+    // Past the point that (this number * max num of bin)-many bins in the domain, the solver will force the bin to
+    // expand
+    float binChangeLowerSafety = 0.3;
+
+    // The max num of geometries in a bin that appeared in the CD process
+    size_t maxSphFoundInBin;
+    size_t maxTriFoundInBin;
+
+    // Num of bins, currently
+    size_t numBins = 0;
+
+    // Current average num of contacts per sphere has.
+    float avgCntsPerSphere = 0.;
+
+    // float maxVel_buffer; // buffer for the current max vel sent by dT
+    DualStruct<float> maxVel = DualStruct<float>(0.f);  // kT's own storage of max vel
+    DualStruct<float> ts_buffer;                        // buffer for the current ts size sent by dT
+    DualStruct<float> ts;                               // kT's own storage of ts size
+    DualStruct<unsigned int> maxDrift_buffer;           // buffer for max dT future drift steps
+    DualStruct<unsigned int> maxDrift;                  // kT's own storage for max future drift
 };
 
 // A struct that defines a `clump' (one of the core concepts of this solver). A clump is typically small which consists

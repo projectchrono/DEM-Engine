@@ -253,17 +253,17 @@ void DEMDynamicThread::migrateAnalGeoWildcardToHost() {
     }
 }
 
-bodyID_t DEMDynamicThread::getGeoOwnerID(const bodyID_t& geoB, const contact_t& type) const {
+bodyID_t DEMDynamicThread::getGeoOwnerID(const bodyID_t& geo, const geoType_t& type) const {
     // These arrays can't change on device
     switch (type) {
-        case (NOT_A_CONTACT):
+        case (GEO_T_SPHERE):
+            return ownerClumpBody[geo];
+        case (GEO_T_TRIANGLE):
+            return ownerMesh[geo];
+        case (GEO_T_ANALYTICAL):
+            return ownerAnalBody[geo];
+        default:
             return NULL_BODYID;
-        case (SPHERE_SPHERE_CONTACT):
-            return ownerClumpBody[geoB];
-        case (SPHERE_MESH_CONTACT):
-            return ownerMesh[geoB];
-        default:  // Default is sphere--analytical
-            return ownerAnalBody[geoB];
     }
 }
 
@@ -1648,11 +1648,8 @@ std::shared_ptr<ContactInfoContainer> DEMDynamicThread::generateContactInfo(floa
             continue;
         }
 
-        // geoA's owner must be a sphere
-        auto ownerA = ownerClumpBody[geoA];
-        bodyID_t ownerB;
-        // geoB's owner depends...
-        ownerB = getGeoOwnerID(geoB, type);
+        bodyID_t ownerA = getGeoOwnerID(geoA, decodeTypeA(type));
+        bodyID_t ownerB = getGeoOwnerID(geoB, decodeTypeB(type));
 
         // Type is mapped to SS, SM and such....
         contactInfo.Get<std::string>("ContactType")[useful_cnt] = contact_type_out_name_map.at(type);
@@ -2850,11 +2847,11 @@ void DEMDynamicThread::setFamilyContactWildcardValue_impl(
 
     size_t numCnt = *solverScratchSpace.numContacts;
     for (size_t i = 0; i < numCnt; i++) {
+        contact_t typeContact = contactType[i];
         bodyID_t geoA = idGeometryA[i];
-        bodyID_t ownerA = ownerClumpBody[geoA];
+        bodyID_t ownerA = getGeoOwnerID(geoA, decodeTypeA(typeContact));
         bodyID_t geoB = idGeometryB[i];
-        contact_t typeB = contactType[i];
-        bodyID_t ownerB = getGeoOwnerID(geoB, typeB);
+        bodyID_t ownerB = getGeoOwnerID(geoB, decodeTypeB(typeContact));
 
         unsigned int famA = +(familyID[ownerA]);
         unsigned int famB = +(familyID[ownerB]);

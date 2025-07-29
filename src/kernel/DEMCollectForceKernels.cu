@@ -9,64 +9,19 @@ __constant__ __device__ deme::bodyID_t objOwner[] = {_objOwner_};
 _massDefs_;
 _moiDefs_;
 
-__global__ void cashInOwnerIndexA(deme::bodyID_t* idOwner,
-                                  deme::bodyID_t* id,
-                                  deme::bodyID_t* ownerClumpBody,
-                                  deme::contact_t* contactType,
-                                  size_t nContactPairs) {
+__global__ void cashInOwnerIndex(deme::bodyID_t* idAOwner,
+                                 deme::bodyID_t* idBOwner,
+                                 deme::DEMDataDT* granData,
+                                 size_t nContactPairs) {
     deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContactPairs) {
-        deme::bodyID_t thisBodyID = id[myID];
-        idOwner[myID] = ownerClumpBody[thisBodyID];
+        deme::bodyID_t idGeoA = granData->idGeometryA[myID];
+        deme::bodyID_t idGeoB = granData->idGeometryB[myID];
+        deme::contact_t thisCntType = granData->contactType[myID];
+        idAOwner[myID] = DEME_GET_GEO_OWNER_ID(idGeoA, deme::decodeTypeA(thisCntType));
+        idBOwner[myID] = DEME_GET_GEO_OWNER_ID(idGeoB, deme::decodeTypeB(thisCntType));
     }
 }
-
-__global__ void cashInOwnerIndexB(deme::bodyID_t* idOwner,
-                                  deme::bodyID_t* id,
-                                  deme::bodyID_t* ownerClumpBody,
-                                  deme::bodyID_t* ownerMesh,
-                                  deme::contact_t* contactType,
-                                  size_t nContactPairs) {
-    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (myID < nContactPairs) {
-        deme::bodyID_t thisBodyID = id[myID];
-        deme::contact_t thisCntType = contactType[myID];
-        if (thisCntType == deme::SPHERE_SPHERE_CONTACT) {
-            idOwner[myID] = ownerClumpBody[thisBodyID];
-        } else if (thisCntType == deme::SPHERE_MESH_CONTACT) {
-            idOwner[myID] = ownerMesh[thisBodyID];
-        } else {
-            // This is a sphere--analytical geometry contact, its owner is jitified
-            idOwner[myID] = objOwner[thisBodyID];
-        }
-    }
-}
-
-/*
-__global__ void cashInMassMoiIndex(float* massOwner,
-                                   float3* moiOwner,
-                                   deme::inertiaOffset_t* inertiaPropOffsets,
-                                   deme::bodyID_t* idOwner,
-                                   size_t nContactPairs) {
-    // _nDistinctMassProperties_  elements are in these arrays
-    const float moiX[] = {_moiX_};
-    const float moiY[] = {_moiY_};
-    const float moiZ[] = {_moiZ_};
-    const float MassProperties[] = {_MassProperties_};
-
-    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (myID < nContactPairs) {
-        deme::bodyID_t thisOwnerID = idOwner[myID];
-        deme::inertiaOffset_t myMassOffset = inertiaPropOffsets[thisOwnerID];
-        float3 moi;
-        moi.x = moiX[myMassOffset];
-        moi.y = moiY[myMassOffset];
-        moi.z = moiZ[myMassOffset];
-        massOwner[myID] = MassProperties[myMassOffset];
-        moiOwner[myID] = moi;
-    }
-}
-*/
 
 // computes a ./ b
 __global__ void forceToAcc(float3* acc,

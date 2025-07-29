@@ -454,7 +454,7 @@ class DEMDynamicThread {
                                  bool torque_in_local = false);
 
     /// Get owner of contact geo B.
-    bodyID_t getGeoOwnerID(const bodyID_t& geoB, const contact_t& type) const;
+    bodyID_t getGeoOwnerID(const bodyID_t& geo, const geoType_t& type) const;
 
     /// Let dT know that it needs a kT update, as something important may have changed, and old contact pair info is no
     /// longer valid.

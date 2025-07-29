@@ -196,7 +196,7 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
                 // Unlike the sphere-X contact case, we do not test against family extra margin here. This may result in
                 // more fake contact pairs, but the efficiency in the mesh-based particle case is not our top priority
                 // yet.
-                if (contact_type == deme::MESH_ANALYTICAL_CONTACT) {
+                if (contact_type == deme::TRIANGLE_ANALYTICAL_CONTACT) {
                     contact_count++;
                 }
             }
@@ -325,7 +325,7 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                                                                   objNormal[objB], granData->marginSize[objBOwner]);
                 }
                 // Unlike the sphere-X contact case, we do not test against family extra margin here.
-                if (contact_type == deme::MESH_ANALYTICAL_CONTACT) {
+                if (contact_type == deme::TRIANGLE_ANALYTICAL_CONTACT) {
                     idGeoA[myTriGeoReportOffset] = triID;
                     idGeoB[myTriGeoReportOffset] = (deme::bodyID_t)objB;
                     contactType[myTriGeoReportOffset] = contact_type;

@@ -556,7 +556,7 @@ inline __host__ __device__ deme::contact_t checkTriEntityOverlap(const T1& A,
                 // printf("v point %f %f %f, entityLoc %f %f %f\n", v->x, v->y, v->z, entityLoc.x, entityLoc.y,
                 // entityLoc.z);
                 if (overlapDepth >= 0.0)
-                    return deme::MESH_ANALYTICAL_CONTACT;
+                    return deme::TRIANGLE_ANALYTICAL_CONTACT;
             }
             return deme::NOT_A_CONTACT;
         }
@@ -571,7 +571,7 @@ inline __host__ __device__ deme::contact_t checkTriEntityOverlap(const T1& A,
                 // (positive if same orientation, negative if opposite)
                 double signed_dist = (size1B - length(vec)) * normal_sign;
                 if (signed_dist <= beta4Entity)
-                    return deme::MESH_ANALYTICAL_CONTACT;
+                    return deme::TRIANGLE_ANALYTICAL_CONTACT;
             }
             return deme::NOT_A_CONTACT;
         }

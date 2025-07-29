@@ -24,11 +24,11 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
                                                       bool torque_in_local) {
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < numCnt) {
+        contact_t typeContact = granData->contactType[i];
         bodyID_t geoA = granData->idGeometryA[i];
-        bodyID_t ownerA = granData->ownerClumpBody[geoA];
+        bodyID_t ownerA = DEME_GET_GEO_OWNER_ID(geoA, decodeTypeA(typeContact));
         bodyID_t geoB = granData->idGeometryB[i];
-        contact_t typeB = granData->contactType[i];
-        bodyID_t ownerB = DEME_GET_GEO_OWNER_ID(geoB, typeB);
+        bodyID_t ownerB = DEME_GET_GEO_OWNER_ID(geoB, decodeTypeB(typeContact));
 
         bool AorB;  // true for A, false for B
         if (cuda_binary_search<bodyID_t, ssize_t>(d_ownerIDs, ownerA, 0, IDListSize - 1)) {

@@ -66,10 +66,12 @@ constexpr clumpComponentOffset_t NUM_ACTIVE_TEMPLATE_LOADING_THREADS =
     DEME_MIN(DEME_MIN(DEME_CUDA_WARP_SIZE, DEME_KT_CD_NTHREADS_PER_BLOCK), DEME_NUM_BODIES_PER_BLOCK);
 
 // Codes for owner types. We just have a handful of types...
+const ownerType_t NOT_A_OWNER = 0;
 const ownerType_t OWNER_T_CLUMP = 1;
 const ownerType_t OWNER_T_MESH = 2;
 const ownerType_t OWNER_T_ANALYTICAL = 4;  ///< Must be 4, not 3, as used in bitwise operations
 
+const geoType_t NOT_A_GEO = 0;
 const geoType_t GEO_T_SPHERE = 1;
 const geoType_t GEO_T_TRIANGLE = 2;
 const geoType_t GEO_T_ANALYTICAL = 4;  ///< Analytical components
@@ -93,10 +95,17 @@ inline __device__ __host__ constexpr geoType_t decodeTypeB(contact_t id) {
 
 const contact_t NOT_A_CONTACT = 0;
 const contact_t SPHERE_SPHERE_CONTACT = encodeContactType(GEO_T_SPHERE, GEO_T_SPHERE);
-const contact_t SPHERE_MESH_CONTACT = encodeContactType(GEO_T_SPHERE, GEO_T_TRIANGLE);
+const contact_t SPHERE_TRIANGLE_CONTACT = encodeContactType(GEO_T_SPHERE, GEO_T_TRIANGLE);
 const contact_t SPHERE_ANALYTICAL_CONTACT = encodeContactType(GEO_T_SPHERE, GEO_T_ANALYTICAL);
-const contact_t MESH_MESH_CONTACT = encodeContactType(GEO_T_TRIANGLE, GEO_T_TRIANGLE);
-const contact_t MESH_ANALYTICAL_CONTACT = encodeContactType(GEO_T_TRIANGLE, GEO_T_ANALYTICAL);
+const contact_t TRIANGLE_TRIANGLE_CONTACT = encodeContactType(GEO_T_TRIANGLE, GEO_T_TRIANGLE);
+const contact_t TRIANGLE_ANALYTICAL_CONTACT = encodeContactType(GEO_T_TRIANGLE, GEO_T_ANALYTICAL);
+
+// Device version of getting geo owner ID
+#define DEME_GET_GEO_OWNER_ID(geo, type)                                  \
+    ((type) == deme::GEO_T_SPHERE       ? granData->ownerClumpBody[(geo)] \
+     : (type) == deme::GEO_T_TRIANGLE   ? granData->ownerMesh[(geo)]      \
+     : (type) == deme::GEO_T_ANALYTICAL ? granData->ownerAnalBody[(geo)]  \
+                                        : deme::NULL_BODYID)
 
 // Can be seen as even finer grain type identifiers of the analytical component type
 const objType_t ANAL_OBJ_TYPE_PLANE = 0;
@@ -141,13 +150,6 @@ constexpr unsigned int THRESHOLD_CANT_JITIFY_ALL_COMP =
     DEME_MIN(DEME_MIN(RESERVED_CLUMP_COMPONENT_OFFSET, DEME_THRESHOLD_BIG_CLUMP), DEME_THRESHOLD_TOO_MANY_SPHERE_COMP);
 // Max size change the bin auto-adjust algorithm can apply to the bin size per step
 constexpr float BIN_SIZE_MAX_CHANGE_RATE = 0.2;
-
-// Device version of getting geo owner ID
-#define DEME_GET_GEO_OWNER_ID(geoB, type)                                 \
-    ((type) == NOT_A_CONTACT           ? NULL_BODYID                      \
-     : (type) == SPHERE_SPHERE_CONTACT ? granData->ownerClumpBody[(geoB)] \
-     : (type) == SPHERE_MESH_CONTACT   ? granData->ownerMesh[(geoB)]      \
-                                       : granData->ownerAnalBody[(geoB)])
 
 // Some enums...
 // Verbosity

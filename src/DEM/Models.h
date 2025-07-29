@@ -343,7 +343,8 @@ inline void equip_owner_wildcards(std::string& definition,
 
 // Sweep through all ingredients...
 inline void equip_geo_wildcards(std::string& definition,
-                                std::string& acquisition_A,
+                                std::string& acquisition_A_sph,
+                                std::string& acquisition_A_tri,
                                 std::string& acquisition_B_sph,
                                 std::string& acquisition_B_tri,
                                 std::string& acquisition_B_anal,
@@ -351,7 +352,8 @@ inline void equip_geo_wildcards(std::string& definition,
     unsigned int i = 0;
     for (const auto& name : added_ingredients) {
         definition += "float* " + name + "_A, *" + name + "_B;\n";
-        acquisition_A += name + "_A = granData->sphereWildcards[" + std::to_string(i) + "];\n";
+        acquisition_A_sph += name + "_A = granData->sphereWildcards[" + std::to_string(i) + "];\n";
+        acquisition_A_tri += name + "_A = granData->triWildcards[" + std::to_string(i) + "];\n";
         acquisition_B_sph += name + "_B = granData->sphereWildcards[" + std::to_string(i) + "];\n";
         acquisition_B_tri += name + "_B = granData->triWildcards[" + std::to_string(i) + "];\n";
         acquisition_B_anal += name + "_B = granData->analWildcards[" + std::to_string(i) + "];\n";

@@ -57,9 +57,8 @@ void DEMSolver::assignFamilyPersistentContact_impl(
         bodyID_t bodyB = kT->previous_idGeometryB[i];
         contact_t c_type = kT->previous_contactType[i];
 
-        bodyID_t ownerA = dT->ownerClumpBody[bodyA];  // ownerClumpBody can't change on device
-        // As for B, it depends on type
-        bodyID_t ownerB = dT->getGeoOwnerID(bodyB, c_type);
+        bodyID_t ownerA = dT->getGeoOwnerID(bodyA, decodeTypeA(c_type));
+        bodyID_t ownerB = dT->getGeoOwnerID(bodyB, decodeTypeB(c_type));
 
         family_t famA = dT->familyID[ownerA];
         family_t famB = dT->familyID[ownerB];
@@ -355,8 +354,8 @@ void DEMSolver::getContacts_impl(std::vector<bodyID_t>& idA,
     for (size_t i = 0; i < num_contacts; i++) {
         contact_t this_type = dT->contactType[i];
         if (type_func(this_type)) {
-            idA[useful_contacts] = dT->getGeoOwnerID(dT->idGeometryA[i], this_type);
-            idB[useful_contacts] = dT->getGeoOwnerID(dT->idGeometryB[i], this_type);
+            idA[useful_contacts] = dT->getGeoOwnerID(dT->idGeometryA[i], decodeTypeA(this_type));
+            idB[useful_contacts] = dT->getGeoOwnerID(dT->idGeometryB[i], decodeTypeB(this_type));
             cnt_type[useful_contacts] = this_type;
             famA[useful_contacts] = dT->familyID[idA[useful_contacts]];
             famB[useful_contacts] = dT->familyID[idB[useful_contacts]];
@@ -1405,8 +1404,8 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     // acquisition module
     std::string ingredient_definition = " ", cnt_wildcard_acquisition = " ", ingredient_acquisition_A = " ",
                 ingredient_acquisition_B = " ", owner_geo_wildcard_write_back = " ", cnt_wildcard_write_back = " ",
-                cnt_wildcard_destroy_record = " ", geo_wc_acquisition_B_sph = " ", geo_wc_acquisition_B_tri = " ",
-                geo_wc_acquisition_B_anal = " ";
+                cnt_wildcard_destroy_record = " ", geo_wc_acquisition_A_sph = " ", geo_wc_acquisition_A_tri = " ",
+                geo_wc_acquisition_B_sph = " ", geo_wc_acquisition_B_tri = " ", geo_wc_acquisition_B_anal = " ";
     scan_force_model_ingr(added_ingredients, model);
     // As our numerical method stands now, AOwnerFamily and BOwnerFamily are always needed.
     add_force_model_ingr(added_ingredients, "AOwnerFamily");
@@ -1483,8 +1482,9 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     // Then equip acquisition strategies for geo wildcards.
     // geo_wc_acquisition_B_sph, geo_wc_acquisition_B_tri, geo_wc_acquisition_B_anal cannot be incorporated into
     // ingredient_acquisition_B, since they are different for the 3 cases...
-    equip_geo_wildcards(ingredient_definition, ingredient_acquisition_A, geo_wc_acquisition_B_sph,
-                        geo_wc_acquisition_B_tri, geo_wc_acquisition_B_anal, added_geo_wildcards);
+    equip_geo_wildcards(ingredient_definition, geo_wc_acquisition_A_sph, geo_wc_acquisition_A_tri,
+                        geo_wc_acquisition_B_sph, geo_wc_acquisition_B_tri, geo_wc_acquisition_B_anal,
+                        added_geo_wildcards);
     // Currently, owner_wildcard_write_back and geo_wildcard_write_back might be blank, since give the write-back
     // control to the user, and they may need to use atomic operations (atomicExch or atomicAdd) to update the
     // wildcards.
@@ -1550,9 +1550,11 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     strMap["_forceModelIngredientAcqForA_"] = ingredient_acquisition_A;
     strMap["_forceModelIngredientAcqForB_"] = ingredient_acquisition_B;
     // Geo wildcard acquisition is contact type-dependent.
-    strMap["_forceModelGeoWildcardAcqForSph_"] = geo_wc_acquisition_B_sph;
-    strMap["_forceModelGeoWildcardAcqForTri_"] = geo_wc_acquisition_B_tri;
-    strMap["_forceModelGeoWildcardAcqForAnal_"] = geo_wc_acquisition_B_anal;
+    strMap["_forceModelGeoWildcardAcqForASph_"] = geo_wc_acquisition_A_sph;
+    strMap["_forceModelGeoWildcardAcqForATri_"] = geo_wc_acquisition_A_tri;
+    strMap["_forceModelGeoWildcardAcqForBSph_"] = geo_wc_acquisition_B_sph;
+    strMap["_forceModelGeoWildcardAcqForBTri_"] = geo_wc_acquisition_B_tri;
+    strMap["_forceModelGeoWildcardAcqForBAnal_"] = geo_wc_acquisition_B_anal;
 
     // This should be empty as of now...
     strMap["_forceModelOwnerWildcardWrite_"] = owner_geo_wildcard_write_back;

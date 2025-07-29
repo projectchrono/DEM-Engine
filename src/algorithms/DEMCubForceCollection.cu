@@ -45,22 +45,11 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
     if (contactPairArr_isFresh) {
         // First step, prepare the owner ID array (nContactPairs * bodyID_t) for usage in final reduction by key (do it
         // for both A and B)
-        // Note for A, it is always a sphere or a triangle
-        collect_force_kernels->kernel("cashInOwnerIndexA")
+        collect_force_kernels->kernel("cashInOwnerIndex")
             .instantiate()
             .configure(dim3(blocks_needed_for_contacts), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
-            .launch(idAOwner, granData->idGeometryA, granData->ownerClumpBody, granData->contactType, nContactPairs);
+            .launch(idAOwner, idBOwner, &granData, nContactPairs);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-
-        // But for B, it can be sphere, triangle or some analytical geometries
-        collect_force_kernels->kernel("cashInOwnerIndexB")
-            .instantiate()
-            .configure(dim3(blocks_needed_for_contacts), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
-            .launch(idBOwner, granData->idGeometryB, granData->ownerClumpBody, granData->ownerMesh,
-                    granData->contactType, nContactPairs);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-        // displayDeviceArray<bodyID_t>(idAOwner, nContactPairs);
-        // displayDeviceArray<bodyID_t>(idBOwner, nContactPairs);
     }
 
     // ==============================================

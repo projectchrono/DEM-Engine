@@ -23,7 +23,7 @@ __global__ void forceToAcc(deme::DEMDataDT* granData, size_t n) {
             const deme::bodyID_t idGeo = granData->idGeometryA[myID];
             const float3 myCntPnt = granData->contactPointGeometryA[myID];
 
-            const deme::bodyID_t myOwner = granData->ownerClumpBody[idGeo];
+            const deme::bodyID_t myOwner = DEME_GET_GEO_OWNER_ID(idGeo, deme::decodeTypeA(thisCntType));
             // Get my mass info from either jitified arrays or global memory
             // Outputs myMass
             // Use an input named exactly `myOwner' which is the id of this owner
@@ -60,15 +60,7 @@ __global__ void forceToAcc(deme::DEMDataDT* granData, size_t n) {
             const deme::bodyID_t idGeo = granData->idGeometryB[myID];
             const float3 myCntPnt = granData->contactPointGeometryB[myID];
 
-            deme::bodyID_t myOwner;
-            if (thisCntType == deme::SPHERE_SPHERE_CONTACT) {
-                myOwner = granData->ownerClumpBody[idGeo];
-            } else if (thisCntType == deme::SPHERE_MESH_CONTACT) {
-                myOwner = granData->ownerMesh[idGeo];
-            } else {
-                // This is a sphere--analytical geometry contact, its owner is jitified
-                myOwner = objOwner[idGeo];
-            }
+            deme::bodyID_t myOwner = DEME_GET_GEO_OWNER_ID(idGeo, deme::decodeTypeB(thisCntType));
 
             // Get my mass info from either jitified arrays or global memory
             // Outputs myMass

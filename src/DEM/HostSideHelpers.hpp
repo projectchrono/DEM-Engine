@@ -316,6 +316,27 @@ inline std::string compact_code(const std::string& prgm) {
     return res;
 }
 
+inline std::string pretty_format_bytes(size_t bytes) {
+    // set up byte prefixes
+    constexpr size_t KIBI = 1024;
+    constexpr size_t MEBI = KIBI * KIBI;
+    constexpr size_t GIBI = KIBI * KIBI * KIBI;
+    float gibival = float(bytes) / GIBI;
+    float mebival = float(bytes) / MEBI;
+    float kibival = float(bytes) / KIBI;
+    std::stringstream ret;
+    if (gibival > 1) {
+        ret << gibival << " GiB";
+    } else if (mebival > 1) {
+        ret << mebival << " MiB";
+    } else if (kibival > 1) {
+        ret << kibival << " KiB";
+    } else {
+        ret << bytes << " B";
+    }
+    return ret.str();
+}
+
 /// Get a quaternion from axis and angle
 inline float4 QuatFromAxisAngle(const float3& axis, const float& theta) {
     float4 Q;
