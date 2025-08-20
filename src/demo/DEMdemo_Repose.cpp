@@ -27,6 +27,9 @@ int main() {
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
 
+    // If you don't need individual force information, then this option makes the solver run a bit faster.
+    DEMSim.SetNoForceRecord();
+
     srand(42);
 
     // Scale factor
@@ -138,21 +141,24 @@ int main() {
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(25.);
-    DEMSim.SetInitBinSize(min_rad * 6);
+    // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto bin
+    // size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case setting
+    // init bin size may save the simulation.
+    // DEMSim.SetInitBinSize(min_rad * 6);
     DEMSim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Repose";
+    out_dir /= "DemoOutput_Repose";
     create_directory(out_dir);
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
-    
+
     for (int i = 0; i < 140; i++) {
-        char filename[200], meshfile[200];
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-        sprintf(meshfile, "%s/DEMdemo_funnel_%04d.vtk", out_dir.c_str(), i);
-        DEMSim.WriteSphereFile(std::string(filename));
-        DEMSim.WriteMeshFile(std::string(meshfile));
+        char filename[100], meshfile[100];
+        sprintf(filename, "DEMdemo_output_%04d.csv", i);
+        sprintf(meshfile, "DEMdemo_funnel_%04d.vtk", i);
+        DEMSim.WriteSphereFile(out_dir / filename);
+        DEMSim.WriteMeshFile(out_dir / meshfile);
         std::cout << "Frame: " << i << std::endl;
         DEMSim.DoDynamics(1e-1);
         DEMSim.ShowThreadCollaborationStats();
@@ -164,6 +170,10 @@ int main() {
 
     DEMSim.ShowTimingStats();
     DEMSim.ClearTimingStats();
+
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
 
     std::cout << "DEMdemo_Repose exiting..." << std::endl;
     return 0;

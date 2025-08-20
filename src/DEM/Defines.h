@@ -6,12 +6,13 @@
 #ifndef DEME_MISC_DEFINES
 #define DEME_MISC_DEFINES
 
-#include <limits>
+// #include <limits>
 #include <stdint.h>
 #include <algorithm>
 #include <cmath>
 
 #include <DEM/VariableTypes.h>
+#include "cuda_runtime.h"
 
 #define DEME_MIN(a, b) ((a < b) ? a : b)
 #define DEME_MAX(a, b) ((a > b) ? a : b)
@@ -25,20 +26,20 @@ namespace deme {
 // It is better to keep DEME_NUM_SPHERES_PER_CD_BATCH == DEME_KT_CD_NTHREADS_PER_BLOCK for better performance
 #define DEME_NUM_SPHERES_PER_CD_BATCH 512    ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
 #define DEME_NUM_TRIANGLES_PER_CD_BATCH 256  ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
-#define DEME_TINY_FLOAT 1e-12
+#define DEME_TINY_FLOAT 1e-12                ///< Appears to be very sensitive to even smaller values...
 #define DEME_HUGE_FLOAT 1e15
 #define DEME_BITS_PER_BYTE 8
 #define DEME_CUDA_WARP_SIZE 32
-#define DEME_MAX_WILDCARD_NUM 8
+#define DEME_MAX_WILDCARD_NUM 16
 // In bin--triangle intersection scan, all bins are enlarged by a factor of this following constant, so that no triangle
 // lies in between bins and not picked up by any bins.
 #define DEME_BIN_ENLARGE_RATIO_FOR_FACETS 0.001
 
 // A few pre-computed constants
-constexpr double TWO_OVER_THREE = 0.666666666666667;
-constexpr double FOUR_OVER_THREE = 1.333333333333333;
-constexpr double FIVE_OVER_THREE = 1.666666666666667;
-constexpr double TWO_TIMES_SQRT_FIVE_OVER_SIX = 1.825741858350554;
+constexpr double TWO_OVER_THREE = 2. / 3.;
+constexpr double FOUR_OVER_THREE = 4. / 3.;
+constexpr double FIVE_OVER_THREE = 5. / 3.;
+constexpr double TWO_TIMES_SQRT_FIVE_OVER_SIX = 1.825741858350554;  // 2. * std::sqrt(5. / 6.)
 constexpr double PI = 3.1415926535897932385;
 constexpr double PI_SQUARED = 9.869604401089358;
 
@@ -47,9 +48,11 @@ constexpr uint8_t VOXEL_COUNT_POWER2 = sizeof(voxelID_t) * DEME_BITS_PER_BYTE;
 constexpr int64_t MAX_SUBVOXEL = (int64_t)1 << VOXEL_RES_POWER2;
 
 #define DEME_NUM_BODIES_PER_BLOCK 1024
+#define DEME_NUM_MODERATORS_PER_BLOCK 512
+
 #define DEME_NUM_TRIANGLE_PER_BLOCK 512
 #define DEME_MAX_THREADS_PER_BLOCK 1024
-#define DEME_INIT_CNT_MULTIPLIER 2
+#define DEME_INIT_CNT_MULTIPLIER 1
 // If there are more than this number of analytical geometry, we may have difficulty jitify them all
 #define DEME_THRESHOLD_TOO_MANY_ANAL_GEO 64
 // If a clump has more than this number of sphere components, it is automatically considered a non-jitifiable big clump
@@ -86,6 +89,11 @@ const ownerType_t OWNER_T_CLUMP = 1;
 const ownerType_t OWNER_T_ANALYTICAL = 2;
 const ownerType_t OWNER_T_MESH = 4;
 
+// Contact persistency marker consts...
+const notStupidBool_t CONTACT_NOT_PERSISTENT = 0;
+const notStupidBool_t CONTACT_IS_PERSISTENT = 1;
+// const notStupidBool_t CONTACT_PERSISTENT_AND_FOUND = 2;
+
 // This ID marks that this is a new contact, not present when we did contact detection last time
 // TODO: half max add half max... so stupid... Better way?? numeric_limit won't work...
 constexpr contactPairs_t NULL_MAPPING_PARTNER = ((size_t)1 << (sizeof(contactPairs_t) * DEME_BITS_PER_BYTE - 1)) +
@@ -115,11 +123,18 @@ constexpr unsigned int THRESHOLD_CANT_JITIFY_ALL_COMP =
 // Max size change the bin auto-adjust algorithm can apply to the bin size per step
 constexpr float BIN_SIZE_MAX_CHANGE_RATE = 0.2;
 
+// Device version of getting geo owner ID
+#define DEME_GET_GEO_OWNER_ID(geoB, type)                                 \
+    ((type) == NOT_A_CONTACT           ? NULL_BODYID                      \
+     : (type) == SPHERE_SPHERE_CONTACT ? granData->ownerClumpBody[(geoB)] \
+     : (type) == SPHERE_MESH_CONTACT   ? granData->ownerMesh[(geoB)]      \
+                                       : granData->ownerAnalBody[(geoB)])
+
 // Some enums...
 // Verbosity
 enum VERBOSITY {
     QUIET = 0,
-    ERROR = 10,
+    DEME_ERROR = 10,
     WARNING = 20,
     INFO = 30,
     STEP_ANOMALY = 32,
@@ -157,7 +172,7 @@ enum class SPATIAL_DIR { X, Y, Z, NONE };
 enum CNT_OUTPUT_CONTENT {
     CNT_TYPE = 0,   // Owner numbers and contact type
     FORCE = 1,      // Force (that owner 1 feels) xyz components in global
-    POINT = 2,      // Contact point in global frame
+    CNT_POINT = 2,  // Contact point in global frame
     COMPONENT = 4,  // The component numbers (such as triangle number for a mesh) that involved in this contact
     NORMAL = 8,     // Contact normal direction in global frame
     TORQUE = 16,    // This is a standalone force and produces torque only (typical example: rolling resistance force)
@@ -312,34 +327,28 @@ struct DEMDataDT {
     clumpComponentOffsetExt_t* clumpComponentOffsetExt;
     materialsOffset_t* sphereMaterialOffset;
     bodyID_t* ownerMesh;
+    bodyID_t* ownerAnalBody;
     float3* relPosNode1;
     float3* relPosNode2;
     float3* relPosNode3;
     materialsOffset_t* triMaterialOffset;
 
-    // dT-owned buffer pointers, for itself's usage
-    size_t nContactPairs_buffer = 0;
-    bodyID_t* idGeometryA_buffer;
-    bodyID_t* idGeometryB_buffer;
-    contact_t* contactType_buffer;
-    contactPairs_t* contactMapping_buffer;
-
     // pointer to remote buffer where kinematic thread stores work-order data provided by the dynamic thread
-    unsigned int* pKTOwnedBuffer_maxDrift = NULL;
-    float* pKTOwnedBuffer_absVel = NULL;
-    float* pKTOwnedBuffer_ts = NULL;
-    voxelID_t* pKTOwnedBuffer_voxelID = NULL;
-    subVoxelPos_t* pKTOwnedBuffer_locX = NULL;
-    subVoxelPos_t* pKTOwnedBuffer_locY = NULL;
-    subVoxelPos_t* pKTOwnedBuffer_locZ = NULL;
-    oriQ_t* pKTOwnedBuffer_oriQ0 = NULL;
-    oriQ_t* pKTOwnedBuffer_oriQ1 = NULL;
-    oriQ_t* pKTOwnedBuffer_oriQ2 = NULL;
-    oriQ_t* pKTOwnedBuffer_oriQ3 = NULL;
-    family_t* pKTOwnedBuffer_familyID = NULL;
-    float3* pKTOwnedBuffer_relPosNode1 = NULL;
-    float3* pKTOwnedBuffer_relPosNode2 = NULL;
-    float3* pKTOwnedBuffer_relPosNode3 = NULL;
+    unsigned int* pKTOwnedBuffer_maxDrift = nullptr;
+    float* pKTOwnedBuffer_absVel = nullptr;
+    float* pKTOwnedBuffer_ts = nullptr;
+    voxelID_t* pKTOwnedBuffer_voxelID = nullptr;
+    subVoxelPos_t* pKTOwnedBuffer_locX = nullptr;
+    subVoxelPos_t* pKTOwnedBuffer_locY = nullptr;
+    subVoxelPos_t* pKTOwnedBuffer_locZ = nullptr;
+    oriQ_t* pKTOwnedBuffer_oriQ0 = nullptr;
+    oriQ_t* pKTOwnedBuffer_oriQ1 = nullptr;
+    oriQ_t* pKTOwnedBuffer_oriQ2 = nullptr;
+    oriQ_t* pKTOwnedBuffer_oriQ3 = nullptr;
+    family_t* pKTOwnedBuffer_familyID = nullptr;
+    float3* pKTOwnedBuffer_relPosNode1 = nullptr;
+    float3* pKTOwnedBuffer_relPosNode2 = nullptr;
+    float3* pKTOwnedBuffer_relPosNode3 = nullptr;
 
     // The collection of pointers to DEM template arrays such as radiiSphere, still useful when there are template info
     // not directly jitified into the kernels
@@ -356,14 +365,11 @@ struct DEMDataDT {
     // Wildcards. These are some quantities that you can associate with contact pairs and objects. Very
     // typically, contact history info in Hertzian model in this DEM tool is a wildcard, and electric charges can be
     // registered on spheres (clump components) with wildcards.
-    float* contactWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
-    float* ownerWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
-    float* sphereWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
-    float* analWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
-    float* triWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
-
-    // dT believes this amount of future drift is ideal
-    unsigned int perhapsIdealFutureDrift = 0;
+    float* contactWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
+    float* ownerWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
+    float* sphereWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
+    float* analWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
+    float* triWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
 };
 
 // A struct that holds pointers to data arrays that kT uses
@@ -381,24 +387,6 @@ struct DEMDataKT {
     // Derived from absv which is for determining contact margin size.
     float* marginSize;
 
-    // kT-owned buffer pointers, for itself's usage
-    // float maxVel_buffer; // buffer for the current max vel sent by dT
-    float maxVel = 0;              // kT's own storage of max vel
-    float ts_buffer;               // buffer for the current ts size sent by dT
-    float ts;                      // kT's own storage of ts size
-    unsigned int maxDrift_buffer;  // buffer for max dT future drift steps
-    unsigned int maxDrift;         // kT's own storage for max future drift
-    voxelID_t* voxelID_buffer;
-    subVoxelPos_t* locX_buffer;
-    subVoxelPos_t* locY_buffer;
-    subVoxelPos_t* locZ_buffer;
-    oriQ_t* oriQ0_buffer;
-    oriQ_t* oriQ1_buffer;
-    oriQ_t* oriQ2_buffer;
-    oriQ_t* oriQ3_buffer;
-    float* absVel_buffer;
-    family_t* familyID_buffer;
-
     // Family mask
     notStupidBool_t* familyMasks;
     // Extra margin size
@@ -409,41 +397,27 @@ struct DEMDataKT {
     clumpComponentOffset_t* clumpComponentOffset;
     clumpComponentOffsetExt_t* clumpComponentOffsetExt;
     bodyID_t* ownerMesh;
+    bodyID_t* ownerAnalBody;
     float3* relPosNode1;
     float3* relPosNode2;
     float3* relPosNode3;
-    // For mesh deformation
-    float3* relPosNode1_buffer;
-    float3* relPosNode2_buffer;
-    float3* relPosNode3_buffer;
-
-    // kT's own work arrays. Now these array pointers get assigned in contactDetection() which point to shared scratch
-    // spaces. No need to do forward declaration anymore. They are left here for reference, should contactDetection()
-    // need to be re-visited.
-    // binsSphereTouches_t* numBinsSphereTouches;
-    // binSphereTouchPairs_t* numBinsSphereTouchesScan;
-    // binID_t* binIDsEachSphereTouches;
-    // bodyID_t* sphereIDsEachBinTouches;
-    // binID_t* activeBinIDs;
-    // binSphereTouchPairs_t* sphereIDsLookUpTable;
-    // spheresBinTouches_t* numSpheresBinTouches;
-    // contactPairs_t* numContactsInEachBin;
 
     // kT produces contact info, and stores it, temporarily
     bodyID_t* idGeometryA;
     bodyID_t* idGeometryB;
     contact_t* contactType;
+    notStupidBool_t* contactPersistency;
     bodyID_t* previous_idGeometryA;
     bodyID_t* previous_idGeometryB;
     contact_t* previous_contactType;
     contactPairs_t* contactMapping;
 
     // data pointers that is kT's transfer destination
-    size_t* pDTOwnedBuffer_nContactPairs = NULL;
-    bodyID_t* pDTOwnedBuffer_idGeometryA = NULL;
-    bodyID_t* pDTOwnedBuffer_idGeometryB = NULL;
-    contact_t* pDTOwnedBuffer_contactType = NULL;
-    contactPairs_t* pDTOwnedBuffer_contactMapping = NULL;
+    size_t* pDTOwnedBuffer_nContactPairs = nullptr;
+    bodyID_t* pDTOwnedBuffer_idGeometryA = nullptr;
+    bodyID_t* pDTOwnedBuffer_idGeometryB = nullptr;
+    contact_t* pDTOwnedBuffer_contactType = nullptr;
+    contactPairs_t* pDTOwnedBuffer_contactMapping = nullptr;
 
     // The collection of pointers to DEM template arrays such as radiiSphere, still useful when there are template info
     // not directly jitified into the kernels

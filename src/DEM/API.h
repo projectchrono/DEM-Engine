@@ -14,11 +14,11 @@
 #include <core/ApiVersion.h>
 #include <DEM/kT.h>
 #include <DEM/dT.h>
-#include <core/utils/ManagedAllocator.hpp>
+#include <core/utils/CudaAllocator.hpp>
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
 #include <core/utils/DEMEPaths.h>
-#include <nvmath/helper_math.cuh>
+#include <kernel/DEMHelperKernels.cuh>
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
 #include <DEM/BdrsAndObjs.h>
@@ -39,6 +39,8 @@ class DEMTracker;
 //            2. Allow ext obj init CoM setting
 //            3. Instruct how many dT steps should at LEAST do before receiving kT update
 //            4. Sleepers that don't participate CD or integration
+//            5. Update the game of life demo (it's about model ingredient usage)
+//            7. Set the device numbers to use
 //            9. wT takes care of an extra output when it crashes
 //            10. Recover sph--mesh contact pairs in restarted sim by mesh name
 //            11. A dry-run to map contact pair file with current clump batch based on cnt points location
@@ -51,7 +53,7 @@ class DEMSolver {
     DEMSolver(unsigned int nGPUs = 2);
     ~DEMSolver();
 
-    /// Set output detail level
+    /// Set output detail level.
     void SetVerbosity(VERBOSITY verbose) { verbosity = verbose; }
 
     /// Instruct the dimension of the `world'. On initialization, this info will be used to figure out how to assign the
@@ -81,18 +83,21 @@ class DEMSolver {
     void SetGravitationalAcceleration(float3 g) { G = g; }
     void SetGravitationalAcceleration(const std::vector<float>& g) {
         assertThreeElements(g, "SetGravitationalAcceleration", "g");
-        G = host_make_float3(g[0], g[1], g[2]);
+        G = make_float3(g[0], g[1], g[2]);
     }
     /// Set the initial time step size. If using constant step size, then this will be used throughout; otherwise, the
     /// actual step size depends on the variable step strategy.
     void SetInitTimeStep(double ts_size) { m_ts_size = ts_size; }
-    /// Return the number of clumps that are currently in the simulation.
+    /// Return the number of clumps that are currently in the simulation. Must be used after initialization.
     size_t GetNumClumps() const { return nOwnerClumps; }
+    /// Return the total number of owners (clumps + meshes + analytical objects) that are currently in the simulation.
+    /// Must be used after initialization.
+    size_t GetNumOwners() const { return nOwnerBodies; }
     /// @brief Get the number of kT-reported potential contact pairs.
     /// @return Number of potential contact pairs.
     size_t GetNumContacts() const { return dT->getNumContacts(); }
     /// Get the current time step size in simulation.
-    double GetTimeStepSize() const;
+    double GetTimeStepSize() const { return m_ts_size; }
     /// Get the current expand factor in simulation.
     float GetExpandFactor() const;
     /// Set the number of dT steps before it waits for a contact-pair info update from kT.
@@ -123,17 +128,26 @@ class DEMSolver {
     /// Get the jitification string substitution laundary list. It is needed by some of this simulation system's friend
     /// classes.
     std::unordered_map<std::string, std::string> GetJitStringSubs() const { return m_subs; }
+    /// Get current jitification options. It is needed by some of this simulation system's friend classes.
+    std::vector<std::string> GetJitifyOptions() const { return m_jitify_options; }
+    /// Set the jitification options. It is only needed by advanced users.
+    void SetJitifyOptions(const std::vector<std::string>& options) { m_jitify_options = options; }
 
     /// Explicitly instruct the bin size (for contact detection) that the solver should use.
     void SetInitBinSize(double bin_size) {
-        use_user_defined_bin_size = true;
+        use_user_defined_bin_size = INIT_BIN_SIZE_TYPE::EXPLICIT;
         m_binSize = bin_size;
     }
     /// Explicitly instruct the bin size (for contact detection) that the solver should use, as a multiple of the radius
     /// of the smallest sphere in simulation.
     void SetInitBinSizeAsMultipleOfSmallestSphere(float bin_size) {
-        use_user_defined_bin_size = false;
+        use_user_defined_bin_size = INIT_BIN_SIZE_TYPE::MULTI_MIN_SPH;
         m_binSize_as_multiple = bin_size;
+    }
+    /// @brief Set the target number of bins (for contact detection) at the start of the simulation upon initialization.
+    void SetInitBinNumTarget(size_t num) {
+        use_user_defined_bin_size = INIT_BIN_SIZE_TYPE::TARGET_NUM;
+        m_target_init_bin_num = num;
     }
 
     /// Explicitly instruct the sizes for the arrays at initialization time. This is useful when the number of owners
@@ -245,25 +259,43 @@ class DEMSolver {
     void DisableAdaptiveUpdateFreq() { auto_adjust_update_freq = false; }
     /// @brief Adjust how frequent kT updates the bin size.
     /// @param n Number of contact detections before kT makes one adjustment to bin size.
-    void SetAdaptiveBinSizeDelaySteps(unsigned int n) { auto_adjust_observe_steps = n; }
+    void SetAdaptiveBinSizeDelaySteps(unsigned int n) {
+        if (n < NUM_STEPS_RESERVED_AFTER_CHANGING_BIN_SIZE)
+            DEME_WARNING(
+                "SetAdaptiveBinSizeDelaySteps is called with argument %u.\nThis is probably sub-optimal and may cause "
+                "kT to try adjusting bin size before enough knowledge is gained.",
+                n);
+        auto_adjust_observe_steps = (n >= 1) ? n : 1;
+    }
     /// @brief Set the max rate that the bin size can change in one adjustment.
     /// @param rate 0: never changes; 1: can double or halve size in one go; suggest using default.
     void SetAdaptiveBinSizeMaxRate(float rate) { auto_adjust_max_rate = (rate > 0) ? rate : 0; }
     /// @brief Set how fast kT changes the direction of bin size adjustmemt when there's a more beneficial direction.
     /// @param acc 0.01: slowly change direction; 1: quickly change direction
-    void SetAdaptiveBinSizeAcc(float acc) { auto_adjust_acc = hostClampBetween(acc, 0.01, 1.0); }
+    void SetAdaptiveBinSizeAcc(float acc) { auto_adjust_acc = clampBetween(acc, 0.01, 1.0); }
     /// @brief Set how proactive the solver is in avoiding the bin being too big (leading to too many geometries in a
     /// bin).
     /// @param ratio 0: not proavtive; 1: very proactive.
     void SetAdaptiveBinSizeUpperProactivity(float ratio) {
-        auto_adjust_upper_proactive_ratio = hostClampBetween(ratio, 0.0, 1.0);
+        auto_adjust_upper_proactive_ratio = clampBetween(ratio, 0.0, 1.0);
     }
     /// @brief Set how proactive the solver is in avoiding the bin being too small (leading to too many bins in domain).
     /// @param ratio 0: not proavtive; 1: very proactive.
     void SetAdaptiveBinSizeLowerProactivity(float ratio) {
-        auto_adjust_lower_proactive_ratio = hostClampBetween(ratio, 0.0, 1.0);
+        auto_adjust_lower_proactive_ratio = clampBetween(ratio, 0.0, 1.0);
     }
+    /// @brief Get the current bin (for contact detection) size. Must be called from synchronized stance.
+    /// @return Bin size.
+    double GetBinSize() { return kT->simParams->binSize; }
+    // NOTE: No need to get binSize from the device, as binSize is only changed on the host
+
+    /// @brief Get the current number of bins (for contact detection). Must be called from synchronized stance.
+    /// @return Number of bins.
+    size_t GetBinNum() { return kT->stateParams.numBins; }
+
     /// @brief Set the upper bound of kT update frequency (when it is adjusted automatically).
+    /// @details This only affects when the update freq is updated automatically. To manually control the freq, use
+    /// SetCDUpdateFreq then call DisableAdaptiveUpdateFreq.
     /// @param max_freq dT will not receive updates less frequently than 1 update per max_freq steps.
     void SetCDMaxUpdateFreq(unsigned int max_freq) { upper_bound_future_drift = 2 * max_freq; }
     /// @brief Set the number of steps dT configures its max drift more than average drift steps.
@@ -279,7 +311,7 @@ class DEMSolver {
     /// @return The current update frequency.
     float GetUpdateFreq() const;
 
-    /// Set the number of threads per block in force calculation (default 512).
+    /// Set the number of threads per block in force calculation (default 256).
     void SetForceCalcThreadsPerBlock(unsigned int nTh) { dT->DT_FORCE_CALC_NTHREADS_PER_BLOCK = nTh; }
 
     /// @brief Load a clump type into the API-level cache.
@@ -298,9 +330,9 @@ class DEMSolver {
         assertThreeElementsVector(sp_locations_xyz, "LoadClumpType", "sp_locations_xyz");
         std::vector<float3> loc_xyz(sp_locations_xyz.size());
         for (size_t i = 0; i < sp_locations_xyz.size(); i++) {
-            loc_xyz[i] = host_make_float3(sp_locations_xyz[i][0], sp_locations_xyz[i][1], sp_locations_xyz[i][2]);
+            loc_xyz[i] = make_float3(sp_locations_xyz[i][0], sp_locations_xyz[i][1], sp_locations_xyz[i][2]);
         }
-        return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), sp_radii, loc_xyz, sp_materials);
+        return LoadClumpType(mass, make_float3(moi[0], moi[1], moi[2]), sp_radii, loc_xyz, sp_materials);
     }
     /// An overload of LoadClumpType where all components use the same material
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
@@ -317,9 +349,9 @@ class DEMSolver {
         assertThreeElementsVector(sp_locations_xyz, "LoadClumpType", "sp_locations_xyz");
         std::vector<float3> loc_xyz(sp_locations_xyz.size());
         for (size_t i = 0; i < sp_locations_xyz.size(); i++) {
-            loc_xyz[i] = host_make_float3(sp_locations_xyz[i][0], sp_locations_xyz[i][1], sp_locations_xyz[i][2]);
+            loc_xyz[i] = make_float3(sp_locations_xyz[i][0], sp_locations_xyz[i][1], sp_locations_xyz[i][2]);
         }
-        return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), sp_radii, loc_xyz, sp_material);
+        return LoadClumpType(mass, make_float3(moi[0], moi[1], moi[2]), sp_radii, loc_xyz, sp_material);
     }
     /// An overload of LoadClumpType where the user builds the DEMClumpTemplate struct themselves then supply it
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(DEMClumpTemplate& clump);
@@ -333,7 +365,7 @@ class DEMSolver {
                                                     const std::string filename,
                                                     const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
         assertThreeElements(moi, "LoadClumpType", "moi");
-        return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), filename, sp_materials);
+        return LoadClumpType(mass, make_float3(moi[0], moi[1], moi[2]), filename, sp_materials);
     }
     /// An overload of LoadClumpType which loads sphere components from a file and all components use the same material
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
@@ -345,7 +377,7 @@ class DEMSolver {
                                                     const std::string filename,
                                                     const std::shared_ptr<DEMMaterial>& sp_material) {
         assertThreeElements(moi, "LoadClumpType", "moi");
-        return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), filename, sp_material);
+        return LoadClumpType(mass, make_float3(moi[0], moi[1], moi[2]), filename, sp_material);
     }
     /// A simplified version of LoadClumpType: it just loads a one-sphere clump template
     std::shared_ptr<DEMClumpTemplate> LoadSphereType(float mass,
@@ -387,45 +419,69 @@ class DEMSolver {
                                  float val);
 
     /// @brief Get the clumps that are in contact with this owner as a vector.
+    /// @details No multi-owner bulk version. This is due to efficiency concerns. If getting multiple owners' contacting
+    /// clumps is needed, use family-based GetContacts method, then the owner ID list-based c method if you further
+    /// need the contact forces information.
     /// @param ownerID The ID of the owner that is being queried.
     /// @return Clump owner IDs in contact with this owner.
     std::vector<bodyID_t> GetOwnerContactClumps(bodyID_t ownerID) const;
-    /// Get position of a owner
-    float3 GetOwnerPosition(bodyID_t ownerID) const;
-    /// Get angular velocity of a owner
-    float3 GetOwnerAngVel(bodyID_t ownerID) const;
-    /// Get quaternion of a owner
-    float4 GetOwnerOriQ(bodyID_t ownerID) const;
-    /// Get velocity of a owner
-    float3 GetOwnerVelocity(bodyID_t ownerID) const;
-    /// Get the acceleration of a owner
-    float3 GetOwnerAcc(bodyID_t ownerID) const;
-    /// Get the angular acceleration of a owner
-    float3 GetOwnerAngAcc(bodyID_t ownerID) const;
-    /// @brief Get the family number of a owner.
-    /// @param ownerID The owner's ID.
+    /// Get position of n consecutive owners.
+    std::vector<float3> GetOwnerPosition(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// Get angular velocity of n consecutive owners.
+    std::vector<float3> GetOwnerAngVel(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// Get quaternion of n consecutive owners.
+    std::vector<float4> GetOwnerOriQ(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// Get velocity of n consecutive owners.
+    std::vector<float3> GetOwnerVelocity(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// Get the acceleration of n consecutive owners.
+    std::vector<float3> GetOwnerAcc(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// Get the angular acceleration of n consecutive owners.
+    std::vector<float3> GetOwnerAngAcc(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// @brief Get the family number of n consecutive owners.
+    /// @param ownerID First owner's ID.
+    /// @param n The number of consecutive owners.
     /// @return The family number.
-    unsigned int GetOwnerFamily(bodyID_t ownerID) const;
-    /// @brief Get the mass of a owner.
-    /// @param ownerID The owner's ID.
+    std::vector<unsigned int> GetOwnerFamily(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// @brief Get the mass of n consecutive owners.
+    /// @param ownerID First owner's ID.
+    /// @param n The number of consecutive owners.
     /// @return The mass.
-    float GetOwnerMass(bodyID_t ownerID) const;
-    /// @brief Get the moment of inertia (in principal axis frame) of a owner.
-    /// @param ownerID The owner's ID.
+    std::vector<float> GetOwnerMass(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// @brief Get the moment of inertia (in principal axis frame) of n consecutive owners.
+    /// @param ownerID First owner's ID.
+    /// @param n The number of consecutive owners.
     /// @return The moment of inertia (in principal axis frame).
-    float3 GetOwnerMOI(bodyID_t ownerID) const;
-    /// Set position of a owner
-    void SetOwnerPosition(bodyID_t ownerID, float3 pos);
-    /// Set angular velocity of a owner
-    void SetOwnerAngVel(bodyID_t ownerID, float3 angVel);
-    /// Set velocity of a owner
-    void SetOwnerVelocity(bodyID_t ownerID, float3 vel);
-    /// Set quaternion of a owner
-    void SetOwnerOriQ(bodyID_t ownerID, float4 oriQ);
-    /// @brief Set the family number of a owner.
-    /// @param ownerID The ID (offset) of the owner.
+    std::vector<float3> GetOwnerMOI(bodyID_t ownerID, bodyID_t n = 1) const;
+
+    /// @brief Set position of consecutive owners starting from ownerID, based on input position vector. N (the size of
+    /// the input vector) elements will be modified.
+    void SetOwnerPosition(bodyID_t ownerID, const std::vector<float3>& pos);
+    /// Set angular velocity of consecutive owners starting from ownerID, based on input angular velocity vector. N (the
+    /// size of the input vector) elements will be modified.
+    void SetOwnerAngVel(bodyID_t ownerID, const std::vector<float3>& angVel);
+    /// Set velocity of consecutive owners starting from ownerID, based on input velocity vector. N (the size of the
+    /// input vector) elements will be modified.
+    void SetOwnerVelocity(bodyID_t ownerID, const std::vector<float3>& vel);
+    /// Set quaternion of consecutive owners starting from ownerID, based on input quaternion vector. N (the size of the
+    /// input vector) elements will be modified.
+    void SetOwnerOriQ(bodyID_t ownerID, const std::vector<float4>& oriQ);
+    /// @brief Set the family number of consecutive owners.
+    /// @param ownerID The ID of the owner.
     /// @param fam Family number.
-    void SetOwnerFamily(bodyID_t ownerID, family_t fam);
+    /// @param n Number of consecutive owners.
+    void SetOwnerFamily(bodyID_t ownerID, unsigned int fam, bodyID_t n = 1);
+
+    /// @brief Add an extra accelerations to consecutive owners for the next time step.
+    /// @param ownerID The number of the starting owner.
+    /// @param acc The extra acceleration to add. N (the size of this vector) elements will be modified based on its
+    /// values.
+    void AddOwnerNextStepAcc(bodyID_t ownerID, const std::vector<float3>& acc);
+    /// @brief Add an extra angular accelerations to consecutive owners for the next time step.
+    /// @param ownerID The number of the starting owner.
+    /// @param acc The extra angular acceleration to add. N (the size of this vector) elements will be modified based on
+    /// its values.
+    void AddOwnerNextStepAngAcc(bodyID_t ownerID, const std::vector<float3>& angAcc);
+
     /// @brief Rewrite the relative positions of the flattened triangle soup.
     void SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& new_nodes);
     /// @brief Update the relative positions of the flattened triangle soup.
@@ -438,24 +494,91 @@ class DEMSolver {
     /// @return A vector of float3 representing the global coordinates of the mesh nodes.
     std::vector<float3> GetMeshNodesGlobal(bodyID_t ownerID);
 
-    /// @brief Get all clump--clump contacts in the simulation system.
+    /// @brief Get all clump--clump contact ID pairs in the simulation system. Note all GetContact-like methods reports
+    /// potential contacts (not necessarily confirmed contacts), meaning they are similar to what
+    /// WriteContactFileIncludingPotentialPairs does, not what WriteContactFile does.
+    /// @details Do not call this method with high frequency, as it is not efficient.
     /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
     /// body A, and Second is that of contact body B.
     std::vector<std::pair<bodyID_t, bodyID_t>> GetClumpContacts() const;
-
-    /// @brief Get all clump--clump contacts in the simulation system.
+    /// @brief Get all clump--clump contact ID pairs in the simulation system. Note all GetContact-like methods reports
+    /// potential contacts (not necessarily confirmed contacts), meaning they are similar to what
+    /// WriteContactFileIncludingPotentialPairs does, not what WriteContactFile does.
+    /// @details Do not call this method with high frequency, as it is not efficient.
     /// @param family_to_include Contacts that involve a body in a family not listed in this argument are ignored.
     /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
     /// body A, and Second is that of contact body B.
     std::vector<std::pair<bodyID_t, bodyID_t>> GetClumpContacts(const std::set<family_t>& family_to_include) const;
-
-    /// @brief Get all clump--clump contacts in the simulation system.
+    /// @brief Get all clump--clump contact ID pairs in the simulation system. Note all GetContact-like methods reports
+    /// potential contacts (not necessarily confirmed contacts), meaning they are similar to what
+    /// WriteContactFileIncludingPotentialPairs does, not what WriteContactFile does.
+    /// @details Do not call this method with high frequency, as it is not efficient.
     /// @param family_pair Functions returns a vector of contact body family number pairs. First is the family number of
     /// contact body A, and Second is that of contact body B.
     /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
     /// body A, and Second is that of contact body B.
     std::vector<std::pair<bodyID_t, bodyID_t>> GetClumpContacts(
         std::vector<std::pair<family_t, family_t>>& family_pair) const;
+
+    /// @brief Get all contact ID pairs in the simulation system. Note all GetContact-like methods reports potential
+    /// contacts (not necessarily confirmed contacts), meaning they are similar to what
+    /// WriteContactFileIncludingPotentialPairs does, not what WriteContactFile does.
+    /// @details Do not call this method with high frequency, as it is not efficient.
+    /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
+    /// body A, and Second is that of contact body B.
+    std::vector<std::pair<bodyID_t, bodyID_t>> GetContacts() const;
+    /// @brief Get all contact ID pairs in the simulation system. Note all GetContact-like methods reports potential
+    /// contacts (not necessarily confirmed contacts), meaning they are similar to what
+    /// WriteContactFileIncludingPotentialPairs does, not what WriteContactFile does.
+    /// @details Do not call this method with high frequency, as it is not efficient.
+    /// @param family_to_include Contacts that involve a body in a family not listed in this argument are ignored.
+    /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
+    /// body A, and Second is that of contact body B.
+    std::vector<std::pair<bodyID_t, bodyID_t>> GetContacts(const std::set<family_t>& family_to_include) const;
+    /// @brief Get all contact ID pairs in the simulation system. Note all GetContact-like methods reports potential
+    /// contacts (not necessarily confirmed contacts), meaning they are similar to what
+    /// WriteContactFileIncludingPotentialPairs does, not what WriteContactFile does.
+    /// @details Do not call this method with high frequency, as it is not efficient.
+    /// @param family_pair Functions returns a vector of contact body family number pairs. First is the family number of
+    /// contact body A, and Second is that of contact body B.
+    /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
+    /// body A, and Second is that of contact body B.
+    std::vector<std::pair<bodyID_t, bodyID_t>> GetContacts(
+        std::vector<std::pair<family_t, family_t>>& family_pair) const;
+
+    /// @brief Get all contact pairs' detailed information (actual content based on the setting with
+    /// SetContactOutputContent; default are owner IDs, contact point location, contact force, and associated wildcard
+    /// values) in the simulation system. Note all GetContact-like methods reports potential contacts (not necessarily
+    /// confirmed contacts), meaning they are similar to what WriteContactFileIncludingPotentialPairs does, not what
+    /// WriteContactFile does.
+    /// @details Do not call this method with high frequency, as it is not efficient.
+    /// @param force_thres Only contacts with force larger than this value are returned. Setting it to a small positive
+    /// number to, instead of getting all potential contacts, only get the ones that are currently confirmed to generate
+    /// force.
+    /// @return A map that may have the following keys: "ContactType", "Point", "AOwner", "BOwner", "AOwnerFamily",
+    /// "BOwnerFamily", "Force", "Torque", "Normal" and wildcard names, each corresponding to a vector of values. The
+    /// "ContactType" is a vector of strings, each indicating the type of contact (e.g., "sphere-sphere",
+    /// "sphere-triangle", etc.). The "Point" is a vector of float3s, each indicating the contact point location in
+    /// global coordinates. The "AOwner" and "BOwner" are vectors of body IDs for the two bodies in contact. The "Force"
+    /// is a vector of float3s, each indicating the contact force at the contact point. The "Torque" is a vector of
+    /// float3s, each indicating the torque at the contact point. The "Normal" is a vector of float3s, each indicating
+    /// the normal direction at the contact point.
+    std::shared_ptr<ContactInfoContainer> GetContactDetailedInfo(float force_thres = -1.0) const;
+
+    /// @brief Get the host memory usage (in bytes) on dT.
+    /// @return Number of bytes.
+    size_t GetHostMemUsageDynamic() const { return dT->estimateHostMemUsage(); }
+    /// @brief Get the device memory usage (in bytes) on dT.
+    /// @return Number of bytes.
+    size_t GetDeviceMemUsageDynamic() const { return dT->estimateDeviceMemUsage(); }
+    /// @brief Get the host memory usage (in bytes) on kT.
+    /// @return Number of bytes.
+    size_t GetHostMemUsageKinematic() const { return kT->estimateHostMemUsage(); }
+    /// @brief Get the device memory usage (in bytes) on kT.
+    /// @return Number of bytes.
+    size_t GetDeviceMemUsageKinematic() const { return kT->estimateDeviceMemUsage(); }
+    /// @brief Print the current memory usage in pretty format.
+    void ShowMemStats() const;
 
     /// Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial location
     /// means the location of the clumps' CoM coordinates in the global frame.
@@ -471,7 +594,7 @@ class DEMSolver {
         assertThreeElementsVector(input_xyz, "AddClumps", "input_xyz");
         std::vector<float3> loc_xyz(input_xyz.size());
         for (size_t i = 0; i < input_xyz.size(); i++) {
-            loc_xyz[i] = host_make_float3(input_xyz[i][0], input_xyz[i][1], input_xyz[i][2]);
+            loc_xyz[i] = make_float3(input_xyz[i][0], input_xyz[i][1], input_xyz[i][2]);
         }
         return AddClumps(input_types, loc_xyz);
     }
@@ -487,7 +610,7 @@ class DEMSolver {
     std::shared_ptr<DEMClumpBatch> AddClumps(std::shared_ptr<DEMClumpTemplate>& input_type,
                                              const std::vector<float>& input_xyz) {
         assertThreeElements(input_xyz, "AddClumps", "input_xyz");
-        return AddClumps(input_type, host_make_float3(input_xyz[0], input_xyz[1], input_xyz[2]));
+        return AddClumps(input_type, make_float3(input_xyz[0], input_xyz[1], input_xyz[2]));
     }
 
     /// @brief Load clumps (of the same template) into the simulation.
@@ -503,7 +626,7 @@ class DEMSolver {
         assertThreeElementsVector(input_xyz, "AddClumps", "input_xyz");
         std::vector<float3> loc_xyz(input_xyz.size());
         for (size_t i = 0; i < input_xyz.size(); i++) {
-            loc_xyz[i] = host_make_float3(input_xyz[i][0], input_xyz[i][1], input_xyz[i][2]);
+            loc_xyz[i] = make_float3(input_xyz[i][0], input_xyz[i][1], input_xyz[i][2]);
         }
         return AddClumps(input_type, loc_xyz);
     }
@@ -525,7 +648,7 @@ class DEMSolver {
     template <typename T>
     std::shared_ptr<DEMTracker> Track(const std::shared_ptr<T>& obj) {
         // Create a middle man: DEMTrackedObj. The reason we use it is because a simple struct should be used to
-        // transfer to  dT for owner-number processing. If we cut the middle man and use things such as DEMExtObj, there
+        // transfer to dT for owner-number processing. If we cut the middle man and use things such as DEMExtObj, there
         // will not be a universal treatment that dT can apply, besides we may have some include-related issues.
         DEMTrackedObj tracked_obj;
         tracked_obj.load_order = obj->load_order;
@@ -549,50 +672,79 @@ class DEMSolver {
     std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity = "clump_max_z");
     std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity, const std::string& region);
 
-    /// @brief Add an extra acceleration to a owner for the next time step.
-    /// @param ownerID The number of that owner.
-    /// @param acc The extra acceleration to add.
-    void AddOwnerNextStepAcc(bodyID_t ownerID, float3 acc);
-    /// @brief Add an extra angular acceleration to a owner for the next time step.
-    /// @param ownerID The number of that owner.
-    /// @param acc The extra angular acceleration to add.
-    void AddOwnerNextStepAngAcc(bodyID_t ownerID, float3 angAcc);
-
     /// Instruct the solver that the 2 input families should not have contacts (a.k.a. ignored, if such a pair is
     /// encountered in contact detection). These 2 families can be the same (which means no contact within members of
     /// that family).
     void DisableContactBetweenFamilies(unsigned int ID1, unsigned int ID2);
 
-    /// Re-enable contact between 2 families after the system is initialized
+    /// Re-enable contact between 2 families after the system is initialized.
     void EnableContactBetweenFamilies(unsigned int ID1, unsigned int ID2);
 
-    /// Prevent entites associated with this family to be outputted to files
+    /// Prevent entites associated with this family to be outputted to files.
     void DisableFamilyOutput(unsigned int ID);
 
-    /// Mark all entities in this family to be fixed
+    /// Mark all entities in this family to be fixed.
     void SetFamilyFixed(unsigned int ID);
-    /// Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this family will
-    /// not be influenced by the force exerted from other simulation entites (both linear and rotational motions).
+
+    /// If dictate is set to true, then
+
+    /// @brief Set the prescribed linear velocity to all entities in a family.
+    /// @param ID Family number.
+    /// @param velX X component of velocity.
+    /// @param velY Y component of velocity.
+    /// @param velZ Z component of velocity.
+    /// @param dictate If true, this family will not be influenced by the force exerted from other simulation entites
+    /// (both linear and rotational motions); if false, only specified components (that is, not specified with "none")
+    /// will not be influenced by the force exerted from other simulation entites.
+    /// @param pre Prerequisite code. For example, you can generate a float3 with this prerequisite code, then assign
+    /// XYZ components based on this float3.
     void SetFamilyPrescribedLinVel(unsigned int ID,
                                    const std::string& velX,
                                    const std::string& velY,
                                    const std::string& velZ,
-                                   bool dictate = true);
+                                   bool dictate = true,
+                                   const std::string& pre = "none");
     /// Let the linear velocities of all entites in this family always keep `as is', and not influenced by the force
     /// exerted from other simulation entites.
     void SetFamilyPrescribedLinVel(unsigned int ID);
-    /// Set the prescribed angular velocity to all entities in a family. If dictate is set to true, then this family
-    /// will not be fluenced by the force exerted from other simulation entites (both linear and rotational motions).
+    /// Let the X component of the linear velocities of all entites in this family always keep `as is', and not
+    /// influenced by the force exerted from other simulation entites.
+    void SetFamilyPrescribedLinVelX(unsigned int ID);
+    /// Let the Y component of the linear velocities of all entites in this family always keep `as is', and not
+    /// influenced by the force exerted from other simulation entites.
+    void SetFamilyPrescribedLinVelY(unsigned int ID);
+    /// Let the Z component of the linear velocities of all entites in this family always keep `as is', and not
+    /// influenced by the force exerted from other simulation entites.
+    void SetFamilyPrescribedLinVelZ(unsigned int ID);
+
+    /// @brief Set the prescribed angular velocity to all entities in a family.
+    /// @param ID Family number.
+    /// @param velX X component of angular velocity.
+    /// @param velY Y component of angular velocity.
+    /// @param velZ Z component of angular velocity.
+    /// @param dictate If true, this family will not be influenced by the force exerted from other simulation entites
+    /// (both linear and rotational motions); if false, only specified components (that is, not specified with "none")
+    /// will not be influenced by the force exerted from other simulation entites.
+    /// @param pre Prerequisite code. For example, you can generate a float3 with this prerequisite code, then assign
+    /// XYZ components based on this float3.
     void SetFamilyPrescribedAngVel(unsigned int ID,
                                    const std::string& velX,
                                    const std::string& velY,
                                    const std::string& velZ,
-                                   bool dictate = true);
+                                   bool dictate = true,
+                                   const std::string& pre = "none");
     /// Let the linear velocities of all entites in this family always keep `as is', and not influenced by the force
     /// exerted from other simulation entites.
     void SetFamilyPrescribedAngVel(unsigned int ID);
-
-    /// @brief
+    /// Let the X component of the angular velocities of all entites in this family always keep `as is', and not
+    /// influenced by the force exerted from other simulation entites.
+    void SetFamilyPrescribedAngVelX(unsigned int ID);
+    /// Let the Y component of the angular velocities of all entites in this family always keep `as is', and not
+    /// influenced by the force exerted from other simulation entites.
+    void SetFamilyPrescribedAngVelY(unsigned int ID);
+    /// Let the Z component of the angular velocities of all entites in this family always keep `as is', and not
+    /// influenced by the force exerted from other simulation entites.
+    void SetFamilyPrescribedAngVelZ(unsigned int ID);
 
     /// @brief Keep the positions of all entites in this family to remain exactly the user-specified values.
     /// @param ID Family number.
@@ -600,28 +752,87 @@ class DEMSolver {
     /// @param Y Y coordinate (can be an expression).
     /// @param Z Z coordinate (can be an expression).
     /// @param dictate If true, prevent entities in this family to have (both linear and rotational) positional updates
-    /// resulted from `simulation physics' unless the prescription is specified as none.
+    /// resulted from the `simulation physics'; if false, only specified components (that is, not specified with "none")
+    /// will not be influenced by the force exerted from other simulation entites.
+    /// @param pre Prerequisite code. For example, you can generate a float3 with this prerequisite code, then assign
+    /// XYZ components based on this float3.
     void SetFamilyPrescribedPosition(unsigned int ID,
                                      const std::string& X,
                                      const std::string& Y,
                                      const std::string& Z,
-                                     bool dictate = true);
-    /// @brief Let the linear positions of all entites in this family always keep `as is'
+                                     bool dictate = true,
+                                     const std::string& pre = "none");
+    /// @brief Let the linear positions of all entites in this family always keep `as is'.
     void SetFamilyPrescribedPosition(unsigned int ID);
+    /// @brief Let the X component of the linear positions of all entites in this family always keep `as is'.
+    void SetFamilyPrescribedPositionX(unsigned int ID);
+    /// @brief Let the Y component of the linear positions of all entites in this family always keep `as is'.
+    void SetFamilyPrescribedPositionY(unsigned int ID);
+    /// @brief Let the Z component of the linear positions of all entites in this family always keep `as is'.
+    void SetFamilyPrescribedPositionZ(unsigned int ID);
+
     /// @brief Keep the orientation quaternions of all entites in this family to remain exactly the user-specified
-    /// values
+    /// values.
     /// @param ID Family number.
-    /// @param q_formula A formula from which the quaternion should be calculated.
+    /// @param q_formula The code from which the quaternion should be calculated. Must `return' a float4. For example,
+    /// "float tmp=make_float4(1,1,1,1); return tmp;".
     /// @param dictate If true, prevent entities in this family to have (both linear and rotational) positional updates
-    /// resulted from `simulation physics' unless the prescription is specified as none.
+    /// resulted from the `simulation physics'; otherwise, the `simulation physics' still takes effect.
     void SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula, bool dictate = true);
-    /// @brief Let the orientation quaternions of all entites in this family always keep `as is'
+    /// @brief Let the orientation quaternions of all entites in this family always keep `as is'.
     void SetFamilyPrescribedQuaternion(unsigned int ID);
 
-    /// The entities in this family will always experienced an extra acceleration defined using this method
-    void AddFamilyPrescribedAcc(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
-    /// The entities in this family will always experienced an extra angular acceleration defined using this method
-    void AddFamilyPrescribedAngAcc(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
+    /// @brief The entities in this family will always experience an extra acceleration defined using this method.
+    /// @param pre Prerequisite code. For example, you can generate a float3 with this prerequisite code, then assign
+    /// XYZ components based on this float3.
+    void AddFamilyPrescribedAcc(unsigned int ID,
+                                const std::string& X,
+                                const std::string& Y,
+                                const std::string& Z,
+                                const std::string& pre = "none");
+    /// @brief The entities in this family will always experience an extra angular acceleration defined using this
+    /// method.
+    /// @param pre Prerequisite code. For example, you can generate a float3 with this prerequisite code, then assign
+    /// XYZ components based on this float3.
+    void AddFamilyPrescribedAngAcc(unsigned int ID,
+                                   const std::string& X,
+                                   const std::string& Y,
+                                   const std::string& Z,
+                                   const std::string& pre = "none");
+
+    /// @brief The entities in this family will always experience an added linear-velocity correction defined using this
+    /// method. At the same time, they are still subject to the `simulation physics'.
+    /// @param pre Prerequisite code. For example, you can generate a float3 with this prerequisite code, then assign
+    /// XYZ components based on this float3.
+    void CorrectFamilyLinVel(unsigned int ID,
+                             const std::string& X,
+                             const std::string& Y,
+                             const std::string& Z,
+                             const std::string& pre = "none");
+    /// @brief The entities in this family will always experience an added angular-velocity correction defined using
+    /// this method. At the same time, they are still subject to the `simulation physics'.
+    /// @param pre Prerequisite code. For example, you can generate a float3 with this prerequisite code, then assign
+    /// XYZ components based on this float3.
+    void CorrectFamilyAngVel(unsigned int ID,
+                             const std::string& X,
+                             const std::string& Y,
+                             const std::string& Z,
+                             const std::string& pre = "none");
+
+    /// @brief The entities in this family will always experience an added positional correction defined using this
+    /// method. At the same time, they are still subject to the `simulation physics'.
+    /// @param pre Prerequisite code. For example, you can generate a float3 with this prerequisite code, then assign
+    /// XYZ components based on this float3.
+    void CorrectFamilyPosition(unsigned int ID,
+                               const std::string& X,
+                               const std::string& Y,
+                               const std::string& Z,
+                               const std::string& pre = "none");
+    /// @brief The entities in this family will always experience an added quaternion correction defined using this
+    /// method. At the same time, they are still subject to the `simulation physics'.
+    /// @param q_formula The code from which the quaternion should be calculated. Must `return' a float4. For example,
+    /// "float tmp=make_float4(1,1,1,1); return tmp;".
+    void CorrectFamilyQuaternion(unsigned int ID, const std::string& q_formula);
 
     /// @brief Set the names for the extra quantities that will be associated with each contact pair.
     void SetContactWildcards(const std::set<std::string>& wildcards);
@@ -635,32 +846,81 @@ class DEMSolver {
     /// @param N Family number. If one contact geometry is in N, this contact wildcard is modified.
     /// @param name Name of the contact wildcard to modify.
     /// @param val The value to change to.
-    void SetFamilyContactWildcardValueAny(unsigned int N, const std::string& name, float val);
+    void SetFamilyContactWildcardValueEither(unsigned int N, const std::string& name, float val);
     /// @brief Change the value of contact wildcards to val if both of the contact geometries are in family N.
     /// @param N Family number. Only if both contact geometries are in N, this contact wildcard is modified.
     /// @param name Name of the contact wildcard to modify.
     /// @param val The value to change to.
-    void SetFamilyContactWildcardValueAll(unsigned int N, const std::string& name, float val);
+    void SetFamilyContactWildcardValueBoth(unsigned int N, const std::string& name, float val);
+    /// @brief Change the value of contact wildcards to val if one of the contact geometry is in family N1, and the
+    /// other is in N2.
+    /// @param N1 First family number.
+    /// @param N2 Second family number.
+    /// @param name Name of the contact wildcard to modify.
+    /// @param val The value to change to.
+    void SetFamilyContactWildcardValue(unsigned int N1, unsigned int N2, const std::string& name, float val);
     /// @brief Change the value of contact wildcards to val. Apply to all simulation bodies that are present.
     /// @param name Name of the contact wildcard to modify.
     /// @param val The value to change to.
     void SetContactWildcardValue(const std::string& name, float val);
 
-    /// @brief Get all contact forces that concern a owner.
-    /// @param ownerID The ID of the owner.
+    /// @brief Make it so that for any currently-existing contact, if one of its contact geometries is in family N, then
+    /// this contact will never be removed.
+    /// @details This contact might be created through contact detection, or being a contact the user manually loaded at
+    /// the start of simulation. Note this is a one-time assignment and will not continuously mark future emerging
+    /// contact to be persistent.
+    /// @param N Family number.
+    void MarkFamilyPersistentContactEither(unsigned int N);
+    /// @brief Make it so that for any currently-existing contact, if both of its contact geometries are in family N,
+    /// then this contact will never be removed.
+    /// @details This contact might be created through contact detection, or being a contact the user manually loaded at
+    /// the start of simulation. Note this is a one-time assignment and will not continuously mark future emerging
+    /// contact to be persistent.
+    /// @param N Family number.
+    void MarkFamilyPersistentContactBoth(unsigned int N);
+    /// @brief Make it so that if for any currently-existing contact, if its two contact geometries are in family N1 and
+    /// N2 respectively, this contact will never be removed.
+    /// @details This contact might be created through contact detection, or being a contact the user manually loaded at
+    /// the start of simulation. Note this is a one-time assignment and will not continuously mark future emerging
+    /// contact to be persistent.
+    /// @param N1 Family number 1.
+    /// @param N2 Family number 2.
+    void MarkFamilyPersistentContact(unsigned int N1, unsigned int N2);
+    /// @brief Make it so that all currently-existing contacts in this simulation will never be removed.
+    /// @details The contacts might be created through contact detection, or being manually loaded at the start of
+    /// simulation. Note this is a one-time assignment and will not continuously mark future emerging contact to be
+    /// persistent.
+    void MarkPersistentContact();
+
+    /// @brief Cancel contact persistence qualification. Work like the inverse of MarkFamilyPersistentContactEither.
+    void RemoveFamilyPersistentContactEither(unsigned int N);
+    /// @brief Cancel contact persistence qualification. Work like the inverse of MarkFamilyPersistentContactBoth.
+    void RemoveFamilyPersistentContactBoth(unsigned int N);
+    /// @brief Cancel contact persistence qualification. Work like the inverse of MarkFamilyPersistentContact.
+    void RemoveFamilyPersistentContact(unsigned int N1, unsigned int N2);
+    /// @brief Cancel contact persistence qualification. Work like the inverse of MarkPersistentContact.
+    void RemovePersistentContact();
+
+    /// @brief Get all contact forces that concern a list of owners.
+    /// @param ownerIDs The IDs of the owners.
     /// @param points Fill this vector of float3 with the XYZ components of the contact points.
     /// @param forces Fill this vector of float3 with the XYZ components of the forces.
     /// @return Number of force pairs.
-    size_t GetOwnerContactForces(bodyID_t ownerID, std::vector<float3>& points, std::vector<float3>& forces);
+    size_t GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
+                                 std::vector<float3>& points,
+                                 std::vector<float3>& forces);
 
-    /// @brief Get all contact forces that concern a owner.
-    /// @param ownerID The ID of the owner.
+    /// @brief Get all contact forces that concern a list of owners.
+    /// @details If a contact involves at least one of the owner IDs provided as the first arg this method, it will be
+    /// outputted. Note if a contact involves two IDs of the user-provided list, then the force for that contact will be
+    /// given as the force experienced by whichever owner that appears earlier in the ID list.
+    /// @param ownerIDs The IDs of the owners.
     /// @param points Fill this vector of float3 with the XYZ components of the contact points.
     /// @param forces Fill this vector of float3 with the XYZ components of the forces.
     /// @param torques Fill this vector of float3 with the XYZ components of the torques (in local frame).
     /// @param torque_in_local If true, output torque in this body's local ref frame.
     /// @return Number of force pairs.
-    size_t GetOwnerContactForces(bodyID_t ownerID,
+    size_t GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
                                  std::vector<float3>& points,
                                  std::vector<float3>& forces,
                                  std::vector<float3>& torques,
@@ -720,11 +980,12 @@ class DEMSolver {
     /// @param extra_size The thickness of the extra contact margin.
     void SetFamilyExtraMargin(unsigned int N, float extra_size);
 
-    /// @brief Get the owner wildcard's values of a owner.
-    /// @param ownerID Owner's ID.
+    /// @brief Get the owner wildcard's values of some owners.
+    /// @param ownerID Starting owner's ID.
     /// @param name Wildcard's name.
+    /// @param n Total number of owners to query, starting from ownerID.
     /// @return Value of this wildcard.
-    float GetOwnerWildcardValue(bodyID_t ownerID, const std::string& name);
+    std::vector<float> GetOwnerWildcardValue(bodyID_t ownerID, const std::string& name, bodyID_t n = 1);
     /// @brief Get the owner wildcard's values of all entities.
     std::vector<float> GetAllOwnerWildcardValue(const std::string& name);
     /// @brief Get the owner wildcard's values of all entities in family N.
@@ -748,6 +1009,11 @@ class DEMSolver {
     /// @param n The number of analytical entities to query following the ID of the first one.
     /// @return Vector of values of the wildcards.
     std::vector<float> GetAnalWildcardValue(bodyID_t geoID, const std::string& name, size_t n);
+
+    /// @brief If the user used async-ed version of a tracker's get/set methods (to get a speed boost in many piecemeal
+    /// accesses of a long array), this method should be called to mark the end of to-host transactions. But usually,
+    /// the user would use sync-ed version of the methods by default and this call is not needed in that case.
+    void SyncMemoryTransfer();
 
     /// Change all entities with family number ID_from to have a new number ID_to, when the condition defined by the
     /// string is satisfied by the entities in question. This should be called before initialization, and will be baked
@@ -817,8 +1083,7 @@ class DEMSolver {
                                              const std::shared_ptr<DEMMaterial>& material) {
         assertThreeElements(pos, "AddBCPlane", "pos");
         assertThreeElements(normal, "AddBCPlane", "normal");
-        return AddBCPlane(host_make_float3(pos[0], pos[1], pos[2]), host_make_float3(normal[0], normal[1], normal[2]),
-                          material);
+        return AddBCPlane(make_float3(pos[0], pos[1], pos[2]), make_float3(normal[0], normal[1], normal[2]), material);
     }
 
     /// Remove host-side cached vectors (so you can re-define them, and then re-initialize system)
@@ -826,25 +1091,46 @@ class DEMSolver {
 
     /// Write the current status of clumps to a file
     void WriteClumpFile(const std::string& outfilename, unsigned int accuracy = 10) const;
+    void WriteClumpFile(const std::filesystem::path& outfilename, unsigned int accuracy = 10) const {
+        WriteClumpFile(outfilename.string(), accuracy);
+    }
     /// Write the current status of `clumps' to a file, but not as clumps, instead, as each individual sphere. This may
     /// make small-scale rendering easier.
     void WriteSphereFile(const std::string& outfilename) const;
+    void WriteSphereFile(const std::filesystem::path& outfilename) const { WriteSphereFile(outfilename.string()); }
     /// @brief Write all contact pairs to a file.
     /// @details The outputted torque using this method is in global, rather than each object's local coordinate system.
     /// @param outfilename Output filename.
     /// @param force_thres Forces with magnitude smaller than this amount will not be outputted.
     void WriteContactFile(const std::string& outfilename, float force_thres = DEME_TINY_FLOAT) const;
-    /// Write the current status of all meshes to a file
+    void WriteContactFile(const std::filesystem::path& outfilename) const { WriteContactFile(outfilename.string()); }
+    /// @brief Write all contact pairs kT-supplied to a file, thus including the potential ones (those are not yet in
+    /// contact, or recently used to be in contact).
+    /// @details The outputted torque using this method is in global, rather than each object's local coordinate system.
+    /// @param outfilename Output filename.
+    void WriteContactFileIncludingPotentialPairs(const std::string& outfilename) const {
+        WriteContactFile(outfilename, -1.0);
+    }
+    void WriteContactFileIncludingPotentialPairs(const std::filesystem::path& outfilename) const {
+        WriteContactFileIncludingPotentialPairs(outfilename.string());
+    }
+    /// Write the current status of all meshes to a file.
     void WriteMeshFile(const std::string& outfilename) const;
+    void WriteMeshFile(const std::filesystem::path& outfilename) const { WriteMeshFile(outfilename.string()); }
 
-    /// Read clump coordinates from a CSV file (whose format is consistent with this solver's clump output file).
-    /// Returns an unordered_map which maps each unique clump type name to a vector of float3 (XYZ coordinates).
-    static std::unordered_map<std::string, std::vector<float3>> ReadClumpXyzFromCsv(
+    /// @brief Read 3 columns of your choice from a CSV filem and group them by clump_header.
+    /// @param infilename CSV filename.
+    /// @param x_header CSV header for the first col.
+    /// @param y_header CSV header for the second col.
+    /// @param z_header CSV header for the third col.
+    /// @param clump_header The identifier column to separate types of clumps.
+    /// @return Unordered_map which maps types of clumps to a respective vector of float3s.
+    static std::unordered_map<std::string, std::vector<float3>> ReadClumpFloat3FromCsv(
         const std::string& infilename,
-        const std::string& clump_header = OUTPUT_FILE_CLUMP_TYPE_NAME,
-        const std::string& x_header = OUTPUT_FILE_X_COL_NAME,
-        const std::string& y_header = OUTPUT_FILE_Y_COL_NAME,
-        const std::string& z_header = OUTPUT_FILE_Z_COL_NAME) {
+        const std::string& x_header,
+        const std::string& y_header,
+        const std::string& z_header,
+        const std::string& clump_header) {
         std::unordered_map<std::string, std::vector<float3>> type_xyz_map;
         io::CSVReader<4, io::trim_chars<' ', '\t'>, io::no_quote_escape<','>, io::throw_on_overflow,
                       io::empty_line_comment>
@@ -859,21 +1145,35 @@ class DEMSolver {
         }
         return type_xyz_map;
     }
+    /// Read clump coordinates from a CSV file (whose format is consistent with this solver's clump output file).
+    /// Returns an unordered_map which maps each unique clump type name to a vector of float3 (XYZ coordinates).
+    static std::unordered_map<std::string, std::vector<float3>> ReadClumpXyzFromCsv(const std::string& infilename) {
+        return ReadClumpFloat3FromCsv(infilename, OUTPUT_FILE_X_COL_NAME, OUTPUT_FILE_Y_COL_NAME,
+                                      OUTPUT_FILE_Z_COL_NAME, OUTPUT_FILE_CLUMP_TYPE_NAME);
+    }
+    /// Read clump velocity from a CSV file (whose format is consistent with this solver's clump output file).
+    /// Returns an unordered_map which maps each unique clump type name to a vector of float3 (velocity).
+    static std::unordered_map<std::string, std::vector<float3>> ReadClumpVelFromCsv(const std::string& infilename) {
+        return ReadClumpFloat3FromCsv(infilename, OUTPUT_FILE_VEL_X_COL_NAME, OUTPUT_FILE_VEL_Y_COL_NAME,
+                                      OUTPUT_FILE_VEL_Z_COL_NAME, OUTPUT_FILE_CLUMP_TYPE_NAME);
+    }
+    /// Read clump angular velocity from a CSV file (whose format is consistent with this solver's clump output file).
+    /// Returns an unordered_map which maps each unique clump type name to a vector of float3 (angular velocity).
+    static std::unordered_map<std::string, std::vector<float3>> ReadClumpAngVelFromCsv(const std::string& infilename) {
+        return ReadClumpFloat3FromCsv(infilename, OUTPUT_FILE_ANGVEL_X_COL_NAME, OUTPUT_FILE_ANGVEL_Y_COL_NAME,
+                                      OUTPUT_FILE_ANGVEL_Z_COL_NAME, OUTPUT_FILE_CLUMP_TYPE_NAME);
+    }
+
     /// Read clump quaternions from a CSV file (whose format is consistent with this solver's clump output file).
     /// Returns an unordered_map which maps each unique clump type name to a vector of float4 (4 components of the
     /// quaternion, (Qx, Qy, Qz, Qw) = (0, 0, 0, 1) means 0 rotation).
-    static std::unordered_map<std::string, std::vector<float4>> ReadClumpQuatFromCsv(
-        const std::string& infilename,
-        const std::string& clump_header = OUTPUT_FILE_CLUMP_TYPE_NAME,
-        const std::string& qw_header = "Qw",
-        const std::string& qx_header = "Qx",
-        const std::string& qy_header = "Qy",
-        const std::string& qz_header = "Qz") {
+    static std::unordered_map<std::string, std::vector<float4>> ReadClumpQuatFromCsv(const std::string& infilename) {
         std::unordered_map<std::string, std::vector<float4>> type_Q_map;
         io::CSVReader<5, io::trim_chars<' ', '\t'>, io::no_quote_escape<','>, io::throw_on_overflow,
                       io::empty_line_comment>
             in(infilename);
-        in.read_header(io::ignore_extra_column, clump_header, qw_header, qx_header, qy_header, qz_header);
+        in.read_header(io::ignore_extra_column, OUTPUT_FILE_CLUMP_TYPE_NAME, OUTPUT_FILE_QW_COL_NAME,
+                       OUTPUT_FILE_QX_COL_NAME, OUTPUT_FILE_QY_COL_NAME, OUTPUT_FILE_QZ_COL_NAME);
         std::string type_name;
         float4 Q;
         size_t count = 0;
@@ -945,8 +1245,8 @@ class DEMSolver {
         return w_vals;
     }
 
-    /// Intialize the simulation system
-    void Initialize();
+    /// Intialize the simulation system.
+    void Initialize(bool dry_run = false);
 
     /// Advance simulation by this amount of time, and at the end of this call, synchronize kT and dT. This is suitable
     /// for a longer call duration and without co-simulation.
@@ -956,7 +1256,7 @@ class DEMSolver {
     /// and short call durations and allows interplay with co-simulation APIs.
     void DoDynamics(double thisCallDuration);
 
-    /// Equivalent to calling DoDynamics with the time step size as the argument
+    /// Equivalent to calling DoDynamics with the time step size as the argument.
     void DoStepDynamics() { DoDynamics(m_ts_size); }
 
     /// @brief Transferthe cached sim params to the workers. Used for sim environment modification after system
@@ -968,13 +1268,13 @@ class DEMSolver {
 
     /// @brief Update the time step size. Used after system initialization.
     /// @param ts Time step size.
-    void UpdateStepSize(float ts = -1.0);
+    void UpdateStepSize(double ts);
 
     /// Show the collaboration stats between dT and kT. This is more useful for tweaking the number of time steps that
     /// dT should be allowed to be in advance of kT.
     void ShowThreadCollaborationStats();
 
-    /// Show the wall time and percentages of wall time spend on various solver tasks
+    /// Show the wall time and percentages of wall time spend on various solver tasks.
     void ShowTimingStats();
 
     /// Show potential anomalies that may have been there in the simulation, then clear the anomaly log.
@@ -985,14 +1285,14 @@ class DEMSolver {
     /// and destroy DEMSolver.
     void ClearThreadCollaborationStats();
 
-    /// Reset the recordings of the wall time and percentages of wall time spend on various solver tasks
+    /// Reset the recordings of the wall time and percentages of wall time spend on various solver tasks.
     void ClearTimingStats();
 
-    /// Removes all entities associated with a family from the arrays (to save memory space)
+    /// Removes all entities associated with a family from the arrays (to save memory space).
     void PurgeFamily(unsigned int family_num);
 
     /// Release the memory for the flattened arrays (which are used for initialization pre-processing and transferring
-    /// info the worker threads)
+    /// info the worker threads).
     void ReleaseFlattenedArrays();
 
     /// @brief Return whether the solver is currently reducing force in the force calculation kernel.
@@ -1011,15 +1311,15 @@ class DEMSolver {
     // call.
     // void SetClumpOutputMode(OUTPUT_MODE mode) { m_clump_out_mode = mode; }
 
-    /// Choose output format
+    /// Choose output format.
     void SetOutputFormat(OUTPUT_FORMAT format) { m_out_format = format; }
-    /// Specify the information that needs to go into the clump or sphere output files
+    /// Specify the information that needs to go into the clump or sphere output files.
     void SetOutputContent(unsigned int content) { m_out_content = content; }
-    /// Specify the file format of contact pairs
+    /// Specify the file format of contact pairs.
     void SetContactOutputFormat(OUTPUT_FORMAT format) { m_cnt_out_format = format; }
-    /// Specify the information that needs to go into the contact pair output files
+    /// Specify the information that needs to go into the contact pair output files.
     void SetContactOutputContent(unsigned int content) { m_cnt_out_content = content; }
-    /// Specify the file format of meshes
+    /// Specify the file format of meshes.
     void SetMeshOutputFormat(MESH_FORMAT format) { m_mesh_out_format = format; }
     /// Enable/disable outputting owner wildcard values to file.
     void EnableOwnerWildcardOutput(bool enable = true) { m_is_out_owner_wildcards = enable; }
@@ -1028,7 +1328,45 @@ class DEMSolver {
     /// Enable/disable outputting geometry wildcard values to the contact file.
     void EnableGeometryWildcardOutput(bool enable = true) { m_is_out_geo_wildcards = enable; }
 
-    /// Let dT do this call and return the reduce value of the inspected quantity
+    /// @brief Set the verbosity level of the solver.
+    /// @param verbose "QUIET", "ERROR", "WARNING", "INFO", "STEP_ANOMALY", "STEP_METRIC", "DEBUG" or "STEP_DEBUG".
+    /// Recommend "INFO".
+    void SetVerbosity(const std::string& verbose);
+    /// @brief Choose sphere and clump output file format.
+    /// @param format Choice among "CSV", "BINARY".
+    void SetOutputFormat(const std::string& format);
+    /// @brief Specify the information that needs to go into the clump or sphere output files.
+    /// @param content A list of "XYZ", "QUAT", "ABSV", "VEL", "ANG_VEL", "ABS_ACC", "ACC", "ANG_ACC", "FAMILY", "MAT",
+    /// "OWNER_WILDCARD" and/or "GEO_WILDCARD".
+    void SetOutputContent(const std::vector<std::string>& content);
+    /// @brief Specify the file format of contact pairs.
+    /// @param format Choice among "CSV", "BINARY".
+    void SetContactOutputFormat(const std::string& format);
+    /// @brief Specify the information that needs to go into the contact pair output files.
+    /// @param content A list of "CNT_TYPE", "FORCE", "POINT", "COMPONENT", "NORMAL", "TORQUE", "CNT_WILDCARD", "OWNER",
+    /// "GEO_ID" and/or "NICKNAME".
+    void SetContactOutputContent(const std::vector<std::string>& content);
+    /// @brief Specify the output file format of meshes.
+    /// @param format A choice between "VTK", "OBJ".
+    void SetMeshOutputFormat(const std::string& format);
+
+    // void SetOutputContent(const std::string& content) { SetOutputContent({content}); }
+    // void SetContactOutputContent(const std::string& content) { SetContactOutputContent({content}); }
+
+    /// @brief Add a library that the kernels will be compiled with (so that the user can use the provided methods in
+    /// their customized code, like force model).
+    /// @param lib_name The lib to include. For example, "math_functions.h".
+    void AddKernelInclude(const std::string& lib_name);
+    /// @brief Set the kernels' headers' extra include lines. Useful for customization.
+    /// @param includes The extra headers, as a string.
+    void SetKernelInclude(const std::string& includes) { kernel_includes = includes; }
+    /// @brief Remove all extra libraries that the kernels `include' in their headers.
+    void RemoveKernelInclude() { kernel_includes = " "; }
+
+    /// @brief Print kT's scratch space usage. This is a debug method.
+    void PrintKinematicScratchSpaceUsage() const { kT->printScratchSpaceUsage(); }
+
+    /// Let dT do this call and return the reduce value of the inspected quantity.
     float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
                           const std::string& kernel_name,
                           INSPECT_ENTITY_TYPE thing_to_insp,
@@ -1047,7 +1385,7 @@ class DEMSolver {
 
     // Verbosity
     VERBOSITY verbosity = INFO;
-    // If true, dT should sort contact arrays (based on contact type) before usage (not implemented)
+    // If true, dT should sort contact arrays (based on contact type) before usage
     bool should_sort_contacts = true;
     // If true, the solvers may need to do a per-step sweep to apply family number changes
     bool famnum_can_change_conditionally = false;
@@ -1057,10 +1395,18 @@ class DEMSolver {
     // Should jitify mass/MOI properties into kernels
     bool jitify_mass_moi = true;
 
+    enum class INIT_BIN_SIZE_TYPE { EXPLICIT, MULTI_MIN_SPH, TARGET_NUM };
     // User explicitly set a bin size to use
-    bool use_user_defined_bin_size = false;
+    INIT_BIN_SIZE_TYPE use_user_defined_bin_size = INIT_BIN_SIZE_TYPE::TARGET_NUM;
     // User explicity specify a expand factor to use
     bool use_user_defined_expand_factor = false;
+    // Whether to auto-adjust the bin size and the max update frequency
+    bool auto_adjust_bin_size = true;
+    bool auto_adjust_update_freq = true;
+    // User-instructed initial bin size as a multiple of smallest sphere radius
+    float m_binSize_as_multiple = 8.0;
+    // Target initial bin number
+    size_t m_target_init_bin_num = 1e6;
 
     // I/O related flags
     // The output file format for clumps and spheres
@@ -1070,8 +1416,8 @@ class DEMSolver {
     // The output file format for contact pairs
     OUTPUT_FORMAT m_cnt_out_format = OUTPUT_FORMAT::CSV;
     // The output file content for contact pairs
-    unsigned int m_cnt_out_content = CNT_OUTPUT_CONTENT::GEO_ID | CNT_OUTPUT_CONTENT::FORCE |
-                                     CNT_OUTPUT_CONTENT::POINT | CNT_OUTPUT_CONTENT::CNT_WILDCARD;
+    unsigned int m_cnt_out_content = CNT_OUTPUT_CONTENT::OWNER | CNT_OUTPUT_CONTENT::FORCE |
+                                     CNT_OUTPUT_CONTENT::CNT_POINT | CNT_OUTPUT_CONTENT::CNT_WILDCARD;
     // The output file format for meshes
     MESH_FORMAT m_mesh_out_format = MESH_FORMAT::VTK;
     // If the solver should output wildcards to file
@@ -1109,15 +1455,13 @@ class DEMSolver {
     // Actual (double-precision) size of a voxel
     double m_voxelSize;
     // Time step size
-    double m_ts_size = -1.0;
+    double m_ts_size = 1e-5;
     // If the time step size is a constant (if not, it needs to be supplied with a file or a function)
     bool ts_size_is_const = true;
     // The length unit. Any XYZ we report to the user, is under the hood a multiple of this l.
     float l = FLT_MAX;
     // The edge length of a bin (for contact detection)
     double m_binSize;
-    // User-instructed initial bin size as a multiple of smallest sphere radius
-    float m_binSize_as_multiple = 2.0;
     // Total number of bins
     size_t m_num_bins;
     // Number of bins on each direction
@@ -1160,6 +1504,9 @@ class DEMSolver {
     // This is an unused variable which is supposed to be related to m_suggestedFutureDrift...
     int m_updateFreq = 20;
 
+    // The extra libs that the kernels need to include.
+    std::string kernel_includes = "#include <curand_kernel.h>\n";
+
     // If and how we should add boundaries to the simulation world upon initialization. Choose between none, all and
     // top_open.
     std::string m_user_add_bounding_box = "none";
@@ -1181,19 +1528,16 @@ class DEMSolver {
     unsigned int threshold_too_many_tri_in_bin = 32768;
     // The max velocity at which the simulation should error out
     float threshold_error_out_vel = 1e3;
-    // Whether to auto-adjust the bin size and the max update frequency
-    bool auto_adjust_bin_size = true;
-    bool auto_adjust_update_freq = true;
     // Num of steps that kT takes average before making a conclusion on the performance of this bin size
-    unsigned int auto_adjust_observe_steps = 20;
+    unsigned int auto_adjust_observe_steps = 25;
     // See corresponding method for those...
     float auto_adjust_max_rate = 0.03;
     float auto_adjust_acc = 0.2;
-    float auto_adjust_upper_proactive_ratio = 1.0;
-    float auto_adjust_lower_proactive_ratio = 0.3;
-    unsigned int upper_bound_future_drift = 5000;
-    float max_drift_ahead_of_avg_drift = 6.;
-    float max_drift_multiple_of_avg_drift = 1.1;
+    float auto_adjust_upper_proactive_ratio = 0.75;
+    float auto_adjust_lower_proactive_ratio = 0.5;
+    unsigned int upper_bound_future_drift = 200;
+    float max_drift_ahead_of_avg_drift = 4.;
+    float max_drift_multiple_of_avg_drift = 1.05;
     unsigned int max_drift_gauge_history_size = 200;
 
     // See SetNoForceRecord
@@ -1305,6 +1649,8 @@ class DEMSolver {
 
     // A big fat tab for all string replacement that the JIT compiler needs to consider
     std::unordered_map<std::string, std::string> m_subs;
+    // jitify's compilation options
+    std::vector<std::string> m_jitify_options = DEME_JITIFY_DEFAULT_OPTIONS;
 
     // A map that records the numbering for user-defined owner wildcards
     std::unordered_map<std::string, unsigned int> m_owner_wc_num;
@@ -1327,7 +1673,7 @@ class DEMSolver {
     //// TODO: These re-initialization flavors haven't been added
 
     // This is the cached material information.
-    // It will be massaged into the managed memory upon Initialize().
+    // It will be massaged into the GPU memory upon Initialize().
     std::vector<std::shared_ptr<DEMMaterial>> m_loaded_materials;
 
     // Pair-wise material properties
@@ -1500,28 +1846,36 @@ class DEMSolver {
     /// Add boundaries to the simulation `world' based on user instructions
     void addWorldBoundingBox();
     /// Transfer cached solver preferences/instructions to dT and kT.
-    void transferSolverParams();
+    void setSolverParams();
     /// Transfer (CPU-side) cached simulation data (about sim world) to the GPU-side. It is called automatically during
     /// system initialization.
-    void transferSimParams();
-    /// Transfer cached clump templates info etc. to GPU-side arrays
+    void setSimParams();
+    /// Transfer cached clump templates info etc. to GPU-side arrays.
     void initializeGPUArrays();
-    /// Allocate memory space for GPU-side arrays
+    /// Allocate memory space for GPU-side arrays.
     void allocateGPUArrays();
-    /// Pack array pointers to a struct so they can be easily used as kernel arguments
+    /// Pack array pointers to a struct so they can be easily used as kernel arguments.
     void packDataPointers();
+    /// @brief Move host-prepared simulation parameter data to device.
+    void migrateSimParamsToDevice();
+    /// @brief Move host-prepared array data to device.
+    void migrateArrayDataToDevice();
+    /// @brief Move device-modified array data to host. This is important when the simulation already started, but some
+    /// data need to be re-cooked on host. For small updates to the host, we don't need to do this, just directly modify
+    /// the device array.
+    void migrateArrayDataToHost();
     /// Warn users if the data types defined in Defines.h do not blend well with the user inputs (fist-round
-    /// coarse-grain sanity check)
+    /// coarse-grain sanity check).
     void validateUserInputs();
-    /// Prepare the material/contact proxy matrix force computation kernels
+    /// Prepare the material/contact proxy matrix force computation kernels.
     void figureOutMaterialProxies();
-    /// Figure out info about external objects and how they should be jitified
+    /// Figure out info about external objects and how they should be jitified.
     void preprocessAnalyticalObjs();
-    /// Figure out info about external meshed objects
+    /// Figure out info about external meshed objects.
     void preprocessTriangleObjs();
-    /// Report simulation stats at initialization
+    /// Report simulation stats at initialization.
     void reportInitStats() const;
-    /// Based on user input, prepare family_mask_matrix (family contact map matrix)
+    /// Based on user input, prepare family_mask_matrix (family contact map matrix).
     void figureOutFamilyMasks();
     /// Reset kT and dT back to a status like when the simulation system is constructed. I decided to make this a
     /// private method because it can be dangerous, as if it is called when kT is waiting at the outer loop, it will
@@ -1529,7 +1883,7 @@ class DEMSolver {
     /// this call does not reset the collaboration log between kT and dT.
     void resetWorkerThreads();
     /// Transfer newly loaded clumps/meshed objects to the GPU-side in mid-simulation and allocate GPU memory space for
-    /// them
+    /// them.
     void updateClumpMeshArrays(size_t nOwners,
                                size_t nClumps,
                                size_t nSpheres,
@@ -1556,9 +1910,6 @@ class DEMSolver {
     void assertSysNotInit(const std::string& method_name);
     /// Print due information on worker threads reported anomalies
     bool goThroughWorkerAnomalies();
-    /// @brief Get the owner ID of this geometry, depending on the contact type.
-    /// @return Owner ID of this geometry.
-    bodyID_t getGeoOwnerID(const bodyID_t& geoID, const contact_t& cnt_type) const;
     /// @brief Implementation of getting (unsorted) contact pairs from dT.
     /// @param type_func Exclude certain contact types from being outputted if this evaluates to false.
     void getContacts_impl(std::vector<bodyID_t>& idA,
@@ -1567,6 +1918,18 @@ class DEMSolver {
                           std::vector<family_t>& famA,
                           std::vector<family_t>& famB,
                           std::function<bool(contact_t)> type_func) const;
+    /// The implimentation of persistency assignment
+    void assignFamilyPersistentContact_impl(
+        unsigned int N1,
+        unsigned int N2,
+        notStupidBool_t is_or_not,
+        const std::function<bool(family_t, family_t, unsigned int, unsigned int)>& condition);
+
+    // Persistent contact implementations
+    void assignFamilyPersistentContactEither(unsigned int N, notStupidBool_t is_or_not);
+    void assignFamilyPersistentContactBoth(unsigned int N, notStupidBool_t is_or_not);
+    void assignFamilyPersistentContact(unsigned int N1, unsigned int N2, notStupidBool_t is_or_not);
+    void assignPersistentContact(notStupidBool_t is_or_not);
 
     // Some JIT packaging helpers
     inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap);
@@ -1579,6 +1942,7 @@ class DEMSolver {
     inline void equipFamilyOnFlyChanges(std::unordered_map<std::string, std::string>& strMap);
     inline void equipForceModel(std::unordered_map<std::string, std::string>& strMap);
     inline void equipIntegrationScheme(std::unordered_map<std::string, std::string>& strMap);
+    inline void equipKernelIncludes(std::unordered_map<std::string, std::string>& strMap);
 };
 
 }  // namespace deme

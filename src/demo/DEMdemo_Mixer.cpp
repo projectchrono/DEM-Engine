@@ -30,6 +30,9 @@ int main() {
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
 
+    // If you don't need individual force information, then this option makes the solver run a bit faster.
+    DEMSim.SetNoForceRecord();
+
     // E, nu, CoR, mu, Crr...
     auto mat_type_mixer = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.0}});
     auto mat_type_granular = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.2}, {"Crr", 0.0}});
@@ -61,14 +64,12 @@ int main() {
     float granular_rad = 0.005;
     // auto template_granular = DEMSim.LoadSphereType(granular_rad * granular_rad * granular_rad * 2.8e3 * 4 / 3 * 3.14,
     //                                                granular_rad, mat_type_granular);
-    DEMClumpTemplate shape_template;
-    shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/3_clump.csv").string());
     // Calculate its mass and MOI
-    shape_template.mass = 2.6e3 * 5.5886717;  // in kg or g
-    shape_template.MOI = make_float3(2.928, 2.6029, 3.9908) * 2.6e3;
-    shape_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(shape_template.nComp, mat_type_granular);
-    shape_template.Scale(granular_rad);
-    auto template_granular = DEMSim.LoadClumpType(shape_template);
+    float mass = 2.6e3 * 5.5886717;  // in kg or g
+    float3 MOI = make_float3(2.928, 2.6029, 3.9908) * 2.6e3;
+    std::shared_ptr<DEMClumpTemplate> template_granular =
+        DEMSim.LoadClumpType(mass, MOI, GetDEMEDataFile("clumps/3_clump.csv"), mat_type_granular);
+    template_granular->Scale(granular_rad);
 
     // Track the mixer
     auto mixer_tracker = DEMSim.Track(mixer);
@@ -87,7 +88,10 @@ int main() {
     // Mixer has a big angular velocity-contributed linear speed at its blades, this is something the solver do not
     // account for, for now. And that means it needs to be added as an estimated value.
     DEMSim.SetExpandSafetyAdder(2.0);
-    DEMSim.SetInitBinSize(25 * granular_rad);
+    // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto bin
+    // size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case setting
+    // init bin size may save the simulation.
+    // DEMSim.SetInitBinSize(25 * granular_rad);
     DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1.2);
     DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(6);
     DEMSim.SetSortContactPairs(true);
@@ -95,12 +99,18 @@ int main() {
     DEMSim.SetErrorOutVelocity(20.);
     // Force the solver to error out if something went crazy. A good practice to add them, but not necessary.
     DEMSim.SetErrorOutAvgContacts(50);
-    DEMSim.SetForceCalcThreadsPerBlock(512);
-    // DEMSim.UseCubForceCollection();
+
+    // The two following methods set how proactive the solver is in avoiding having its bins (for contact detection) too
+    // large or too small, and numbers close to 1 means more proactive. Usually, the user do not have to manually set it
+    // and the default values work fine.
+    DEMSim.SetAdaptiveBinSizeUpperProactivity(0.5);
+    DEMSim.SetAdaptiveBinSizeLowerProactivity(0.15);
+
+    // Initialize the simulation system
     DEMSim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Mixer";
+    out_dir /= "DemoOutput_Mixer";
     create_directory(out_dir);
 
     float sim_end = 10.0;
@@ -117,28 +127,37 @@ int main() {
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_end; t += frame_time) {
         std::cout << "Frame: " << currframe << std::endl;
-        char filename[200], meshfilename[200], cnt_filename[200];
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-        sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
-        sprintf(cnt_filename, "%s/Contact_pairs_%04d.csv", out_dir.c_str(), currframe++);
-        DEMSim.WriteSphereFile(std::string(filename));
-        DEMSim.WriteMeshFile(std::string(meshfilename));
-        // DEMSim.WriteContactFile(std::string(cnt_filename));
+        char filename[100], meshfilename[100], cnt_filename[100];
+        sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+        sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk", currframe);
+        sprintf(cnt_filename, "Contact_pairs_%04d.csv", currframe++);
+        DEMSim.WriteSphereFile(out_dir / filename);
+        DEMSim.WriteMeshFile(out_dir / meshfilename);
+        // DEMSim.WriteContactFile(out_dir / cnt_filename);
 
         float max_v = max_v_finder->GetValue();
         std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
         std::cout << "Solver's current update frequency (auto-adapted): " << DEMSim.GetUpdateFreq() << std::endl;
         std::cout << "Average contacts each sphere has: " << DEMSim.GetAvgSphContacts() << std::endl;
 
+        float3 mixer_moi = mixer_tracker->MOI();
+        float3 mixer_acc = mixer_tracker->ContactAngAccLocal();
+        float3 mixer_torque = mixer_acc * mixer_moi;
+        std::cout << "Contact torque on the mixer is " << mixer_torque.x << ", " << mixer_torque.y << ", "
+                  << mixer_torque.z << std::endl;
+
         DEMSim.DoDynamics(frame_time);
         DEMSim.ShowThreadCollaborationStats();
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
-    std::cout << (time_sec.count()) / sim_end / (1e-5 / step_size)
-              << " seconds (wall time) to finish 1e5 steps' simulation" << std::endl;
+    std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
 
     DEMSim.ShowTimingStats();
+
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
 
     std::cout << "DEMdemo_Mixer exiting..." << std::endl;
     return 0;

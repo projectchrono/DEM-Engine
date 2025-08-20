@@ -7,24 +7,29 @@
 #define DEME_HOST_STRUCTS
 
 #include <DEM/Defines.h>
-#include <core/utils/ManagedAllocator.hpp>
+#include <core/utils/CudaAllocator.hpp>
 #include <core/utils/ManagedMemory.hpp>
 #include <core/utils/csv.hpp>
 #include <core/utils/GpuError.h>
+#include <core/utils/DataMigrationHelper.hpp>
 #include <core/utils/Timer.hpp>
 #include <core/utils/RuntimeData.h>
+#include <kernel/DEMHelperKernels.cuh>
+#include <DEM/HostSideHelpers.hpp>
 
 #include <sstream>
 #include <exception>
+#include <memory>
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
 #include <unordered_map>
-#include <nvmath/helper_math.cuh>
-#include <DEM/HostSideHelpers.hpp>
 #include <filesystem>
 #include <cstring>
+#include <string>
 #include <cassert>
+#include <typeinfo>
+#include <typeindex>
 
 namespace deme {
 
@@ -32,11 +37,21 @@ namespace deme {
 // SOME HOST-SIDE CONSTANTS
 // =============================================================================
 
-const std::string DEME_NUM_CLUMP_NAME = std::string("NULL");
+const std::string DEME_NULL_CLUMP_NAME = std::string("NULL");
 const std::string OUTPUT_FILE_X_COL_NAME = std::string("X");
 const std::string OUTPUT_FILE_Y_COL_NAME = std::string("Y");
 const std::string OUTPUT_FILE_Z_COL_NAME = std::string("Z");
 const std::string OUTPUT_FILE_R_COL_NAME = std::string("r");
+const std::string OUTPUT_FILE_QW_COL_NAME = std::string("Qw");
+const std::string OUTPUT_FILE_QX_COL_NAME = std::string("Qx");
+const std::string OUTPUT_FILE_QY_COL_NAME = std::string("Qy");
+const std::string OUTPUT_FILE_QZ_COL_NAME = std::string("Qz");
+const std::string OUTPUT_FILE_VEL_X_COL_NAME = std::string("v_x");
+const std::string OUTPUT_FILE_VEL_Y_COL_NAME = std::string("v_y");
+const std::string OUTPUT_FILE_VEL_Z_COL_NAME = std::string("v_z");
+const std::string OUTPUT_FILE_ANGVEL_X_COL_NAME = std::string("w_x");
+const std::string OUTPUT_FILE_ANGVEL_Y_COL_NAME = std::string("w_y");
+const std::string OUTPUT_FILE_ANGVEL_Z_COL_NAME = std::string("w_z");
 const std::string OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
 const std::filesystem::path USER_SCRIPT_PATH = RuntimeDataHelper::data_path / "kernel" / "DEMUserScripts";
 // Column names for contact pair output file
@@ -81,86 +96,106 @@ const std::unordered_map<contact_t, std::string> contact_type_out_name_map = {
     {SPHERE_CONE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME}};
 
 // Possible force model ingredients. This map is used to ensure we don't double-add them.
-const std::unordered_map<std::string, bool> force_kernel_ingredient_stats = {
-    {"ts", false},        {"time", false},      {"AOwnerFamily", true}, {"BOwnerFamily", true}, {"ALinVel", false},
-    {"BLinVel", false},   {"ARotVel", false},   {"BRotVel", false},     {"AOwner", false},      {"BOwner", false},
-    {"AOwnerMOI", false}, {"BOwnerMOI", false}, {"AGeo", false},        {"BGeo", false}};
+const std::unordered_map<std::string, bool> force_kernel_ingredient_stats = {{"ts", false},
+                                                                             {"time", false},
+                                                                             {"AOwnerFamily", true},
+                                                                             {"BOwnerFamily", true},
+                                                                             {"ALinVel", false},
+                                                                             {"BLinVel", false},
+                                                                             {"ARotVel", false},
+                                                                             {"BRotVel", false},
+                                                                             {"AOwner", false},
+                                                                             {"BOwner", false},
+                                                                             {"AOwnerMOI", false},
+                                                                             {"BOwnerMOI", false},
+                                                                             {"AGeo", false},
+                                                                             {"BGeo", false},
+                                                                             {"ContactType", true},
+                                                                             {"force", true},
+                                                                             {"torque_only_force", true}};
 
 // Structs defined here will be used by some host classes in DEM.
-// NOTE: Data structs here need to be those complex ones (such as needing to include ManagedAllocator.hpp), which may
+// NOTE: Data structs here need to be those complex ones (such as needing to include CudaAllocator.hpp), which may
 // not be jitifiable.
 
-/// <summary>
-/// DEMSolverStateData contains information that pertains the DEM solver worker threads, at a certain point in time. It
-/// also contains space allocated as system scratch pad and as thread temporary arrays.
-/// </summary>
-class DEMSolverStateData {
+// DEMSolverScratchData mainly contains space allocated as system scratch pad and as thread temporary arrays
+class DEMSolverScratchData {
   private:
-    const unsigned int numTempArrays;
-    // The vector used by CUB or by anybody else that needs scratch space.
-    // Please pay attention to the type the vector stores.
-    std::vector<scratch_t, ManagedAllocator<scratch_t>> cubScratchSpace;
-
-    // The vectors used by threads when they need temporary arrays (very typically, for storing arrays outputted by cub
-    // scan or reduce operations).
-    std::vector<std::vector<scratch_t, ManagedAllocator<scratch_t>>,
-                ManagedAllocator<std::vector<scratch_t, ManagedAllocator<scratch_t>>>>
-        threadTempVectors;
-    // You can keep more temp arrays if you construct this class with a different initializer
+    // NOTE! The type MUST be scratch_t, since all DEMSolverScratchData's allocation methods use num of bytes as
+    // arguments, but DeviceVectorPool's resize considers number of elements
+    DeviceVectorPool<scratch_t> m_deviceVecPool;
+    DualArrayPool<scratch_t> m_dualArrPool;
+    DualStructPool<size_t> m_dualStructPool;
 
   public:
-    // Temp size_t variables that can be reused
-    size_t* pTempSizeVar1;
-    size_t* pTempSizeVar2;
-    size_t* pTempSizeVar3;
-
     // Number of contacts in this CD step
-    size_t* pNumContacts;
+    DualStruct<size_t> numContacts = DualStruct<size_t>(0);
     // Number of contacts in the previous CD step
-    size_t* pNumPrevContacts;
+    DualStruct<size_t> numPrevContacts = DualStruct<size_t>(0);
     // Number of spheres in the previous CD step (in case user added/removed clumps from the system)
-    size_t* pNumPrevSpheres;
+    DualStruct<size_t> numPrevSpheres = DualStruct<size_t>(0);
 
-    DEMSolverStateData(unsigned int nArrays) : numTempArrays(nArrays) {
-        DEME_GPU_CALL(cudaMallocManaged(&pNumContacts, sizeof(size_t)));
-        DEME_GPU_CALL(cudaMallocManaged(&pTempSizeVar1, sizeof(size_t)));
-        DEME_GPU_CALL(cudaMallocManaged(&pTempSizeVar2, sizeof(size_t)));
-        DEME_GPU_CALL(cudaMallocManaged(&pTempSizeVar3, sizeof(size_t)));
-        DEME_GPU_CALL(cudaMallocManaged(&pNumPrevContacts, sizeof(size_t)));
-        DEME_GPU_CALL(cudaMallocManaged(&pNumPrevSpheres, sizeof(size_t)));
-        *pNumContacts = 0;
-        *pNumPrevContacts = 0;
-        *pNumPrevSpheres = 0;
-        threadTempVectors.resize(numTempArrays);
+    DEMSolverScratchData(size_t* external_host_counter = nullptr, size_t* external_device_counter = nullptr)
+        : m_deviceVecPool(external_device_counter), m_dualArrPool(external_host_counter, external_device_counter) {
+        m_deviceVecPool.claim("ScratchSpace", 42);
     }
-    ~DEMSolverStateData() {
-        DEME_GPU_CALL(cudaFree(pNumContacts));
-        DEME_GPU_CALL(cudaFree(pTempSizeVar1));
-        DEME_GPU_CALL(cudaFree(pTempSizeVar2));
-        DEME_GPU_CALL(cudaFree(pTempSizeVar3));
-        DEME_GPU_CALL(cudaFree(pNumPrevContacts));
-        DEME_GPU_CALL(cudaFree(pNumPrevSpheres));
-
-        cubScratchSpace.clear();
-        for (unsigned int i = 0; i < numTempArrays; i++) {
-            threadTempVectors.at(i).clear();
-        }
-        threadTempVectors.clear();
-    }
+    ~DEMSolverScratchData() { releaseMemory(); }
 
     // Return raw pointer to swath of device memory that is at least "sizeNeeded" large
-    inline scratch_t* allocateScratchSpace(size_t sizeNeeded) {
-        if (cubScratchSpace.size() < sizeNeeded) {
-            cubScratchSpace.resize(sizeNeeded);
-        }
-        return cubScratchSpace.data();
+    scratch_t* allocateScratchSpace(size_t sizeNeeded) {
+        m_deviceVecPool.resize("ScratchSpace", sizeNeeded);
+        return m_deviceVecPool.get("ScratchSpace");
     }
 
-    inline scratch_t* allocateTempVector(unsigned int i, size_t sizeNeeded) {
-        if (threadTempVectors.at(i).size() < sizeNeeded) {
-            threadTempVectors.at(i).resize(sizeNeeded);
-        }
-        return threadTempVectors.at(i).data();
+    // This flavor does not prevent you from forgeting to recycle before this time step ends
+    scratch_t* allocateVector(const std::string& name, size_t sizeNeeded) {
+        return m_deviceVecPool.claim(name, sizeNeeded, /*allow_duplicate=*/true);
+    }
+
+    // This flavor prevents you from forgeting to recycle before this time step ends
+    scratch_t* allocateTempVector(const std::string& name, size_t sizeNeeded) {
+        return m_deviceVecPool.claim(name, sizeNeeded);
+    }
+
+    // Dual arrays allocated here will always be temporary. If you need permanent dual array, create it as a member of
+    // your worker.
+    DualArray<scratch_t>* allocateDualArray(const std::string& name, size_t sizeNeeded) {
+        return m_dualArrPool.claim(name, sizeNeeded);
+    }
+    scratch_t* getDualArrayHost(const std::string& name) { return m_dualArrPool.getHost(name); }
+    scratch_t* getDualArrayDevice(const std::string& name) { return m_dualArrPool.getDevice(name); }
+    void syncDualArrayDeviceToHost(const std::string& name) { m_dualArrPool.get(name)->toHost(); }
+    void syncDualArrayHostToDevice(const std::string& name) { m_dualArrPool.get(name)->toDevice(); }
+    // When using these methods, remember the type is scratch_t
+    void syncDualArrayDeviceToHost(const std::string& name, size_t start, size_t n) {
+        m_dualArrPool.get(name)->toHost(start, n);
+    }
+    void syncDualArrayHostToDevice(const std::string& name, size_t start, size_t n) {
+        m_dualArrPool.get(name)->toDevice(start, n);
+    }
+    // Likewise, all DualStruct allocated using this class will be temporary
+    DualStruct<size_t>* allocateDualStruct(const std::string& name) { return m_dualStructPool.claim(name); }
+    size_t* getDualStructHost(const std::string& name) { return m_dualStructPool.getHost(name); }
+    size_t* getDualStructDevice(const std::string& name) { return m_dualStructPool.getDevice(name); }
+    void syncDualStructDeviceToHost(const std::string& name) { m_dualStructPool.get(name)->toHost(); }
+    void syncDualStructHostToDevice(const std::string& name) { m_dualStructPool.get(name)->toDevice(); }
+
+    void finishUsingTempVector(const std::string& name) { m_deviceVecPool.unclaim(name); }
+    void finishUsingVector(const std::string& name) { finishUsingTempVector(name); }
+    void finishUsingDualArray(const std::string& name) { m_dualArrPool.unclaim(name); }
+    void finishUsingDualStruct(const std::string& name) { m_dualStructPool.unclaim(name); }
+
+    // Debug util
+    void printVectorUsage() const {
+        m_deviceVecPool.printStatus();
+        m_dualArrPool.printStatus();
+        m_dualStructPool.printStatus();
+    }
+
+    void releaseMemory() {
+        m_deviceVecPool.releaseAll();
+        m_dualArrPool.releaseAll();
+        m_dualStructPool.releaseAll();
     }
 };
 
@@ -172,13 +207,13 @@ struct kTStateParams {
     // The `acceleration' of bin size change rate, (0, 1]: 1 means each time a change is applied, it's at top speed
     float binChangeRateAcc = 0.1;
     // Number of CD steps before the solver makes a decision on how to change the bin size
-    unsigned int binChangeObserveSteps = 5;
+    unsigned int binChangeObserveSteps = 25;
     // Past the point that (this number * error out bin geometry count)-many geometries found in a bin, the solver will
     // force the bin to shrink
-    float binChangeUpperSafety = 0.5;
+    float binChangeUpperSafety = 0.25;
     // Past the point that (this number * max num of bin)-many bins in the domain, the solver will force the bin to
     // expand
-    float binChangeLowerSafety = 0.85;
+    float binChangeLowerSafety = 0.3;
 
     // The max num of geometries in a bin that appeared in the CD process
     size_t maxSphFoundInBin;
@@ -189,7 +224,16 @@ struct kTStateParams {
 
     // Current average num of contacts per sphere has.
     float avgCntsPerSphere = 0.;
+
+    // float maxVel_buffer; // buffer for the current max vel sent by dT
+    DualStruct<float> maxVel = DualStruct<float>(0.f);  // kT's own storage of max vel
+    DualStruct<float> ts_buffer;                        // buffer for the current ts size sent by dT
+    DualStruct<float> ts;                               // kT's own storage of ts size
+    DualStruct<unsigned int> maxDrift_buffer;           // buffer for max dT future drift steps
+    DualStruct<unsigned int> maxDrift;                  // kT's own storage for max future drift
 };
+
+struct dTStateParams {};
 
 inline std::string pretty_format_bytes(size_t bytes) {
     // set up byte prefixes
@@ -320,70 +364,12 @@ enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
         }                                         \
     }
 
-// Jitify options include suppressing variable-not-used warnings, but since we don't use CUB block primitives, we don't
-// need std::string(CUDA_TOOLKIT_HEADERS).
-#define DEME_JITIFY_OPTIONS                                                                       \
-    {                                                                                             \
-        "-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(), \
-            "-diag-suppress=550", "-diag-suppress=177"                                            \
+// Jitify options include suppressing variable-not-used warnings. We could use CUDA lib functions too.
+#define DEME_JITIFY_DEFAULT_OPTIONS                                                                   \
+    {                                                                                                 \
+        "-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(),     \
+            "-I" + std::string(DEME_CUDA_TOOLKIT_HEADERS), "-diag-suppress=550", "-diag-suppress=177" \
     }
-
-// I wasn't able to resolve a decltype problem with vector of vectors, so I have to create another macro for this kind
-// of tracked resize... not ideal.
-#define DEME_TRACKED_RESIZE_FLOAT(vec, newsize, val)               \
-    {                                                              \
-        size_t old_size = vec.size();                              \
-        vec.resize(newsize, val);                                  \
-        size_t new_size = vec.size();                              \
-        size_t byte_delta = sizeof(float) * (new_size - old_size); \
-        m_approx_bytes_used += byte_delta;                         \
-    }
-
-#define DEME_TRACKED_RESIZE(vec, newsize, val)                 \
-    {                                                          \
-        size_t item_size = sizeof(decltype(vec)::value_type);  \
-        size_t old_size = vec.size();                          \
-        vec.resize(newsize, val);                              \
-        size_t new_size = vec.size();                          \
-        size_t byte_delta = item_size * (new_size - old_size); \
-        m_approx_bytes_used += byte_delta;                     \
-    }
-
-#define DEME_TRACKED_RESIZE_DEBUGPRINT(vec, newsize, name, val)                                                      \
-    {                                                                                                                \
-        size_t item_size = sizeof(decltype(vec)::value_type);                                                        \
-        size_t old_size = vec.size();                                                                                \
-        vec.resize(newsize, val);                                                                                    \
-        size_t new_size = vec.size();                                                                                \
-        size_t byte_delta = item_size * (new_size - old_size);                                                       \
-        m_approx_bytes_used += byte_delta;                                                                           \
-        DEME_DEBUG_PRINTF("Resizing vector %s, old size %zu, new size %zu, byte delta %s", name, old_size, new_size, \
-                          pretty_format_bytes(byte_delta).c_str());                                                  \
-    }
-
-//// TODO: this is currently not tracked...
-// ptr being a reference to a pointer is crucial
-template <typename T>
-inline void DEME_DEVICE_PTR_ALLOC(T*& ptr, size_t size) {
-    cudaPointerAttributes attrib;
-    DEME_GPU_CALL(cudaPointerGetAttributes(&attrib, ptr));
-
-    if (attrib.type != cudaMemoryType::cudaMemoryTypeUnregistered)
-        DEME_GPU_CALL(cudaFree(ptr));
-    DEME_GPU_CALL(cudaMalloc((void**)&ptr, size * sizeof(T)));
-}
-
-// Managed advise doesn't seem to do anything...
-#define DEME_ADVISE_DEVICE(vec, device) \
-    { advise(vec, ManagedAdvice::PREFERRED_LOC, device); }
-#define DEME_MIGRATE_TO_DEVICE(vec, device, stream) \
-    { migrate(vec, device, stream); }
-
-// Use (void) to silence unused warnings.
-#define assertm(exp, msg) assert(((void)msg, exp))
-
-// #define OUTPUT_IF_GPU_FAILS(res) \
-//     { gpu_assert((res), __FILE__, __LINE__, false); throw std::runtime_error("GPU Assertion Failed!");}
 
 // =============================================================================
 // NOW SOME HOST-SIDE SIMPLE STRUCTS USED BY THE DEM MODULE
@@ -437,6 +423,12 @@ struct familyPrescription_t {
     std::string rotVelX = "none";
     std::string rotVelY = "none";
     std::string rotVelZ = "none";
+
+    // Users can use same prerequisites before setting XYZ...
+    std::string linPosPre = "none";
+    std::string linVelPre = "none";
+    std::string rotVelPre = "none";
+
     // Is this prescribed motion dictating the motion of the entities (true), or should still accept the influence from
     // other contact forces (false)
     bool linVelXPrescribed = false;
@@ -446,7 +438,9 @@ struct familyPrescription_t {
     bool rotVelYPrescribed = false;
     bool rotVelZPrescribed = false;
     bool rotPosPrescribed = false;
-    bool linPosPrescribed = false;
+    bool linPosXPrescribed = false;
+    bool linPosYPrescribed = false;
+    bool linPosZPrescribed = false;
     // Prescribed acc and ang acc; they are added to entities, sort of like gravity
     std::string accX = "none";
     std::string accY = "none";
@@ -454,6 +448,9 @@ struct familyPrescription_t {
     std::string angAccX = "none";
     std::string angAccY = "none";
     std::string angAccZ = "none";
+    // Users can use same prerequisites before setting XYZ...
+    std::string accPre = "none";
+    std::string angAccPre = "none";
     // A switch to mark if there is any prescription going on for this family at all
     bool used = false;
 };
@@ -463,7 +460,7 @@ struct familyPair_t {
     unsigned int ID2;
 };
 
-enum class VAR_TS_STRAT { CONST, MAX_VEL, INT_GAP };
+enum class VAR_TS_STRAT { DEME_CONST, MAX_VEL, INT_GAP };
 
 class ClumpTemplateFlatten {
   public:
@@ -497,7 +494,7 @@ struct SolverFlags {
     // This run uses contact detection in an async fashion (kT and dT working at different points in simulation time)
     bool isAsync = true;
     // If family number can potentially change (at each time step) during the simulation, because of user intervention
-    bool canFamilyChange = false;
+    bool canFamilyChangeOnDevice = false;
     // If mesh will deform in the next kT-update cycle
     std::atomic<bool> willMeshDeform = false;
     // Some output-related flags
@@ -507,7 +504,7 @@ struct SolverFlags {
     bool isStepConst = true;
     bool isExpandFactorFixed = false;
     // The strategy for selecting the variable time step size
-    VAR_TS_STRAT stepSizeStrat = VAR_TS_STRAT::CONST;
+    VAR_TS_STRAT stepSizeStrat = VAR_TS_STRAT::DEME_CONST;
     // Whether instructed to use jitification for mass properties and clump components (default to no and it is
     // recommended)
     bool useClumpJitify = false;
@@ -535,6 +532,9 @@ struct SolverFlags {
     // number of contacts for the sphere that has the most is that, well, we can have a huge sphere and it just will
     // have more contacts. But if avg cnt is high, that means probably the contact margin is out of control now.
     float errOutAvgSphCnts = 100.;
+
+    // Whether there are contacts that can never be removed.
+    bool hasPersistentContacts = false;
 };
 
 class DEMMaterial {
@@ -567,6 +567,21 @@ class DEMTriangle {
 // A struct that defines a `clump' (one of the core concepts of this solver). A clump is typically small which consists
 // of several sphere components, but it can be as large as having thousands of spheres.
 class DEMClumpTemplate {
+  private:
+    void assertLength(size_t len, const std::string name) {
+        if (nComp == 0) {
+            std::cerr << "The settings at the " << name
+                      << " call were applied to 0 sphere components.\nPlease consider using " << name
+                      << " only after loading the clump template." << std::endl;
+        }
+        if (len != nComp) {
+            std::stringstream ss;
+            ss << name << " input argument must have length " << nComp << " (not " << len
+               << "), same as the number of sphere components in the clump template." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+    }
+
   public:
     float mass = 0;
     float3 MOI = make_float3(0);
@@ -575,13 +590,33 @@ class DEMClumpTemplate {
     std::vector<std::shared_ptr<DEMMaterial>> materials;
     unsigned int nComp = 0;  // Number of components
 
+    /// Set mass.
+    void SetMass(float mass) { this->mass = mass; }
+    /// Set MOI (in principal frame).
+    void SetMOI(float3 MOI) { this->MOI = MOI; }
+    /// Set MOI (in principal frame).
+    void SetMOI(const std::vector<float>& MOI) {
+        assertThreeElements(MOI, "SetMOI", "MOI");
+        SetMOI(make_float3(MOI[0], MOI[1], MOI[2]));
+    }
+
+    /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
+    void SetMaterial(const std::vector<std::shared_ptr<DEMMaterial>>& input) {
+        assertLength(input.size(), "SetMaterial");
+        materials = input;
+    }
+    /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
+    void SetMaterial(const std::shared_ptr<DEMMaterial>& input) {
+        SetMaterial(std::vector<std::shared_ptr<DEMMaterial>>(nComp, input));
+    }
+
     // Position of this clump's CoM, in the frame which is used to report the positions of this clump's component
     // spheres. It is usually all 0, unless the user specifies it, in which case we need to process relPos such that
     // when the system is initialized, everything is still in the clump's CoM frame.
     // float3 CoM = make_float3(0);
     // CoM frame's orientation quaternion in the frame which is used to report the positions of this clump's component
     // spheres. Usually unit quaternion.
-    // float4 CoM_oriQ = host_make_float4(0, 0, 0, 1);
+    // float4 CoM_oriQ = make_float4(0, 0, 0, 1);
 
     // Each clump template will have a unique mark number. When clumps are loaded to the system, this mark will help
     // find their type offset.
@@ -589,7 +624,7 @@ class DEMClumpTemplate {
     // Whether this is a big clump (not used; jitifiability is determined automatically)
     bool isBigClump = false;
     // A name given by the user. It will be outputted to file to indicate the type of a clump.
-    std::string m_name = DEME_NUM_CLUMP_NAME;
+    std::string m_name = DEME_NULL_CLUMP_NAME;
     // The volume of this type of clump.
     //// TODO: Add a method to automatically compute its volume
     float volume = 0.0;
@@ -621,7 +656,7 @@ class DEMClumpTemplate {
 
     /// If this clump's component sphere relPos is not reported by the user in its CoM frame, then the user needs to
     /// call this method immediately to report this clump's Volume Centroid and Principal Axes, and relPos will be
-    /// adjusted by this call.
+    /// adjusted by this call so that the clump's frame is its centroid and principal system.
     void InformCentroidPrincipal(float3 center, float4 prin_Q) {
         // Getting to Centroid and Principal is a translation then a rotation (local), so the undo order to undo
         // transltion then rotation
@@ -632,13 +667,13 @@ class DEMClumpTemplate {
     void InformCentroidPrincipal(const std::vector<float>& center, const std::vector<float>& prin_Q) {
         assertThreeElements(center, "InformCentroidPrincipal", "center");
         assertFourElements(prin_Q, "InformCentroidPrincipal", "prin_Q");
-        InformCentroidPrincipal(host_make_float3(center[0], center[1], center[2]),
-                                host_make_float4(prin_Q[0], prin_Q[1], prin_Q[2], prin_Q[3]));
+        InformCentroidPrincipal(make_float3(center[0], center[1], center[2]),
+                                make_float4(prin_Q[0], prin_Q[1], prin_Q[2], prin_Q[3]));
     }
 
     /// The opposite of InformCentroidPrincipal, and it is another way to align this clump's coordinate system with its
-    /// centroid and principal system: rotate then move this clump, so that at the end of this operation, the original
-    /// `origin' point should hit the CoM of this clump.
+    /// centroid and principal system: rotate then move this clump, so that at the end of this operation, the clump's
+    /// frame is its centroid and principal system.
     void Move(float3 vec, float4 rot_Q) {
         for (auto& pos : relPos) {
             applyFrameTransformLocalToGlobal(pos, vec, rot_Q);
@@ -647,20 +682,23 @@ class DEMClumpTemplate {
     void Move(const std::vector<float>& vec, const std::vector<float>& rot_Q) {
         assertThreeElements(vec, "Move", "vec");
         assertFourElements(rot_Q, "Move", "rot_Q");
-        Move(host_make_float3(vec[0], vec[1], vec[2]), host_make_float4(rot_Q[0], rot_Q[1], rot_Q[2], rot_Q[3]));
+        Move(make_float3(vec[0], vec[1], vec[2]), make_float4(rot_Q[0], rot_Q[1], rot_Q[2], rot_Q[3]));
     }
 
     /// Scale all geometry component of this clump
     void Scale(float s) {
+        // Never let mass become negative.
+        assertPositive(s, "Scale", "s");
         for (auto& pos : relPos) {
             pos *= s;
         }
         for (auto& rad : radii) {
             rad *= s;
         }
-        mass *= (double)s * (double)s * (double)s;
-        MOI *= (double)s * (double)s * (double)s * (double)s * (double)s;
-        volume *= (double)s * (double)s * (double)s;
+        double positive_s = (double)std::abs(s);
+        mass *= positive_s * positive_s * positive_s;
+        MOI *= positive_s * positive_s * positive_s * positive_s * positive_s;
+        volume *= positive_s * positive_s * positive_s;
     }
 
     void AssignName(const std::string& some_name) { m_name = some_name; }
@@ -716,7 +754,7 @@ class DEMClumpBatch : public DEMInitializer {
         vel.resize(num, make_float3(0));
         angVel.resize(num, make_float3(0));
         xyz.resize(num);
-        oriQ.resize(num, host_make_float4(0, 0, 0, 1));
+        oriQ.resize(num, make_float4(0, 0, 0, 1));
         obj_type = OWNER_TYPE::CLUMP;
     }
     ~DEMClumpBatch() {}
@@ -741,13 +779,13 @@ class DEMClumpBatch : public DEMInitializer {
     void SetPos(float3 input) { SetPos(std::vector<float3>(nClumps, input)); }
     void SetPos(const std::vector<float>& input) {
         assertThreeElements(input, "SetPos", "input");
-        SetPos(host_make_float3(input[0], input[1], input[2]));
+        SetPos(make_float3(input[0], input[1], input[2]));
     }
     void SetPos(const std::vector<std::vector<float>>& input) {
         assertThreeElementsVector(input, "SetPos", "input");
         std::vector<float3> pos_xyz(input.size());
         for (size_t i = 0; i < input.size(); i++) {
-            pos_xyz[i] = host_make_float3(input[i][0], input[i][1], input[i][2]);
+            pos_xyz[i] = make_float3(input[i][0], input[i][1], input[i][2]);
         }
         SetPos(pos_xyz);
     }
@@ -759,13 +797,13 @@ class DEMClumpBatch : public DEMInitializer {
     void SetVel(float3 input) { SetVel(std::vector<float3>(nClumps, input)); }
     void SetVel(const std::vector<float>& input) {
         assertThreeElements(input, "SetVel", "input");
-        SetVel(host_make_float3(input[0], input[1], input[2]));
+        SetVel(make_float3(input[0], input[1], input[2]));
     }
     void SetVel(const std::vector<std::vector<float>>& input) {
         assertThreeElementsVector(input, "SetVel", "input");
         std::vector<float3> vel_xyz(input.size());
         for (size_t i = 0; i < input.size(); i++) {
-            vel_xyz[i] = host_make_float3(input[i][0], input[i][1], input[i][2]);
+            vel_xyz[i] = make_float3(input[i][0], input[i][1], input[i][2]);
         }
         SetVel(vel_xyz);
     }
@@ -777,13 +815,13 @@ class DEMClumpBatch : public DEMInitializer {
     void SetAngVel(float3 input) { SetAngVel(std::vector<float3>(nClumps, input)); }
     void SetAngVel(const std::vector<float>& input) {
         assertThreeElements(input, "SetAngVel", "input");
-        SetAngVel(host_make_float3(input[0], input[1], input[2]));
+        SetAngVel(make_float3(input[0], input[1], input[2]));
     }
     void SetAngVel(const std::vector<std::vector<float>>& input) {
         assertThreeElementsVector(input, "SetAngVel", "input");
         std::vector<float3> vel_xyz(input.size());
         for (size_t i = 0; i < input.size(); i++) {
-            vel_xyz[i] = host_make_float3(input[i][0], input[i][1], input[i][2]);
+            vel_xyz[i] = make_float3(input[i][0], input[i][1], input[i][2]);
         }
         SetAngVel(vel_xyz);
     }
@@ -795,13 +833,13 @@ class DEMClumpBatch : public DEMInitializer {
     void SetOriQ(float4 input) { SetOriQ(std::vector<float4>(nClumps, input)); }
     void SetOriQ(const std::vector<float>& input) {
         assertFourElements(input, "SetOriQ", "input");
-        SetOriQ(host_make_float4(input[0], input[1], input[2], input[3]));
+        SetOriQ(make_float4(input[0], input[1], input[2], input[3]));
     }
     void SetOriQ(const std::vector<std::vector<float>>& input) {
         assertFourElementsVector(input, "SetOriQ", "input");
         std::vector<float4> Q(input.size());
         for (size_t i = 0; i < input.size(); i++) {
-            Q[i] = host_make_float4(input[i][0], input[i][1], input[i][2], input[i][3]);
+            Q[i] = make_float4(input[i][0], input[i][1], input[i][2], input[i][3]);
         }
         SetOriQ(Q);
     }
@@ -920,6 +958,159 @@ class DEMTrackedObj : public DEMInitializer {
     // The number of geometric entities (sphere components, triangles or analytical components) the tracked objects
     // have.
     size_t nGeos;
+};
+
+// General-purpose data container that can hold any type of data, indexed by string keys.
+class DataContainer {
+  public:
+    virtual ~DataContainer() = default;
+
+    template <typename T>
+    void Insert(const std::string& key, std::vector<T> vec) {
+        if (data_.count(key))
+            throw std::runtime_error("Key already exists: " + key);
+        data_[key] = std::make_shared<Holder<T>>(std::move(vec));
+        types_[key] = &typeid(T);
+    }
+
+    template <typename T>
+    std::vector<T>& Get(const std::string& key) {
+        check_type<T>(key);
+        return static_cast<Holder<T>&>(*data_[key]).data;
+    }
+
+    template <typename T>
+    const std::vector<T>& Get(const std::string& key) const {
+        check_type<T>(key);
+        return static_cast<const Holder<T>&>(*data_.at(key)).data;
+    }
+
+    bool Contains(const std::string& key) const { return data_.count(key) > 0; }
+
+    const std::type_info& type_of(const std::string& key) const {
+        if (!Contains(key))
+            throw std::runtime_error("Key not found: " + key);
+        return *types_.at(key);  // dereference the pointer
+    }
+
+    std::vector<std::string> keys() const {
+        std::vector<std::string> out;
+        for (const auto& kv : data_)
+            out.push_back(kv.first);
+        return out;
+    }
+
+    void ResizeAll(std::size_t n) {
+        for (auto& [key, holder] : data_) {
+            holder->Resize(n);
+        }
+    }
+
+    size_t Size(const std::string& key) const {
+        if (!Contains(key)) {
+            on_missing_key(key);
+        }
+        return data_.at(key)->Size();
+    }
+    size_t Size() const {
+        if (data_.empty()) {
+            throw std::runtime_error("DataContainer is empty.");
+        }
+        return data_.begin()->second->Size();
+    }
+
+  protected:
+    struct IHolder {
+        virtual ~IHolder() = default;
+        virtual void Resize(std::size_t n) = 0;
+        virtual std::size_t Size() const = 0;
+    };
+
+    template <typename T>
+    struct Holder : IHolder {
+        explicit Holder(std::vector<T> d) : data(std::move(d)) {}
+        std::vector<T> data;
+
+        void Resize(std::size_t n) override { data.resize(n); }
+        std::size_t Size() const override { return data.size(); }
+    };
+
+    virtual void on_missing_key(const std::string& key) const {
+        throw std::runtime_error("Key not found: '" + key + "'");
+    }
+
+    template <typename T>
+    void check_type(const std::string& key) const {
+        if (!Contains(key)) {
+            on_missing_key(key);
+        }
+        if (*types_.at(key) != typeid(T)) {
+            throw std::runtime_error("Type mismatch for key: " + key);
+        }
+    }
+
+    std::unordered_map<std::string, std::shared_ptr<IHolder>> data_;
+    std::unordered_map<std::string, const std::type_info*> types_;
+};
+
+class ContactInfoContainer : public DataContainer {
+  public:
+    ContactInfoContainer(unsigned int cnt_out_content,
+                         const std::vector<std::pair<std::string, std::string>>& runtime_keys)
+        : m_cnt_out_content(cnt_out_content) {
+        // Always output the contact type, no need to check
+        Insert<std::string>("ContactType", {});
+        if (cnt_out_content & CNT_OUTPUT_CONTENT::CNT_POINT)
+            Insert<float3>("Point", {});
+        if (cnt_out_content & CNT_OUTPUT_CONTENT::GEO_ID) {
+            Insert<bodyID_t>("AGeo", {});
+            Insert<bodyID_t>("BGeo", {});
+        }
+        if (cnt_out_content & CNT_OUTPUT_CONTENT::OWNER) {
+            Insert<bodyID_t>("AOwner", {});
+            Insert<bodyID_t>("BOwner", {});
+        }
+        // Don't bother, just add the owner family info
+        {
+            Insert<family_t>("AOwnerFamily", {});
+            Insert<family_t>("BOwnerFamily", {});
+        }
+        if (cnt_out_content & CNT_OUTPUT_CONTENT::FORCE)
+            Insert<float3>("Force", {});
+        if (cnt_out_content & CNT_OUTPUT_CONTENT::TORQUE)
+            Insert<float3>("Torque", {});
+        if (cnt_out_content & CNT_OUTPUT_CONTENT::NORMAL)
+            Insert<float3>("Normal", {});
+
+        if (cnt_out_content & CNT_OUTPUT_CONTENT::CNT_WILDCARD) {
+            for (const auto& [name, type] : runtime_keys) {
+                // Wildcard for now can only be float, so type is not used
+                Insert<float>(name, {});
+            }
+        }
+    }
+
+    std::vector<std::string>& GetContactType() { return Get<std::string>("ContactType"); }
+    std::vector<float3>& GetPoint() { return Get<float3>("Point"); }
+    std::vector<bodyID_t>& GetAOwner() { return Get<bodyID_t>("AOwner"); }
+    std::vector<bodyID_t>& GetBOwner() { return Get<bodyID_t>("BOwner"); }
+    std::vector<bodyID_t>& GetAGeo() { return Get<bodyID_t>("AGeo"); }
+    std::vector<bodyID_t>& GetBGeo() { return Get<bodyID_t>("BGeo"); }
+    std::vector<family_t>& GetAOwnerFamily() { return Get<family_t>("AOwnerFamily"); }
+    std::vector<family_t>& GetBOwnerFamily() { return Get<family_t>("BOwnerFamily"); }
+    std::vector<float3>& GetForce() { return Get<float3>("Force"); }
+    std::vector<float3>& GetTorque() { return Get<float3>("Torque"); }
+    std::vector<float3>& GetNormal() { return Get<float3>("Normal"); }
+
+  protected:
+    void on_missing_key(const std::string& key) const override {
+        throw std::runtime_error("ContactInfoContainer does not have field: '" + key +
+                                 "', you may need to turn on the output of this field by correctly calling "
+                                 "SetContactOutputContent before Initialize().");
+    }
+
+  private:
+    unsigned int m_cnt_out_content;
 };
 
 }  // namespace deme

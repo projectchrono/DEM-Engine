@@ -32,6 +32,9 @@ int main() {
     // is minor one way or another.
     DEMSim.DisableJitifyClumpTemplates();
 
+    // If you don't need individual force information, then this option makes the solver run a bit faster.
+    DEMSim.SetNoForceRecord();
+
     // A general template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
     std::vector<float> radii = {1.0, 0.88, 0.64, 0.88, 0.64};
     std::vector<float3> relPos = {make_float3(0, 0, 0), make_float3(0, 0, 0.86), make_float3(0, 0, 1.44),
@@ -132,14 +135,14 @@ int main() {
     // for dT to be aahead of kT to be a * n + b, based on the inputs you give using the 2 methods.
     DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1.1);
     DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(3);
-    // User-given max vel and bin size with the current version of solver, are only for its reference, since they
-    // auto-adapt.
+    // User-given max vel with the current version of solver, are only for its reference, since they auto-adapt.
     DEMSim.SetMaxVelocity(3.);
-    DEMSim.SetInitBinSizeAsMultipleOfSmallestSphere(15);
+    DEMSim.SetInitBinNumTarget(5e5);
+    // DEMSim.SetInitBinSizeAsMultipleOfSmallestSphere(15);
     DEMSim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_RotatingDrum";
+    out_dir /= "DemoOutput_RotatingDrum";
     create_directory(out_dir);
 
     float time_end = 20.0;
@@ -159,8 +162,8 @@ int main() {
             std::cout << "Maximum system velocity: " << max_v << std::endl;
             std::cout << "------------------------------------" << std::endl;
             char filename[100];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            DEMSim.WriteSphereFile(std::string(filename));
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+            DEMSim.WriteSphereFile(out_dir / filename);
             currframe++;
         }
 
@@ -181,6 +184,10 @@ int main() {
     DEMSim.ClearThreadCollaborationStats();
 
     DEMSim.ShowTimingStats();
+
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
 
     std::cout << "DEMdemo_RotatingDrum exiting..." << std::endl;
     return 0;

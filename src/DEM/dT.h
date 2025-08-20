@@ -11,20 +11,19 @@
 #include <thread>
 #include <unordered_map>
 #include <set>
+#include <functional>
 
 #include <core/ApiVersion.h>
-#include <core/utils/ManagedAllocator.hpp>
+#include <core/utils/CudaAllocator.hpp>
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
-#include <nvmath/helper_math.cuh>
+#include <core/utils/DataMigrationHelper.hpp>
+#include <kernel/DEMHelperKernels.cuh>
 #include <core/utils/GpuError.h>
-
 #include <DEM/BdrsAndObjs.h>
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
 #include <DEM/AuxClasses.h>
-
-// #include <core/utils/JitHelper.h>
 
 // Forward declare jitify::Program to avoid downstream dependency
 namespace jitify {
@@ -36,14 +35,14 @@ namespace deme {
 // Implementation-level classes
 class DEMKinematicThread;
 class DEMDynamicThread;
-class DEMSolverStateData;
+class DEMSolverScratchData;
 
 /// DynamicThread class
 class DEMDynamicThread {
   protected:
     WorkerReportChannel* pPagerToMain;
     ThreadManager* pSchedSupport;
-    GpuManager* pGpuDistributor;
+    // GpuManager* pGpuDistributor;
 
     // dT verbosity
     VERBOSITY verbosity = INFO;
@@ -57,174 +56,178 @@ class DEMDynamicThread {
     // Friend system DEMKinematicThread
     DEMKinematicThread* kT;
 
-    // Number of items in the buffer array (which is not a managed vector, due to our need to explicitly control where
+    // Number of items in the buffer array (which is not a dual vector, due to our need to explicitly control where
     // it is allocated)
     size_t buffer_size = 0;
+
+    // dT's one-element buffer of kT-supplied nContacts (as buffer, it's device-only, but I used DualStruct just for
+    // convenience...)
+    DualStruct<size_t> nContactPairs_buffer = DualStruct<size_t>(0);
+
+    // Array-used memory size in bytes
+    size_t m_approxDeviceBytesUsed = 0;
+    size_t m_approxHostBytesUsed = 0;
 
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
 
     // A class that contains scratch pad and system status data (constructed with the number of temp arrays we need)
-    DEMSolverStateData stateOfSolver_resources = DEMSolverStateData(7);
+    DEMSolverScratchData solverScratchSpace = DEMSolverScratchData(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The number of for iterations dT does for a specific user "run simulation" call
     double cycleDuration;
+
+    // dT believes this amount of future drift is ideal
+    DualStruct<unsigned int> perhapsIdealFutureDrift = DualStruct<unsigned int>(0);
 
     // Buffer arrays for storing info from the dT side.
     // kT modifies these arrays; dT uses them only.
 
     // dT gets contact pair/location/history map info from kT
-    // std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA_buffer;
-    // std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB_buffer;
-    // std::vector<contact_t, ManagedAllocator<contact_t>> contactType_buffer;
-    // std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>> contactMapping_buffer;
+    DeviceArray<bodyID_t> idGeometryA_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<bodyID_t> idGeometryB_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<contact_t> contactType_buffer = DeviceArray<contact_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<contactPairs_t> contactMapping_buffer = DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed);
 
-    // Pointers to simulation params-related arrays
-    DEMSimParams* simParams;
+    // Simulation params-related variables
+    DualStruct<DEMSimParams> simParams = DualStruct<DEMSimParams>();
 
     // Pointers to those data arrays defined below, stored in a struct
-    DEMDataDT* granData;
+    DualStruct<DEMDataDT> granData = DualStruct<DEMDataDT>();
 
     // Log for anomalies in the simulation
     WorkerAnomalies anomalies = WorkerAnomalies();
 
-    // Body-related arrays in managed memory, for dT's personal use (not transfer buffer)
+    // Body-related arrays, for dT's personal use (not transfer buffer)
 
     // Those are the smaller ones, the unique, template ones
     // The mass values
-    std::vector<float, ManagedAllocator<float>> massOwnerBody;
+    DualArray<float> massOwnerBody = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The components of MOI values
-    std::vector<float, ManagedAllocator<float>> mmiXX;
-    std::vector<float, ManagedAllocator<float>> mmiYY;
-    std::vector<float, ManagedAllocator<float>> mmiZZ;
+    DualArray<float> mmiXX = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> mmiYY = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> mmiZZ = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Volume values
-    std::vector<float, ManagedAllocator<float>> volumeOwnerBody;
+    DualArray<float> volumeOwnerBody = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The distinct sphere radii values
-    std::vector<float, ManagedAllocator<float>> radiiSphere;
+    DualArray<float> radiiSphere = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The distinct sphere local position (wrt CoM) values
-    std::vector<float, ManagedAllocator<float>> relPosSphereX;
-    std::vector<float, ManagedAllocator<float>> relPosSphereY;
-    std::vector<float, ManagedAllocator<float>> relPosSphereZ;
+    DualArray<float> relPosSphereX = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> relPosSphereY = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> relPosSphereZ = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Triangles (templates) are given a special place (unlike other analytical shapes), b/c we expect them to appear
     // frequently as meshes.
-    std::vector<float3, ManagedAllocator<float3>> relPosNode1;
-    std::vector<float3, ManagedAllocator<float3>> relPosNode2;
-    std::vector<float3, ManagedAllocator<float3>> relPosNode3;
+    DualArray<float3> relPosNode1 = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float3> relPosNode2 = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float3> relPosNode3 = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // External object's components may need the following arrays to store some extra defining features of them. We
     // assume there are usually not too many of them in a simulation.
     // Relative position w.r.t. the owner. For example, the following 3 arrays may hold center points for plates, or tip
     // positions for cones.
-    std::vector<float, ManagedAllocator<float>> relPosEntityX;
-    std::vector<float, ManagedAllocator<float>> relPosEntityY;
-    std::vector<float, ManagedAllocator<float>> relPosEntityZ;
+    DualArray<float> relPosEntityX = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> relPosEntityY = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> relPosEntityZ = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // Some orientation specifiers. For example, the following 3 arrays may hold normal vectors for planes, or center
     // axis vectors for cylinders.
-    std::vector<float, ManagedAllocator<float>> oriEntityX;
-    std::vector<float, ManagedAllocator<float>> oriEntityY;
-    std::vector<float, ManagedAllocator<float>> oriEntityZ;
+    DualArray<float> oriEntityX = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> oriEntityY = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> oriEntityZ = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // Some size specifiers. For example, the following 3 arrays may hold top, bottom and length information for finite
     // cylinders.
-    std::vector<float, ManagedAllocator<float>> sizeEntity1;
-    std::vector<float, ManagedAllocator<float>> sizeEntity2;
-    std::vector<float, ManagedAllocator<float>> sizeEntity3;
+    DualArray<float> sizeEntity1 = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> sizeEntity2 = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> sizeEntity3 = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // What type is this owner? Clump? Analytical object? Meshed object?
-    std::vector<ownerType_t, ManagedAllocator<ownerType_t>> ownerTypes;
+    DualArray<ownerType_t> ownerTypes = DualArray<ownerType_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Those are the large ones, ones that have the same length as the number of clumps
     // The mass/MOI offsets
-    std::vector<inertiaOffset_t, ManagedAllocator<inertiaOffset_t>> inertiaPropOffsets;
+    DualArray<inertiaOffset_t> inertiaPropOffsets =
+        DualArray<inertiaOffset_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Clump's family identification code. Used in determining whether they can be contacts between two families, and
     // whether a family has prescribed motions.
-    std::vector<family_t, ManagedAllocator<family_t>> familyID;
+    DualArray<family_t> familyID = DualArray<family_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The (impl-level) family IDs whose entities should not be outputted to files
-    std::vector<family_t, ManagedAllocator<family_t>> familiesNoOutput;
+    std::unordered_set<family_t> familiesNoOutput;
 
     // The voxel ID (split into 3 parts, representing XYZ location)
-    std::vector<voxelID_t, ManagedAllocator<voxelID_t>> voxelID;
+    DualArray<voxelID_t> voxelID = DualArray<voxelID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The XYZ local location inside a voxel
-    std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locX;
-    std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locY;
-    std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locZ;
+    DualArray<subVoxelPos_t> locX = DualArray<subVoxelPos_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<subVoxelPos_t> locY = DualArray<subVoxelPos_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<subVoxelPos_t> locZ = DualArray<subVoxelPos_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The clump quaternion
-    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQw;
-    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQx;
-    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQy;
-    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQz;
+    DualArray<oriQ_t> oriQw = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<oriQ_t> oriQx = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<oriQ_t> oriQy = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<oriQ_t> oriQz = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Linear velocity
-    std::vector<float, ManagedAllocator<float>> vX;
-    std::vector<float, ManagedAllocator<float>> vY;
-    std::vector<float, ManagedAllocator<float>> vZ;
+    DualArray<float> vX = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> vY = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> vZ = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Local angular velocity
-    std::vector<float, ManagedAllocator<float>> omgBarX;
-    std::vector<float, ManagedAllocator<float>> omgBarY;
-    std::vector<float, ManagedAllocator<float>> omgBarZ;
+    DualArray<float> omgBarX = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> omgBarY = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> omgBarZ = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Linear acceleration
-    std::vector<float, ManagedAllocator<float>> aX;
-    std::vector<float, ManagedAllocator<float>> aY;
-    std::vector<float, ManagedAllocator<float>> aZ;
+    DualArray<float> aX = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> aY = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> aZ = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Local angular acceleration
-    std::vector<float, ManagedAllocator<float>> alphaX;
-    std::vector<float, ManagedAllocator<float>> alphaY;
-    std::vector<float, ManagedAllocator<float>> alphaZ;
+    DualArray<float> alphaX = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> alphaY = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> alphaZ = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // If true, the acceleration is specified for this owner and the prep force kernel should not clear its value in the
     // next time step.
-    std::vector<notStupidBool_t, ManagedAllocator<notStupidBool_t>> accSpecified;
-    std::vector<notStupidBool_t, ManagedAllocator<notStupidBool_t>> angAccSpecified;
+    DualArray<notStupidBool_t> accSpecified =
+        DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<notStupidBool_t> angAccSpecified =
+        DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Contact pair/location, for dT's personal use!!
-    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA;
-    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB;
-    std::vector<contact_t, ManagedAllocator<contact_t>> contactType;
-    // std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>> contactMapping;
+    DualArray<bodyID_t> idGeometryA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> idGeometryB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<contact_t> contactType = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // DualArray<contactPairs_t> contactMapping;
 
     // Some of dT's own work arrays
     // Force of each contact event. It is the force that bodyA feels. They are in global.
-    std::vector<float3, ManagedAllocator<float3>> contactForces;
+    DualArray<float3> contactForces = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // An imaginary `force' in each contact event that produces torque only, and does not affect the linear motion. It
     // will rise in our default rolling resistance model, which is just a torque model; yet, our contact registration is
     // contact pair-based, meaning we do not know the specs of each contact body, so we can register force only, not
     // torque. Therefore, this vector arises. This force-like torque is in global.
-    std::vector<float3, ManagedAllocator<float3>> contactTorque_convToForce;
+    DualArray<float3> contactTorque_convToForce = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // Local position of contact point of contact w.r.t. the reference frame of body A and B
-    std::vector<float3, ManagedAllocator<float3>> contactPointGeometryA;
-    std::vector<float3, ManagedAllocator<float3>> contactPointGeometryB;
+    DualArray<float3> contactPointGeometryA = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float3> contactPointGeometryB = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // Wildcard (extra property) arrays associated with contacts and owners
-    std::vector<std::vector<float, ManagedAllocator<float>>,
-                ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
-        contactWildcards;
-    std::vector<std::vector<float, ManagedAllocator<float>>,
-                ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
-        ownerWildcards;
-    // std::vector<float, ManagedAllocator<float>> contactWildcards[DEME_MAX_WILDCARD_NUM];
-    // std::vector<float, ManagedAllocator<float>> ownerWildcards[DEME_MAX_WILDCARD_NUM];
+    std::vector<std::unique_ptr<DualArray<float>>> contactWildcards;
+    std::vector<std::unique_ptr<DualArray<float>>> ownerWildcards;
+    // DualArray<float> contactWildcards[DEME_MAX_WILDCARD_NUM];
+    // DualArray<float> ownerWildcards[DEME_MAX_WILDCARD_NUM];
     // An example of such wildcard arrays is contact history: how much did the contact point move on the geometry
     // surface compared to when the contact first emerged?
     // Geometric entities' wildcards
-    std::vector<std::vector<float, ManagedAllocator<float>>,
-                ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
-        sphereWildcards;
-    std::vector<std::vector<float, ManagedAllocator<float>>,
-                ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
-        analWildcards;
-    std::vector<std::vector<float, ManagedAllocator<float>>,
-                ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
-        triWildcards;
+    std::vector<std::unique_ptr<DualArray<float>>> sphereWildcards;
+    std::vector<std::unique_ptr<DualArray<float>>> analWildcards;
+    std::vector<std::unique_ptr<DualArray<float>>> triWildcards;
 
     // Storage for the names of the contact wildcards (whose order agrees with the impl-level wildcard numbering, from 1
     // to n)
@@ -232,13 +235,11 @@ class DEMDynamicThread {
     std::set<std::string> m_owner_wildcard_names;
     std::set<std::string> m_geo_wildcard_names;
 
-    // std::vector<float3, ManagedAllocator<float3>> contactHistory;
+    // DualArray<float3> contactHistory;
     // // Durations in time of persistent contact pairs
-    // std::vector<float, ManagedAllocator<float>> contactDuration;
+    // DualArray<float> contactDuration;
     // The velocity of the contact points in the global frame: can be useful in determining the time step size
-    // std::vector<float3, ManagedAllocator<float3>> contactPointVel;
-
-    size_t m_approx_bytes_used = 0;
+    // DualArray<float3> contactPointVel;
 
     // dT's total steps run (since last time the collaboration stats cache is cleared)
     uint64_t nTotalSteps = 0;
@@ -252,68 +253,71 @@ class DEMDynamicThread {
     bool pendingCriticalUpdate = true;
 
     // Number of threads per block for dT force calculation kernels
-    unsigned int DT_FORCE_CALC_NTHREADS_PER_BLOCK = 512;
+    unsigned int DT_FORCE_CALC_NTHREADS_PER_BLOCK = 256;
 
-    // Template-related arrays in managed memory
+    // Template-related arrays
     // Belonged-body ID
-    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerClumpBody;
-    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerMesh;
-    std::vector<bodyID_t> ownerAnalBody;  // Not managed since all analytical bodies are jitified
+    DualArray<bodyID_t> ownerClumpBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> ownerMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> ownerAnalBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The ID that maps this sphere component's geometry-defining parameters, when this component is jitified
-    std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> clumpComponentOffset;
+    DualArray<clumpComponentOffset_t> clumpComponentOffset =
+        DualArray<clumpComponentOffset_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // The ID that maps this sphere component's geometry-defining parameters, when this component is not jitified (too
     // many templates)
-    std::vector<clumpComponentOffsetExt_t, ManagedAllocator<clumpComponentOffsetExt_t>> clumpComponentOffsetExt;
+    DualArray<clumpComponentOffsetExt_t> clumpComponentOffsetExt =
+        DualArray<clumpComponentOffsetExt_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // The ID that maps this analytical entity component's geometry-defining parameters, when this component is jitified
-    // std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> analComponentOffset;
+    // DualArray<clumpComponentOffset_t> analComponentOffset;
 
     // The ID that maps this entity's material
-    std::vector<materialsOffset_t, ManagedAllocator<materialsOffset_t>> sphereMaterialOffset;
-    std::vector<materialsOffset_t, ManagedAllocator<materialsOffset_t>> triMaterialOffset;
+    DualArray<materialsOffset_t> sphereMaterialOffset =
+        DualArray<materialsOffset_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<materialsOffset_t> triMaterialOffset =
+        DualArray<materialsOffset_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // dT's copy of family map
     // std::unordered_map<unsigned int, family_t> familyUserImplMap;
     // std::unordered_map<family_t, unsigned int> familyImplUserMap;
 
     // A long array (usually 32640 elements) registering whether between 2 families there should be contacts
-    std::vector<notStupidBool_t, ManagedAllocator<notStupidBool_t>> familyMaskMatrix;
+    DualArray<notStupidBool_t> familyMaskMatrix =
+        DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The amount of contact margin that each family should add to its associated contact geometries. Default is 0, and
     // that means geometries should be considered in contact when they are physically in contact.
-    std::vector<float, ManagedAllocator<float>> familyExtraMarginSize;
+    DualArray<float> familyExtraMarginSize = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // dT's copy of "clump template and their names" map
     std::unordered_map<unsigned int, std::string> templateNumNameMap;
 
     // dT's timers
-    std::vector<std::string> timer_names = {"Calculate contact forces", "Collect contact forces", "Integration",
-                                            "Unpack updates from kT",   "Send to kT buffer",      "Wait for kT update"};
+    std::vector<std::string> timer_names = {"Clear force array", "Calculate contact forces", "Optional force reduction",
+                                            "Integration",       "Unpack updates from kT",   "Send to kT buffer",
+                                            "Wait for kT update"};
     SolverTimers timers = SolverTimers(timer_names);
 
   public:
     friend class DEMSolver;
     friend class DEMKinematicThread;
 
-    DEMDynamicThread(WorkerReportChannel* pPager, ThreadManager* pSchedSup, GpuManager* pGpuDist)
-        : pPagerToMain(pPager), pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
-        DEME_GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
-        DEME_GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataDT), cudaMemAttachGlobal));
-
+    DEMDynamicThread(WorkerReportChannel* pPager, ThreadManager* pSchedSup, const GpuManager::StreamInfo& sInfo)
+        : pPagerToMain(pPager), pSchedSupport(pSchedSup), streamInfo(sInfo) {
         cycleDuration = 0;
-
-        // Get a device/stream ID to use from the GPU Manager
-        streamInfo = pGpuDistributor->getAvailableStream();
 
         pPagerToMain->userCallDone = false;
         pSchedSupport->dynamicShouldJoin = false;
         pSchedSupport->dynamicStarted = false;
 
+        // I found creating the stream here is needed (rather than creating it in the child thread).
+        // This is because in smaller problems, the array data transfer portion (which needs the stream) could even be
+        // reached before the stream is created in the child thread. So we have to create the stream here before
+        // spawning the child thread.
+        DEME_GPU_CALL(cudaStreamCreate(&streamInfo.stream));
+
         // Launch a worker thread bound to this instance
         th = std::move(std::thread([this]() { this->workerThread(); }));
-
-        // Allocate arrays whose length does not depend on user inputs
-        initAllocation();
     }
     ~DEMDynamicThread() {
         // std::cout << "Dynamic thread closing..." << std::endl;
@@ -323,9 +327,6 @@ class DEMDynamicThread {
         cudaStreamDestroy(streamInfo.stream);
 
         deallocateEverything();
-
-        DEME_GPU_CALL(cudaFree(simParams));
-        DEME_GPU_CALL(cudaFree(granData));
     }
 
     void setCycleDuration(double val) { cycleDuration = val; }
@@ -359,29 +360,39 @@ class DEMDynamicThread {
     /// @brief Get total number of contacts.
     /// @return Number of contacts.
     size_t getNumContacts() const;
-    /// Get this owner's position in user unit
-    float3 getOwnerPos(bodyID_t ownerID) const;
-    /// Get this owner's angular velocity
-    float3 getOwnerAngVel(bodyID_t ownerID) const;
-    /// Get this owner's quaternion
-    float4 getOwnerOriQ(bodyID_t ownerID) const;
-    /// Get this owner's velocity
-    float3 getOwnerVel(bodyID_t ownerID) const;
-    /// Get this owner's acceleration
-    float3 getOwnerAcc(bodyID_t ownerID) const;
-    /// Get this owner's angular acceleration
-    float3 getOwnerAngAcc(bodyID_t ownerID) const;
-    // Get the current auto-adjusted update freq
+    /// Get this owner's position in user unit, for n consecutive items.
+    std::vector<float3> getOwnerPos(bodyID_t ownerID, bodyID_t n = 1);
+    /// Get this owner's angular velocity, for n consecutive items.
+    std::vector<float3> getOwnerAngVel(bodyID_t ownerID, bodyID_t n = 1);
+    /// Get this owner's quaternion, for n consecutive items.
+    std::vector<float4> getOwnerOriQ(bodyID_t ownerID, bodyID_t n = 1);
+    /// Get this owner's velocity, for n consecutive items.
+    std::vector<float3> getOwnerVel(bodyID_t ownerID, bodyID_t n = 1);
+    /// Get this owner's acceleration, for n consecutive items.
+    std::vector<float3> getOwnerAcc(bodyID_t ownerID, bodyID_t n = 1);
+    /// Get this owner's angular acceleration, for n consecutive items.
+    std::vector<float3> getOwnerAngAcc(bodyID_t ownerID, bodyID_t n = 1);
+    /// Get this owner's family number, for n consecutive items.
+    std::vector<unsigned int> getOwnerFamily(bodyID_t ownerID, bodyID_t n = 1);
+    // Get the current auto-adjusted update freq.
     float getUpdateFreq() const;
 
-    /// Set this owner's position in user unit
-    void setOwnerPos(bodyID_t ownerID, float3 pos);
-    /// Set this owner's angular velocity
-    void setOwnerAngVel(bodyID_t ownerID, float3 angVel);
-    /// Set this owner's quaternion
-    void setOwnerOriQ(bodyID_t ownerID, float4 oriQ);
-    /// Set this owner's velocity
-    void setOwnerVel(bodyID_t ownerID, float3 vel);
+    /// Set consecutive owners' position in user unit.
+    void setOwnerPos(bodyID_t ownerID, const std::vector<float3>& pos);
+    /// Set consecutive owners's angular velocity.
+    void setOwnerAngVel(bodyID_t ownerID, const std::vector<float3>& angVel);
+    /// Set consecutive owners' quaternion.
+    void setOwnerOriQ(bodyID_t ownerID, const std::vector<float4>& oriQ);
+    /// Set consecutive owners' velocity.
+    void setOwnerVel(bodyID_t ownerID, const std::vector<float3>& vel);
+    /// Set consecutive owners' family number, for n consecutive items.
+    void setOwnerFamily(bodyID_t ownerID, family_t fam, bodyID_t n = 1);
+
+    /// @brief Add an extra acceleration to consecutive owners for the next time step.
+    void addOwnerNextStepAcc(bodyID_t ownerID, const std::vector<float3>& acc);
+    /// @brief Add an extra angular acceleration to consecutive owners for the next time step.
+    void addOwnerNextStepAngAcc(bodyID_t ownerID, const std::vector<float3>& angAcc);
+
     /// Rewrite the relative positions of the flattened triangle soup, starting from `start', using triangle nodal
     /// positions in `triangles'.
     void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles);
@@ -399,18 +410,18 @@ class DEMDynamicThread {
     /// @brief Set all meshes in this family to have this material.
     void setFamilyMeshMaterial(unsigned int N, unsigned int mat_id);
 
-    /// @brief Set the geometry wildcards of triangles, sarting from geoID, for the length of vals.
+    /// @brief Set the geometry wildcards of triangles, starting from geoID, for the length of vals.
     void setTriWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
-    /// @brief Set the geometry wildcards of spheres, sarting from geoID, for the length of vals.
+    /// @brief Set the geometry wildcards of spheres, starting from geoID, for the length of vals.
     void setSphWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
-    /// @brief Set the geometry wildcards of analytical components, sarting from geoID, for the length of vals.
+    /// @brief Set the geometry wildcards of analytical components, starting from geoID, for the length of vals.
     void setAnalWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
 
-    /// @brief Returns the wildacard value of this owner.
-    float getOwnerWildcardValue(bodyID_t ID, unsigned int wc_num);
-    /// @brief  Fill res with the wc_num wildcard value.
+    /// @brief Returns the wildacard value of this owner, for n consecutive items.
+    std::vector<float> getOwnerWildcardValue(bodyID_t ID, unsigned int wc_num, bodyID_t n = 1);
+    /// @brief Fill res with the wc_num wildcard value.
     void getAllOwnerWildcardValue(std::vector<float>& res, unsigned int wc_num);
-    /// @brief  Fill res with the wc_num wildcard value for entities with family number family_num.
+    /// @brief Fill res with the wc_num wildcard value for entities with family number family_num.
     void getFamilyOwnerWildcardValue(std::vector<float>& res, unsigned int family_num, unsigned int wc_num);
 
     /// @brief Fill res with the `wc_num' wildcard values, for n spheres starting from ID.
@@ -422,20 +433,28 @@ class DEMDynamicThread {
 
     /// @brief Change the value of contact wildcards no.wc_num to val if either of the contact geometries is in family
     /// N.
-    void setFamilyContactWildcardValueAny(unsigned int N, unsigned int wc_num, float val);
+    void setFamilyContactWildcardValueEither(unsigned int N, unsigned int wc_num, float val);
     /// @brief Change the value of contact wildcards no.wc_num to val if both of the contact geometries are in family N.
-    void setFamilyContactWildcardValueAll(unsigned int N, unsigned int wc_num, float val);
+    void setFamilyContactWildcardValueBoth(unsigned int N, unsigned int wc_num, float val);
+    /// @brief Change the value of contact wildcards no.wc_num to val if the contacts are in family N1 and N2
+    /// respectively.
+    void setFamilyContactWildcardValue(unsigned int N1, unsigned int N2, unsigned int wc_num, float val);
     /// @brief Change the value of contact wildcards no.wc_num to val.
     void setContactWildcardValue(unsigned int wc_num, float val);
 
-    /// @brief Get all forces concerning this owner.
-    size_t getOwnerContactForces(bodyID_t ownerID, std::vector<float3>& points, std::vector<float3>& forces);
-    /// @brief Get all forces concerning this owner.
-    size_t getOwnerContactForces(bodyID_t ownerID,
+    /// @brief Get all forces concerning all provided owners.
+    size_t getOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
+                                 std::vector<float3>& points,
+                                 std::vector<float3>& forces);
+    /// @brief Get all forces concerning all provided owners.
+    size_t getOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
                                  std::vector<float3>& points,
                                  std::vector<float3>& forces,
                                  std::vector<float3>& torques,
                                  bool torque_in_local = false);
+
+    /// Get owner of contact geo B.
+    bodyID_t getGeoOwnerID(const bodyID_t& geoB, const contact_t& type) const;
 
     /// Let dT know that it needs a kT update, as something important may have changed, and old contact pair info is no
     /// longer valid.
@@ -444,22 +463,22 @@ class DEMDynamicThread {
     /// @brief Change all entities with (user-level) family number ID_from to have a new number ID_to.
     void changeFamily(unsigned int ID_from, unsigned int ID_to);
 
-    /// Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
-    void allocateManagedArrays(size_t nOwnerBodies,
-                               size_t nOwnerClumps,
-                               unsigned int nExtObj,
-                               size_t nTriMeshes,
-                               size_t nSpheresGM,
-                               size_t nTriGM,
-                               unsigned int nAnalGM,
-                               size_t nExtraContacts,
-                               unsigned int nMassProperties,
-                               unsigned int nClumpTopo,
-                               unsigned int nClumpComponents,
-                               unsigned int nJitifiableClumpComponents,
-                               unsigned int nMatTuples);
+    /// Resize arrays
+    void allocateGPUArrays(size_t nOwnerBodies,
+                           size_t nOwnerClumps,
+                           unsigned int nExtObj,
+                           size_t nTriMeshes,
+                           size_t nSpheresGM,
+                           size_t nTriGM,
+                           unsigned int nAnalGM,
+                           size_t nExtraContacts,
+                           unsigned int nMassProperties,
+                           unsigned int nClumpTopo,
+                           unsigned int nClumpComponents,
+                           unsigned int nJitifiableClumpComponents,
+                           unsigned int nMatTuples);
 
-    // Components of initManagedArrays
+    // Components of initGPUArrays
     void buildTrackedObjs(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                           const std::vector<unsigned int>& ext_obj_comp_num,
                           const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
@@ -498,29 +517,29 @@ class DEMDynamicThread {
                           const std::vector<notStupidBool_t>& family_mask_matrix,
                           const std::set<unsigned int>& no_output_families);
 
-    /// Initialized managed arrays
-    void initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
-                           const std::vector<float3>& input_ext_obj_xyz,
-                           const std::vector<float4>& input_ext_obj_rot,
-                           const std::vector<unsigned int>& input_ext_obj_family,
-                           const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
-                           const std::vector<float3>& input_mesh_obj_xyz,
-                           const std::vector<float4>& input_mesh_obj_rot,
-                           const std::vector<unsigned int>& input_mesh_obj_family,
-                           const std::vector<unsigned int>& mesh_facet_owner,
-                           const std::vector<materialsOffset_t>& mesh_facet_materials,
-                           const std::vector<DEMTriangle>& mesh_facets,
-                           const std::unordered_map<unsigned int, std::string>& template_number_name_map,
-                           const ClumpTemplateFlatten& clump_templates,
-                           const std::vector<float>& ext_obj_mass_types,
-                           const std::vector<float3>& ext_obj_moi_types,
-                           const std::vector<unsigned int>& ext_obj_comp_num,
-                           const std::vector<float>& mesh_obj_mass_types,
-                           const std::vector<float3>& mesh_obj_moi_types,
-                           const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
-                           const std::vector<notStupidBool_t>& family_mask_matrix,
-                           const std::set<unsigned int>& no_output_families,
-                           std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs);
+    /// Initialized arrays
+    void initGPUArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
+                       const std::vector<float3>& input_ext_obj_xyz,
+                       const std::vector<float4>& input_ext_obj_rot,
+                       const std::vector<unsigned int>& input_ext_obj_family,
+                       const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
+                       const std::vector<float3>& input_mesh_obj_xyz,
+                       const std::vector<float4>& input_mesh_obj_rot,
+                       const std::vector<unsigned int>& input_mesh_obj_family,
+                       const std::vector<unsigned int>& mesh_facet_owner,
+                       const std::vector<materialsOffset_t>& mesh_facet_materials,
+                       const std::vector<DEMTriangle>& mesh_facets,
+                       const std::unordered_map<unsigned int, std::string>& template_number_name_map,
+                       const ClumpTemplateFlatten& clump_templates,
+                       const std::vector<float>& ext_obj_mass_types,
+                       const std::vector<float3>& ext_obj_moi_types,
+                       const std::vector<unsigned int>& ext_obj_comp_num,
+                       const std::vector<float>& mesh_obj_mass_types,
+                       const std::vector<float3>& mesh_obj_moi_types,
+                       const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
+                       const std::vector<notStupidBool_t>& family_mask_matrix,
+                       const std::set<unsigned int>& no_output_families,
+                       std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs);
 
     /// Add more clumps and/or meshes into the system, without re-initialization. It must be clump/mesh-addition only,
     /// no other changes to the system.
@@ -560,11 +579,20 @@ class DEMDynamicThread {
     void packDataPointers();
     void packTransferPointers(DEMKinematicThread*& kT);
 
-    void writeSpheresAsChpf(std::ofstream& ptFile) const;
-    void writeSpheresAsCsv(std::ofstream& ptFile) const;
-    void writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy = 10) const;
-    void writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accuracy = 10) const;
-    void writeContactsAsCsv(std::ofstream& ptFile, float force_thres = DEME_TINY_FLOAT) const;
+    // Move array data to or from device
+    void migrateDataToDevice();
+    // void migrateDataToHost();
+
+    // Generate contact info container based on the current contact array, and return it.
+    std::shared_ptr<ContactInfoContainer> generateContactInfo(float force_thres);
+
+#ifdef DEME_USE_CHPF
+    void writeSpheresAsChpf(std::ofstream& ptFile);
+    void writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy = 10);
+#endif
+    void writeSpheresAsCsv(std::ofstream& ptFile);
+    void writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accuracy = 10);
+    void writeContactsAsCsv(std::ofstream& ptFile, float force_thres = DEME_TINY_FLOAT);
     void writeMeshesAsVtk(std::ofstream& ptFile);
 
     /// Called each time when the user calls DoDynamicsThenSync.
@@ -574,10 +602,16 @@ class DEMDynamicThread {
     // It is called upon construction.
     void workerThread();
 
+    // Sync my stream
+    void syncMemoryTransfer() {
+        DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    }
+
     // Reset kT--dT interaction coordinator stats
     void resetUserCallStat();
     // Return the approximate RAM usage
-    size_t estimateMemUsage() const;
+    size_t estimateDeviceMemUsage() const;
+    size_t estimateHostMemUsage() const;
 
     /// Return timing inforation for this current run
     void getTiming(std::vector<std::string>& names, std::vector<double>& vals);
@@ -595,7 +629,8 @@ class DEMDynamicThread {
     void setSimTime(double time);
 
     // Jitify dT kernels (at initialization) based on existing knowledge of this run
-    void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs);
+    void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs,
+                       const std::vector<std::string>& JitifyOptions);
 
     // Execute this kernel, then return the reduced value
     float* inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
@@ -626,8 +661,12 @@ class DEMDynamicThread {
     // The inspector for calculating max vel for this cycle
     std::shared_ptr<DEMInspector> approxMaxVelFunc;
 
+    // Some private arrays that can be used to store inspection results, ready to be passed somewhere else
+    DualArray<scratch_t> m_reduceResArr = DualArray<scratch_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<scratch_t> m_reduceRes = DualArray<scratch_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+
     // Migrate contact history to fit the structure of the newly received contact array
-    inline void migratePersistentContacts();
+    inline void migrateEnduringContacts();
 
     // Update clump-based acceleration array based on sphere-based force array
     inline void calculateForces();
@@ -662,8 +701,13 @@ class DEMDynamicThread {
     // The dT-side allocations that can be done at initialization time
     void initAllocation();
 
-    // Get owner of contact geo B.
-    inline bodyID_t getOwnerForContactB(const bodyID_t& geoB, const contact_t& type) const;
+    // Wildcard setting impl function
+    void setFamilyContactWildcardValue_impl(
+        unsigned int N1,
+        unsigned int N2,
+        unsigned int wc_num,
+        float val,
+        const std::function<bool(unsigned int, unsigned int, unsigned int, unsigned int)>& condition);
 
     // Just-in-time compiled kernels
     std::shared_ptr<jitify::Program> prep_force_kernels;
@@ -708,6 +752,17 @@ class DEMDynamicThread {
         void SetCacheSize(unsigned int n) { cached_size = n; }
     };
     AccumStepUpdater accumStepUpdater = AccumStepUpdater();
+
+    // A collection of migrate-to-host methods. Bulk migrate-to-host is by nature on-demand only.
+    void migrateFamilyToHost();
+    void migrateClumpPosInfoToHost();
+    void migrateClumpHighOrderInfoToHost();
+    void migrateOwnerWildcardToHost();
+    void migrateSphGeoWildcardToHost();
+    void migrateTriGeoWildcardToHost();
+    void migrateAnalGeoWildcardToHost();
+    void migrateContactInfoToHost();
+    void migrateDeviceModifiableInfoToHost();
 
 };  // dT ends
 

@@ -90,8 +90,8 @@ class Sampler {
     std::vector<std::vector<float>> SampleBox(const std::vector<float>& center, const std::vector<float>& halfDim) {
         assertThreeElements(center, "SampleBox", "center");
         assertThreeElements(halfDim, "SampleBox", "halfDim");
-        m_center = host_make_float3(center[0], center[1], center[2]);
-        m_size = host_make_float3(halfDim[0], halfDim[1], halfDim[2]);
+        m_center = make_float3(center[0], center[1], center[2]);
+        m_size = make_float3(halfDim[0], halfDim[1], halfDim[2]);
         auto res = Sample(BOX);
         std::vector<std::vector<float>> xyz(res.size(), std::vector<float>(3, 0.));
         for (size_t i = 0; i < res.size(); i++) {
@@ -105,13 +105,13 @@ class Sampler {
     /// Return points sampled from the specified spherical volume.
     std::vector<float3> SampleSphere(const float3& center, float radius) {
         m_center = center;
-        m_size = host_make_float3(radius, radius, radius);
+        m_size = make_float3(radius, radius, radius);
         return Sample(SPHERE);
     }
     std::vector<std::vector<float>> SampleSphere(const std::vector<float>& center, float radius) {
         assertThreeElements(center, "SampleSphere", "center");
-        m_center = host_make_float3(center[0], center[1], center[2]);
-        m_size = host_make_float3(radius, radius, radius);
+        m_center = make_float3(center[0], center[1], center[2]);
+        m_size = make_float3(radius, radius, radius);
         auto res = Sample(SPHERE);
         std::vector<std::vector<float>> xyz(res.size(), std::vector<float>(3, 0.));
         for (size_t i = 0; i < res.size(); i++) {
@@ -125,13 +125,13 @@ class Sampler {
     /// Return points sampled from the specified X-aligned cylindrical volume.
     std::vector<float3> SampleCylinderX(const float3& center, float radius, float halfHeight) {
         m_center = center;
-        m_size = host_make_float3(halfHeight, radius, radius);
+        m_size = make_float3(halfHeight, radius, radius);
         return Sample(CYLINDER_X);
     }
     std::vector<std::vector<float>> SampleCylinderX(const std::vector<float>& center, float radius, float halfHeight) {
         assertThreeElements(center, "SampleCylinderX", "center");
-        m_center = host_make_float3(center[0], center[1], center[2]);
-        m_size = host_make_float3(halfHeight, radius, radius);
+        m_center = make_float3(center[0], center[1], center[2]);
+        m_size = make_float3(halfHeight, radius, radius);
         auto res = Sample(CYLINDER_X);
         std::vector<std::vector<float>> xyz(res.size(), std::vector<float>(3, 0.));
         for (size_t i = 0; i < res.size(); i++) {
@@ -145,13 +145,13 @@ class Sampler {
     /// Return points sampled from the specified Y-aligned cylindrical volume.
     std::vector<float3> SampleCylinderY(const float3& center, float radius, float halfHeight) {
         m_center = center;
-        m_size = host_make_float3(radius, halfHeight, radius);
+        m_size = make_float3(radius, halfHeight, radius);
         return Sample(CYLINDER_Y);
     }
     std::vector<std::vector<float>> SampleCylinderY(const std::vector<float>& center, float radius, float halfHeight) {
         assertThreeElements(center, "SampleCylinderY", "center");
-        m_center = host_make_float3(center[0], center[1], center[2]);
-        m_size = host_make_float3(radius, halfHeight, radius);
+        m_center = make_float3(center[0], center[1], center[2]);
+        m_size = make_float3(radius, halfHeight, radius);
         auto res = Sample(CYLINDER_Y);
         std::vector<std::vector<float>> xyz(res.size(), std::vector<float>(3, 0.));
         for (size_t i = 0; i < res.size(); i++) {
@@ -165,13 +165,13 @@ class Sampler {
     /// Return points sampled from the specified Z-aligned cylindrical volume.
     std::vector<float3> SampleCylinderZ(const float3& center, float radius, float halfHeight) {
         m_center = center;
-        m_size = host_make_float3(radius, radius, halfHeight);
+        m_size = make_float3(radius, radius, halfHeight);
         return Sample(CYLINDER_Z);
     }
     std::vector<std::vector<float>> SampleCylinderZ(const std::vector<float>& center, float radius, float halfHeight) {
         assertThreeElements(center, "SampleCylinderZ", "center");
-        m_center = host_make_float3(center[0], center[1], center[2]);
-        m_size = host_make_float3(radius, radius, halfHeight);
+        m_center = make_float3(center[0], center[1], center[2]);
+        m_size = make_float3(radius, radius, halfHeight);
         auto res = Sample(CYLINDER_Z);
         std::vector<std::vector<float>> xyz(res.size(), std::vector<float>(3, 0.));
         for (size_t i = 0; i < res.size(); i++) {
@@ -236,7 +236,7 @@ class PDGrid {
         m_dimX = dimX;
         m_dimY = dimY;
         m_dimZ = dimZ;
-        m_data.resize(dimX * dimY * dimZ, Content(host_make_float3(0, 0, 0), true));
+        m_data.resize(dimX * dimY * dimZ, Content(make_float3(0, 0, 0), true));
     }
 
     void SetCellPoint(int i, int j, int k, const float3& p) {
@@ -279,6 +279,9 @@ class PDSampler : public Sampler {
         m_realDist.reset();
         rengine().seed(0);
     }
+
+    /// Set the current state of the random-number engine (default: 0).
+    void SetRandomEngineSeed(unsigned int seed) { rengine().seed(seed); }
 
   private:
     enum Direction2D { NONE, X_DIR, Y_DIR, Z_DIR };
@@ -431,7 +434,7 @@ class PDSampler : public Sampler {
             } break;
         }
 
-        return host_make_float3(x, y, z);
+        return make_float3(x, y, z);
     }
 
     /// Map point location to a 3D grid location.
@@ -517,7 +520,7 @@ class HCPSampler : public Sampler {
                 // X offset for current row and layer
                 float offset_x = ((j + k) % 2 == 0) ? 0 : dx / 2;
                 for (int i = 0; i < nx; i++) {
-                    float3 p = bl + host_make_float3(offset_x + i * dx, offset_y + j * dy, k * dz);
+                    float3 p = bl + make_float3(offset_x + i * dx, offset_y + j * dy, k * dz);
                     if (this->accept(t, p))
                         out_points.push_back(p);
                 }
@@ -539,9 +542,7 @@ class GridSampler : public Sampler {
     GridSampler(const float3& separation) : Sampler(separation.x) { m_sep3D = separation; }
 
     /// Change the minimum separation for subsequent calls to Sample.
-    virtual void SetSeparation(float separation) override {
-        m_sep3D = host_make_float3(separation, separation, separation);
-    }
+    virtual void SetSeparation(float separation) override { m_sep3D = make_float3(separation, separation, separation); }
 
   private:
     /// Worker function for sampling the given domain.
@@ -557,7 +558,7 @@ class GridSampler : public Sampler {
         for (int i = 0; i < nx; i++) {
             for (int j = 0; j < ny; j++) {
                 for (int k = 0; k < nz; k++) {
-                    float3 p = bl + host_make_float3(i * m_sep3D.x, j * m_sep3D.y, k * m_sep3D.z);
+                    float3 p = bl + make_float3(i * m_sep3D.x, j * m_sep3D.y, k * m_sep3D.z);
                     if (this->accept(t, p))
                         out_points.push_back(p);
                 }
@@ -570,7 +571,7 @@ class GridSampler : public Sampler {
     float3 m_sep3D;
 };
 
-/// A wrapper for a grid sampler of a box domain
+/// A wrapper for a grid sampler of a box domain.
 inline std::vector<float3> DEMBoxGridSampler(float3 BoxCenter,
                                              float3 HalfDims,
                                              float GridSizeX,
@@ -580,17 +581,37 @@ inline std::vector<float3> DEMBoxGridSampler(float3 BoxCenter,
         GridSizeY = GridSizeX;
     if (GridSizeZ < 0)
         GridSizeZ = GridSizeX;
-    GridSampler sampler(host_make_float3(GridSizeX, GridSizeY, GridSizeZ));
+    GridSampler sampler(make_float3(GridSizeX, GridSizeY, GridSizeZ));
     return sampler.SampleBox(BoxCenter, HalfDims);
 }
+/// A wrapper for a grid sampler of a box domain.
+inline std::vector<float3> DEMBoxGridSampler(const std::vector<float>& BoxCenter,
+                                             const std::vector<float>& HalfDims,
+                                             float GridSizeX,
+                                             float GridSizeY = -1.0,
+                                             float GridSizeZ = -1.0) {
+    assertThreeElements(BoxCenter, "DEMBoxGridSampler", "BoxCenter");
+    assertThreeElements(HalfDims, "DEMBoxGridSampler", "HalfDims");
+    return DEMBoxGridSampler(make_float3(BoxCenter[0], BoxCenter[1], BoxCenter[2]),
+                             make_float3(HalfDims[0], HalfDims[1], HalfDims[2]), GridSizeX, GridSizeY, GridSizeZ);
+}
 
-/// A wrapper for a HCP sampler of a box domain
+/// A wrapper for a HCP sampler of a box domain.
 inline std::vector<float3> DEMBoxHCPSampler(float3 BoxCenter, float3 HalfDims, float GridSize) {
     HCPSampler sampler(GridSize);
     return sampler.SampleBox(BoxCenter, HalfDims);
 }
+/// A wrapper for a HCP sampler of a box domain.
+inline std::vector<float3> DEMBoxHCPSampler(const std::vector<float>& BoxCenter,
+                                            const std::vector<float>& HalfDims,
+                                            float GridSize) {
+    assertThreeElements(BoxCenter, "DEMBoxHCPSampler", "BoxCenter");
+    assertThreeElements(HalfDims, "DEMBoxHCPSampler", "HalfDims");
+    return DEMBoxHCPSampler(make_float3(BoxCenter[0], BoxCenter[1], BoxCenter[2]),
+                            make_float3(HalfDims[0], HalfDims[1], HalfDims[2]), GridSize);
+}
 
-/// A light-weight sampler that generates a shell made of particles that resembles a cylindrical surface
+/// A light-weight sampler that generates a shell made of particles that resembles a cylindrical surface.
 inline std::vector<float3> DEMCylSurfSampler(float3 CylCenter,
                                              float3 CylAxis,
                                              float CylRad,
@@ -616,6 +637,24 @@ inline std::vector<float3> DEMCylSurfSampler(float3 CylCenter,
         RadDir = Rodrigues(RadDir, UnitCylAxis, RadIncr);
     }
     return points;
+}
+/// A light-weight sampler that generates a shell made of particles that resembles a cylindrical surface.
+inline std::vector<std::vector<float>> DEMCylSurfSampler(const std::vector<float>& CylCenter,
+                                                         const std::vector<float>& CylAxis,
+                                                         float CylRad,
+                                                         float CylHeight,
+                                                         float ParticleRad,
+                                                         float spacing = 1.2f) {
+    assertThreeElements(CylCenter, "DEMCylSurfSampler", "CylCenter");
+    assertThreeElements(CylAxis, "DEMCylSurfSampler", "CylAxis");
+    std::vector<float3> res_float3 =
+        DEMCylSurfSampler(make_float3(CylCenter[0], CylCenter[1], CylCenter[2]),
+                          make_float3(CylAxis[0], CylAxis[1], CylAxis[2]), CylRad, CylHeight, ParticleRad, spacing);
+    std::vector<std::vector<float>> res(res_float3.size());
+    for (size_t i = 0; i < res_float3.size(); i++) {
+        res[i] = {res_float3[i].x, res_float3[i].y, res_float3[i].z};
+    }
+    return res;
 }
 
 }  // namespace deme

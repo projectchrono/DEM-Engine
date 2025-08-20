@@ -14,7 +14,6 @@ configure_file(
 )
 
 
-
 message(STATUS "${core_message} Extracting NVIDIA Jitify header...") 
 configure_file(
 	${NVIDIAJitifyPath}/jitify.hpp
@@ -29,18 +28,26 @@ target_include_directories(
 	core
 	PUBLIC $<BUILD_INTERFACE:${ProjectIncludeSource}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 	PUBLIC $<BUILD_INTERFACE:${ProjectIncludeGenerated}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-	PUBLIC $<BUILD_INTERFACE:${NVIDIAMathDir}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-target_link_libraries(
-	core
-	PUBLIC CUB::CUB
-	INTERFACE ${ChPF_IMPORTED_NAME}
-)
+
+if(USE_CHPF)
+	target_link_libraries(
+		core
+		PUBLIC CUB::CUB
+		INTERFACE ${ChPF_IMPORTED_NAME}
+	)
+else()
+	target_link_libraries(
+		core
+		PUBLIC CUB::CUB
+	)
+endif()
+
 
 set(core_headers
 	${CMAKE_BINARY_DIR}/src/core/ApiVersion.h
-	${CMAKE_CURRENT_SOURCE_DIR}/utils/ManagedAllocator.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/CudaAllocator.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ManagedMemory.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/JitHelper.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ThreadManager.h
@@ -49,6 +56,7 @@ set(core_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/WavefrontMeshLoader.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/csv.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/Timer.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/DataMigrationHelper.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/DEMEPaths.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/RuntimeData.h
 )
@@ -92,10 +100,6 @@ install(
 
 # Install Third-party Headers 
 install(
-	DIRECTORY ${NVIDIAMathDir}/nvmath
-		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
-install(
 	FILES 
 		"${NVIDIAJitifyPath}/jitify.hpp"
 	DESTINATION 
@@ -129,6 +133,12 @@ configure_file(
 
 add_library(DEMERuntimeDataHelper SHARED)
 
+# Windows specific: Define DLL export macros
+if(WIN32)
+    target_compile_definitions(DEMERuntimeDataHelper PRIVATE DEMERuntimeDataHelper_EXPORTS)
+endif()
+
+
 target_sources(DEMERuntimeDataHelper
 	PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils/RuntimeData.h> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/core/utils/RuntimeData.h>
 	PRIVATE "${CMAKE_BINARY_DIR}/src/core/utils/RuntimeDataBuild.cpp" 
@@ -153,15 +163,28 @@ set_target_properties(
 
 add_library(DEMERuntimeDataHelper_install SHARED)
 
+if(WIN32)
+    target_compile_definitions(DEMERuntimeDataHelper_install PRIVATE DEMERuntimeDataHelper_EXPORTS)
+endif()
+
 target_sources(DEMERuntimeDataHelper_install
 	PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils/RuntimeData.h> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/core/utils/RuntimeData.h>
 	PRIVATE "${CMAKE_BINARY_DIR}/src/core/utils/RuntimeDataInstall.cpp" 
 )
 
 
-target_link_options(DEMERuntimeDataHelper_install
-	PUBLIC "LINKER:-soname,libDEMERuntimeDataHelper.so"
-)
+if(WIN32)
+    # Windows-specific linker options
+    # You can add options here if needed. Often, you don't need to specify the DLL name as in Unix.
+    target_link_libraries(DEMERuntimeDataHelper_install PRIVATE DEMERuntimeDataHelper)
+else()
+    # Unix-like OS specific linker options
+    target_link_options(DEMERuntimeDataHelper_install
+        PUBLIC "LINKER:-soname,libDEMERuntimeDataHelper.so"
+    )
+endif()
+
+
 
 target_include_directories(
 	DEMERuntimeDataHelper_install

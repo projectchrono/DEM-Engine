@@ -114,7 +114,10 @@ int main() {
     particles->SetFamilies(family_code);
     // The game board is somewhat large so we have to define it, because the solver defaults the world size to be 1000.
     DEMSim.InstructBoxDomainDimension(world_size * 1.1, world_size * 1.1, world_size * 1.1);
-    DEMSim.SetInitBinSize(world_size / 100.);
+    // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto bin
+    // size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case setting
+    // init bin size may save the simulation.
+    // DEMSim.SetInitBinSize(world_size / 100.);
 
     DEMSim.SetInitTimeStep(1.);
     DEMSim.SetCDUpdateFreq(0);
@@ -125,14 +128,14 @@ int main() {
     DEMSim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_GameOfLife";
+    out_dir /= "DemoOutput_GameOfLife";
     create_directory(out_dir);
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < 3000; i++) {
         char filename[100];
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-        DEMSim.WriteSphereFile(std::string(filename));
+        sprintf(filename, "DEMdemo_output_%04d.csv", i);
+        DEMSim.WriteSphereFile(out_dir / filename);
         std::cout << "Frame: " << i << std::endl;
         std::cout << "Average contacts each sphere has: " << DEMSim.GetAvgSphContacts() << std::endl;
 
@@ -142,6 +145,10 @@ int main() {
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
     std::cout << time_sec.count() << " seconds" << std::endl;
+
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
 
     std::cout << "DEMdemo_GameOfLife exiting..." << std::endl;
     return 0;

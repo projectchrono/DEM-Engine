@@ -30,6 +30,92 @@ void DEMSolver::assertSysNotInit(const std::string& method_name) {
     }
 }
 
+void DEMSolver::assignFamilyPersistentContact_impl(
+    unsigned int N1,
+    unsigned int N2,
+    notStupidBool_t is_or_not,
+    const std::function<bool(family_t, family_t, unsigned int, unsigned int)>& condition) {
+    if (kT->solverFlags.isHistoryless) {
+        DEME_ERROR(
+            "You cannot mark persistent contacts when using a wildcard-less/history-less contact model (since "
+            "persistency is a part of the history).\nYou can use a different force model, and if you have to use this "
+            "one, add a placeholder wildcard.");
+    }
+    // Get device-major info to host first
+    kT->previous_idGeometryA.toHost();
+    kT->previous_idGeometryB.toHost();
+    kT->previous_contactType.toHost();
+    kT->contactPersistency.toHost();
+    if (dT->solverFlags.canFamilyChangeOnDevice) {
+        dT->familyID.toHost();
+    }
+
+    // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
+    // as persistent but not found in CD, it will be added to the contact array.
+    for (size_t i = 0; i < *(kT->solverScratchSpace.numPrevContacts); i++) {
+        bodyID_t bodyA = kT->previous_idGeometryA[i];
+        bodyID_t bodyB = kT->previous_idGeometryB[i];
+        contact_t c_type = kT->previous_contactType[i];
+
+        bodyID_t ownerA = dT->ownerClumpBody[bodyA];  // ownerClumpBody can't change on device
+        // As for B, it depends on type
+        bodyID_t ownerB = dT->getGeoOwnerID(bodyB, c_type);
+
+        family_t famA = dT->familyID[ownerA];
+        family_t famB = dT->familyID[ownerB];
+        if (condition(famA, famB, N1, N2)) {
+            kT->contactPersistency[i] = is_or_not;
+        }
+    }
+
+    if (is_or_not == CONTACT_IS_PERSISTENT) {
+        kT->solverFlags.hasPersistentContacts = true;
+        dT->solverFlags.hasPersistentContacts = true;
+    }
+    kT->contactPersistency.toDevice();
+}
+
+void DEMSolver::assignFamilyPersistentContactEither(unsigned int N, notStupidBool_t is_or_not) {
+    assignFamilyPersistentContact_impl(N, /*no use*/ 0, is_or_not,
+                                       [](family_t famA, family_t famB, unsigned int N1, unsigned int N2) {
+                                           return ((unsigned int)famA == N1) || ((unsigned int)famB == N1);
+                                       });
+}
+void DEMSolver::assignFamilyPersistentContactBoth(unsigned int N, notStupidBool_t is_or_not) {
+    assignFamilyPersistentContact_impl(N, /*no use*/ 0, is_or_not,
+                                       [](family_t famA, family_t famB, unsigned int N1, unsigned int N2) {
+                                           return ((unsigned int)famA == N1) && ((unsigned int)famB == N1);
+                                       });
+}
+void DEMSolver::assignFamilyPersistentContact(unsigned int N1, unsigned int N2, notStupidBool_t is_or_not) {
+    assignFamilyPersistentContact_impl(N1, N2, is_or_not,
+                                       [](family_t famA, family_t famB, unsigned int N1, unsigned int N2) {
+                                           return (((unsigned int)famA == N1) && ((unsigned int)famB == N2)) ||
+                                                  (((unsigned int)famA == N2) && ((unsigned int)famB == N1));
+                                       });
+}
+void DEMSolver::assignPersistentContact(notStupidBool_t is_or_not) {
+    if (kT->solverFlags.isHistoryless) {
+        DEME_ERROR(
+            "You cannot mark persistent contacts when using a wildcard-less/history-less contact model (since "
+            "persistency is a part of the history).\nYou can use a different force model, and if you have to use this "
+            "one, add a placeholder wildcard.");
+    }
+    kT->contactPersistency.toHost();
+
+    // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
+    // as persistent but not found in CD, it will be added to the contact array.
+    for (size_t i = 0; i < *(kT->solverScratchSpace.numPrevContacts); i++) {
+        kT->contactPersistency[i] = is_or_not;
+    }
+
+    if (is_or_not == CONTACT_IS_PERSISTENT) {
+        kT->solverFlags.hasPersistentContacts = true;
+        dT->solverFlags.hasPersistentContacts = true;
+    }
+    kT->contactPersistency.toDevice();
+}
+
 void DEMSolver::generatePolicyResources() {
     // Process the loaded materials. The pre-process of external objects and clumps could add more materials, so this
     // call need to go after those pre-process ones.
@@ -215,32 +301,31 @@ void DEMSolver::jitifyKernels() {
     equipFamilyOnFlyChanges(m_subs);
     equipForceModel(m_subs);
     equipIntegrationScheme(m_subs);
-    kT->jitifyKernels(m_subs);
-    dT->jitifyKernels(m_subs);
+    equipKernelIncludes(m_subs);
 
-    // Now, inspectors need to be jitified too... but the current design jitify inspector kernels at the first time they
-    // are used. for (auto& insp : m_inspectors) {
-    //     insp->Initialize(m_subs);
-    // }
+    // Jitify may require a defined device to derive the arch
+    std::thread kT_build([&]() {
+        DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
+        kT->jitifyKernels(m_subs, m_jitify_options);
+    });
 
-    // Solver system's own max vel inspector should be init-ed. Don't bother init-ing it while using, because it is
-    // called at high frequency, let's save an if check. Forced initialization (since doing it before system completes
-    // init).
-    m_approx_max_vel_func->Initialize(m_subs, true);
-    dT->approxMaxVelFunc = m_approx_max_vel_func;
-}
+    std::thread dT_build([&]() {
+        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+        dT->jitifyKernels(m_subs, m_jitify_options);
 
-bodyID_t DEMSolver::getGeoOwnerID(const bodyID_t& geoID, const contact_t& cnt_type) const {
-    switch (cnt_type) {
-        case NOT_A_CONTACT:
-            return NULL_BODYID;
-        case SPHERE_SPHERE_CONTACT:
-            return dT->ownerClumpBody.at(geoID);
-        case SPHERE_MESH_CONTACT:
-            return dT->ownerMesh.at(geoID);
-        default:
-            return dT->ownerAnalBody.at(geoID);
-    }
+        // Now, inspectors need to be jitified too... but the current design jitify inspector kernels at the first time
+        // they are used. for (auto& insp : m_inspectors) {
+        //     insp->Initialize(m_subs);
+        // }
+
+        // Solver system's own max vel inspector should be init-ed. Don't bother init-ing it while using, because it is
+        // called at high frequency, let's save an if check. Forced initialization (since doing it before system
+        // completes init).
+        m_approx_max_vel_func->Initialize(m_subs, m_jitify_options, true);
+        dT->approxMaxVelFunc = m_approx_max_vel_func;
+    });
+    kT_build.join();
+    dT_build.join();
 }
 
 void DEMSolver::getContacts_impl(std::vector<bodyID_t>& idA,
@@ -249,21 +334,32 @@ void DEMSolver::getContacts_impl(std::vector<bodyID_t>& idA,
                                  std::vector<family_t>& famA,
                                  std::vector<family_t>& famB,
                                  std::function<bool(contact_t)> type_func) const {
+    // Get device-major info to host first
+    if (dT->solverFlags.canFamilyChangeOnDevice) {
+        dT->familyID.toHostAsync(dT->streamInfo.stream);
+    }
+    dT->idGeometryA.toHostAsync(dT->streamInfo.stream);
+    dT->idGeometryB.toHostAsync(dT->streamInfo.stream);
+    dT->contactType.toHostAsync(dT->streamInfo.stream);
+
     size_t num_contacts = dT->getNumContacts();
     idA.resize(num_contacts);
     idB.resize(num_contacts);
     cnt_type.resize(num_contacts);
     famA.resize(num_contacts);
     famB.resize(num_contacts);
+    // Try overlapping mem transfer with allocation...
+    dT->syncMemoryTransfer();
+
     size_t useful_contacts = 0;
     for (size_t i = 0; i < num_contacts; i++) {
-        contact_t this_type = dT->contactType.at(i);
+        contact_t this_type = dT->contactType[i];
         if (type_func(this_type)) {
-            idA[useful_contacts] = getGeoOwnerID(dT->idGeometryA.at(i), this_type);
-            idB[useful_contacts] = getGeoOwnerID(dT->idGeometryB.at(i), this_type);
+            idA[useful_contacts] = dT->getGeoOwnerID(dT->idGeometryA[i], this_type);
+            idB[useful_contacts] = dT->getGeoOwnerID(dT->idGeometryB[i], this_type);
             cnt_type[useful_contacts] = this_type;
-            famA[useful_contacts] = dT->familyID.at(idA[useful_contacts]);
-            famB[useful_contacts] = dT->familyID.at(idB[useful_contacts]);
+            famA[useful_contacts] = dT->familyID[idA[useful_contacts]];
+            famB[useful_contacts] = dT->familyID[idB[useful_contacts]];
             useful_contacts++;
         }
     }
@@ -400,20 +496,23 @@ void DEMSolver::decideBinSize() {
         }
     }
 
-    // use_user_defined_bin_size means the user explicitly gave a number for bin size
+    // use_user_defined_bin_size records whether the user explicitly gave a number for bin size
     if (m_smallest_radius > DEME_TINY_FLOAT) {
-        if (!use_user_defined_bin_size) {
+        if (use_user_defined_bin_size != INIT_BIN_SIZE_TYPE::EXPLICIT) {
             m_binSize = m_binSize_as_multiple * m_smallest_radius;
         }
     } else {
-        if (!use_user_defined_bin_size) {
+        if (use_user_defined_bin_size == INIT_BIN_SIZE_TYPE::MULTI_MIN_SPH) {
             DEME_ERROR(
-                "There are spheres in clump templates that have 0 radii, and the user did not specify the bin size "
-                "(for contact detection)!\nBecause the bin size is supposed to be defaulted to the size of the "
-                "smallest sphere, now the solver does not know what to do.");
+                "There are spheres in clump templates that have near-zero radii (%.9g), and the user did not specify "
+                "the bin size (for contact detection)!\nBecause the bin size is supposed to be defaulted to the size "
+                "of the smallest sphere, now the solver does not know what to do.",
+                m_smallest_radius);
         } else {
             DEME_WARNING(
-                "There are spheres in clump templates that have 0 radii!! Please make sure this is intentional.");
+                "There are spheres in clump templates that have near-zero radii (%.9g)! Please make sure this is "
+                "intentional.",
+                m_smallest_radius);
         }
     }
 
@@ -421,9 +520,29 @@ void DEMSolver::decideBinSize() {
     // It's better to compute num of bins this way, rather than...
     // (uint64_t)(m_boxX / m_binSize + 1) * (uint64_t)(m_boxY / m_binSize + 1) * (uint64_t)(m_boxZ / m_binSize + 1);
     // because the space bins and voxels can cover may be larger than the user-defined sim domain
-    // Do we have more bins that our data type can handle?
+
+    // Now we have a bin size. We adjust it here if the user specified a target init number.
+    if (use_user_defined_bin_size == INIT_BIN_SIZE_TYPE::TARGET_NUM) {
+        size_t prev_num = m_num_bins;
+        while ((double)m_num_bins < 0.67 * m_target_init_bin_num || (double)m_num_bins > 1.5 * m_target_init_bin_num) {
+            if (m_num_bins < m_target_init_bin_num) {
+                m_binSize *= 0.8;
+            } else {
+                m_binSize *= 1.2;
+            }
+            m_num_bins = hostCalcBinNum(nbX, nbY, nbZ, m_voxelSize, m_binSize, nvXp2, nvYp2, nvZp2);
+            // If changed size relationship, good enough.
+            if ((prev_num < m_target_init_bin_num && m_num_bins >= m_target_init_bin_num) ||
+                (prev_num >= m_target_init_bin_num && m_num_bins < m_target_init_bin_num)) {
+                break;
+            }
+            prev_num = m_num_bins;
+        }
+    }
+
+    // A final safety check: Do we have more bins that our data type can handle?
     if (m_num_bins > std::numeric_limits<binID_t>::max() - 1) {
-        if (!use_user_defined_bin_size) {
+        if (use_user_defined_bin_size != INIT_BIN_SIZE_TYPE::EXPLICIT) {
             DEME_WARNING(
                 "%zu initial bins created with size %.6g. This is more than max allowance %zu. Auto-adjusting...",
                 m_num_bins, m_binSize, (size_t)(std::numeric_limits<binID_t>::max() - 1));
@@ -431,7 +550,11 @@ void DEMSolver::decideBinSize() {
                 m_binSize *= 1.5;
                 m_num_bins = hostCalcBinNum(nbX, nbY, nbZ, m_voxelSize, m_binSize, nvXp2, nvYp2, nvZp2);
             }
-            DEME_WARNING("Bin size auto-adjusted to %.6g, now we have %zu initial bins.", m_binSize, m_num_bins);
+            DEME_WARNING(
+                "Bin size auto-adjusted to %.6g, now we have %zu initial bins. Note this number may be large and it "
+                "potentially slows down kT.\nUsing SetInitBinNumTarget to set a reasonable target initial bin number "
+                "is recommended.",
+                m_binSize, m_num_bins);
         } else {
             DEME_ERROR(
                 "The simulation world has %zu bins (for domain partitioning in contact detection), but the largest bin "
@@ -504,8 +627,9 @@ void DEMSolver::reportInitStats() const {
                   (m_expand_factor / m_smallest_radius) * 100.0);
     } else {
         DEME_INFO("The solver to set to adaptively change the contact margin size.");
+        float initFutureDrift = (m_suggestedFutureDrift < 0.) ? 10.0 : m_suggestedFutureDrift;
         float expand_factor = (m_expand_safety_multi * AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE + m_expand_base_vel) *
-                              m_suggestedFutureDrift * m_ts_size;
+                              initFutureDrift * m_ts_size;
         DEME_STEP_METRIC(
             "To give an example, all geometries may be enlarged/thickened by around %.6g (estimated with the initial "
             "step size, initial update frequency and velocity %.4g) for contact detection purpose.",
@@ -641,6 +765,12 @@ void DEMSolver::preprocessTriangleObjs() {
         // Note that cache_offset needs to be modified by dT in init. This info is important if we need to modify the
         // mesh later on.
 
+        if (mesh_obj->mass < 1e-15 || length(mesh_obj->MOI) < 1e-15) {
+            DEME_WARNING(
+                "A mesh is instructed to have near-zero (or negative) mass or moment of inertia (mass: %.9g, MOI "
+                "magnitude: %.9g). This could destabilize the simulation.\nPlease make sure this is intentional.",
+                mesh_obj->mass, length(mesh_obj->MOI));
+        }
         m_mesh_obj_mass.push_back(mesh_obj->mass);
         m_mesh_obj_moi.push_back(mesh_obj->MOI);
 
@@ -717,50 +847,49 @@ void DEMSolver::figureOutFamilyMasks() {
         this_family_info.used = true;
         this_family_info.family = user_family;
 
-        // If one positional coord is fixed then all of this object is fixed... this is just my design choice. If the
-        // user want to prescribe X but not Y, why don't they just prescribe velocity instead?
+        if (preInfo.linPosPre != "none") {
+            this_family_info.linPosPre = preInfo.linPosPre;
+        }
         if (preInfo.linPosX != "none") {
             this_family_info.linPosX = preInfo.linPosX;
-            this_family_info.linPosPrescribed = true;
         }
         if (preInfo.linPosY != "none") {
             this_family_info.linPosY = preInfo.linPosY;
-            this_family_info.linPosPrescribed = true;
         }
         if (preInfo.linPosZ != "none") {
             this_family_info.linPosZ = preInfo.linPosZ;
-            this_family_info.linPosPrescribed = true;
         }
+
         if (preInfo.oriQ != "none") {
             this_family_info.oriQ = preInfo.oriQ;
-            this_family_info.rotPosPrescribed = true;
         }
 
         // If it is not none, then it is automatically dictated by prescribed motion and will not accept influence by
         // other sim entities
+        if (preInfo.linVelPre != "none") {
+            this_family_info.linVelPre = preInfo.linVelPre;
+        }
         if (preInfo.linVelX != "none") {
             this_family_info.linVelX = preInfo.linVelX;
-            this_family_info.linVelXPrescribed = true;
         }
         if (preInfo.linVelY != "none") {
             this_family_info.linVelY = preInfo.linVelY;
-            this_family_info.linVelYPrescribed = true;
         }
         if (preInfo.linVelZ != "none") {
             this_family_info.linVelZ = preInfo.linVelZ;
-            this_family_info.linVelZPrescribed = true;
+        }
+
+        if (preInfo.rotVelPre != "none") {
+            this_family_info.rotVelPre = preInfo.rotVelPre;
         }
         if (preInfo.rotVelX != "none") {
             this_family_info.rotVelX = preInfo.rotVelX;
-            this_family_info.rotVelXPrescribed = true;
         }
         if (preInfo.rotVelY != "none") {
             this_family_info.rotVelY = preInfo.rotVelY;
-            this_family_info.rotVelYPrescribed = true;
         }
         if (preInfo.rotVelZ != "none") {
             this_family_info.rotVelZ = preInfo.rotVelZ;
-            this_family_info.rotVelZPrescribed = true;
         }
 
         // Possibly the user explicitly ordered this family to not accept influence from other sim entities; if it is
@@ -773,9 +902,14 @@ void DEMSolver::figureOutFamilyMasks() {
         this_family_info.rotVelZPrescribed = this_family_info.rotVelZPrescribed || preInfo.rotVelZPrescribed;
 
         this_family_info.rotPosPrescribed = this_family_info.rotPosPrescribed || preInfo.rotPosPrescribed;
-        this_family_info.linPosPrescribed = this_family_info.linPosPrescribed || preInfo.linPosPrescribed;
+        this_family_info.linPosXPrescribed = this_family_info.linPosXPrescribed || preInfo.linPosXPrescribed;
+        this_family_info.linPosYPrescribed = this_family_info.linPosYPrescribed || preInfo.linPosYPrescribed;
+        this_family_info.linPosZPrescribed = this_family_info.linPosZPrescribed || preInfo.linPosZPrescribed;
 
         // Then register the accelerations that are added on top of `normal physics'
+        if (preInfo.accPre != "none") {
+            this_family_info.accPre = preInfo.accPre;
+        }
         if (preInfo.accX != "none") {
             this_family_info.accX = preInfo.accX;
         }
@@ -784,6 +918,10 @@ void DEMSolver::figureOutFamilyMasks() {
         }
         if (preInfo.accZ != "none") {
             this_family_info.accZ = preInfo.accZ;
+        }
+
+        if (preInfo.angAccPre != "none") {
+            this_family_info.angAccPre = preInfo.angAccPre;
         }
         if (preInfo.angAccX != "none") {
             this_family_info.angAccX = preInfo.angAccX;
@@ -794,13 +932,21 @@ void DEMSolver::figureOutFamilyMasks() {
         if (preInfo.angAccZ != "none") {
             this_family_info.angAccZ = preInfo.angAccZ;
         }
+    }
 
-        DEME_DEBUG_PRINTF("User family %u has prescribed lin vel: %s, %s, %s", user_family,
-                          this_family_info.linVelX.c_str(), this_family_info.linVelY.c_str(),
-                          this_family_info.linVelZ.c_str());
-        DEME_DEBUG_PRINTF("User family %u has prescribed ang vel: %s, %s, %s", user_family,
-                          this_family_info.rotVelX.c_str(), this_family_info.rotVelY.c_str(),
-                          this_family_info.rotVelZ.c_str());
+    for (const auto& this_family_info : m_unique_family_prescription) {
+        if (!this_family_info.used)
+            continue;
+        unsigned int user_family = this_family_info.family;
+        DEME_DEBUG_PRINTF("User family %u has prescribed position: %s, %s, %s, %s", user_family,
+                          this_family_info.linPosPre.c_str(), this_family_info.linPosX.c_str(),
+                          this_family_info.linPosY.c_str(), this_family_info.linPosZ.c_str());
+        DEME_DEBUG_PRINTF("User family %u has prescribed lin vel: %s, %s, %s, %s", user_family,
+                          this_family_info.linVelPre.c_str(), this_family_info.linVelX.c_str(),
+                          this_family_info.linVelY.c_str(), this_family_info.linVelZ.c_str());
+        DEME_DEBUG_PRINTF("User family %u has prescribed ang vel: %s, %s, %s, %s", user_family,
+                          this_family_info.rotVelPre.c_str(), this_family_info.rotVelX.c_str(),
+                          this_family_info.rotVelY.c_str(), this_family_info.rotVelZ.c_str());
     }
 }
 
@@ -835,7 +981,7 @@ void DEMSolver::addWorldBoundingBox() {
     if (bottom) {
         float3 bottom_loc = (m_user_box_min + m_user_box_max) / 2.;
         bottom_loc.z = m_user_box_min.z;
-        box->AddPlane(bottom_loc, host_make_float3(0, 0, 1), m_bounding_box_material);
+        box->AddPlane(bottom_loc, make_float3(0, 0, 1), m_bounding_box_material);
     }
 
     if (sides) {
@@ -843,30 +989,30 @@ void DEMSolver::addWorldBoundingBox() {
 
         float3 left = center;
         left.x = m_user_box_min.x;
-        box->AddPlane(left, host_make_float3(1, 0, 0), m_bounding_box_material);
+        box->AddPlane(left, make_float3(1, 0, 0), m_bounding_box_material);
 
         float3 right = center;
         right.x = m_user_box_max.x;
-        box->AddPlane(right, host_make_float3(-1, 0, 0), m_bounding_box_material);
+        box->AddPlane(right, make_float3(-1, 0, 0), m_bounding_box_material);
 
         float3 front = center;
         front.y = m_user_box_min.y;
-        box->AddPlane(front, host_make_float3(0, 1, 0), m_bounding_box_material);
+        box->AddPlane(front, make_float3(0, 1, 0), m_bounding_box_material);
 
         float3 the_back = center;
         the_back.y = m_user_box_max.y;
-        box->AddPlane(the_back, host_make_float3(0, -1, 0), m_bounding_box_material);
+        box->AddPlane(the_back, make_float3(0, -1, 0), m_bounding_box_material);
     }
 
     if (top) {
         float3 top_loc = (m_user_box_min + m_user_box_max) / 2.;
         top_loc.z = m_user_box_max.z;
-        box->AddPlane(top_loc, host_make_float3(0, 0, -1), m_bounding_box_material);
+        box->AddPlane(top_loc, make_float3(0, 0, -1), m_bounding_box_material);
     }
 }
 
 // This is generally used to pass individual instructions on how the solver should behave
-void DEMSolver::transferSolverParams() {
+void DEMSolver::setSolverParams() {
     // Verbosity
     kT->verbosity = verbosity;
     dT->verbosity = verbosity;
@@ -909,20 +1055,21 @@ void DEMSolver::transferSolverParams() {
     kT->solverFlags.isAsync = !((m_suggestedFutureDrift == 0) && !auto_adjust_update_freq);
     dT->solverFlags.isAsync = !((m_suggestedFutureDrift == 0) && !auto_adjust_update_freq);
     // Ideal max drift in solverFlags may not be up-to-date, and only represents what the solver thinks it ought to be.
-    // Interaction manager's copy prevails.
-    dT->granData->perhapsIdealFutureDrift = m_suggestedFutureDrift;
+    // Interaction manager's copy prevails. This one is used for margin decision so should be non-negative.
+    *(dT->perhapsIdealFutureDrift) = (m_suggestedFutureDrift < 0.) ? 10 : m_suggestedFutureDrift;
     // The reason why we use dTMaxFutureDrift rather than m_updateFreq is the following...
     // dT's contact pair info is actually in a `double stale' situation. kT-supplied contact pairs are based on some old
     // position info already (because kT needs time to run after a dT's order is placed), and dT needs to use this
     // contact info for some extra steps. That's why 2 * m_updateFreq (m_updateFreq can be used-estimated and derived
     // from kT--dT collab stats, so the solver has no control over how it is inputted; it just has to use it wisely) is
     // actually a better guess for the max dT-into-future steps.
+    // Also, these values can be negative per user instruction.
     dTkT_InteractionManager->dynamicMaxFutureDrift = m_suggestedFutureDrift;
     dTkT_InteractionManager->kinematicMaxFutureDrift = m_suggestedFutureDrift;
 
     // Tell kT and dT whether the user enforeced potential on-the-fly family number changes
-    kT->solverFlags.canFamilyChange = famnum_can_change_conditionally;
-    dT->solverFlags.canFamilyChange = famnum_can_change_conditionally;
+    kT->solverFlags.canFamilyChangeOnDevice = famnum_can_change_conditionally;
+    dT->solverFlags.canFamilyChangeOnDevice = famnum_can_change_conditionally;
 
     // Force reduction strategy
     kT->solverFlags.useCubForceCollect = use_cub_to_reduce_force;
@@ -935,14 +1082,15 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.should_sort_pairs = should_sort_contacts;
 
     // Error out policies
+    kT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
+    dT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
+    // simParams-stored variables need to be sync-ed to device
     kT->simParams->errOutBinSphNum = threshold_too_many_spheres_in_bin;
     dT->simParams->errOutBinSphNum = threshold_too_many_spheres_in_bin;
     kT->simParams->errOutBinTriNum = threshold_too_many_tri_in_bin;
     dT->simParams->errOutBinTriNum = threshold_too_many_tri_in_bin;
     kT->simParams->errOutVel = threshold_error_out_vel;
     dT->simParams->errOutVel = threshold_error_out_vel;
-    kT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
-    dT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
 
     // Whether the solver should auto-update bin sizes
     kT->solverFlags.autoBinSize = auto_adjust_bin_size;
@@ -952,8 +1100,11 @@ void DEMSolver::transferSolverParams() {
         kT->stateParams.binChangeRateAcc = auto_adjust_acc;
         // Suppose for avoiding bins too big, the most proactive thing you can do is starting to shrink it when half max
         // geo count is reached...
-        kT->stateParams.binChangeUpperSafety = 0.5 + (1. - auto_adjust_upper_proactive_ratio) * 0.5;
-        kT->stateParams.binChangeLowerSafety = 0.5 + (1. - auto_adjust_lower_proactive_ratio) * 0.5;
+        double base_val = 0.01;
+        kT->stateParams.binChangeUpperSafety =
+            base_val + (1. - auto_adjust_upper_proactive_ratio) * (1. - 2 * base_val);
+        kT->stateParams.binChangeLowerSafety =
+            base_val + (1. - auto_adjust_lower_proactive_ratio) * (1. - 2 * base_val);
     }
 
     // CDFreq auto-adapt related
@@ -965,7 +1116,7 @@ void DEMSolver::transferSolverParams() {
     dT->accumStepUpdater.SetCacheSize(max_drift_gauge_history_size);
 }
 
-void DEMSolver::transferSimParams() {
+void DEMSolver::setSimParams() {
     if ((!use_user_defined_expand_factor) && m_approx_max_vel < 1e-4f && m_suggestedFutureDrift > 0) {
         DEME_WARNING(
             "You instructed that the physics can stretch %u time steps into the future, and explicitly specified the "
@@ -997,6 +1148,12 @@ void DEMSolver::transferSimParams() {
     }
     DEME_DEBUG_PRINTF("%u contact wildcards are in the force model.", nContactWildcards);
 
+    // Error-out velocity should be no smaller than the max velocity we can expect
+    if (threshold_error_out_vel < m_approx_max_vel) {
+        // Silently bring down m_approx_max_vel
+        m_approx_max_vel = threshold_error_out_vel;
+    }
+
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
                      m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_expand_safety_multi,
                      m_expand_base_vel, m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards,
@@ -1008,18 +1165,18 @@ void DEMSolver::transferSimParams() {
 }
 
 void DEMSolver::allocateGPUArrays() {
-    // Resize managed arrays based on the statistical data we had from the previous step
+    // Resize arrays based on the statistical data we have
     std::thread dThread = std::move(std::thread([this]() {
-        this->dT->allocateManagedArrays(
-            this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes, this->nSpheresGM, this->nTriGM,
-            this->nAnalGM, this->nExtraContacts, this->nDistinctMassProperties, this->nDistinctClumpBodyTopologies,
-            this->nDistinctClumpComponents, this->nJitifiableClumpComponents, this->nMatTuples);
+        this->dT->allocateGPUArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
+                                    this->nSpheresGM, this->nTriGM, this->nAnalGM, this->nExtraContacts,
+                                    this->nDistinctMassProperties, this->nDistinctClumpBodyTopologies,
+                                    this->nDistinctClumpComponents, this->nJitifiableClumpComponents, this->nMatTuples);
     }));
     std::thread kThread = std::move(std::thread([this]() {
-        this->kT->allocateManagedArrays(
-            this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes, this->nSpheresGM, this->nTriGM,
-            this->nAnalGM, this->nExtraContacts, this->nDistinctMassProperties, this->nDistinctClumpBodyTopologies,
-            this->nDistinctClumpComponents, this->nJitifiableClumpComponents, this->nMatTuples);
+        this->kT->allocateGPUArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
+                                    this->nSpheresGM, this->nTriGM, this->nAnalGM, this->nExtraContacts,
+                                    this->nDistinctMassProperties, this->nDistinctClumpBodyTopologies,
+                                    this->nDistinctClumpComponents, this->nJitifiableClumpComponents, this->nMatTuples);
     }));
     dThread.join();
     kThread.join();
@@ -1031,7 +1188,7 @@ void DEMSolver::initializeGPUArrays() {
                                                    m_template_sp_radii, m_template_sp_relPos, m_template_clump_volume);
 
     // Now we can feed those GPU-side arrays with the cached API-level simulation info
-    dT->initManagedArrays(
+    dT->initGPUArrays(
         // Clump batchs' initial stats
         cached_input_clump_batches,
         // Analytical objects' initial stats
@@ -1054,7 +1211,7 @@ void DEMSolver::initializeGPUArrays() {
         // I/O and misc.
         m_no_output_families, m_tracked_objs);
 
-    kT->initManagedArrays(
+    kT->initGPUArrays(
         // Clump batchs' initial stats
         cached_input_clump_batches,
         // Analytical objects' initial stats
@@ -1131,6 +1288,24 @@ void DEMSolver::packDataPointers() {
     }
 }
 
+void DEMSolver::migrateSimParamsToDevice() {
+    dT->simParams.toDevice();
+    kT->simParams.toDevice();
+}
+
+void DEMSolver::migrateArrayDataToDevice() {
+    dT->granData.toDevice();
+    kT->granData.toDevice();
+    // Then move DualArray data to device
+    dT->migrateDataToDevice();
+    kT->migrateDataToDevice();
+}
+
+void DEMSolver::migrateArrayDataToHost() {
+    dT->migrateDeviceModifiableInfoToHost();
+    kT->migrateDeviceModifiableInfoToHost();
+}
+
 void DEMSolver::validateUserInputs() {
     // Then some checks...
     // if (m_templates.size() == 0) {
@@ -1138,6 +1313,23 @@ void DEMSolver::validateUserInputs() {
     //     LoadClumpType.");
     // }
 
+    // If not 2 GPUs detected, output warnings as needed
+    int ndevices = dTkT_GpuManager->getNumDevices();
+    if (ndevices == 0) {
+        DEME_ERROR(
+            "No GPU device is detected. Try lspci and see what you get.\nIf you indeed have GPU devices, maybe you "
+            "should try rebooting or reinstalling cuda components?");
+        // } else if (ndevices == 1) {
+        //     DEME_WARNING(
+        //         "One GPU device is detected. On consumer cards, DEME's performance edge is limited with only one"
+        //         "GPU.\nTry allocating 2 GPU devices if possible.");
+    } else if (ndevices > 2) {
+        DEME_WARNING(
+            "More than two GPU devices are detected.\nCurrently, DEME can make use of at most two devices.\nMore "
+            "devices will not improve the performance.");
+    }
+
+    // Box size OK?
     float3 user_box_size = m_user_box_max - m_user_box_min;
     if (user_box_size.x <= 0.f || user_box_size.y <= 0.f || user_box_size.z <= 0.f) {
         DEME_ERROR(
@@ -1148,7 +1340,8 @@ void DEMSolver::validateUserInputs() {
     if (m_suggestedFutureDrift < 0) {
         DEME_WARNING(
             "The physics of the DEM system can drift into the future as much as it wants compared to contact "
-            "detections, because SetCDUpdateFreq was called with a negative argument. Please make sure this is "
+            "detections, because SetCDUpdateFreq was called with a negative argument.\nThere is also no guarantee on "
+            "the contact margin size to be added, other than it will be no less than 0.\nPlease make sure this is "
             "intended.");
     }
 
@@ -1190,9 +1383,20 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     std::set<std::string> added_owner_wildcards, added_geo_wildcards;
     // Analyze this model... what does it require?
     std::string model = m_force_model->m_force_model;
+    std::string model_prerequisites = m_force_model->m_model_prerequisites;
     const std::set<std::string> contact_wildcard_names = m_force_model->m_contact_wildcards;
     const std::set<std::string> owner_wildcard_names = m_force_model->m_owner_wildcards;
     const std::set<std::string> geo_wildcard_names = m_force_model->m_geo_wildcards;
+    std::set<std::string> geo_wildcard_names_error_checking;
+    // geo_wildcard_names needs some treatments: Add _A and _B to them for error checking...
+    if (geo_wildcard_names.size() > 0) {
+        for (const std::string& wc_name : geo_wildcard_names) {
+            geo_wildcard_names_error_checking.insert(wc_name + "_A");
+            geo_wildcard_names_error_checking.insert(wc_name + "_B");
+        }
+    }
+
+    // Then clear the wc numbering registering array
     m_owner_wc_num.clear();
     m_geo_wc_num.clear();
     m_cnt_wc_num.clear();
@@ -1229,19 +1433,24 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         m_owner_wc_num[owner_wildcard_name] = owner_wc_num;
         owner_wc_num++;
     }
-    for (const auto& geo_wildcard_name : geo_wildcard_names) {
-        if (added_ingredients.find(geo_wildcard_name) != added_ingredients.end()) {
+    // For geo wildcard, error checking is separated
+    for (const auto& geo_wildcard_name_error_checking : geo_wildcard_names_error_checking) {
+        if (added_ingredients.find(geo_wildcard_name_error_checking) != added_ingredients.end()) {
             DEME_ERROR(
                 "Geometry wildcard %s shares its name with a reserved contact force model ingredient.\nPlease select a "
                 "different name for this wildcard and try again.",
-                geo_wildcard_name.c_str());
+                geo_wildcard_name_error_checking.c_str());
         }
+    }
+    // Then the "vanilla" names for geo wildcard which go into m_geo_wc_num register
+    for (const auto& geo_wildcard_name : geo_wildcard_names) {
         added_geo_wildcards.insert(geo_wildcard_name);
         // Finally, owner wildcards are subject to user modification, so it is better to keep tab of their numbering for
         // later use.
         m_geo_wc_num[geo_wildcard_name] = geo_wc_num;
         geo_wc_num++;
     }
+    // Finally the contact wildcard
     for (const auto& contact_wildcard_name : contact_wildcard_names) {
         if (added_ingredients.find(contact_wildcard_name) != added_ingredients.end()) {
             DEME_ERROR(
@@ -1287,23 +1496,25 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     std::string non_match;
     if (!all_whole_word_match(model, contact_wildcard_names, non_match))
         DEME_WARNING(
-            "Contact wildcard %s is not used/set in your custom force model. Your force model will probably not "
-            "produce what you expect.",
+            "Contact wildcard(s) %s are not used/set in your custom force model. "
+            "Your force model will probably not produce what you expect.",
             non_match.c_str());
     if (!all_whole_word_match(model, owner_wildcard_names, non_match))
         DEME_WARNING(
-            "Owner wildcard %s is not used/set in your custom force model. Your force model will probably not produce "
-            "what you expect.",
+            "Owner wildcard(s) %s are not used/set in your custom force model. "
+            "Your force model will probably not produce what you expect.",
             non_match.c_str());
-    if (!all_whole_word_match(model, geo_wildcard_names, non_match))
+    if (!all_whole_word_match(model, geo_wildcard_names_error_checking, non_match))
         DEME_WARNING(
-            "Geometry wildcard %s is not used/set in your custom force model. Your force model will probably not "
-            "produce what you expect.",
+            "Geometry wildcard(s) %s are not used/set in your custom force model. "
+            "Your force model will probably not produce what you expect. "
+            "\nRemember for geometry wildcard you need to append _A and _B to wildcard names "
+            "to distinguish two contact geometries in the custom force model.",
             non_match.c_str());
     if (!all_whole_word_match(model, {"force"}, non_match)) {
         DEME_WARNING(
-            "Your custom force model does not set the variable %s at all. You probably will not see any contact in the "
-            "simulation.",
+            "Your custom force model does not set the %s variable at all. "
+            "You probably will not see any contact in the simulation.",
             non_match.c_str());
     }
 
@@ -1333,6 +1544,7 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         contact_info_write_strat = compact_code(contact_info_write_strat);
     }
     strMap["_DEMForceModel_"] = model;
+    strMap["_forceModelPrerequisites_;"] = model_prerequisites;
     strMap["_forceModelIngredientDefinition_"] = ingredient_definition;
     strMap["_forceModelIngredientAcqForA_"] = ingredient_acquisition_A;
     strMap["_forceModelIngredientAcqForB_"] = ingredient_acquisition_B;
@@ -1394,6 +1606,10 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
         posStr += "case " + std::to_string(preInfo.family) + ": {";
         accStr += "case " + std::to_string(preInfo.family) + ": {";
         {
+            velStr += "{";
+            if (preInfo.linVelPre != "none") {
+                velStr += preInfo.linVelPre + ";";
+            }
             if (preInfo.linVelX != "none") {
                 velStr += "vX = " + preInfo.linVelX + ";";
             }
@@ -1402,6 +1618,12 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
             }
             if (preInfo.linVelZ != "none") {
                 velStr += "vZ = " + preInfo.linVelZ + ";";
+            }
+            velStr += "}";
+
+            velStr += "{";
+            if (preInfo.rotVelPre != "none") {
+                velStr += preInfo.rotVelPre + ";";
             }
             if (preInfo.rotVelX != "none") {
                 velStr += "omgBarX = " + preInfo.rotVelX + ";";
@@ -1412,42 +1634,69 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
             if (preInfo.rotVelZ != "none") {
                 velStr += "omgBarZ = " + preInfo.rotVelZ + ";";
             }
-            velStr += "LinXPrescribed = " + std::to_string(preInfo.linVelXPrescribed) + ";";
-            velStr += "LinYPrescribed = " + std::to_string(preInfo.linVelYPrescribed) + ";";
-            velStr += "LinZPrescribed = " + std::to_string(preInfo.linVelZPrescribed) + ";";
-            velStr += "RotXPrescribed = " + std::to_string(preInfo.rotVelXPrescribed) + ";";
-            velStr += "RotYPrescribed = " + std::to_string(preInfo.rotVelYPrescribed) + ";";
-            velStr += "RotZPrescribed = " + std::to_string(preInfo.rotVelZPrescribed) + ";";
+            velStr += "}";
+
+            velStr += "LinVelXPrescribed = " + std::to_string(preInfo.linVelXPrescribed) + ";";
+            velStr += "LinVelYPrescribed = " + std::to_string(preInfo.linVelYPrescribed) + ";";
+            velStr += "LinVelZPrescribed = " + std::to_string(preInfo.linVelZPrescribed) + ";";
+            velStr += "RotVelXPrescribed = " + std::to_string(preInfo.rotVelXPrescribed) + ";";
+            velStr += "RotVelYPrescribed = " + std::to_string(preInfo.rotVelYPrescribed) + ";";
+            velStr += "RotVelZPrescribed = " + std::to_string(preInfo.rotVelZPrescribed) + ";";
         }
         velStr += "break; }";
         {
+            posStr += "{";
+            if (preInfo.linPosPre != "none") {
+                posStr += preInfo.linPosPre + ";";
+            }
             if (preInfo.linPosX != "none")
                 posStr += "X = " + preInfo.linPosX + ";";
             if (preInfo.linPosY != "none")
                 posStr += "Y = " + preInfo.linPosY + ";";
             if (preInfo.linPosZ != "none")
                 posStr += "Z = " + preInfo.linPosZ + ";";
+            posStr += "}";
+
             if (preInfo.oriQ != "none") {
-                posStr += "float4 myOriQ = " + preInfo.oriQ + ";";
-                posStr += "oriQw = myOriQ.w; oriQx = myOriQ.x; oriQy = myOriQ.y; oriQz = myOriQ.z;";
+                posStr += "{";
+                std::string user_str = replace_pattern(preInfo.oriQ, "return", "float4 DEME_Presc_OriQ = ");
+                posStr += user_str + ";";
+                posStr +=
+                    "oriQw = DEME_Presc_OriQ.w; oriQx = DEME_Presc_OriQ.x; oriQy = DEME_Presc_OriQ.y; oriQz = "
+                    "DEME_Presc_OriQ.z;";
+                posStr += "}";
             }
-            posStr += "LinPrescribed = " + std::to_string(preInfo.linPosPrescribed) + ";";
+
+            posStr += "LinXPrescribed = " + std::to_string(preInfo.linPosXPrescribed) + ";";
+            posStr += "LinYPrescribed = " + std::to_string(preInfo.linPosYPrescribed) + ";";
+            posStr += "LinZPrescribed = " + std::to_string(preInfo.linPosZPrescribed) + ";";
             posStr += "RotPrescribed = " + std::to_string(preInfo.rotPosPrescribed) + ";";
         }
         posStr += "break; }";
         {
+            accStr += "{";
+            if (preInfo.accPre != "none") {
+                accStr += preInfo.accPre + ";";
+            }
             if (preInfo.accX != "none")
                 accStr += "accX = " + preInfo.accX + ";";
             if (preInfo.accY != "none")
                 accStr += "accY = " + preInfo.accY + ";";
             if (preInfo.accZ != "none")
                 accStr += "accZ = " + preInfo.accZ + ";";
+            accStr += "}";
+
+            accStr += "{";
+            if (preInfo.angAccPre != "none") {
+                accStr += preInfo.angAccPre + ";";
+            }
             if (preInfo.angAccX != "none")
                 accStr += "angAccX = " + preInfo.angAccX + ";";
             if (preInfo.angAccY != "none")
                 accStr += "angAccY = " + preInfo.angAccY + ";";
             if (preInfo.angAccZ != "none")
                 accStr += "angAccZ = " + preInfo.angAccZ + ";";
+            accStr += "}";
         }
         accStr += "break; }";
     }
@@ -1534,7 +1783,7 @@ inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std
     if (ensure_kernel_line_num) {
         analyticalEntityDefs = compact_code(analyticalEntityDefs);
     }
-    strMap["_analyticalEntityDefs_"] = analyticalEntityDefs;
+    strMap["_analyticalEntityDefs_;"] = analyticalEntityDefs;
 
     // There is a special owner-only version used by force collection kernels. We have it here so we don't have not-used
     // variable warnings while jitifying
@@ -1613,11 +1862,11 @@ inline void DEMSolver::equipMassMoiVolume(std::unordered_map<std::string, std::s
         moiAcqStrat = compact_code(moiAcqStrat);
         volumeDefs = compact_code(volumeDefs);
     }
-    strMap["_massDefs_"] = massDefs;
-    strMap["_moiDefs_"] = moiDefs;
+    strMap["_massDefs_;"] = massDefs;
+    strMap["_moiDefs_;"] = moiDefs;
     strMap["_massAcqStrat_"] = massAcqStrat;
     strMap["_moiAcqStrat_"] = moiAcqStrat;
-    strMap["_volumeDefs_"] = volumeDefs;
+    strMap["_volumeDefs_;"] = volumeDefs;
 
     DEME_DEBUG_PRINTF("Volume properties in kernel:");
     DEME_DEBUG_PRINTF("%s", volumeDefs.c_str());
@@ -1771,7 +2020,7 @@ inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::strin
     if (ensure_kernel_line_num) {
         materialDefs = compact_code(materialDefs);
     }
-    strMap["_materialDefs_"] = materialDefs;
+    strMap["_materialDefs_;"] = materialDefs;
 }
 
 inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap) {
@@ -1832,7 +2081,7 @@ inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::
         clump_template_arrays = compact_code(clump_template_arrays);
         componentAcqStrat = compact_code(componentAcqStrat);
     }
-    strMap["_clumpTemplateDefs_"] = clump_template_arrays;
+    strMap["_clumpTemplateDefs_;"] = clump_template_arrays;
     strMap["_componentAcqStrat_"] = componentAcqStrat;
 }
 
@@ -1875,6 +2124,10 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_nDistinctMassProperties_"] = std::to_string(nDistinctMassProperties);
     strMap["_nJitifiableClumpComponents_"] = std::to_string(nJitifiableClumpComponents);
     strMap["_nMatTuples_"] = std::to_string(nMatTuples);
+}
+
+inline void DEMSolver::equipKernelIncludes(std::unordered_map<std::string, std::string>& strMap) {
+    strMap["_kernelIncludes_;"] = kernel_includes;
 }
 
 }  // namespace deme

@@ -5,7 +5,7 @@
 # INCLUDE_DIRECTORIES(${ProjectIncludeRoot})
 
 SET(LIBRARIES
-	simulator_multi_gpu
+		simulator_multi_gpu
 )
 
 # ------------------------------------------------------------------------------
@@ -14,6 +14,9 @@ SET(LIBRARIES
 
 SET(DEMOS
 		DEMdemo_Repose
+		DEMdemo_Repose2D
+		DEMdemo_ContactChain
+		DEMdemo_Plow
 		DEMdemo_Sieve
 		DEMdemo_SingleSphereCollide
 		DEMdemo_TestPack
@@ -22,6 +25,7 @@ SET(DEMOS
 		DEMdemo_Centrifuge
 		DEMdemo_GameOfLife
 		DEMdemo_BallDrop
+		DEMdemo_BallDrop2D
 		DEMdemo_Mixer
 		DEMdemo_PolydisperseGeneration
 		DEMdemo_RoverWheel
@@ -37,6 +41,8 @@ SET(DEMOS
 		DEMdemo_SolarSystem
 		DEMdemo_Electrostatic
 		DEMdemo_FlexibleMesh
+		DEMdemo_Hopper_Sphere_Cylinder
+		DEMdemo_Fracture_Box
 )
 
 # ------------------------------------------------------------------------------
@@ -50,6 +56,25 @@ FOREACH(PROGRAM ${DEMOS})
 		message(STATUS "...add ${PROGRAM}")
 
 		add_executable(${PROGRAM}  "${PROGRAM}.cpp")
+
+		set_target_properties(
+			${PROGRAM} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${DEME_INSTALL_DEMO}"
+		)
+
+		if(WIN32)
+			# set_property(TARGET ${PROGRAM} 
+			# 	PROPERTY VS_DEBUGGER_ENVIRONMENT "PATH=$<TARGET_FILE_DIR:DEMERuntimeDataHelper_install>;%PATH%"
+			# )
+			# set_property(TARGET ${PROGRAM} 
+			# 	PROPERTY VS_DEBUGGER_ENVIRONMENT "PATH=$<TARGET_FILE_DIR:DEMERuntimeDataHelper>;%PATH%"
+			# )
+			add_custom_command(TARGET ${PROGRAM} POST_BUILD
+                       COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                       "$<TARGET_FILE_DIR:DEMERuntimeDataHelper_install>/DEMERuntimeDataHelper_install.dll"
+					   "$<TARGET_FILE_DIR:DEMERuntimeDataHelper_install>/DEMERuntimeDataHelper.dll"
+                       "$<TARGET_FILE_DIR:${PROGRAM}>")
+		endif()
 		
 		source_group("" FILES "${PROGRAM}.cpp")
 		
@@ -64,6 +89,8 @@ FOREACH(PROGRAM ${DEMOS})
 			${PROGRAM} PROPERTIES
 			CXX_STANDARD ${CXXSTD_SUPPORTED}
 		)
+
+		# install(TARGETS ${PROGRAM} DESTINATION ${DEME_INSTALL_DEMO})
 
 ENDFOREACH(PROGRAM)
 

@@ -6,17 +6,16 @@
 #include "GpuError.h"
 
 GpuManager::GpuManager(unsigned int total_streams) {
-    int ndevices = 0;
-    DEME_GPU_CALL(cudaGetDeviceCount(&ndevices));
+    ndevices = scanNumDevices();
 
-    if (ndevices == 0) {
-        std::cerr << "No GPU device is detected. Try lspci and see what you get.\nIf you indeed have GPU "
-                     "devices, maybe you should try rebooting or reinstalling cuda components?\n";
-        throw std::runtime_error("No GPU device detected!");
-    } else if (ndevices == 1) {
-        std::cerr << "\nOne GPU device is detected. Currently, DEME's performance edge is limited with only one "
-                     "GPU.\nTry allocating 2 GPU devices if possible.\n\n";
-    }
+    // if (ndevices == 0) {
+    //     std::cerr << "No GPU device is detected. Try lspci and see what you get.\nIf you indeed have GPU "
+    //                  "devices, maybe you should try rebooting or reinstalling cuda components?\n";
+    //     throw std::runtime_error("No GPU device detected!");
+    // } else if (ndevices == 1) {
+    //     std::cerr << "\nOne GPU device is detected. Currently, DEME's performance edge is limited with only one "
+    //                  "GPU.\nTry allocating 2 GPU devices if possible.\n\n";
+    // }
 
     this->streams.resize(ndevices);
 
@@ -25,7 +24,7 @@ GpuManager::GpuManager(unsigned int total_streams) {
             current_device = 0;
         }
 
-        cudaStream_t new_stream;
+        cudaStream_t new_stream = nullptr;
         // cudaStreamCreate(&new_stream);
 
         this->streams[current_device].push_back(StreamInfo{(signed)current_device, new_stream, false});
@@ -42,9 +41,9 @@ GpuManager::~GpuManager() {
 }
 
 // TODO: add CUDA error checking
-int GpuManager::getNumDevices() {
+int GpuManager::scanNumDevices() {
     int ndevices = 0;
-    cudaGetDeviceCount(&ndevices);
+    DEME_GPU_CALL(cudaGetDeviceCount(&ndevices));
     return ndevices;
 }
 
@@ -69,6 +68,7 @@ const std::vector<GpuManager::StreamInfo>& GpuManager::getStreamsFromDevice(cons
 }
 
 const GpuManager::StreamInfo& GpuManager::getAvailableStream() {
+    std::lock_guard<std::mutex> lock(stream_manipulation_mutex);
     // Iterate over stream lists by device
     for (auto by_device = this->streams.begin(); by_device != streams.end(); by_device++) {
         // Iterate over streams in each device
@@ -86,6 +86,7 @@ const GpuManager::StreamInfo& GpuManager::getAvailableStream() {
 }
 
 const GpuManager::StreamInfo& GpuManager::getAvailableStreamFromDevice(int index) {
+    std::lock_guard<std::mutex> lock(stream_manipulation_mutex);
     for (auto stream = this->streams[index].begin(); stream != this->streams[index].end(); stream++) {
         if (!stream->_impl_active) {
             stream->_impl_active = true;
@@ -98,6 +99,7 @@ const GpuManager::StreamInfo& GpuManager::getAvailableStreamFromDevice(int index
 }
 
 void GpuManager::setStreamAvailable(const StreamInfo& info) {
+    std::lock_guard<std::mutex> lock(stream_manipulation_mutex);
     for (auto stream = this->streams[info.device].begin(); stream != this->streams[info.device].end(); stream++) {
         if (stream->stream == info.stream) {
             stream->_impl_active = false;

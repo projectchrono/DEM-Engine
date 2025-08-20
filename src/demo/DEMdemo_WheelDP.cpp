@@ -27,7 +27,7 @@ const double math_PI = 3.1415927;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DemoOutput_WheelDP";
+    out_dir /= "DemoOutput_WheelDP";
     std::filesystem::create_directory(out_dir);
 
     float TRs[] = {0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.8};
@@ -40,7 +40,7 @@ int main() {
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
         DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
         DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
-        DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
+        DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT"});
 
         // E, nu, CoR, mu, Crr...
         auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}, {"Crr", 0.00}});
@@ -229,7 +229,10 @@ int main() {
         // Error out vel is used to force the simulation to abort when something goes wrong and sim diverges.
         DEMSim.SetErrorOutVelocity(60.);
         DEMSim.SetExpandSafetyMultiplier(1.1);
-        DEMSim.SetInitBinSize(2 * scales.at(2));
+        // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto
+        // bin size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case
+        // setting init bin size may save the simulation.
+        // DEMSim.SetInitBinSize(2 * scales.at(2));
         DEMSim.Initialize();
 
         // Compress until dense enough
@@ -245,12 +248,12 @@ int main() {
         float max_z = max_z_finder->GetValue();
         wheel_tracker->SetPos(make_float3(-0.45, 0, max_z + 0.03 + wheel_rad));
         for (double t = 0; t < 0.5; t += frame_time) {
-            char filename[200], meshname[200];
+            char filename[100], meshname[100];
             std::cout << "Outputting frame: " << currframe << std::endl;
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
-            DEMSim.WriteSphereFile(std::string(filename));
-            DEMSim.WriteMeshFile(std::string(meshname));
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+            sprintf(meshname, "DEMdemo_mesh_%04d.vtk", currframe++);
+            DEMSim.WriteSphereFile(out_dir / filename);
+            DEMSim.WriteMeshFile(out_dir / meshname);
 
             // float3 pos = bot_wall_tracker->Pos();
             // float3 force = bot_wall_tracker->ContactAcc();
@@ -266,12 +269,12 @@ int main() {
 
         for (double t = 0; t < sim_end; t += step_size, curr_step++) {
             if (curr_step % out_steps == 0) {
-                char filename[200], meshname[200];
+                char filename[100], meshname[100];
                 std::cout << "Outputting frame: " << currframe << std::endl;
-                sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-                sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
-                DEMSim.WriteSphereFile(std::string(filename));
-                DEMSim.WriteMeshFile(std::string(meshname));
+                sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+                sprintf(meshname, "DEMdemo_mesh_%04d.vtk", currframe++);
+                DEMSim.WriteSphereFile(out_dir / filename);
+                DEMSim.WriteMeshFile(out_dir / meshname);
                 DEMSim.ShowThreadCollaborationStats();
             }
 
@@ -290,7 +293,9 @@ int main() {
 
         run_mode++;
         DEMSim.ShowTimingStats();
-        DEMSim.ShowAnomalies();
+        std::cout << "----------------------------------------" << std::endl;
+        DEMSim.ShowMemStats();
+        std::cout << "----------------------------------------" << std::endl;
     }
 
     std::cout << "WheelDP demo exiting..." << std::endl;

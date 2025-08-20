@@ -35,11 +35,11 @@ void writeFloat3VectorsToCSV(const std::string& header,
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
-    DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
-    DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
-    DEMSim.SetContactOutputContent(OWNER | FORCE | POINT | TORQUE);
+    DEMSim.SetVerbosity("INFO");
+    DEMSim.SetOutputFormat("CSV");
+    DEMSim.SetOutputContent({"ABSV"});
+    DEMSim.SetMeshOutputFormat("VTK");
+    DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT", "TORQUE"});
 
     // E, nu, CoR, mu, Crr...
     auto mat_type_mesh = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.7}, {"Crr", 0.00}});
@@ -149,7 +149,7 @@ int main() {
     std::vector<float3> node_resting_location(mesh_handle->GetCoordsVertices());
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DemoOutput_FlexibleMesh";
+    out_dir /= "DemoOutput_FlexibleMesh";
     std::filesystem::create_directory(out_dir);
 
     float sim_end = 9.0;
@@ -166,14 +166,15 @@ int main() {
 
     // Settle
     for (float t = 0; t < 0.5; t += frame_time) {
-        char filename[200], meshname[200], force_filename[200];
+        char filename[100], meshname[100], force_filename[100];
         std::cout << "Outputting frame: " << frame_count << std::endl;
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame_count);
-        sprintf(force_filename, "%s/DEMdemo_forces_%04d.csv", out_dir.c_str(), frame_count);
-        sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame_count++);
-        DEMSim.WriteSphereFile(std::string(filename));
-        DEMSim.WriteMeshFile(std::string(meshname));
-        writeFloat3VectorsToCSV(force_csv_header, {points, forces}, force_filename, num_force_pairs);
+        sprintf(filename, "DEMdemo_output_%04d.csv", frame_count);
+        sprintf(force_filename, "DEMdemo_forces_%04d.csv", frame_count);
+        sprintf(meshname, "DEMdemo_mesh_%04d.vtk", frame_count++);
+        DEMSim.WriteSphereFile(out_dir / filename);
+        DEMSim.WriteMeshFile(out_dir / meshname);
+        std::filesystem::path force_filepath = out_dir / force_filename;
+        writeFloat3VectorsToCSV(force_csv_header, {points, forces}, force_filepath.string(), num_force_pairs);
         DEMSim.ShowThreadCollaborationStats();
         DEMSim.DoDynamics(frame_time);
     }
@@ -190,16 +191,17 @@ int main() {
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_end; t += step_size, step_count++) {
         if (step_count % out_steps == 0) {
-            char filename[200], meshname[200], force_filename[200];
+            char filename[100], meshname[100], force_filename[100];
             std::cout << "Outputting frame: " << frame_count << std::endl;
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame_count);
-            sprintf(force_filename, "%s/DEMdemo_forces_%04d.csv", out_dir.c_str(), frame_count);
-            sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame_count++);
-            DEMSim.WriteSphereFile(std::string(filename));
-            DEMSim.WriteMeshFile(std::string(meshname));
+            sprintf(filename, "DEMdemo_output_%04d.csv", frame_count);
+            sprintf(force_filename, "DEMdemo_forces_%04d.csv", frame_count);
+            sprintf(meshname, "DEMdemo_mesh_%04d.vtk", frame_count++);
+            DEMSim.WriteSphereFile(out_dir / filename);
+            DEMSim.WriteMeshFile(out_dir / meshname);
+            std::filesystem::path force_filepath = out_dir / force_filename;
             // We write force pairs that are related to the mesh to a file
             num_force_pairs = flex_mesh_tracker->GetContactForces(points, forces);
-            writeFloat3VectorsToCSV(force_csv_header, {points, forces}, force_filename, num_force_pairs);
+            writeFloat3VectorsToCSV(force_csv_header, {points, forces}, force_filepath.string(), num_force_pairs);
             DEMSim.ShowThreadCollaborationStats();
         }
 
@@ -261,6 +263,10 @@ int main() {
     std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
 
     DEMSim.ShowTimingStats();
+
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
     std::cout << "FlexibleMesh demo exiting..." << std::endl;
     return 0;
 }
@@ -277,7 +283,7 @@ void writeFloat3VectorsToCSV(const std::string& header,
         return;
     }
 
-    file << force_csv_header << "\n";
+    file << header << "\n";
 
     // Write vectors as columns
     for (size_t i = 0; i < num_items; ++i) {

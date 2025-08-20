@@ -1,6 +1,7 @@
 // DEM kernels used for quarrying (statistical) information from the current simulation system
 #include <DEM/Defines.h>
-#include <DEMHelperKernels.cu>
+#include <DEMHelperKernels.cuh>
+_kernelIncludes_;
 
 // Mass properties are below, if jitified mass properties are in use
 _massDefs_;

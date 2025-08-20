@@ -31,7 +31,7 @@ int main() {
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
-    DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
+    DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT"});
 
     // E, nu, CoR, mu, Crr...
     auto mat_type_cone = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.7}, {"Crr", 0.00}});
@@ -140,10 +140,11 @@ int main() {
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(10.);
+
     DEMSim.Initialize();
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DemoOutput_ConePenetration";
+    out_dir /= "DemoOutput_ConePenetration";
     std::filesystem::create_directory(out_dir);
 
     // Settle
@@ -163,11 +164,11 @@ int main() {
         float total_volume = math_PI * (soil_bin_diameter * soil_bin_diameter / 4) * (terrain_max_z - bottom);
         bulk_density = matter_mass / total_volume;
         if (curr_step % out_steps == 0) {
-            char filename[200], meshname[200];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
-            DEMSim.WriteSphereFile(std::string(filename));
-            // DEMSim.WriteMeshFile(std::string(meshname));
+            char filename[100], meshname[100];
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+            sprintf(meshname, "DEMdemo_mesh_%04d.vtk", currframe);
+            DEMSim.WriteSphereFile(out_dir / filename);
+            // DEMSim.WriteMeshFile(out_dir / meshname);
             std::cout << "Compression bulk density: " << bulk_density << std::endl;
             currframe++;
         }
@@ -180,11 +181,11 @@ int main() {
     // Then gradually remove the compressor
     while (terrain_max_z < init_max_z) {
         if (curr_step % out_steps == 0) {
-            char filename[200], meshname[200];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
-            DEMSim.WriteSphereFile(std::string(filename));
-            // DEMSim.WriteMeshFile(std::string(meshname));
+            char filename[100], meshname[100];
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+            sprintf(meshname, "DEMdemo_mesh_%04d.vtk", currframe);
+            DEMSim.WriteSphereFile(out_dir / filename);
+            // DEMSim.WriteMeshFile(out_dir / meshname);
             float matter_mass = total_mass_finder->GetValue();
             float total_volume =
                 math_PI * (soil_bin_diameter * soil_bin_diameter / 4) * (max_z_finder->GetValue() - bottom);
@@ -250,12 +251,12 @@ int main() {
         std::cout << "Pressure: " << pressure << std::endl;
 
         if (frame_count % 500 == 0) {
-            char filename[200], meshname[200];
+            char filename[100], meshname[100];
             std::cout << "Outputting frame: " << currframe << std::endl;
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
-            DEMSim.WriteSphereFile(std::string(filename));
-            DEMSim.WriteMeshFile(std::string(meshname));
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+            sprintf(meshname, "DEMdemo_mesh_%04d.vtk", currframe++);
+            DEMSim.WriteSphereFile(out_dir / filename);
+            DEMSim.WriteMeshFile(out_dir / meshname);
             DEMSim.ShowThreadCollaborationStats();
         }
 

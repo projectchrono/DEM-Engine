@@ -151,7 +151,7 @@ if (overlapDepth > 0) {
     // For example, although the charges transfer between geometries, the geometries within one clump cannot
     // re-distribute elec charges among them, since no contact among geometries in one clump. Still, you could write
     // your own subroutine to further modify those geometry and/or own wildcards in your script, or within the force
-    // model. 
+    // model.
     // On the other hand, if you do not need to modify the wildcards, you just need to use them for calculating
     // the force, then that is probably easier and with less strings attached to it. I can see this being more
     // useful.

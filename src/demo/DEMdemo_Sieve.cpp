@@ -26,6 +26,9 @@ int main() {
     // I generally use this demo to inspect if I have "lost contact pairs", so the verbosity is set to STEP_METRIC...
     DEMSim.SetVerbosity(STEP_METRIC);
 
+    // If you don't need individual force information, then this option makes the solver run a bit faster.
+    DEMSim.SetNoForceRecord();
+
     srand(759);
 
     // total number of random clump templates to generate
@@ -143,13 +146,16 @@ int main() {
     DEMSim.SetCDUpdateFreq(30);
     DEMSim.SetExpandSafetyMultiplier(1.0);
     DEMSim.SetExpandSafetyAdder(1.0);
-    DEMSim.SetInitBinSize(0.1);
+    // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto bin
+    // size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case setting
+    // init bin size may save the simulation.
+    // DEMSim.SetInitBinSize(0.1);
     // DEMSim.DisableAdaptiveBinSize();
 
     DEMSim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Sieve";
+    out_dir /= "DemoOutput_Sieve";
     create_directory(out_dir);
 
     float time_end = 40.0;
@@ -164,8 +170,8 @@ int main() {
         if (curr_step % out_steps == 0) {
             std::cout << "Frame: " << currframe << std::endl;
             char filename[100];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-            DEMSim.WriteSphereFile(std::string(filename));
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe++);
+            DEMSim.WriteSphereFile(out_dir / filename);
             max_v = max_v_finder->GetValue();
             std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
         }
@@ -178,6 +184,10 @@ int main() {
 
     DEMSim.ShowThreadCollaborationStats();
     DEMSim.ShowTimingStats();
+
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
     std::cout << "DEMdemo_Sieve exiting..." << std::endl;
     return 0;
 }

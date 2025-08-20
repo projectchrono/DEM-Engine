@@ -1,7 +1,8 @@
 // DEM contact detection-related custom kernels
 #include <DEM/Defines.h>
-#include <DEMHelperKernels.cu>
+#include <DEMHelperKernels.cuh>
 #include <DEMCollisionKernels.cu>
+_kernelIncludes_;
 
 // #include <cub/block/block_load.cuh>
 // #include <cub/block/block_store.cuh>
@@ -218,6 +219,11 @@ __global__ void getNumberOfSphTriContactsEachBin(deme::DEMSimParams* simParams,
                     if (granData->familyMasks[maskMatID] != deme::DONT_PREVENT_CONTACT) {
                         continue;
                     }
+                    // The smaller of the two added margins is recorded...
+                    float artificialMargin = (granData->familyExtraMarginSize[ownerFamily] <
+                                              granData->familyExtraMarginSize[triOwnerFamilies[ind]])
+                                                 ? granData->familyExtraMarginSize[ownerFamily]
+                                                 : granData->familyExtraMarginSize[triOwnerFamilies[ind]];
 
                     float3 cntPnt, normal;
                     float depth;
@@ -229,9 +235,16 @@ __global__ void getNumberOfSphTriContactsEachBin(deme::DEMSimParams* simParams,
                     // mainly "sphere near needle tip" scenario. Think about it.
                     in_contact_A = triangle_sphere_CD_directional<float3, float>(
                         triANode1[ind], triANode2[ind], triANode3[ind], sphXYZ, myRadius, normal, depth, cntPnt);
+                    // If the contact is too shallow (smaller than the smaller of artificial margin, then it can be
+                    // dropped to reduce the overall number of contact pairs). Note triangle_sphere_CD_directional gives
+                    // negative for contacts.
+                    in_contact_A = in_contact_A && (-depth > artificialMargin);
+
                     // And triangle B...
                     in_contact_B = triangle_sphere_CD_directional<float3, float>(
                         triBNode1[ind], triBNode2[ind], triBNode3[ind], sphXYZ, myRadius, normal, depth, cntPnt);
+                    // Same treatment for B...
+                    in_contact_B = in_contact_B && (-depth > artificialMargin);
 
                     // Note the contact point must be calculated through the original triangle, not the 2 phantom
                     // triangles; or we will have double count problems. Use the first triangle as standard.
@@ -354,6 +367,11 @@ __global__ void populateTriSphContactsEachBin(deme::DEMSimParams* simParams,
                     if (granData->familyMasks[maskMatID] != deme::DONT_PREVENT_CONTACT) {
                         continue;
                     }
+                    // The smaller of the two added margins is recorded...
+                    float artificialMargin = (granData->familyExtraMarginSize[ownerFamily] <
+                                              granData->familyExtraMarginSize[triOwnerFamilies[ind]])
+                                                 ? granData->familyExtraMarginSize[ownerFamily]
+                                                 : granData->familyExtraMarginSize[triOwnerFamilies[ind]];
 
                     float3 cntPnt, normal;
                     float depth;
@@ -365,9 +383,16 @@ __global__ void populateTriSphContactsEachBin(deme::DEMSimParams* simParams,
                     // mainly "sphere near needle tip" scenario. Think about it.
                     in_contact_A = triangle_sphere_CD_directional<float3, float>(
                         triANode1[ind], triANode2[ind], triANode3[ind], sphXYZ, myRadius, normal, depth, cntPnt);
+                    // If the contact is too shallow (smaller than the smaller of artificial margin, then it can be
+                    // dropped to reduce the overall number of contact pairs). Note triangle_sphere_CD_directional gives
+                    // negative for contacts.
+                    in_contact_A = in_contact_A && (-depth > artificialMargin);
+
                     // And triangle B...
                     in_contact_B = triangle_sphere_CD_directional<float3, float>(
                         triBNode1[ind], triBNode2[ind], triBNode3[ind], sphXYZ, myRadius, normal, depth, cntPnt);
+                    // Same treatment for B...
+                    in_contact_B = in_contact_B && (-depth > artificialMargin);
 
                     // Note the contact point must be calculated through the original triangle, not the 2 phantom
                     // triangles; or we will have double count problems. Use the first triangle as standard.

@@ -1,6 +1,7 @@
 // DEM force computation related custom kernels
 #include <DEM/Defines.h>
-#include <DEMHelperKernels.cu>
+#include <DEMHelperKernels.cuh>
+_kernelIncludes_;
 
 inline __device__ void cleanUpContactForces(size_t thisContact,
                                             deme::DEMSimParams* simParams,
@@ -28,13 +29,17 @@ inline __device__ void cleanUpAcc(size_t thisClump, deme::DEMSimParams* simParam
     }
 }
 
+__global__ void prepareAccArrays(deme::DEMSimParams* simParams, deme::DEMDataDT* granData) {
+    size_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < simParams->nOwnerBodies) {
+        cleanUpAcc(myID, simParams, granData);
+    }
+}
+
 __global__ void prepareForceArrays(deme::DEMSimParams* simParams, deme::DEMDataDT* granData, size_t nContactPairs) {
     size_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContactPairs) {
         cleanUpContactForces(myID, simParams, granData);
-    }
-    if (myID < simParams->nOwnerBodies) {
-        cleanUpAcc(myID, simParams, granData);
     }
 }
 

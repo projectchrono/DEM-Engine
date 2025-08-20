@@ -1,6 +1,7 @@
 // DEM kernels that does some wildcard stuff, such as modifying the system as per user instruction
-#include <DEMHelperKernels.cu>
+#include <DEMHelperKernels.cuh>
 #include <DEM/Defines.h>
+_kernelIncludes_;
 
 // Mass properties are below, if jitified mass properties are in use
 _massDefs_;
@@ -25,6 +26,10 @@ __global__ void applyFamilyChanges(deme::DEMSimParams* simParams, deme::DEMDataD
         voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
             pos.x, pos.y, pos.z, granData->voxelID[myOwner], granData->locX[myOwner], granData->locY[myOwner],
             granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
+        pos.x += simParams->LBFX;
+        pos.y += simParams->LBFY;
+        pos.z += simParams->LBFZ;
+
         vel.x = granData->vX[myOwner];
         vel.y = granData->vY[myOwner];
         vel.z = granData->vZ[myOwner];
@@ -32,8 +37,19 @@ __global__ void applyFamilyChanges(deme::DEMSimParams* simParams, deme::DEMDataD
         acc.y = granData->aY[myOwner];
         acc.z = granData->aZ[myOwner];
 
-        float h = simParams->h;
-        float t = simParams->timeElapsed;
+        // Standardize names...
+        double X = pos.x;
+        double Y = pos.y;
+        double Z = pos.z;
+        float vX = vel.x;
+        float vY = vel.y;
+        float vZ = vel.z;
+        float accX = acc.x;
+        float accY = acc.y;
+        float accZ = acc.z;
+
+        float ts = simParams->h;
+        float time = simParams->timeElapsed;
 
         // Carry out user's instructions
         { _familyChangeRules_; }

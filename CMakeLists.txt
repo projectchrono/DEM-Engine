@@ -10,15 +10,24 @@
 cmake_minimum_required(VERSION 3.18)
 
 # Version information
-set(VERSION_MAJOR   0)
-set(VERSION_MINOR   0)
-set(VERSION_PATCH   0)
+set(DEME_VERSION_MAJOR   2)
+set(DEME_VERSION_MINOR   1)
+set(DEME_VERSION_PATCH   0)
 
 project(
-	Simulator-MUlti-Gpu 
-	VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
+	Chrono-DEM-Engine
+	VERSION ${DEME_VERSION_MAJOR}.${DEME_VERSION_MINOR}.${DEME_VERSION_PATCH}
 	LANGUAGES CXX CUDA
 )
+
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  message(STATUS "Setting CMAKE_BUILD_TYPE to 'Release' (default)")
+  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "RelWithDebInfo" "MinSizeRel")
+endif()
+
+# Mark compile time (not runtime), affects how some kernel files include
+add_compile_definitions(DEME_BEING_CMAKE_COMPILED)
 
 # ---------------------------------------------------------------------------- #
 # Additional Packages
@@ -47,29 +56,36 @@ find_path(
 	PATHS "${CMAKE_CURRENT_LIST_DIR}/thirdparty/jitify"
 )
 
-# nvidia_helper_math doesn't require any extra configuration, so just set the path 
-set(NVIDIAMathDir ${CMAKE_CURRENT_LIST_DIR}/thirdparty/nvidia_helper_math)
+# Let the user decide if they want to use ChPF
+option(USE_CHPF "Toggle the use of ChPF for outputting" OFF)
 
-# Find ChPF, else fetch it 
-find_package(ChPF 3.0 QUIET)
+if(USE_CHPF)
+	# Find ChPF, else fetch it 
+    find_package(ChPF 3.0 QUIET)
+    if (NOT ChPF_FOUND)         
+        FetchContent_Declare(
+            ChPF
+            GIT_REPOSITORY  https://gitlab.com/uwsbel/chpf.git
+            GIT_TAG         0699f01e720cecf58719a1651ab797c6a62a1897
+        )
+        FetchContent_MakeAvailable(ChPF)
+    endif()
 
-if (NOT ChPF_FOUND) 		
-	FetchContent_Declare(
-		ChPF
-		GIT_REPOSITORY	https://gitlab.com/uwsbel/chpf.git
-		GIT_TAG			0699f01e720cecf58719a1651ab797c6a62a1897
-	)
-	FetchContent_MakeAvailable(ChPF)
-
+	# Based on whether ChPF was found or fetched, set the target name CMake can use to find it 
+    if (ChPF_FOUND) 
+        set(ChPF_IMPORTED_NAME "ChPF::ChPF")
+    elseif (chpf_POPULATED)
+        set(ChPF_IMPORTED_NAME "ChPF")
+    endif()
 endif()
 
-# Based on whether ChPF was found or fetched, set the target name CMake can use to find it 
-if (ChPF_FOUND) 
-	set(ChPF_IMPORTED_NAME "ChPF::ChPF")
-elseif (chpf_POPULATED)
-	set(ChPF_IMPORTED_NAME "ChPF")
-endif()
-
+# Let the user decide if they want to use managed arrays, rather than default cudaMalloc and cudaMallocHost memory.
+# Note that turning this on gives no performance benefits, and it's considered legacy.
+set(USE_MANAGED_ARRAYS_DESC
+	"Use managed CUDA arrays (instead of manual CUDA host and device memory) to store data"
+	"Switching it on makes the project operable on a Linux platform (excluding WSL) only."
+)
+option(USE_MANAGED_ARRAYS "${USE_MANAGED_ARRAYS_DESC}" OFF)
 
 # ---------------------------------------------------------------------------- #
 # Global Configuration
@@ -106,6 +122,13 @@ set(ProjectIncludeGenerated "${CMAKE_BINARY_DIR}/src")
 # Global fix for CUDA language bug
 include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
+
+#------------------------------------------------------------
+# Install destinations for data and demo programs
+#------------------------------------------------------------
+
+set(DEME_INSTALL_DEMO "bin")
+
 # ---------------------------------------------------------------------------- #
 # Source-level configuration
 # ---------------------------------------------------------------------------- #
@@ -136,12 +159,39 @@ target_include_directories(simulator_multi_gpu
 	PUBLIC ${CORE_INTERFACE}
 )
 
-target_link_libraries(simulator_multi_gpu
-	PUBLIC CUDA::cudart
-	PUBLIC CUDA::nvrtc
-	PUBLIC ${ChPF_IMPORTED_NAME}
-	PUBLIC DEMERuntimeDataHelper
-)
+# If use ChPF, inform the source
+if(USE_CHPF)
+    target_compile_definitions(simulator_multi_gpu PUBLIC DEME_USE_CHPF)
+	set(USE_CHPF_STR "ON")
+
+	target_link_libraries(simulator_multi_gpu
+		PUBLIC CUDA::cudart
+		PUBLIC CUDA::nvrtc
+		PUBLIC CUDA::cuda_driver
+		PUBLIC ${ChPF_IMPORTED_NAME}
+		PUBLIC DEMERuntimeDataHelper
+	)
+else()
+	set(USE_CHPF_STR "OFF")
+
+	target_link_libraries(simulator_multi_gpu
+		PUBLIC CUDA::cudart
+		PUBLIC CUDA::nvrtc
+		PUBLIC CUDA::cuda_driver
+		PUBLIC DEMERuntimeDataHelper
+	)
+endif()
+
+# If use managed arrays, define a macro
+if(USE_MANAGED_ARRAYS)
+	target_compile_definitions(simulator_multi_gpu PUBLIC DEME_USE_MANAGED_ARRAYS)
+endif()
+
+# Specific to Windows...
+if(WIN32)
+	target_link_libraries(simulator_multi_gpu 
+		PUBLIC dbghelp)
+endif()
 
 # Attach include directories to the top-level library target
 set_target_properties(simulator_multi_gpu
@@ -216,7 +266,7 @@ configure_file(cmake/DEMEConfig.cmake.in
 
 write_basic_package_version_file(
 	${CMAKE_CURRENT_BINARY_DIR}/DEME/DEMEConfigVersion.cmake
-	VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
+	VERSION ${DEME_VERSION_MAJOR}.${DEME_VERSION_MINOR}.${DEME_VERSION_PATCH}
 	COMPATIBILITY AnyNewerVersion
 )
 

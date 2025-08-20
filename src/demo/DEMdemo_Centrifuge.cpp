@@ -30,6 +30,9 @@ int main() {
     DEMSim.SetOutputContent(OUTPUT_CONTENT::FAMILY);
     // DEMSim.SetVerbosity(STEP_METRIC);
 
+    // If you don't need individual force information, then this option makes the solver run a bit faster.
+    DEMSim.SetNoForceRecord();
+
     // What will be loaded from the file, is a template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
     DEMClumpTemplate ellipsoid;
     ellipsoid.ReadComponentFromFile((GET_DATA_PATH() / "clumps/ellipsoid_2_1_1.csv").string());
@@ -141,7 +144,7 @@ int main() {
     DEMSim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Centrifuge";
+    out_dir /= "DemoOutput_Centrifuge";
     create_directory(out_dir);
 
     float time_end = 20.0;
@@ -157,16 +160,16 @@ int main() {
             std::cout << "Frame: " << currframe << std::endl;
             DEMSim.ShowThreadCollaborationStats();
             char filename[100];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            DEMSim.WriteSphereFile(std::string(filename));
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+            DEMSim.WriteSphereFile(out_dir / filename);
             currframe++;
             max_v = max_v_finder->GetValue();
             std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
 
             // Torque on the side walls are?
             float3 drum_moi = Drum_tracker->MOI();
-            float3 drum_pos = Drum_tracker->ContactAngAccLocal();
-            float3 drum_torque = drum_pos * drum_moi;
+            float3 drum_acc = Drum_tracker->ContactAngAccLocal();
+            float3 drum_torque = drum_acc * drum_moi;
             std::cout << "Contact torque on the side walls is " << drum_torque.x << ", " << drum_torque.y << ", "
                       << drum_torque.z << std::endl;
 
@@ -185,7 +188,9 @@ int main() {
     DEMSim.ClearThreadCollaborationStats();
 
     DEMSim.ShowTimingStats();
-    DEMSim.ShowAnomalies();
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
 
     std::cout << "DEMdemo_Centrifuge exiting..." << std::endl;
     return 0;

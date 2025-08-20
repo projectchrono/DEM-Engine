@@ -8,6 +8,14 @@
 
 namespace deme {
 
+// static_assert(sizeof(size_t) >= sizeof(unsigned long long), "This code should be compiled on 64-bit systems!");
+
+#if defined(_WIN64)
+typedef long long ssize_t;
+#elif defined(_WIN32)
+typedef long ssize_t;
+#endif
+
 typedef uint16_t subVoxelPos_t;  ///< uint16 or uint32
 
 typedef uint64_t voxelID_t;
@@ -20,9 +28,7 @@ typedef uint16_t inertiaOffset_t;
 typedef uint8_t clumpComponentOffset_t;
 typedef uint16_t clumpComponentOffsetExt_t;  ///< Extended component offset type for non-jitified part
 typedef double realFine_t;
-typedef char scratch_t;  ///< Data type for DEM scratch-pad array (this should NOT be changed, must be 1-byte)
-// typedef unsigned int distinctSphereRelativePositions_default_t;
-// typedef unsigned int distinctSphereRadiiOffset_default_t;
+typedef char scratch_t;  ///< Data type for DEM scratch-pad array (this should NOT be changed, MUST be 1-byte)
 
 // How many bin--sphere touch pairs can there be for one sphere, tops? This type should not need to be large.
 typedef unsigned short int binsSphereTouches_t;
