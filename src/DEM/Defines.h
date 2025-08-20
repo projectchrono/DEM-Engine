@@ -36,6 +36,7 @@ namespace deme {
 #define DEME_BIN_ENLARGE_RATIO_FOR_FACETS 0.001
 
 // A few pre-computed constants
+constexpr double ONE_OVER_THREE = 1. / 3.;
 constexpr double TWO_OVER_THREE = 2. / 3.;
 constexpr double FOUR_OVER_THREE = 4. / 3.;
 constexpr double FIVE_OVER_THREE = 5. / 3.;
@@ -208,8 +209,9 @@ struct DEMSimParams {
     double l;
     // Double-precision single voxel size
     double voxelSize;
-    // The edge length of a bin (for contact detection)
+    // The edge length and inverse edge length of a bin (for contact detection)
     double binSize;
+    double inv_binSize;
     // Number of clumps, spheres, triangles, mesh-represented objects, analytical components, external objs...
     bodyID_t nSpheresGM;
     bodyID_t nTriGM;
@@ -447,6 +449,8 @@ const unsigned int NUM_STEPS_RESERVED_AFTER_RENEWING_FREQ_TUNER = 10;
 const float DEFAULT_BOX_DOMAIN_SIZE = 20.;
 // The enlargement ratio we apply to the target sim world size when we construct it.
 const float DEFAULT_BOX_DOMAIN_ENLARGE_RATIO = 0.2;
+// For the bin collecting
+struct AxisBounds { int imin, imax; };
 
 // #ifndef CUB_IGNORE_DEPRECATED_API
 // #define CUB_IGNORE_DEPRECATED_API

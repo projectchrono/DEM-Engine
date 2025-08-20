@@ -84,6 +84,7 @@ void DEMKinematicThread::calibrateParams() {
                 simParams->binSize /= (1. - stateParams.binCurrentChangeRate);
             }
             // Register the new bin size
+            simParams->inv_binSize = 1./simParams->binSize;
             stateParams.numBins =
                 hostCalcBinNum(simParams->nbX, simParams->nbY, simParams->nbZ, simParams->voxelSize, simParams->binSize,
                                simParams->nvXp2, simParams->nvYp2, simParams->nvZp2);
@@ -555,6 +556,7 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
     simParams->l = l;
     simParams->voxelSize = voxelSize;
     simParams->binSize = binSize;
+    simParams->inv_binSize = 1./binSize;
     simParams->LBFX = LBFPoint.x;
     simParams->LBFY = LBFPoint.y;
     simParams->LBFZ = LBFPoint.z;
