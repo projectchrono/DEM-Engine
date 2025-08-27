@@ -539,6 +539,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             }
 
             if (blocks_needed_for_bins_tri > 0) {
+                // We got both tri--sph and tri--tri contacts in this kernel
                 sphTri_contact_kernels->kernel("getNumberOfTriangleContactsEachBin")
                     .instantiate()
                     .configure(dim3(blocks_needed_for_bins_tri), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
@@ -574,7 +575,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 cubDEMPrefixScan<binContactPairs_t, contactPairs_t>(numSphContactsInEachBin, sphSphContactReportOffsets,
                                                                     *pNumActiveBins, this_stream, scratchPad);
             }
-            contactPairs_t* triSphContactReportOffsets;
+            contactPairs_t *triSphContactReportOffsets, *triTriContactReportOffsets = nullptr;
             if (simParams->nTriGM > 0) {
                 CD_temp_arr_bytes = (*pNumActiveBinsForTri + 1) * sizeof(contactPairs_t);
                 triSphContactReportOffsets =
@@ -582,6 +583,15 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 cubDEMPrefixScan<binContactPairs_t, contactPairs_t>(numTriSphContactsInEachBin,
                                                                     triSphContactReportOffsets, *pNumActiveBinsForTri,
                                                                     this_stream, scratchPad);
+                if (solverFlags.meshUniversalContact) {
+                    // tri--tri contact report offsets...
+                    CD_temp_arr_bytes = (*pNumActiveBinsForTri + 1) * sizeof(contactPairs_t);
+                    triTriContactReportOffsets =
+                        (contactPairs_t*)scratchPad.allocateTempVector("triTriContactReportOffsets", CD_temp_arr_bytes);
+                    cubDEMPrefixScan<binContactPairs_t, contactPairs_t>(numTriTriContactsInEachBin,
+                                                                        triTriContactReportOffsets,
+                                                                        *pNumActiveBinsForTri, this_stream, scratchPad);
+                }
             }
             // DEME_DEBUG_PRINTF("Num contacts each bin:");
             // DEME_DEBUG_EXEC(displayDeviceArray<binContactPairs_t>(numSphContactsInEachBin, *pNumActiveBins));
@@ -613,9 +623,24 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 scratchPad.syncDualStructDeviceToHost("numSMContact");
                 nTriSphereContact = *scratchPad.getDualStructHost("numSMContact");
                 scratchPad.finishUsingDualStruct("numSMContact");
+                // If mesh-universal contact is on, tri--tri contacts are also possible, add it here...
+                if (solverFlags.meshUniversalContact) {
+                    scratchPad.allocateDualStruct("numMMContact");
+                    deviceAdd<size_t, binContactPairs_t, contactPairs_t>(
+                        scratchPad.getDualStructDevice("numMMContact"),
+                        &(numTriTriContactsInEachBin[*pNumActiveBinsForTri - 1]),
+                        &(triTriContactReportOffsets[*pNumActiveBinsForTri - 1]), this_stream);
+                    deviceAssign<contactPairs_t, size_t>(&(triTriContactReportOffsets[*pNumActiveBinsForTri]),
+                                                         scratchPad.getDualStructDevice("numMMContact"), this_stream);
+                    scratchPad.syncDualStructDeviceToHost("numMMContact");
+                    nTriTriContact = *scratchPad.getDualStructHost("numMMContact");
+                    scratchPad.finishUsingDualStruct("numMMContact");
+                }
             }
-            // std::cout << "nSphereGeoContact: " << nSphereGeoContact << std::endl;
-            // std::cout << "nSphereSphereContact: " << nSphereSphereContact << std::endl;
+            std::cout << "nSphereGeoContact: " << nSphereGeoContact << std::endl;
+            std::cout << "nSphereSphereContact: " << nSphereSphereContact << std::endl;
+            std::cout << "nTriSphereContact: " << nTriSphereContact << std::endl;
+            std::cout << "nTriTriContact: " << nTriTriContact << std::endl;
 
             *scratchPad.numContacts =
                 nSphereSphereContact + nSphereGeoContact + nTriGeoContact + nTriSphereContact + nTriTriContact;
@@ -639,17 +664,30 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
 
             // Triangle--sphere contact pairs go after sphere--sphere contacts. Remember to mark their type.
             if (blocks_needed_for_bins_tri > 0) {
-                idSphA = (granData->idGeometryA + nSphereGeoContact + nTriGeoContact + nSphereSphereContact);
-                bodyID_t* idTriB = (granData->idGeometryB + nSphereGeoContact + nTriGeoContact + nSphereSphereContact);
-                dType = (granData->contactType + nSphereGeoContact + nTriGeoContact + nSphereSphereContact);
+                // The contact in this section can be sph--tri...
+                bodyID_t* idSphA_sm =
+                    (granData->idGeometryA + nSphereGeoContact + nTriGeoContact + nSphereSphereContact);
+                bodyID_t* idTriB_sm =
+                    (granData->idGeometryB + nSphereGeoContact + nTriGeoContact + nSphereSphereContact);
+                contact_t* dType_sm =
+                    (granData->contactType + nSphereGeoContact + nTriGeoContact + nSphereSphereContact);
+                // Or tri--tri... They go after tri--sph contacts
+                bodyID_t* idTriA_mm = (granData->idGeometryA + nSphereGeoContact + nTriGeoContact +
+                                       nSphereSphereContact + nTriSphereContact);
+                bodyID_t* idTriB_mm = (granData->idGeometryB + nSphereGeoContact + nTriGeoContact +
+                                       nSphereSphereContact + nTriSphereContact);
+                contact_t* dType_mm = (granData->contactType + nSphereGeoContact + nTriGeoContact +
+                                       nSphereSphereContact + nTriSphereContact);
+                // And two possible types of contact are resolved both in this kernel
                 sphTri_contact_kernels->kernel("populateTriangleContactsEachBin")
                     .instantiate()
                     .configure(dim3(blocks_needed_for_bins_tri), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
                     .launch(&simParams, &granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
                             sphereIDsLookUpTable, mapTriActBinToSphActBin, triIDsEachBinTouches_sorted,
                             activeBinIDsForTri, numTrianglesBinTouches, triIDsLookUpTable, triSphContactReportOffsets,
-                            idSphA, idTriB, dType, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
-                            sandwichBNode2, sandwichBNode3, *pNumActiveBinsForTri);
+                            triTriContactReportOffsets, idSphA_sm, idTriB_sm, dType_sm, idTriA_mm, idTriB_mm, dType_mm,
+                            sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1, sandwichBNode2,
+                            sandwichBNode3, *pNumActiveBinsForTri, solverFlags.meshUniversalContact);
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                 // std::cout << "Contacts: " << std::endl;
                 // displayDeviceArray<bodyID_t>(granData->idGeometryA, *scratchPad.numContacts);
@@ -675,6 +713,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         scratchPad.finishUsingTempVector("numTriTriContactsInEachBin");
         scratchPad.finishUsingTempVector("sphSphContactReportOffsets");
         scratchPad.finishUsingTempVector("triSphContactReportOffsets");
+        scratchPad.finishUsingTempVector("triTriContactReportOffsets");
 
         scratchPad.finishUsingDualStruct("numActiveBins");
         scratchPad.finishUsingDualStruct("numActiveBinsForTri");
@@ -719,7 +758,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             scratchPad.syncDualStructDeviceToHost("numPersistCnts");
             size_t* pNumPersistCnts = scratchPad.getDualStructHost("numPersistCnts");
 
-            // Then concatenate the persisten
+            // Then concatenate the persistent contacts to the current contact list
             size_t total_ids_bytes = (*scratchPad.numContacts + *pNumPersistCnts) * sizeof(bodyID_t);
             size_t total_types_bytes = (*scratchPad.numContacts + *pNumPersistCnts) * sizeof(contact_t);
             size_t total_persistency_bytes = (*scratchPad.numContacts + *pNumPersistCnts) * sizeof(notStupidBool_t);

@@ -212,7 +212,7 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
     // This bin may have more than 128 (default) triangles, so we process it by 128-triangle batch
     for (deme::trianglesBinTouches_t processed_count = 0; processed_count < nTriInBin;
          processed_count += DEME_NUM_TRIANGLES_PER_CD_BATCH) {
-        // After this batch is processed, how many spheres are still left to go in this bin?
+        // After this batch is processed, how many tris are still left to go in this bin?
         const deme::trianglesBinTouches_t leftover_count =
             (nTriInBin - processed_count > DEME_NUM_TRIANGLES_PER_CD_BATCH)
                 ? nTriInBin - processed_count - DEME_NUM_TRIANGLES_PER_CD_BATCH
@@ -406,16 +406,21 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                                                 deme::trianglesBinTouches_t* numTrianglesBinTouches,
                                                 deme::binsTriangleTouchPairs_t* triIDsLookUpTable,
                                                 deme::contactPairs_t* triSphContactReportOffsets,
-                                                deme::bodyID_t* idSphA,
-                                                deme::bodyID_t* idTriB,
-                                                deme::contact_t* dType,
+                                                deme::contactPairs_t* triTriContactReportOffsets,
+                                                deme::bodyID_t* idSphA_sm,
+                                                deme::bodyID_t* idTriB_sm,
+                                                deme::contact_t* dType_sm,
+                                                deme::bodyID_t* idTriA_mm,
+                                                deme::bodyID_t* idTriB_mm,
+                                                deme::contact_t* dType_mm,
                                                 float3* sandwichANode1,
                                                 float3* sandwichANode2,
                                                 float3* sandwichANode3,
                                                 float3* sandwichBNode1,
                                                 float3* sandwichBNode2,
                                                 float3* sandwichBNode3,
-                                                size_t nActiveBinsForTri) {
+                                                size_t nActiveBinsForTri,
+                                                bool meshUniversalContact) {
     // Shared storage for bodies involved in this bin. Pre-allocated so that each threads can easily use.
     __shared__ deme::bodyID_t triOwnerIDs[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ deme::bodyID_t triIDs[DEME_NUM_TRIANGLES_PER_CD_BATCH];
@@ -426,34 +431,48 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
     __shared__ float3 triBNode2[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ float3 triBNode3[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ deme::family_t triOwnerFamilies[DEME_NUM_TRIANGLES_PER_CD_BATCH];
-    __shared__ deme::binContactPairs_t blockSphTriPairCnt;
+    __shared__ deme::binContactPairs_t blockSphTriPairCnt, blockTriTriPairCnt;
 
     const deme::trianglesBinTouches_t nTriInBin = numTrianglesBinTouches[blockIdx.x];
     const deme::spheresBinTouches_t myThreadID = threadIdx.x;
     const deme::binID_t binID = activeBinIDsForTri[blockIdx.x];
     // But what is the index of the same binID in array activeBinIDs? Well, mapTriActBinToSphActBin comes to rescure.
     const deme::binID_t indForAcqSphInfo = mapTriActBinToSphActBin[blockIdx.x];
-    // If it is not an active bin from the perspective of the spheres, then we can move on
-    if (indForAcqSphInfo == deme::NULL_BINID) {
+    // If it is not an active bin from the perspective of the spheres, then we can move on, unless mesh universal
+    // contact
+    if (indForAcqSphInfo == deme::NULL_BINID && !meshUniversalContact) {
         return;
     }
-    const deme::binSphereTouchPairs_t thisSphereTableEntry = sphereIDsLookUpTable[indForAcqSphInfo];
-    const deme::spheresBinTouches_t nSphInBin = numSpheresBinTouches[indForAcqSphInfo];
     const deme::binsTriangleTouchPairs_t thisTriTableEntry = triIDsLookUpTable[blockIdx.x];
-    // Get my offset for writing back to the global arrays that contain contact pair info
-    const deme::contactPairs_t myReportOffset = triSphContactReportOffsets[blockIdx.x];
-    const deme::contactPairs_t myReportOffset_end = triSphContactReportOffsets[blockIdx.x + 1];
-    if (myThreadID == 0)
+    // Have to allocate my sphere info first (each thread handles a sphere)
+    const deme::spheresBinTouches_t nSphInBin =
+        (indForAcqSphInfo == deme::NULL_BINID) ? 0 : numSpheresBinTouches[indForAcqSphInfo];
+    const deme::binSphereTouchPairs_t thisSphereTableEntry =
+        (nSphInBin == 0) ? 0 : sphereIDsLookUpTable[indForAcqSphInfo];
+
+    // No need to check if there are too many spheres, since we did in another kernel
+    if (myThreadID == 0) {
         blockSphTriPairCnt = 0;
+        blockTriTriPairCnt = 0;
+    }
+    const deme::contactPairs_t smReportOffset = triSphContactReportOffsets[blockIdx.x];
+    const deme::contactPairs_t smReportOffset_end = triSphContactReportOffsets[blockIdx.x + 1];
+    const deme::contactPairs_t mmReportOffset = triTriContactReportOffsets[blockIdx.x];
+    const deme::contactPairs_t mmReportOffset_end = triTriContactReportOffsets[blockIdx.x + 1];
     __syncthreads();
 
     // This bin may have more than 128 (default) triangles, so we process it by 128-triangle batch
     for (deme::trianglesBinTouches_t processed_count = 0; processed_count < nTriInBin;
          processed_count += DEME_NUM_TRIANGLES_PER_CD_BATCH) {
+        // After this batch is processed, how many tris are still left to go in this bin?
+        const deme::trianglesBinTouches_t leftover_count =
+            (nTriInBin - processed_count > DEME_NUM_TRIANGLES_PER_CD_BATCH)
+                ? nTriInBin - processed_count - DEME_NUM_TRIANGLES_PER_CD_BATCH
+                : 0;
         // How many threads are still active in this batch
         const deme::trianglesBinTouches_t this_batch_active_count =
-            (nTriInBin - processed_count > DEME_NUM_TRIANGLES_PER_CD_BATCH) ? DEME_NUM_TRIANGLES_PER_CD_BATCH
-                                                                            : nTriInBin - processed_count;
+            (leftover_count > 0) ? DEME_NUM_TRIANGLES_PER_CD_BATCH : nTriInBin - processed_count;
+
         // If I need to work on shared memory allocation
         if (myThreadID < this_batch_active_count) {
             deme::bodyID_t triID = triIDsEachBinTouches_sorted[thisTriTableEntry + processed_count + myThreadID];
@@ -526,17 +545,117 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                         deme::binID_t contactPntBin = getPointBinID<deme::binID_t>(
                             cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize, simParams->nbX, simParams->nbY);
                         if (contactPntBin == binID) {
-                            deme::contactPairs_t inBlockOffset = myReportOffset + atomicAdd(&blockSphTriPairCnt, 1);
-                            if (inBlockOffset < myReportOffset_end) {
-                                idSphA[inBlockOffset] = sphereID;
-                                idTriB[inBlockOffset] = triIDs[ind];
-                                dType[inBlockOffset] = deme::SPHERE_TRIANGLE_CONTACT;
+                            deme::contactPairs_t inBlockOffset = smReportOffset + atomicAdd(&blockSphTriPairCnt, 1);
+                            if (inBlockOffset < smReportOffset_end) {
+                                idSphA_sm[inBlockOffset] = sphereID;
+                                idTriB_sm[inBlockOffset] = triIDs[ind];
+                                dType_sm[inBlockOffset] = deme::SPHERE_TRIANGLE_CONTACT;
                             }
                         }
                     }
                 }  // End of a 256-sphere sweep
             }
         }  // End of sweeping through all spheres in bin
+
+        // Now all sph--tri pairs are processed, so we move on to potential tri--tri pairs
+        if (meshUniversalContact) {
+            // We have n * (n - 1) / 2 pairs to compare. To ensure even workload, these pairs are distributed to all
+            // threads.
+            const unsigned int nPairsNeedHandling =
+                (unsigned int)this_batch_active_count * ((unsigned int)this_batch_active_count - 1) / 2;
+            // Note this distribution is not even, but we need all active threads to process the same amount of pairs,
+            // so that each thread can easily know its offset
+            const unsigned int nPairsEachHandles =
+                (nPairsNeedHandling + DEME_KT_CD_NTHREADS_PER_BLOCK - 1) / DEME_KT_CD_NTHREADS_PER_BLOCK;
+
+            // i, j are local tri number in bin
+            unsigned int bodyA, bodyB;
+            // We can stop if this thread reaches the end of all potential pairs, nPairsNeedHandling
+            for (unsigned int ind = nPairsEachHandles * myThreadID;
+                 ind < nPairsNeedHandling && ind < nPairsEachHandles * (myThreadID + 1); ind++) {
+                recoverCntPair<unsigned int>(bodyA, bodyB, ind, this_batch_active_count);
+                // For 2 bodies to be considered in contact, the contact point must be in this bin (to avoid
+                // double-counting), and they do not belong to the same clump
+                if (triOwnerIDs[bodyA] == triOwnerIDs[bodyB])
+                    continue;
+
+                // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
+                unsigned int bodyAFamily = triOwnerFamilies[bodyA];
+                unsigned int bodyBFamily = triOwnerFamilies[bodyB];
+                unsigned int maskMatID = locateMaskPair<unsigned int>(bodyAFamily, bodyBFamily);
+                // If marked no contact, skip ths iteration
+                if (granData->familyMasks[maskMatID] != deme::DONT_PREVENT_CONTACT) {
+                    continue;
+                }
+
+                deme::binID_t contactPntBin;
+                bool in_contact = calcPrismContactPoint(
+                    simParams, triANode1[bodyA], triANode2[bodyA], triANode3[bodyA], triBNode1[bodyA], triBNode2[bodyA],
+                    triBNode3[bodyA], triANode1[bodyB], triANode2[bodyB], triANode3[bodyB], triBNode1[bodyB],
+                    triBNode2[bodyB], triBNode3[bodyB], contactPntBin);
+
+                if (in_contact && (contactPntBin == binID)) {
+                    deme::contactPairs_t inBlockOffset = mmReportOffset + atomicAdd(&blockTriTriPairCnt, 1);
+                    // The chance of offset going out-of-bound is very low, lower than sph--bin CD step, but I put it
+                    // here anyway
+                    if (inBlockOffset < mmReportOffset_end) {
+                        idTriA_mm[inBlockOffset] = triIDs[bodyA];
+                        idTriB_mm[inBlockOffset] = triIDs[bodyB];
+                        dType_mm[inBlockOffset] = deme::TRIANGLE_TRIANGLE_CONTACT;
+                    }
+                }
+            }
+
+            // Take care of the left-over triangles
+            if (myThreadID < this_batch_active_count) {
+                for (deme::trianglesBinTouches_t i = 0; i < leftover_count; i++) {
+                    deme::bodyID_t cur_ownerID, cur_bodyID;
+                    float3 cur_triANode1, cur_triANode2, cur_triANode3, cur_triBNode1, cur_triBNode2, cur_triBNode3;
+                    deme::family_t cur_ownerFamily;
+                    {
+                        const deme::trianglesBinTouches_t cur_ind =
+                            processed_count + DEME_NUM_TRIANGLES_PER_CD_BATCH + i;
+
+                        // Get the info of this tri in question here. Note this is a broadcast so should be relatively
+                        // fast. And it's not really shared mem filling, just using that function to get the info.
+                        deme::bodyID_t cur_triID = triIDsEachBinTouches_sorted[thisTriTableEntry + cur_ind];
+                        fillSharedMemTriangles(simParams, granData, 0, cur_triID, &cur_ownerID, &cur_bodyID,
+                                               &cur_ownerFamily, sandwichANode1, sandwichANode2, sandwichANode3,
+                                               sandwichBNode1, sandwichBNode2, sandwichBNode3, &cur_triANode1,
+                                               &cur_triANode2, &cur_triANode3, &cur_triBNode1, &cur_triBNode2,
+                                               &cur_triBNode3);
+                    }
+                    // Then each in-shared-mem sphere compares against it. But first, check if same owner...
+                    if (triOwnerIDs[myThreadID] == cur_ownerID)
+                        continue;
+
+                    // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
+                    unsigned int bodyAFamily = triOwnerFamilies[myThreadID];
+                    unsigned int maskMatID = locateMaskPair<unsigned int>(bodyAFamily, cur_ownerFamily);
+                    // If marked no contact, skip ths iteration
+                    if (granData->familyMasks[maskMatID] != deme::DONT_PREVENT_CONTACT) {
+                        continue;
+                    }
+
+                    deme::binID_t contactPntBin;
+                    bool in_contact = calcPrismContactPoint(
+                        simParams, triANode1[myThreadID], triANode2[myThreadID], triANode3[myThreadID],
+                        triBNode1[myThreadID], triBNode2[myThreadID], triBNode3[myThreadID], cur_triANode1,
+                        cur_triANode2, cur_triANode3, cur_triBNode1, cur_triBNode2, cur_triBNode3, contactPntBin);
+
+                    if (in_contact && (contactPntBin == binID)) {
+                        deme::contactPairs_t inBlockOffset = mmReportOffset + atomicAdd(&blockTriTriPairCnt, 1);
+                        // The chance of offset going out-of-bound is very low, lower than sph--bin CD step, but I put
+                        // it here anyway
+                        if (inBlockOffset < mmReportOffset_end) {
+                            idTriA_mm[inBlockOffset] = triIDs[myThreadID];
+                            idTriB_mm[inBlockOffset] = cur_bodyID;
+                            dType_mm[inBlockOffset] = deme::TRIANGLE_TRIANGLE_CONTACT;
+                        }
+                    }
+                }
+            }
+        }
         __syncthreads();
     }  // End of batch-wise triangle processing
     // __syncthreads();
@@ -544,9 +663,15 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
     // In practice, I've never seen non-illed contact slots that need to be resolved this way. It's purely for ultra
     // safety.
     if (threadIdx.x == 0) {
-        for (deme::contactPairs_t inBlockOffset = myReportOffset + blockSphTriPairCnt;
-             inBlockOffset < myReportOffset_end; inBlockOffset++) {
-            dType[inBlockOffset] = deme::NOT_A_CONTACT;
+        for (deme::contactPairs_t inBlockOffset = smReportOffset + blockSphTriPairCnt;
+             inBlockOffset < smReportOffset_end; inBlockOffset++) {
+            dType_sm[inBlockOffset] = deme::NOT_A_CONTACT;
+        }
+        if (meshUniversalContact) {
+            for (deme::contactPairs_t inBlockOffset = mmReportOffset + blockTriTriPairCnt;
+                 inBlockOffset < mmReportOffset_end; inBlockOffset++) {
+                dType_mm[inBlockOffset] = deme::NOT_A_CONTACT;
+            }
         }
     }
 }
