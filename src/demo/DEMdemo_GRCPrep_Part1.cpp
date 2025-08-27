@@ -31,8 +31,9 @@ int main() {
     DEMSolver DEMSim;
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    // DEMSim.SetOutputContent(OUTPUT_CONTENT::FAMILY);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ);
+    // Let the contact output file include "GEO_ID" geoA and geoB (not just owner IDs A and B, but their components)
+    DEMSim.SetContactOutputContent({"OWNER", "GEO_ID", "FORCE", "POINT", "CNT_WILDCARD"});
 
     srand(759);
 
