@@ -637,9 +637,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     scratchPad.finishUsingDualStruct("numMMContact");
                 }
             }
-            std::cout << "nSphereGeoContact: " << nSphereGeoContact << std::endl;
-            std::cout << "nSphereSphereContact: " << nSphereSphereContact << std::endl;
-            std::cout << "nTriSphereContact: " << nTriSphereContact << std::endl;
+            // std::cout << "nSphereGeoContact: " << nSphereGeoContact << std::endl;
+            // std::cout << "nSphereSphereContact: " << nSphereSphereContact << std::endl;
+            // std::cout << "nTriSphereContact: " << nTriSphereContact << std::endl;
             std::cout << "nTriTriContact: " << nTriTriContact << std::endl;
 
             *scratchPad.numContacts =

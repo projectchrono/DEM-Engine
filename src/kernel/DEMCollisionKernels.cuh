@@ -248,22 +248,12 @@ inline __device__ void select_projection(const T1& pts, const T1& axis, T2& min_
 }
 
 template <typename T1, typename T2>
-inline __device__ void project_points_on_axis(const T1& prismFaceANode1,
-                                              const T1& prismFaceANode2,
-                                              const T1& prismFaceANode3,
-                                              const T1& prismFaceBNode1,
-                                              const T1& prismFaceBNode2,
-                                              const T1& prismFaceBNode3,
-                                              const T1& axis,
-                                              T2& out_min,
-                                              T2& out_max) {
-    T2 min_p = dot(prismFaceANode1, axis);
+inline __device__ void project_points_on_axis(const T1* prism, const T1& axis, T2& out_min, T2& out_max) {
+    T2 min_p = dot(prism[0], axis);
     T2 max_p = min_p;
-    select_projection(prismFaceANode2, axis, min_p, max_p);
-    select_projection(prismFaceANode3, axis, min_p, max_p);
-    select_projection(prismFaceBNode1, axis, min_p, max_p);
-    select_projection(prismFaceBNode2, axis, min_p, max_p);
-    select_projection(prismFaceBNode3, axis, min_p, max_p);
+    for (int i = 1; i < 6; ++i) {
+        select_projection(prism[i], axis, min_p, max_p);
+    }
     out_min = min_p;
     out_max = max_p;
 }
@@ -289,20 +279,23 @@ inline __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
                                           T1& contactPointOut) {
     float3 axes[11];
     unsigned short int axisCount = 0;
+    // Pack as stack arrays for easier looping
+    T1 prismA[6] = {prismAFaceANode1, prismAFaceANode2, prismAFaceANode3,
+                    prismAFaceBNode1, prismAFaceBNode2, prismAFaceBNode3};
+    T1 prismB[6] = {prismBFaceANode1, prismBFaceANode2, prismBFaceANode3,
+                    prismBFaceBNode1, prismBFaceBNode2, prismBFaceBNode3};
 
     // Base triangle normals
-    T1 A_faceNormal = cross(prismAFaceANode2 - prismAFaceANode1, prismAFaceANode3 - prismAFaceANode1);
-    T1 B_faceNormal = cross(prismBFaceANode2 - prismBFaceANode1, prismBFaceANode3 - prismBFaceANode1);
+    T1 A_faceNormal = cross(prismA[1] - prismA[0], prismA[2] - prismA[0]);
+    T1 B_faceNormal = cross(prismB[1] - prismB[0], prismB[2] - prismB[0]);
 
     axes[axisCount++] = normalize(A_faceNormal);
     axes[axisCount++] = normalize(B_faceNormal);
 
     // Edges of each prism base
     {
-        T1 A_edges[3] = {prismAFaceANode2 - prismAFaceANode1, prismAFaceANode3 - prismAFaceANode2,
-                         prismAFaceANode1 - prismAFaceANode3};
-        T1 B_edges[3] = {prismBFaceANode2 - prismBFaceANode1, prismBFaceANode3 - prismBFaceANode2,
-                         prismBFaceANode1 - prismBFaceANode3};
+        T1 A_edges[3] = {prismA[1] - prismA[0], prismA[2] - prismA[1], prismA[0] - prismA[2]};
+        T1 B_edges[3] = {prismB[1] - prismB[0], prismB[2] - prismB[1], prismB[0] - prismB[2]};
 
         // Edge–edge cross products
         for (unsigned short int i = 0; i < 3; ++i) {
@@ -318,10 +311,8 @@ inline __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
     // SAT test
     for (unsigned short int i = 0; i < axisCount; ++i) {
         float minA, maxA, minB, maxB;
-        project_points_on_axis(prismAFaceANode1, prismAFaceANode2, prismAFaceANode3, prismAFaceBNode1, prismAFaceBNode2,
-                               prismAFaceBNode3, axes[i], minA, maxA);
-        project_points_on_axis(prismBFaceANode1, prismBFaceANode2, prismBFaceANode3, prismBFaceBNode1, prismBFaceBNode2,
-                               prismBFaceBNode3, axes[i], minB, maxB);
+        project_points_on_axis(prismA, axes[i], minA, maxA);
+        project_points_on_axis(prismB, axes[i], minB, maxB);
         if (!projections_overlap(minA, maxA, minB, maxB))
             return false;  // separating axis found -> no contact
     }
@@ -330,20 +321,24 @@ inline __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
     // The contact point does not need to be accurate, but consistent in terms of two metrics:
     // 1. It should be the same for the same pair of prisms, regardless of their order.
     // 2. It should be in the bin that one of the triangles lives
-    T1 minV = prismAFaceANode1;
-    minV = (minV < prismAFaceANode2) ? minV : prismAFaceANode2;
-    minV = (minV < prismAFaceANode3) ? minV : prismAFaceANode3;
-    minV = (minV < prismAFaceBNode1) ? minV : prismAFaceBNode1;
-    minV = (minV < prismAFaceBNode2) ? minV : prismAFaceBNode2;
-    minV = (minV < prismAFaceBNode3) ? minV : prismAFaceBNode3;
-    minV = (minV < prismBFaceANode1) ? minV : prismBFaceANode1;
-    minV = (minV < prismBFaceANode2) ? minV : prismBFaceANode2;
-    minV = (minV < prismBFaceANode3) ? minV : prismBFaceANode3;
-    minV = (minV < prismBFaceBNode1) ? minV : prismBFaceBNode1;
-    minV = (minV < prismBFaceBNode2) ? minV : prismBFaceBNode2;
-    minV = (minV < prismBFaceBNode3) ? minV : prismBFaceBNode3;
+    // And we use the computed midpoint of closest vertex pair
+    T1 closestA = prismA[0];
+    T1 closestB = prismB[0];
+    float minDist2 = DEME_HUGE_FLOAT;
 
-    contactPointOut = minV;
+    for (int i = 0; i < 6; ++i) {
+        for (int j = 0; j < 6; ++j) {
+            T1 diff = prismA[i] - prismB[j];
+            float d2 = dot(diff, diff);
+            if (d2 < minDist2 || (d2 == minDist2 && (i < j))) {
+                minDist2 = d2;
+                closestA = prismA[i];
+                closestB = prismB[j];
+            }
+        }
+    }
+    contactPointOut = (closestA + closestB) * 0.5;
+
     return true;
 }
 

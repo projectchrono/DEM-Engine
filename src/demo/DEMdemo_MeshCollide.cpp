@@ -57,7 +57,8 @@ int main() {
     DEMSim.SetInitTimeStep(2e-5);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEMSim.SetExpandSafetyType("auto");
-
+    // DEMSim.DisableAdaptiveBinSize();
+    // DEMSim.SetInitBinSize(10);
     DEMSim.Initialize();
 
     // Ready simulation

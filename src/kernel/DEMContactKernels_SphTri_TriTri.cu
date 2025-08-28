@@ -1,7 +1,7 @@
 // DEM contact detection-related custom kernels
 #include <DEM/Defines.h>
 #include <DEMHelperKernels.cuh>
-#include <DEMCollisionKernels.cu>
+#include <DEMCollisionKernels.cuh>
 _kernelIncludes_;
 
 // #include <cub/block/block_load.cuh>
@@ -47,6 +47,7 @@ inline __device__ void fillSharedMemTriangles(deme::DEMSimParams* simParams,
     float myOriQy = granData->oriQy[ownerID];
     float myOriQz = granData->oriQz[ownerID];
 
+    // These locations does not include the LBF offset, which is fine since we only care about relative positions here
     {
         node1 = sandwichANode1[triID];
         node2 = sandwichANode2[triID];
@@ -99,6 +100,7 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
         myRadius += granData->marginSize[ownerID];
     }
 
+    // These locations does not include the LBF offset
     voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
         ownerX, ownerY, ownerZ, granData->voxelID[ownerID], granData->locX[ownerID], granData->locY[ownerID],
         granData->locZ[ownerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
@@ -336,6 +338,19 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                     triBNode3[bodyA], triANode1[bodyB], triANode2[bodyB], triANode3[bodyB], triBNode1[bodyB],
                     triBNode2[bodyB], triBNode3[bodyB], contactPntBin);
 
+                /*
+                if (in_contact && (contactPntBin != binID)) {
+                    unsigned int ZZ = binID/(simParams->nbX*simParams->nbY);
+                    unsigned int YY = binID%(simParams->nbX*simParams->nbY)/simParams->nbX;
+                    unsigned int XX = binID%(simParams->nbX*simParams->nbY)%simParams->nbX;
+                    double binLocX = (XX + 0.5) * simParams->binSize;
+                    double binLocY = (YY + 0.5) * simParams->binSize;
+                    double binLocZ = (ZZ + 0.5) * simParams->binSize;
+                    printf("binLoc: %f, %f, %f\n", binLocX, binLocY, binLocZ);
+                    printf("triANode1A: %f, %f, %f\n", triANode1[bodyA].x, triANode1[bodyA].y, triANode1[bodyA].z);
+                }
+                */
+
                 if (in_contact && (contactPntBin == binID)) {
                     atomicAdd(&blockTriTriPairCnt, 1);
                 }
@@ -457,8 +472,11 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
     }
     const deme::contactPairs_t smReportOffset = triSphContactReportOffsets[blockIdx.x];
     const deme::contactPairs_t smReportOffset_end = triSphContactReportOffsets[blockIdx.x + 1];
-    const deme::contactPairs_t mmReportOffset = triTriContactReportOffsets[blockIdx.x];
-    const deme::contactPairs_t mmReportOffset_end = triTriContactReportOffsets[blockIdx.x + 1];
+    deme::contactPairs_t mmReportOffset, mmReportOffset_end;
+    if (meshUniversalContact) {
+        mmReportOffset = triTriContactReportOffsets[blockIdx.x];
+        mmReportOffset_end = triTriContactReportOffsets[blockIdx.x + 1];
+    }
     __syncthreads();
 
     // This bin may have more than 128 (default) triangles, so we process it by 128-triangle batch
