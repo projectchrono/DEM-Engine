@@ -11,7 +11,7 @@
 #include <algorithms/DEMKinematicMisc.cu>
 #include <algorithms/DEMCubWrappers.cu>
 
-#include <DEM/HostSideHelpers.hpp>
+#include <DEM/utils/HostSideHelpers.hpp>
 #include <core/utils/GpuError.h>
 
 namespace deme {
@@ -33,6 +33,9 @@ inline void contactEventArraysResize(size_t nContactPairs,
     // so writing from host to device won't change the destination where dT writes
     granData.toDevice();
 }
+
+template <typename... Ts>
+inline void removeDuplicateContacts(std::tuple<Ts*...> ptrs, size_t count) {}
 
 void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       std::shared_ptr<jitify::Program>& bin_triangle_kernels,
@@ -73,6 +76,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     stateParams.maxTriFoundInBin = 0;
     stateParams.avgCntsPerSphere = 0;
 
+    // A special flag that marks if the contact arrays are sorted based on idGeometryA; if so, we can choose to not do
+    // another sort at some points
+    bool contactArraysAreSortedByA = false;
+
     // total bytes needed for temp arrays in contact detection
     size_t CD_temp_arr_bytes = 0;
 
@@ -82,9 +89,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
 
     {
         timers.GetTimer("Discretize domain").start();
-        ////////////////////////////////////////////////////////////////////////////////
+        // -----------------------------------------------------------------------------------------------------------
         // Sphere-related discretization & sphere--analytical contact detection
-        ////////////////////////////////////////////////////////////////////////////////
+        // -----------------------------------------------------------------------------------------------------------
 
         // If there are spheres, the following information needs to be extracted and kept...
         scratchPad.allocateDualStruct("numActiveBins");
@@ -260,9 +267,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // displayDeviceArray<binSphereTouchPairs_t>(sphereIDsLookUpTable, *pNumActiveBins);
         }
 
-        ////////////////////////////////////////////////////////////////////////////////
+        // -----------------------------------------------------------------------------------------------------------
         // Triangle-related discretization and triangle--analytical contact detection
-        ////////////////////////////////////////////////////////////////////////////////
+        // -----------------------------------------------------------------------------------------------------------
 
         // If there are meshes, they need to be processed too
         scratchPad.allocateDualStruct("numActiveBinsForTri");
@@ -496,9 +503,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         }
         timers.GetTimer("Discretize domain").stop();
 
-        ////////////////////////////////////////////////////////////////////////////////
+        // -----------------------------------------------------------------------------------------------------------
         // Populating contact pairs
-        ////////////////////////////////////////////////////////////////////////////////
+        // -----------------------------------------------------------------------------------------------------------
 
         timers.GetTimer("Find contact pairs").start();
         // Final step: find the contact pairs. One-two punch: first find num of contacts in each bin, then prescan, then
@@ -554,14 +561,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 // std::cout << "numTriTriContactsInEachBin: " << std::endl;
                 // displayDeviceArray<binContactPairs_t>(numTriTriContactsInEachBin, *pNumActiveBinsForTri);
             }
-
-            //// TODO: sphere should have jitified and non-jitified part. Use a component ID > max_comp_id to signal
-            /// bringing data from global memory. / TODO: Add tri--sphere CD kernel (if mesh support is to be added).
-            /// This kernel integrates tri--boundary CD. Note triangle facets can have jitified (many bodies of the same
-            /// type) and non-jitified (a big meshed body) part. Use a component ID > max_comp_id to signal bringing
-            /// data from global memory. / TODO: Add tri--tri CD kernel (in the far future, should mesh-rerpesented
-            /// geometry to be supported). This kernel integrates tri--boundary CD. / TODO: remember that boundary types
-            /// are either all jitified or non-jitified. In principal, they should be all jitified.
 
             // Prescan numSphContactsInEachBin to get the final sphSphContactReportOffsets and
             // triSphContactReportOffsets. New vectors are needed.
@@ -640,7 +639,11 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // std::cout << "nSphereGeoContact: " << nSphereGeoContact << std::endl;
             // std::cout << "nSphereSphereContact: " << nSphereSphereContact << std::endl;
             // std::cout << "nTriSphereContact: " << nTriSphereContact << std::endl;
-            std::cout << "nTriTriContact: " << nTriTriContact << std::endl;
+            // std::cout << "nTriTriContact: " << nTriTriContact << std::endl;
+            // ----------------------------------------------------------------------------------------
+            // IMPORTANT NOTE: contacts got here may have duplicates, as we do not rule out duplicates in tri--tri
+            // contacts, so the numbers here are not reliable. These duplicates will be filtered out later.
+            // ----------------------------------------------------------------------------------------
 
             *scratchPad.numContacts =
                 nSphereSphereContact + nSphereGeoContact + nTriGeoContact + nTriSphereContact + nTriTriContact;
@@ -689,10 +692,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                             sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1, sandwichBNode2,
                             sandwichBNode3, *pNumActiveBinsForTri, solverFlags.meshUniversalContact);
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-                // std::cout << "Contacts: " << std::endl;
-                // displayDeviceArray<bodyID_t>(granData->idGeometryA, *scratchPad.numContacts);
-                // displayDeviceArray<bodyID_t>(granData->idGeometryB, *scratchPad.numContacts);
-                // displayDeviceArray<contact_t>(granData->contactType, *scratchPad.numContacts);
             }
         }  // End of bin-wise contact detection subroutine
 
@@ -718,10 +717,14 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         scratchPad.finishUsingDualStruct("numActiveBins");
         scratchPad.finishUsingDualStruct("numActiveBinsForTri");
 
-        // There is in fact one more task: If the user specified persistent contacts, we check the previous contact list
+        // -----------------------------------------------------------------------------------------------------------
+        // One more task: If the user specified persistent contacts, we check the previous contact list
         // and see if there are some contacts we need to add to the current list. Even if we detected 0 contacts, we
         // might still have persistent contacts to add to the list.
-        // Also at this point, all temp arrays are freed now.
+        // -----------------------------------------------------------------------------------------------------------
+
+        // At user API level, persistent contacts are only supported for history-based models, and this check is totally
+        // for redundancy purpose.
         if (solverFlags.hasPersistentContacts && !solverFlags.isHistoryless) {
             // A bool array to help find what persistent contacts from the prev array need to be processed...
             size_t flag_arr_bytes = (*scratchPad.numPrevContacts) * sizeof(notStupidBool_t);
@@ -758,7 +761,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             scratchPad.syncDualStructDeviceToHost("numPersistCnts");
             size_t* pNumPersistCnts = scratchPad.getDualStructHost("numPersistCnts");
 
-            // Then concatenate the persistent contacts to the current contact list
+            // Then concatenate the persistent contacts (goes first) and the newly detected contacts (follows after)
             size_t total_ids_bytes = (*scratchPad.numContacts + *pNumPersistCnts) * sizeof(bodyID_t);
             size_t total_types_bytes = (*scratchPad.numContacts + *pNumPersistCnts) * sizeof(contact_t);
             size_t total_persistency_bytes = (*scratchPad.numContacts + *pNumPersistCnts) * sizeof(notStupidBool_t);
@@ -778,7 +781,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             DEME_GPU_CALL(cudaMemcpy(total_types, selected_types, selected_types_bytes, cudaMemcpyDeviceToDevice));
             DEME_GPU_CALL(cudaMemcpy(total_types + *pNumPersistCnts, granData->contactType,
                                      total_types_bytes - selected_types_bytes, cudaMemcpyDeviceToDevice));
-            // For the selected portion, persistency is all 1
+            // For the selected portion, persistency is all 1, the rest is all 0
             DEME_GPU_CALL(cudaMemset(total_persistency, CONTACT_NOT_PERSISTENT, total_persistency_bytes));
             size_t blocks_needed_for_setting_1 =
                 (*pNumPersistCnts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
@@ -819,6 +822,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             scratchPad.finishUsingTempVector("total_types");
             scratchPad.finishUsingTempVector("total_persistency");
             scratchPad.finishUsingDualStruct("numPersistCnts");
+
+            // This step sorts the contact array by idA, which saves effort later
+            contactArraysAreSortedByA = true;
 
             // Then we run-length it...
             size_t run_length_bytes = simParams->nSpheresGM * sizeof(geoSphereTouches_t);
@@ -913,23 +919,34 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             scratchPad.finishUsingTempVector("retain_flags");
         }
 
+        // -----------------------------------------------------------------------------------------------------------
+        // One more thing: We need to remove duplicates in the contact list, because tri--tri contacts are not
+        // guaranteed to be unique, and neither are added persistent contacts.
+        // -----------------------------------------------------------------------------------------------------------
+
+        if (solverFlags.meshUniversalContact || solverFlags.hasPersistentContacts) {
+        }
+
         timers.GetTimer("Find contact pairs").stop();
+        // std::cout << "Contacts: " << std::endl;
+        // displayDeviceArray<bodyID_t>(granData->idGeometryA, *scratchPad.numContacts);
+        // displayDeviceArray<bodyID_t>(granData->idGeometryB, *scratchPad.numContacts);
+        // displayDeviceArray<contact_t>(granData->contactType, *scratchPad.numContacts);
+
     }  // End of contact pairs construction of this CD step
 
-    ////////////////////////////////////////////////////////////////////////////////
+    // -----------------------------------------------------------------------------------------------------------
     // Constructing contact history
-    ////////////////////////////////////////////////////////////////////////////////
+    // -----------------------------------------------------------------------------------------------------------
 
     timers.GetTimer("Build history map").start();
     // Now, sort idGeometryAB by their owners. Needed for identifying enduring contacts in history-based models.
     if (*scratchPad.numContacts > 0) {
-        // All temp vectors are free now...
-        // Note that if it hasPersistentContacts, idAB and types are already sorted based on idA, so there is no need to
-        // do that again.
         size_t type_arr_bytes = (*scratchPad.numContacts) * sizeof(contact_t);
-
         size_t id_arr_bytes = (*scratchPad.numContacts) * sizeof(bodyID_t);
-        if (!solverFlags.hasPersistentContacts) {
+        // There could be a few cases where arrays are sorted by A: we did duplicate removal; we had persistent contacts
+        // etc. In those cases, no need to sort again.
+        if (!contactArraysAreSortedByA) {
             contact_t* contactType_sorted =
                 (contact_t*)scratchPad.allocateTempVector("contactType_sorted", type_arr_bytes);
             bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector("idA_sorted", id_arr_bytes);

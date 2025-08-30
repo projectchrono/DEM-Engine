@@ -11,7 +11,6 @@
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
@@ -21,13 +20,6 @@
 
 using namespace deme;
 using namespace std::filesystem;
-
-double randomBetween0and1() {
-    static std::mt19937 gen(std::random_device{}());                       // Random number generator
-    static std::uniform_real_distribution<double> distribution(0.0, 1.0);  // Uniform distribution between 0 and 1
-
-    return distribution(gen);
-}
 
 int main() {
     float ball_density = 6.2e3;

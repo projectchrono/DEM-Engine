@@ -29,36 +29,13 @@
 
 namespace deme {
 
-// Generic helper function to run something in a thread and get the result
-template <typename Func, typename... Args>
-inline auto run_in_thread(Func&& func, Args&&... args) -> decltype(func(args...)) {
-    using ReturnType = decltype(func(args...));
-
-    std::promise<ReturnType> prom;
-    std::future<ReturnType> fut = prom.get_future();
-
-    // Capture everything in a tuple
-    auto bound_args = std::make_tuple(std::forward<Func>(func), std::forward<Args>(args)...);
-
-    std::thread t([&prom, bound_args = std::move(bound_args)]() mutable {
-        try {
-            auto result = std::apply(std::move(std::get<0>(bound_args)),
-                                     std::apply(
-                                         [](auto&&, auto&&... args_inner) {
-                                             return std::make_tuple(std::forward<decltype(args_inner)>(args_inner)...);
-                                         },
-                                         std::move(bound_args)));
-            prom.set_value(std::move(result));
-        } catch (...) {
-            prom.set_exception(std::current_exception());
-        }
-    });
-
-    t.join();
-    return fut.get();
+// Generic helper to access tuple of pointers
+template <typename Tuple, size_t... Is>
+auto dereference_at(const Tuple& ptrs, size_t idx, std::index_sequence<Is...>) {
+    return std::make_tuple((std::get<Is>(ptrs)[idx])...);
 }
 
-inline int randomZeroOrOne() {
+inline int random_zero_or_one() {
     std::random_device rd;   // Random number device to seed the generator
     std::mt19937 gen(rd());  // Mersenne Twister generator
     std::uniform_int_distribution<> dist(0, 1);

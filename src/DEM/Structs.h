@@ -15,7 +15,7 @@
 #include <core/utils/Timer.hpp>
 #include <core/utils/RuntimeData.h>
 #include <kernel/DEMHelperKernels.cuh>
-#include <DEM/HostSideHelpers.hpp>
+#include <DEM/utils/HostSideHelpers.hpp>
 
 #include <sstream>
 #include <exception>

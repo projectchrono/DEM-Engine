@@ -617,6 +617,16 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                     // The chance of offset going out-of-bound is very low, lower than sph--bin CD step, but I put it
                     // here anyway
                     if (inBlockOffset < mmReportOffset_end) {
+                        // ----------------------------------------------------------------------------
+                        // IMPORTANT NOTE: Here, I did not adjust A and B ids to ensure A < B, but this is automatically
+                        // ensured due to 1) The binID--triID pairs were generated with an inherent order of
+                        // triID, then processed through (stable) radix sort, which preserved the blockwise order of
+                        // triID; 2) Then the ordered triIDs are loaded to shared mem, and the in-kernel contact
+                        // detection had threads reconstruct shared mem offsets from a recoverCntPair process, which
+                        // also ensures i < j. Therefore, the generated tri contact pair has A < B. Though a change
+                        // in these processes could affect the ordering, and adding a if statement here is probably more
+                        // robust, I didn't do that, as a reminder of how fragile the things we built can be.
+                        // ----------------------------------------------------------------------------
                         idTriA_mm[inBlockOffset] = triIDs[bodyA];
                         idTriB_mm[inBlockOffset] = triIDs[bodyB];
                         dType_mm[inBlockOffset] = deme::TRIANGLE_TRIANGLE_CONTACT;

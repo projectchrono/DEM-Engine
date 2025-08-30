@@ -15,7 +15,7 @@
 #include <core/utils/JitHelper.h>
 #include <DEM/dT.h>
 #include <DEM/kT.h>
-#include <DEM/HostSideHelpers.hpp>
+#include <DEM/utils/HostSideHelpers.hpp>
 #include <kernel/DEMHelperKernels.cuh>
 #include <DEM/Defines.h>
 

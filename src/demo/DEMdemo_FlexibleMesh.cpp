@@ -12,7 +12,6 @@
 // =============================================================================
 
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <chrono>

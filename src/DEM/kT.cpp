@@ -11,7 +11,7 @@
 #include <core/utils/JitHelper.h>
 #include <DEM/kT.h>
 #include <DEM/dT.h>
-#include <DEM/HostSideHelpers.hpp>
+#include <DEM/utils/HostSideHelpers.hpp>
 #include <DEM/Defines.h>
 
 #include <algorithms/DEMStaticDeviceSubroutines.h>
@@ -50,7 +50,7 @@ void DEMKinematicThread::calibrateParams() {
             // Note the speed can be 0, yet we find performance variance. Then this is purely noise. We still wish the
             // bin size to change in the next iteration, so we assign a direction randomly.
             if (speed_dir == 0)
-                speed_dir = (randomZeroOrOne() == 0) ? -1 : 1;
+                speed_dir = (random_zero_or_one() == 0) ? -1 : 1;
             float speed_update;
             if (curr_time < prev_time) {
                 // If there is improvement, then we accelerate the current change direction

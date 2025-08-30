@@ -7,7 +7,7 @@
 
 #include <DEM/API.h>
 #include <DEM/AuxClasses.h>
-#include <DEM/HostSideHelpers.hpp>
+#include <DEM/utils/HostSideHelpers.hpp>
 #include <DEM/Models.h>
 
 namespace deme {

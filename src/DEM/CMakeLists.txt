@@ -39,7 +39,7 @@ set(DEM_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/Models.h
 	${CMAKE_CURRENT_SOURCE_DIR}/VariableTypes.h
 	${CMAKE_CURRENT_SOURCE_DIR}/BdrsAndObjs.h
-	${CMAKE_CURRENT_SOURCE_DIR}/HostSideHelpers.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/HostSideHelpers.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/Samplers.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/AuxClasses.h
 )

@@ -6,7 +6,7 @@
 #include <core/ApiVersion.h>
 #include <DEM/API.h>
 #include <DEM/Defines.h>
-#include <DEM/HostSideHelpers.hpp>
+#include <DEM/utils/HostSideHelpers.hpp>
 
 #include <iostream>
 #include <fstream>
