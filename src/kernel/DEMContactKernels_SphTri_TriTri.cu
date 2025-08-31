@@ -127,18 +127,11 @@ inline __device__ bool calcPrismContactPoint(deme::DEMSimParams* simParams,
                                              const float3& triANode3_other,
                                              const float3& triBNode1_other,
                                              const float3& triBNode2_other,
-                                             const float3& triBNode3_other,
-                                             deme::binID_t& contactPntBin) {
+                                             const float3& triBNode3_other) {
     // Calculate the contact point between 2 prisms, and return whether they are in contact
-    float3 contactPnt;
-    bool in_contact = calc_prism_contact(triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3,
-                                         triANode1_other, triANode2_other, triANode3_other, triBNode1_other,
-                                         triBNode2_other, triBNode3_other, contactPnt);
-    if (in_contact) {
-        // And get the bin ID of the contact point
-        contactPntBin = getPointBinID<deme::binID_t>(contactPnt.x, contactPnt.y, contactPnt.z, simParams->binSize,
-                                                     simParams->nbX, simParams->nbY);
-    }
+    bool in_contact =
+        calc_prism_contact(triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3, triANode1_other,
+                           triANode2_other, triANode3_other, triBNode1_other, triBNode2_other, triBNode3_other);
     return in_contact;
 }
 
@@ -332,11 +325,11 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                     continue;
                 }
 
-                deme::binID_t contactPntBin;
-                bool in_contact = calcPrismContactPoint(
-                    simParams, triANode1[bodyA], triANode2[bodyA], triANode3[bodyA], triBNode1[bodyA], triBNode2[bodyA],
-                    triBNode3[bodyA], triANode1[bodyB], triANode2[bodyB], triANode3[bodyB], triBNode1[bodyB],
-                    triBNode2[bodyB], triBNode3[bodyB], contactPntBin);
+                // Tri--tri contact does not take into account bins, as duplicates will be removed in the end
+                bool in_contact = calcPrismContactPoint(simParams, triANode1[bodyA], triANode2[bodyA], triANode3[bodyA],
+                                                        triBNode1[bodyA], triBNode2[bodyA], triBNode3[bodyA],
+                                                        triANode1[bodyB], triANode2[bodyB], triANode3[bodyB],
+                                                        triBNode1[bodyB], triBNode2[bodyB], triBNode3[bodyB]);
 
                 /*
                 if (in_contact && (contactPntBin != binID)) {
@@ -351,7 +344,7 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                 }
                 */
 
-                if (in_contact && (contactPntBin == binID)) {
+                if (in_contact) {
                     atomicAdd(&blockTriTriPairCnt, 1);
                 }
             }
@@ -387,13 +380,13 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                         continue;
                     }
 
-                    deme::binID_t contactPntBin;
+                    // Tri--tri contact does not take into account bins, as duplicates will be removed in the end
                     bool in_contact = calcPrismContactPoint(
                         simParams, triANode1[myThreadID], triANode2[myThreadID], triANode3[myThreadID],
                         triBNode1[myThreadID], triBNode2[myThreadID], triBNode3[myThreadID], cur_triANode1,
-                        cur_triANode2, cur_triANode3, cur_triBNode1, cur_triBNode2, cur_triBNode3, contactPntBin);
+                        cur_triANode2, cur_triANode3, cur_triBNode1, cur_triBNode2, cur_triBNode3);
 
-                    if (in_contact && (contactPntBin == binID)) {
+                    if (in_contact) {
                         atomicAdd(&blockTriTriPairCnt, 1);
                     }
                 }
@@ -606,13 +599,13 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                     continue;
                 }
 
-                deme::binID_t contactPntBin;
-                bool in_contact = calcPrismContactPoint(
-                    simParams, triANode1[bodyA], triANode2[bodyA], triANode3[bodyA], triBNode1[bodyA], triBNode2[bodyA],
-                    triBNode3[bodyA], triANode1[bodyB], triANode2[bodyB], triANode3[bodyB], triBNode1[bodyB],
-                    triBNode2[bodyB], triBNode3[bodyB], contactPntBin);
+                // Tri--tri contact does not take into account bins, as duplicates will be removed in the end
+                bool in_contact = calcPrismContactPoint(simParams, triANode1[bodyA], triANode2[bodyA], triANode3[bodyA],
+                                                        triBNode1[bodyA], triBNode2[bodyA], triBNode3[bodyA],
+                                                        triANode1[bodyB], triANode2[bodyB], triANode3[bodyB],
+                                                        triBNode1[bodyB], triBNode2[bodyB], triBNode3[bodyB]);
 
-                if (in_contact && (contactPntBin == binID)) {
+                if (in_contact) {
                     deme::contactPairs_t inBlockOffset = mmReportOffset + atomicAdd(&blockTriTriPairCnt, 1);
                     // The chance of offset going out-of-bound is very low, lower than sph--bin CD step, but I put it
                     // here anyway
@@ -665,13 +658,13 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                         continue;
                     }
 
-                    deme::binID_t contactPntBin;
+                    // Tri--tri contact does not take into account bins, as duplicates will be removed in the end
                     bool in_contact = calcPrismContactPoint(
                         simParams, triANode1[myThreadID], triANode2[myThreadID], triANode3[myThreadID],
                         triBNode1[myThreadID], triBNode2[myThreadID], triBNode3[myThreadID], cur_triANode1,
-                        cur_triANode2, cur_triANode3, cur_triBNode1, cur_triBNode2, cur_triBNode3, contactPntBin);
+                        cur_triANode2, cur_triANode3, cur_triBNode1, cur_triBNode2, cur_triBNode3);
 
-                    if (in_contact && (contactPntBin == binID)) {
+                    if (in_contact) {
                         deme::contactPairs_t inBlockOffset = mmReportOffset + atomicAdd(&blockTriTriPairCnt, 1);
                         // The chance of offset going out-of-bound is very low, lower than sph--bin CD step, but I put
                         // it here anyway

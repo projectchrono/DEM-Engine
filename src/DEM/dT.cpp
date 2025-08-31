@@ -1941,6 +1941,8 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     // Re-packing pointers now is automatic
 
     // Sync pointers to device can be delayed... we'll only need to do that before kernel calls
+
+    // Also note that dT does not have to worry about contact persistence, because kT handles that
 }
 
 inline void DEMDynamicThread::unpackMyBuffer() {

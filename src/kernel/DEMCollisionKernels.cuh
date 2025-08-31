@@ -275,8 +275,7 @@ inline __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
                                           const T1& prismBFaceANode3,
                                           const T1& prismBFaceBNode1,
                                           const T1& prismBFaceBNode2,
-                                          const T1& prismBFaceBNode3,
-                                          T1& contactPointOut) {
+                                          const T1& prismBFaceBNode3) {
     float3 axes[11];
     unsigned short int axisCount = 0;
     // Pack as stack arrays for easier looping
@@ -317,6 +316,7 @@ inline __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
             return false;  // separating axis found -> no contact
     }
 
+    /*
     // Contact confirmed... find lex smallest point from both prisms, used for the contact point
     // The contact point does not need to be accurate, but consistent in terms of two metrics:
     // 1. It should be the same for the same pair of prisms, regardless of their order.
@@ -338,6 +338,7 @@ inline __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
         }
     }
     contactPointOut = (closestA + closestB) * 0.5;
+    */
 
     return true;
 }

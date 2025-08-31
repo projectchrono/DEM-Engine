@@ -115,7 +115,8 @@ __global__ void markDuplicateContacts(deme::geoSphereTouches_t* idA_runlength,
                                       deme::contact_t* contactType,
                                       deme::notStupidBool_t* persistency,
                                       deme::notStupidBool_t* retain_list,
-                                      size_t n) {
+                                      size_t n,
+                                      bool persistency_affect) {
     deme::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
         deme::geoSphereTouches_t cnt_count = idA_runlength[myID];
@@ -130,23 +131,29 @@ __global__ void markDuplicateContacts(deme::geoSphereTouches_t* idA_runlength,
                     deme::contactPairs_t contactB = cnt_offset + j;
                     deme::bodyID_t contactA_idB = idB[contactA];
                     deme::contact_t contactA_cntType = contactType[contactA];
-                    deme::notStupidBool_t contactA_persistency = persistency[contactA];
                     deme::bodyID_t contactB_idB = idB[contactB];
                     deme::contact_t contactB_cntType = contactType[contactB];
-                    deme::notStupidBool_t contactB_persistency = persistency[contactB];
+                    deme::notStupidBool_t contactA_persistency, contactB_persistency;
+                    if (persistency_affect) {
+                        contactA_persistency = persistency[contactA];
+                        contactB_persistency = persistency[contactB];
+                    }
 
                     if (contactA_idB == contactB_idB && contactA_cntType == contactB_cntType) {
                         // If so, they are the same contact, we have to remove one
-                        if (contactA_persistency && contactB_persistency) {
-                            // This is a weird situation: Both are persistent, it should not exist. But still, we remove
-                            // the first one
-                            retain_list[contactA] = 0;
+                        if (!persistency_affect) {
+                            // If persistency does not matter, we remove the one with bigger index, in case there are
+                            // 3-way duplicates
+                            retain_list[contactB] = 0;
                         } else {
-                            // If one is persistent, we remove the non-persistent one
-                            if (contactA_persistency == deme::CONTACT_NOT_PERSISTENT) {
-                                retain_list[contactA] = 0;
-                            } else {
+                            if (contactA_persistency == contactB_persistency) {
+                                // If both are persistent or both are non-persistent, we remove the one with bigger
+                                // index, in case there are 3-way duplicates
                                 retain_list[contactB] = 0;
+                            } else if (contactB_persistency == deme::CONTACT_NOT_PERSISTENT) {
+                                retain_list[contactB] = 0;
+                            } else {
+                                retain_list[contactA] = 0;
                             }
                         }
                     }
