@@ -92,19 +92,19 @@ The coordinates of the face and sphere are assumed to be provided in the same re
 
 Output:
   - pt1:      contact point on triangle
-  - depth:    penetration distance (a negative value means that overlap exists)
+  - depth:    penetration distance (a positive value means that overlap exists)
   - normal:     contact normal, from pt2 to pt1
 A return value of "true" signals collision.
 */
 template <typename T1, typename T2>
-__device__ bool triangle_sphere_CD(const T1& A,           ///< First vertex of the triangle
-                                   const T1& B,           ///< Second vertex of the triangle
-                                   const T1& C,           ///< Third vertex of the triangle
-                                   const T1& sphere_pos,  ///< Location of the center of the sphere
-                                   const T2 radius,       ///< Sphere radius
-                                   T1& normal,            ///< contact normal
-                                   T2& depth,             ///< penetration (negative if in contact)
-                                   T1& pt1                ///< contact point on triangle
+__device__ bool checkTriSphereOverlap(const T1& A,           ///< First vertex of the triangle
+                                      const T1& B,           ///< Second vertex of the triangle
+                                      const T1& C,           ///< Third vertex of the triangle
+                                      const T1& sphere_pos,  ///< Location of the center of the sphere
+                                      const T2 radius,       ///< Sphere radius
+                                      T1& normal,            ///< contact normal
+                                      T2& depth,             ///< penetration (positive if in contact)
+                                      T1& pt1                ///< contact point on triangle
 ) {
     // Calculate face normal using RHR
     T1 face_n = normalize(cross(B - A, C - A));
@@ -123,11 +123,14 @@ __device__ bool triangle_sphere_CD(const T1& A,           ///< First vertex of t
     if (!snap_to_face<T1, T2>(A, B, C, sphere_pos, faceLoc)) {
         // Nearest point on the triangle is on its face
         // printf("FACE CONTACT\n");
-        depth = h - radius;
+        depth = radius - h;  // Positive for contact
         normal.x = face_n.x;
         normal.y = face_n.y;
         normal.z = face_n.z;
-        pt1 = faceLoc;
+        // Note checkTriSphereOverlap is used in force calc, so we follow the convention that the contact point is
+        // somewhere in the midpoint of the deepest penetration line segment. Go from faceLoc, towards normal, half the
+        // penetration depth
+        pt1 = faceLoc - (depth * 0.5) * normal;
         if (h >= radius || h <= -radius) {
             in_contact = false;
         } else {
@@ -143,11 +146,12 @@ __device__ bool triangle_sphere_CD(const T1& A,           ///< First vertex of t
             normal.z = normal_d.z;
         }
         T2 dist = length(normal);
-        depth = dist - radius;
+        depth = radius - dist;  // Positive for contact
 
         normal = (1.0 / dist) * normal;
-        pt1 = faceLoc;
-        if (depth >= 0. || h >= radius || h <= -radius) {
+        // Go from faceLoc, towards normal, half the penetration depth
+        pt1 = faceLoc - (depth * 0.5) * normal;
+        if (depth < 0. || h >= radius || h <= -radius) {
             in_contact = false;
         } else {
             in_contact = true;
@@ -170,19 +174,19 @@ is too deep, large than 2 * sphere rad.
 
 Output:
   - pt1:      contact point on triangle
-  - depth:    penetration distance (a negative value means that overlap exists)
+  - depth:    penetration distance (a positive value means that overlap exists)
   - normal:     contact normal, from pt2 to pt1
 A return value of "true" signals collision.
 */
 template <typename T1, typename T2>
-__device__ bool triangle_sphere_CD_directional(const T1& A,           ///< First vertex of the triangle
-                                               const T1& B,           ///< Second vertex of the triangle
-                                               const T1& C,           ///< Third vertex of the triangle
-                                               const T1& sphere_pos,  ///< Location of the center of the sphere
-                                               const T2 radius,       ///< Sphere radius
-                                               T1& normal,            ///< contact normal
-                                               T2& depth,             ///< penetration (negative if in contact)
-                                               T1& pt1                ///< contact point on triangle
+__device__ bool checkTriSphereOverlap_directional(const T1& A,           ///< First vertex of the triangle
+                                                  const T1& B,           ///< Second vertex of the triangle
+                                                  const T1& C,           ///< Third vertex of the triangle
+                                                  const T1& sphere_pos,  ///< Location of the center of the sphere
+                                                  const T2 radius,       ///< Sphere radius
+                                                  T1& normal,            ///< contact normal
+                                                  T2& depth,             ///< penetration (positive if in contact)
+                                                  T1& pt1                ///< contact point on triangle
 ) {
     // Calculate face normal using RHR
     T1 face_n = normalize(cross(B - A, C - A));
@@ -201,12 +205,14 @@ __device__ bool triangle_sphere_CD_directional(const T1& A,           ///< First
     if (!snap_to_face<T1, T2>(A, B, C, sphere_pos, faceLoc)) {
         // Nearest point on the triangle is on its face
         // printf("FACE CONTACT\n");
-        depth = h - radius;
+        depth = radius - h;  // Positive for contact
         normal.x = face_n.x;
         normal.y = face_n.y;
         normal.z = face_n.z;
+        // Note checkTriSphereOverlap_directional is never used in force calc, so pt1 being an approximation is ok, just
+        // leave it as a point on facet
         pt1 = faceLoc;
-        if (depth >= 0.) {
+        if (depth < 0.) {
             in_contact = false;
         } else {
             in_contact = true;
@@ -221,11 +227,11 @@ __device__ bool triangle_sphere_CD_directional(const T1& A,           ///< First
             normal.z = normal_d.z;
         }
         T2 dist = length(normal);
-        depth = dist - radius;
+        depth = radius - dist;  // Positive for contact
 
         normal = (1.0 / dist) * normal;
         pt1 = faceLoc;
-        if (depth >= 0. || h >= radius) {
+        if (depth < 0. || h >= radius) {
             in_contact = false;
         } else {
             in_contact = true;
@@ -341,6 +347,123 @@ inline __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
     */
 
     return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Triangle-analytical contact
+////////////////////////////////////////////////////////////////////////////////
+
+template <typename T1, typename T2>
+inline bool __device__
+tri_plane_penetration(const T1** tri, const T1& entityLoc, const float3& entityDir, T2& overlapDepth, T1& contactPnt) {
+    // signed distances
+    T2 d[3];
+    // penetration depth: deepest point in triangle
+    T2 dmin = DEME_HUGE_FLOAT;
+#pragma unroll
+    for (int i = 0; i < 3; ++i) {
+        d[i] = planeSignedDistance<T2>(*tri[i], entityLoc, entityDir);
+        if (d[i] < dmin)
+            dmin = d[i];
+    }
+    // build clipped polygon
+    T1 poly[4];
+    int nNode = 0;                 // max 4 poly nodes
+    bool hasIntersection = false;  // one edge intersecting the plane
+#pragma unroll
+    for (int i = 0; i < 3; ++i) {
+        int j = (i + 1) % 3;  // compare with next vertex
+        bool in_i = (d[i] < 0.0);
+        bool in_j = (d[j] < 0.0);
+
+        // ^ means one is in, the other is out
+        if (in_i ^ in_j) {
+            T2 t = d[i] / (d[i] - d[j]);  // between 0 and 1
+            T1 inter = *tri[i] + (*tri[j] - *tri[i]) * t;
+            // Only register inside points once
+            if (in_i)
+                poly[nNode++] = *tri[i];
+            poly[nNode++] = inter;
+            hasIntersection = true;
+        }
+    }
+
+    // centroid of contact
+    T1 centroid;
+    centroid.x = 0.;
+    centroid.y = 0.;
+    centroid.z = 0.;
+    if (hasIntersection) {  // If has intersection, centroid of the (inside) polygon
+        for (int i = 0; i < nNode; i++)
+            centroid = centroid + poly[i];
+        centroid = centroid / T2(nNode);
+    } else {  // If no intersection, centroid is just average of all tri verts
+#pragma unroll
+        for (int i = 0; i < 3; i++)
+            centroid = centroid + *tri[i];
+        centroid = centroid / T2(3);
+    }
+
+    // We use the convention that if in contact, overlapDepth is positive
+    overlapDepth = -dmin;
+    bool in_contact = (overlapDepth >= 0.);
+    // The centroid's projection to the plane
+    T1 projection =
+        centroid - planeSignedDistance<T2>(centroid, entityLoc, entityDir) * to_real3<float3, T1>(entityDir);
+    // cntPnt is from the projection point, go half penetration depth.
+    // Note this penetration depth is signed, so if no contact, we go positive plane normal; if in contact, we go
+    // negative plane normal. As such, cntPnt always exists and  this is important for the cases with extraMargin.
+    contactPnt = projection - (overlapDepth * 0.5) * to_real3<float3, T1>(entityDir);
+    return in_contact;
+}
+
+template <typename T1, typename T2>
+inline bool __device__ tri_cyl_penetration(const T1** tri,
+                                           const T1& entityLoc,
+                                           const float3& entityDir,
+                                           const float& entitySize1,
+                                           const float& entitySize2,
+                                           const float& normal_sign,
+                                           float3& contact_normal,
+                                           T2& overlapDepth,
+                                           T1& contactPnt) {
+    return false;
+}
+
+// NOTE: Due to our algorithm needs a overlapDepth even in the case of no contact (because of extraMargin; and with
+// extraMargin, negative overlapDepth can be considered in-contact), our tri-anal CD algorithm needs to always return a
+// overlapDepth, even in the case of no contact. This is different from the usual CD algorithms which only return a
+// overlapDepth. Also unlike tri-sph contact which has a unified util function, calcTriEntityOverlap is different from
+// checkTriEntityOverlap.
+template <typename T1, typename T2>
+inline bool __device__ calcTriEntityOverlap(const T1& A,
+                                            const T1& B,
+                                            const T1& C,
+                                            const deme::objType_t& entityType,
+                                            const T1& entityLoc,
+                                            const float3& entityDir,
+                                            const float& entitySize1,
+                                            const float& entitySize2,
+                                            const float& entitySize3,
+                                            const float& normal_sign,
+                                            T1& contactPnt,
+                                            float3& contact_normal,
+                                            T2& overlapDepth) {
+    const T1* tri[] = {&A, &B, &C};
+    bool in_contact;
+    switch (entityType) {
+        case deme::ANAL_OBJ_TYPE_PLANE:
+            in_contact = tri_plane_penetration<T1, T2>(tri, entityLoc, entityDir, overlapDepth, contactPnt);
+            // Plane contact's normal is always the plane's normal
+            contact_normal = entityDir;
+            return in_contact;
+        case deme::ANAL_OBJ_TYPE_CYL_INF:
+            in_contact = tri_cyl_penetration<T1, T2>(tri, entityLoc, entityDir, entitySize1, entitySize2, normal_sign,
+                                                     contact_normal, overlapDepth, contactPnt);
+            return in_contact;
+        default:
+            return false;
+    }
 }
 
 #endif

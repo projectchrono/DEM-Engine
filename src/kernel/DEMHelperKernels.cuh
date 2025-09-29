@@ -540,10 +540,10 @@ inline __host__ __device__ deme::contact_t checkTriEntityOverlap(const T1& A,
                                                                  const T1& C,
                                                                  const deme::objType_t& typeB,
                                                                  const T1& entityLoc,
-                                                                 const float3& dirB,
-                                                                 const float& size1B,
-                                                                 const float& size2B,
-                                                                 const float& size3B,
+                                                                 const float3& entityDir,
+                                                                 const float& entitySize1,
+                                                                 const float& entitySize2,
+                                                                 const float& entitySize3,
                                                                  const float& normal_sign,
                                                                  const float& beta4Entity) {
     const T1* tri[] = {&A, &B, &C};
@@ -551,7 +551,7 @@ inline __host__ __device__ deme::contact_t checkTriEntityOverlap(const T1& A,
         case (deme::ANAL_OBJ_TYPE_PLANE): {
             for (const T1*& v : tri) {
                 // Always cast to double
-                double d = planeSignedDistance<double>(*v, entityLoc, dirB);
+                double d = planeSignedDistance<double>(*v, entityLoc, entityDir);
                 double overlapDepth = beta4Entity - d;
                 // printf("v point %f %f %f, entityLoc %f %f %f\n", v->x, v->y, v->z, entityLoc.x, entityLoc.y,
                 // entityLoc.z);
@@ -566,10 +566,10 @@ inline __host__ __device__ deme::contact_t checkTriEntityOverlap(const T1& A,
         case (deme::ANAL_OBJ_TYPE_CYL_INF): {
             for (const T1*& v : tri) {
                 // Radial distance vector is from cylinder axis to a point
-                double3 vec = cylRadialDistanceVec<double3>(*v, entityLoc, dirB);
+                double3 vec = cylRadialDistanceVec<double3>(*v, entityLoc, entityDir);
                 // Also, inward normal is 1, outward is -1, so it's the signed dist from point to cylinder wall
                 // (positive if same orientation, negative if opposite)
-                double signed_dist = (size1B - length(vec)) * normal_sign;
+                double signed_dist = (entitySize1 - length(vec)) * normal_sign;
                 if (signed_dist <= beta4Entity)
                     return deme::TRIANGLE_ANALYTICAL_CONTACT;
             }

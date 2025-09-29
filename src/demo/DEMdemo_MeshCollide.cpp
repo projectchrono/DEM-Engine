@@ -41,19 +41,22 @@ int main() {
     // Add a bottom plane
     DEMSim.AddBCPlane(make_float3(0, 0, -1.8), make_float3(0, 0, 1), mat_type_1);
 
-    auto particles1 = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cube.obj").string(), mat_type_1);
-    particles1->SetFamily(0);
-    particles1->SetInitPos(make_float3(-0.4, 0, -1.25));
-    particles1->SetMass(10000.);
-    auto tracker1 = DEMSim.Track(particles1);
+    auto particle1 = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cube.obj").string(), mat_type_1);
+    particle1->SetFamily(0);
+    particle1->SetInitPos(make_float3(-0.4, 0, -1.25));
+    particle1->SetMass(10000.);
+    particle1->SetMOI(make_float3(4000., 4000., 4000.));
+    auto tracker1 = DEMSim.Track(particle1);
 
-    auto particles2 = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cube.obj").string(), mat_type_1);
-    particles2->SetFamily(0);
-    particles2->SetInitPos(make_float3(0.4, 0, 0));
-    particles2->SetMass(10000.);
-    auto tracker2 = DEMSim.Track(particles2);
+    auto particle2 = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cube.obj").string(), mat_type_1);
+    particle2->SetFamily(0);
+    particle2->SetInitPos(make_float3(0.4, 0, 0));
+    particle2->SetMass(10000.);
+    particle2->SetMOI(make_float3(4000., 4000., 4000.));
+    auto tracker2 = DEMSim.Track(particle2);
 
-    DEMSim.SetInitTimeStep(2e-5);
+    float step_time = 2e-5;
+    DEMSim.SetInitTimeStep(step_time);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEMSim.SetExpandSafetyType("auto");
     // DEMSim.DisableAdaptiveBinSize();
@@ -95,8 +98,8 @@ int main() {
         // DEMSim.GetOwnerContactForces({ID1, ID2}, points_mesh, forces_mesh);
 
         std::cout << "----------------------------------------" << std::endl;
-        std::cout << "Particle 1 X coord is " << pos1.x << std::endl;
-        std::cout << "Particle 2 X coord is " << pos2.x << std::endl;
+        std::cout << "Particle 1 Z coord is " << pos1.z << std::endl;
+        std::cout << "Particle 2 Z coord is " << pos2.z << std::endl;
         if (points_mesh.size() > 0) {
             std::cout << "Two meshes collide, one contact is at (" << points_mesh[0].x << ", " << points_mesh[0].y
                       << ", " << points_mesh[0].z << ")." << std::endl;

@@ -985,10 +985,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         }
 
         timers.GetTimer("Find contact pairs").stop();
-        std::cout << "Contacts: " << std::endl;
-        displayDeviceArray<bodyID_t>(granData->idGeometryA, *scratchPad.numContacts);
-        displayDeviceArray<bodyID_t>(granData->idGeometryB, *scratchPad.numContacts);
-        displayDeviceArray<contact_t>(granData->contactType, *scratchPad.numContacts);
+        // std::cout << "Contacts: " << std::endl;
+        // displayDeviceArray<bodyID_t>(granData->idGeometryA, *scratchPad.numContacts);
+        // displayDeviceArray<bodyID_t>(granData->idGeometryB, *scratchPad.numContacts);
+        // displayDeviceArray<contact_t>(granData->contactType, *scratchPad.numContacts);
 
     }  // End of contact pairs construction of this CD step
 

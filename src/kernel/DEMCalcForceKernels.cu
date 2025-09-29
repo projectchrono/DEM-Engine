@@ -232,7 +232,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             // threads in this block will have the same ContactType.
             if (AType == deme::GEO_T_SPHERE) {
                 double3 contact_normal;
-                bool in_contact = triangle_sphere_CD<double3, double>(
+                bool in_contact = checkTriSphereOverlap<double3, double>(
                     triBNode1, triBNode2, triBNode3, bodyAPos, ARadius, contact_normal, overlapDepth, contactPnt);
                 B2A = to_float3(contact_normal);
 
@@ -241,10 +241,10 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                 // penetration since in that case, overlapDepth is very negative and this will be considered in-contact.
                 // So the cases we exclude are: too far away while at the positive direction; not in contact while at
                 // the negative side.
-                if ((overlapDepth > extraMarginSize) || (!in_contact && overlapDepth < 0.)) {
+                // Also checkTriSphereOverlap gives positive number for overlapping cases
+                if ((overlapDepth < -extraMarginSize) || (!in_contact && overlapDepth > 0.)) {
                     ContactType = deme::NOT_A_CONTACT;
                 }
-                overlapDepth = -overlapDepth;  // triangle_sphere_CD gives neg. number for overlapping cases
             } else if (AType == deme::GEO_T_TRIANGLE) {
                 // Triangle--triangle contact is not supported yet, so we just skip it.
                 ContactType = deme::NOT_A_CONTACT;
@@ -295,8 +295,13 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                     ContactType = deme::NOT_A_CONTACT;
                 }
             } else if (AType == deme::GEO_T_TRIANGLE) {
-                // Triangle--analytical contact is not supported yet, so we just skip it.
-                ContactType = deme::NOT_A_CONTACT;
+                calcTriEntityOverlap<double3, double>(
+                    triANode1, triANode2, triANode3, objType[sphereID], bodyBPos, bodyBRot, objSize1[sphereID],
+                    objSize2[sphereID], objSize3[sphereID], objNormal[sphereID], contactPnt, B2A, overlapDepth);
+                // Fix ContactType if needed
+                if (overlapDepth < -extraMarginSize) {
+                    ContactType = deme::NOT_A_CONTACT;
+                }
             }
         }
 

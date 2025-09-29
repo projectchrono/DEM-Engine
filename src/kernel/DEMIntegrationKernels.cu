@@ -140,7 +140,6 @@ inline __device__ void integrateVelPos(deme::bodyID_t ownerID,
     }
 
     // Operation phase...
-
     {
         // User's addition of accelerations won't affect acc arrays in global memory; that is, if the user query the
         // contact acceleration, still they don't get the part they applied in this acc prescription

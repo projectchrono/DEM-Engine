@@ -115,19 +115,19 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
     radii[myThreadID] = myRadius;
 }
 
-inline __device__ bool calcPrismContactPoint(deme::DEMSimParams* simParams,
-                                             const float3& triANode1,
-                                             const float3& triANode2,
-                                             const float3& triANode3,
-                                             const float3& triBNode1,
-                                             const float3& triBNode2,
-                                             const float3& triBNode3,
-                                             const float3& triANode1_other,
-                                             const float3& triANode2_other,
-                                             const float3& triANode3_other,
-                                             const float3& triBNode1_other,
-                                             const float3& triBNode2_other,
-                                             const float3& triBNode3_other) {
+inline __device__ bool checkPrismPrismContact(deme::DEMSimParams* simParams,
+                                              const float3& triANode1,
+                                              const float3& triANode2,
+                                              const float3& triANode3,
+                                              const float3& triBNode1,
+                                              const float3& triBNode2,
+                                              const float3& triBNode3,
+                                              const float3& triANode1_other,
+                                              const float3& triANode2_other,
+                                              const float3& triANode3_other,
+                                              const float3& triBNode1_other,
+                                              const float3& triBNode2_other,
+                                              const float3& triBNode3_other) {
     // Calculate the contact point between 2 prisms, and return whether they are in contact
     bool in_contact =
         calc_prism_contact(triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3, triANode1_other,
@@ -262,23 +262,24 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                     float3 cntPnt, normal;
                     float depth;
                     bool in_contact_A, in_contact_B;
-                    // NOTE: triangle_sphere_CD_directional, instead of triangle_sphere_CD, is in use here. This is
-                    // because if the later is in use, then if a sphere is between 2 sandwiching triangles, then its
+                    // NOTE: checkTriSphereOverlap_directional, instead of checkTriSphereOverlap, is in use here. This
+                    // is because if the later is in use, then if a sphere is between 2 sandwiching triangles, then its
                     // potential contact with the original triangle will not be registered. At the same time, we don't
-                    // want to use triangle_sphere_CD_directional for the real force calculation, and the concern is
+                    // want to use checkTriSphereOverlap_directional for the real force calculation, and the concern is
                     // mainly "sphere near needle tip" scenario. Think about it.
-                    in_contact_A = triangle_sphere_CD_directional<float3, float>(
+                    in_contact_A = checkTriSphereOverlap_directional<float3, float>(
                         triANode1[ind], triANode2[ind], triANode3[ind], sphXYZ, myRadius, normal, depth, cntPnt);
                     // If the contact is too shallow (smaller than the smaller of artificial margin, then it can be
-                    // dropped to reduce the overall number of contact pairs). Note triangle_sphere_CD_directional gives
-                    // negative for contacts.
-                    in_contact_A = in_contact_A && (-depth > artificialMargin);
+                    // dropped to reduce the overall number of contact pairs, as when making sandwich, the added safety
+                    // margin already includes familyExtra). Note checkTriSphereOverlap_directional gives positive
+                    // number for contacts.
+                    in_contact_A = in_contact_A && (depth > artificialMargin);
 
                     // And triangle B...
-                    in_contact_B = triangle_sphere_CD_directional<float3, float>(
+                    in_contact_B = checkTriSphereOverlap_directional<float3, float>(
                         triBNode1[ind], triBNode2[ind], triBNode3[ind], sphXYZ, myRadius, normal, depth, cntPnt);
                     // Same treatment for B...
-                    in_contact_B = in_contact_B && (-depth > artificialMargin);
+                    in_contact_B = in_contact_B && (depth > artificialMargin);
 
                     // Note the contact point must be calculated through one triangle, not the 2 phantom
                     // triangles; or we will have double count problems. Use the first triangle as standard.
@@ -326,10 +327,10 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                 }
 
                 // Tri--tri contact does not take into account bins, as duplicates will be removed in the end
-                bool in_contact = calcPrismContactPoint(simParams, triANode1[bodyA], triANode2[bodyA], triANode3[bodyA],
-                                                        triBNode1[bodyA], triBNode2[bodyA], triBNode3[bodyA],
-                                                        triANode1[bodyB], triANode2[bodyB], triANode3[bodyB],
-                                                        triBNode1[bodyB], triBNode2[bodyB], triBNode3[bodyB]);
+                bool in_contact = checkPrismPrismContact(
+                    simParams, triANode1[bodyA], triANode2[bodyA], triANode3[bodyA], triBNode1[bodyA], triBNode2[bodyA],
+                    triBNode3[bodyA], triANode1[bodyB], triANode2[bodyB], triANode3[bodyB], triBNode1[bodyB],
+                    triBNode2[bodyB], triBNode3[bodyB]);
 
                 /*
                 if (in_contact && (contactPntBin != binID)) {
@@ -381,7 +382,7 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                     }
 
                     // Tri--tri contact does not take into account bins, as duplicates will be removed in the end
-                    bool in_contact = calcPrismContactPoint(
+                    bool in_contact = checkPrismPrismContact(
                         simParams, triANode1[myThreadID], triANode2[myThreadID], triANode3[myThreadID],
                         triBNode1[myThreadID], triBNode2[myThreadID], triBNode3[myThreadID], cur_triANode1,
                         cur_triANode2, cur_triANode3, cur_triBNode1, cur_triBNode2, cur_triBNode3);
@@ -531,23 +532,24 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                     float3 cntPnt, normal;
                     float depth;
                     bool in_contact_A, in_contact_B;
-                    // NOTE: triangle_sphere_CD_directional, instead of triangle_sphere_CD, is in use here. This is
-                    // because if the later is in use, then if a sphere is between 2 sandwiching triangles, then its
+                    // NOTE: checkTriSphereOverlap_directional, instead of checkTriSphereOverlap, is in use here. This
+                    // is because if the later is in use, then if a sphere is between 2 sandwiching triangles, then its
                     // potential contact with the original triangle will not be registered. At the same time, we don't
-                    // want to use triangle_sphere_CD_directional for the real force calculation, and the concern is
+                    // want to use checkTriSphereOverlap_directional for the real force calculation, and the concern is
                     // mainly "sphere near needle tip" scenario. Think about it.
-                    in_contact_A = triangle_sphere_CD_directional<float3, float>(
+                    in_contact_A = checkTriSphereOverlap_directional<float3, float>(
                         triANode1[ind], triANode2[ind], triANode3[ind], sphXYZ, myRadius, normal, depth, cntPnt);
                     // If the contact is too shallow (smaller than the smaller of artificial margin, then it can be
-                    // dropped to reduce the overall number of contact pairs). Note triangle_sphere_CD_directional gives
-                    // negative for contacts.
-                    in_contact_A = in_contact_A && (-depth > artificialMargin);
+                    // dropped to reduce the overall number of contact pairs, as when making sandwich, the added safety
+                    // margin already includes familyExtra). Note checkTriSphereOverlap_directional gives positive
+                    // number for contacts.
+                    in_contact_A = in_contact_A && (depth > artificialMargin);
 
                     // And triangle B...
-                    in_contact_B = triangle_sphere_CD_directional<float3, float>(
+                    in_contact_B = checkTriSphereOverlap_directional<float3, float>(
                         triBNode1[ind], triBNode2[ind], triBNode3[ind], sphXYZ, myRadius, normal, depth, cntPnt);
                     // Same treatment for B...
-                    in_contact_B = in_contact_B && (-depth > artificialMargin);
+                    in_contact_B = in_contact_B && (depth > artificialMargin);
 
                     // Note the contact point must be calculated through one triangle, not the 2 phantom
                     // triangles; or we will have double count problems. Use the first triangle as standard.
@@ -600,10 +602,10 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                 }
 
                 // Tri--tri contact does not take into account bins, as duplicates will be removed in the end
-                bool in_contact = calcPrismContactPoint(simParams, triANode1[bodyA], triANode2[bodyA], triANode3[bodyA],
-                                                        triBNode1[bodyA], triBNode2[bodyA], triBNode3[bodyA],
-                                                        triANode1[bodyB], triANode2[bodyB], triANode3[bodyB],
-                                                        triBNode1[bodyB], triBNode2[bodyB], triBNode3[bodyB]);
+                bool in_contact = checkPrismPrismContact(
+                    simParams, triANode1[bodyA], triANode2[bodyA], triANode3[bodyA], triBNode1[bodyA], triBNode2[bodyA],
+                    triBNode3[bodyA], triANode1[bodyB], triANode2[bodyB], triANode3[bodyB], triBNode1[bodyB],
+                    triBNode2[bodyB], triBNode3[bodyB]);
 
                 if (in_contact) {
                     deme::contactPairs_t inBlockOffset = mmReportOffset + atomicAdd(&blockTriTriPairCnt, 1);
@@ -659,7 +661,7 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                     }
 
                     // Tri--tri contact does not take into account bins, as duplicates will be removed in the end
-                    bool in_contact = calcPrismContactPoint(
+                    bool in_contact = checkPrismPrismContact(
                         simParams, triANode1[myThreadID], triANode2[myThreadID], triANode3[myThreadID],
                         triBNode1[myThreadID], triBNode2[myThreadID], triBNode3[myThreadID], cur_triANode1,
                         cur_triANode2, cur_triANode3, cur_triBNode1, cur_triBNode2, cur_triBNode3);

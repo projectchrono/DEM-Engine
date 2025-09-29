@@ -39,4 +39,10 @@ if (overlapDepth > 0) {
 
     // normal force (that A feels)
     force += (k_n * overlapDepth + gamma_n * projection) * B2A;
+
+    // printf("Force is (%.9g, %.9g, %.9g) on body %d\n", force.x, force.y, force.z, AOwner);
+    // printf("CoR_cnt is %.9g\n", CoR_cnt);
+    // printf("Sn is %.9g, sqrt_Rd is %.9g\n", Sn, sqrt_Rd);
+    // printf("k_n is %.9g, gamma_n is %.9g\n", k_n, gamma_n);
+    // printf("overlapDepth is %.9g, projection is %.9g\n", overlapDepth, projection);
 }
