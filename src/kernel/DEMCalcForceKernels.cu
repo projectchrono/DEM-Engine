@@ -126,16 +126,16 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             _forceModelIngredientAcqForA_;
             _forceModelGeoWildcardAcqForATri_;
 
-            // bodyBPos is for a place holder for the outcome triANode1 position
-            equipOwnerPosRot(simParams, granData, myOwner, triANode1, BOwnerPos, bodyBPos, BOriQ);
-            triANode1 = bodyBPos;
+            // bodyAPos is for a place holder for the outcome triANode1 position
+            equipOwnerPosRot(simParams, granData, myOwner, triANode1, AOwnerPos, bodyAPos, AOriQ);
+            triANode1 = bodyAPos;
             // Do this to node 2 and 3 as well
-            applyOriQToVector3(triANode2.x, triANode2.y, triANode2.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
-            triANode2 += BOwnerPos;
-            applyOriQToVector3(triANode3.x, triANode3.y, triANode3.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
-            triANode3 += BOwnerPos;
-            // Assign the correct bodyBPos
-            bodyBPos = triangleCentroid<double3>(triANode1, triANode2, triANode3);
+            applyOriQToVector3(triANode2.x, triANode2.y, triANode2.z, AOriQ.w, AOriQ.x, AOriQ.y, AOriQ.z);
+            triANode2 += AOwnerPos;
+            applyOriQToVector3(triANode3.x, triANode3.y, triANode3.z, AOriQ.w, AOriQ.x, AOriQ.y, AOriQ.z);
+            triANode3 += AOwnerPos;
+            // Assign the correct bodyAPos
+            bodyAPos = triangleCentroid<double3>(triANode1, triANode2, triANode3);
         } else {
             // Currently, we only support sphere and mesh for body A
             ContactType = deme::NOT_A_CONTACT;

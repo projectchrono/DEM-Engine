@@ -40,6 +40,9 @@ if (overlapDepth > 0) {
     // normal force (that A feels)
     force += (k_n * overlapDepth + gamma_n * projection) * B2A;
 
+    // printf("A linear vel is (%.9g, %.9g, %.9g)\n", ALinVel.x, ALinVel.y, ALinVel.z);
+    // printf("A rotational vel is (%.9g, %.9g, %.9g)\n", ARotVel.x, ARotVel.y, ARotVel.z);
+    // printf("locCPA is (%.9g, %.9g, %.9g)\n", locCPA.x, locCPA.y, locCPA.z);
     // printf("Force is (%.9g, %.9g, %.9g) on body %d\n", force.x, force.y, force.z, AOwner);
     // printf("CoR_cnt is %.9g\n", CoR_cnt);
     // printf("Sn is %.9g, sqrt_Rd is %.9g\n", Sn, sqrt_Rd);

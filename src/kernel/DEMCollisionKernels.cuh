@@ -128,8 +128,8 @@ __device__ bool checkTriSphereOverlap(const T1& A,           ///< First vertex o
         normal.y = face_n.y;
         normal.z = face_n.z;
         // Note checkTriSphereOverlap is used in force calc, so we follow the convention that the contact point is
-        // somewhere in the midpoint of the deepest penetration line segment. Go from faceLoc, towards normal, half the
-        // penetration depth
+        // somewhere in the midpoint of the deepest penetration line segment. Go from faceLoc, backwards wrt normal,
+        // half the penetration depth.
         pt1 = faceLoc - (depth * 0.5) * normal;
         if (h >= radius || h <= -radius) {
             in_contact = false;
@@ -149,7 +149,7 @@ __device__ bool checkTriSphereOverlap(const T1& A,           ///< First vertex o
         depth = radius - dist;  // Positive for contact
 
         normal = (1.0 / dist) * normal;
-        // Go from faceLoc, towards normal, half the penetration depth
+        // Go from faceLoc, backwards wrt normal, half the penetration depth
         pt1 = faceLoc - (depth * 0.5) * normal;
         if (depth < 0. || h >= radius || h <= -radius) {
             in_contact = false;
@@ -412,7 +412,7 @@ tri_plane_penetration(const T1** tri, const T1& entityLoc, const float3& entityD
         centroid - planeSignedDistance<T2>(centroid, entityLoc, entityDir) * to_real3<float3, T1>(entityDir);
     // cntPnt is from the projection point, go half penetration depth.
     // Note this penetration depth is signed, so if no contact, we go positive plane normal; if in contact, we go
-    // negative plane normal. As such, cntPnt always exists and  this is important for the cases with extraMargin.
+    // negative plane normal. As such, cntPnt always exists and this is important for the cases with extraMargin.
     contactPnt = projection - (overlapDepth * 0.5) * to_real3<float3, T1>(entityDir);
     return in_contact;
 }
