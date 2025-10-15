@@ -9,8 +9,8 @@
 #include <cassert>
 #include <optional>
 #include <unordered_map>
-#include <core/utils/GpuError.h>
-#include <DEM/VariableTypes.h>
+#include "GpuError.h"
+#include "../../DEM/VariableTypes.h"
 
 namespace deme {
 

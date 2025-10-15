@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <cstring>
+
 #include "DEMEPaths.h"
 
 namespace deme {

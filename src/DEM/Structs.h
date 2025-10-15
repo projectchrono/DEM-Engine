@@ -6,16 +6,16 @@
 #ifndef DEME_HOST_STRUCTS
 #define DEME_HOST_STRUCTS
 
-#include <DEM/Defines.h>
-#include <core/utils/CudaAllocator.hpp>
-#include <core/utils/ManagedMemory.hpp>
-#include <core/utils/csv.hpp>
-#include <core/utils/GpuError.h>
-#include <core/utils/DataMigrationHelper.hpp>
-#include <core/utils/Timer.hpp>
-#include <core/utils/RuntimeData.h>
-#include <kernel/DEMHelperKernels.cuh>
-#include <DEM/HostSideHelpers.hpp>
+#include "Defines.h"
+#include "../core/utils/CudaAllocator.hpp"
+#include "../core/utils/ManagedMemory.hpp"
+#include "../core/utils/csv.hpp"
+#include "../core/utils/GpuError.h"
+#include "../core/utils/DataMigrationHelper.hpp"
+#include "../core/utils/Timer.hpp"
+#include "../core/utils/RuntimeData.h"
+#include "../kernel/DEMHelperKernels.cuh"
+#include "HostSideHelpers.hpp"
 
 #include <sstream>
 #include <exception>
@@ -362,13 +362,6 @@ enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
         if (verbosity >= VERBOSITY::STEP_DEBUG) { \
             __VA_ARGS__;                          \
         }                                         \
-    }
-
-// Jitify options include suppressing variable-not-used warnings. We could use CUDA lib functions too.
-#define DEME_JITIFY_DEFAULT_OPTIONS                                                                   \
-    {                                                                                                 \
-        "-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(),     \
-            "-I" + std::string(DEME_CUDA_TOOLKIT_HEADERS), "-diag-suppress=550", "-diag-suppress=177" \
     }
 
 // =============================================================================

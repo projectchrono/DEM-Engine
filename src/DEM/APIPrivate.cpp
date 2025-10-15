@@ -4,9 +4,9 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 #include <core/ApiVersion.h>
-#include <DEM/API.h>
-#include <DEM/Defines.h>
-#include <DEM/HostSideHelpers.hpp>
+#include "API.h"
+#include "Defines.h"
+#include "HostSideHelpers.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -2128,6 +2128,14 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
 
 inline void DEMSolver::equipKernelIncludes(std::unordered_map<std::string, std::string>& strMap) {
     strMap["_kernelIncludes_;"] = kernel_includes;
+}
+
+// Jitify options include suppressing variable-not-used warnings. We could use CUDA lib functions too.
+// It's put here as ApiVersion.h.in (which sets DEME_CUDA_TOOLKIT_HEADERS) is a CMake-in configuration file, we don't
+// want to include it anywhere in the h headers in case DEM-Engine is included by some parent project.
+void DEMSolver::setDefaultSolverParams() {
+    m_jitify_options = {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(),
+                        "-I" + std::string(DEME_CUDA_TOOLKIT_HEADERS), "-diag-suppress=550", "-diag-suppress=177"};
 }
 
 }  // namespace deme

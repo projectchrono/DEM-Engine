@@ -24,8 +24,8 @@
 #include <tuple>
 #include <type_traits>
 
-#include <kernel/DEMHelperKernels.cuh>
-#include <DEM/VariableTypes.h>
+#include "../kernel/DEMHelperKernels.cuh"
+#include "VariableTypes.h"
 
 namespace deme {
 

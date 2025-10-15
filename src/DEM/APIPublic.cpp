@@ -4,10 +4,11 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 #include <core/ApiVersion.h>
-#include <DEM/API.h>
-#include <DEM/Defines.h>
-#include <DEM/HostSideHelpers.hpp>
-#include <DEM/AuxClasses.h>
+#include "API.h"
+#include "Defines.h"
+#include "HostSideHelpers.hpp"
+#include "AuxClasses.h"
+#include "../kernel/DEMHelperKernels.cuh"
 
 #include <iostream>
 #include <fstream>
@@ -26,6 +27,9 @@ DEMSolver::DEMSolver(unsigned int nGPUs) {
 
     // 2 means 2 threads (nGPUs is currently not used)
     dTkT_GpuManager = new GpuManager(2);
+
+    // Set default solver params
+    setDefaultSolverParams();
 
     // Thread-based worker creation may be needed as the workers allocate DualStructs on construction
     std::thread dT_construct([&]() {

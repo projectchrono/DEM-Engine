@@ -2,6 +2,7 @@
 #include <stdexcept>
 #include <iostream>
 
+#include <core/ApiVersion.h>
 #include "GpuManager.h"
 #include "GpuError.h"
 
