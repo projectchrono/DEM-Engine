@@ -1054,7 +1054,7 @@ class DEMSolver {
     void ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors);
 
     /// If true, each jitification string substitution will do a one-liner to one-liner replacement, so that if the
-    /// kernel compilation fails, the error meessage line number will reflex the actual spot where that happens (instead
+    /// kernel compilation fails, the error message line number will reflex the actual spot where that happens (instead
     /// of some random number)
     void EnsureKernelErrMsgLineNum(bool flag = true) { ensure_kernel_line_num = flag; }
 

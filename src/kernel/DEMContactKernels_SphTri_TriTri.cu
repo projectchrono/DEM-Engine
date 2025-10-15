@@ -399,7 +399,9 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
     // deme::binContactPairs_t total_count = BlockReduceT(temp_storage).Sum(contact_count);
     if (myThreadID == 0) {
         numTriSphContactsInEachBin[blockIdx.x] = blockSphTriPairCnt;
-        numTriTriContactsInEachBin[blockIdx.x] = blockTriTriPairCnt;
+        if (meshUniversalContact) {
+            numTriTriContactsInEachBin[blockIdx.x] = blockTriTriPairCnt;
+        }
     }
 }
 
