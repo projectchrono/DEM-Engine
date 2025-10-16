@@ -10,11 +10,11 @@
 #include <core/ApiVersion.h>
 #include <core/utils/JitHelper.h>
 #include <DEM/kT.h>
-#include <DEM/dT.h>
-#include <DEM/HostSideHelpers.hpp>
-#include <DEM/Defines.h>
-
-#include <algorithms/DEMStaticDeviceSubroutines.h>
+#include "dT.h"
+#include "HostSideHelpers.hpp"
+#include "Defines.h"
+#include "algorithms/DEMStaticDeviceSubroutines.h"
+#include "kernel/DEMHelperKernels.cuh"
 
 namespace deme {
 

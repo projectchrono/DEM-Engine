@@ -9,9 +9,8 @@
 #include <regex>
 
 #include <core/ApiVersion.h>
-#include <core/utils/RuntimeData.h>
-#include <core/utils/JitHelper.h>
-#include <core/utils/DEMEPaths.h>
+#include "RuntimeData.h"
+#include "JitHelper.h"
 
 jitify::JitCache JitHelper::kcache;
 

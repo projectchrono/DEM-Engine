@@ -20,6 +20,7 @@
 #include <DEM/Defines.h>
 
 #include <algorithms/DEMStaticDeviceSubroutines.h>
+#include <kernel/DEMHelperKernels.cuh>
 
 namespace deme {
 
