@@ -18,7 +18,7 @@
     #define DEMERuntimeDataHelper_API
 #endif
 
-class DEMERuntimeDataHelper_API RuntimeDataHelper {
+class DEMERuntimeDataHelper_API DEMERuntimeDataHelper {
   public:
     static std::filesystem::path data_path;
     static std::filesystem::path include_path;

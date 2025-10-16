@@ -53,7 +53,7 @@ const std::string OUTPUT_FILE_ANGVEL_X_COL_NAME = std::string("w_x");
 const std::string OUTPUT_FILE_ANGVEL_Y_COL_NAME = std::string("w_y");
 const std::string OUTPUT_FILE_ANGVEL_Z_COL_NAME = std::string("w_z");
 const std::string OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
-const std::filesystem::path USER_SCRIPT_PATH = RuntimeDataHelper::data_path / "kernel" / "DEMUserScripts";
+const std::filesystem::path USER_SCRIPT_PATH = DEMERuntimeDataHelper::data_path / "kernel" / "DEMUserScripts";
 // Column names for contact pair output file
 const std::string OUTPUT_FILE_OWNER_1_NAME = std::string("A");
 const std::string OUTPUT_FILE_OWNER_2_NAME = std::string("B");

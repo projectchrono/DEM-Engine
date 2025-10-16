@@ -5,12 +5,12 @@
 
 #include <core/utils/RuntimeData.h>
 
-#define RUNTIME_DATA_DIRECTORY "@RUNTIME_DATA_DIRECTORY@"
-#define RUNTIME_INCLUDE_DIRECTORY "@RUNTIME_INCLUDE_DIRECTORY@"
+#define DEME_RUNTIME_DATA_DIRECTORY "@DEME_RUNTIME_DATA_DIRECTORY@"
+#define DEME_RUNTIME_INCLUDE_DIRECTORY "@DEME_RUNTIME_INCLUDE_DIRECTORY@"
 
 // It's called data_path, but it includes both data files and kernel files
-std::filesystem::path RuntimeDataHelper::data_path = std::filesystem::path(RUNTIME_DATA_DIRECTORY);
+std::filesystem::path DEMERuntimeDataHelper::data_path = std::filesystem::path(DEME_RUNTIME_DATA_DIRECTORY);
 
 // This include path is for the included headers in the kernels that need jitification
-std::filesystem::path RuntimeDataHelper::include_path = std::filesystem::path(RUNTIME_INCLUDE_DIRECTORY);
+std::filesystem::path DEMERuntimeDataHelper::include_path = std::filesystem::path(DEME_RUNTIME_INCLUDE_DIRECTORY);
 

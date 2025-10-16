@@ -113,16 +113,16 @@ install(
 
 
 message(STATUS "${core_message} Generating Runtime Data helper (build)...")
-set(RUNTIME_DATA_DIRECTORY "${CMAKE_BINARY_DIR}")
-set(RUNTIME_INCLUDE_DIRECTORY "${CMAKE_BINARY_DIR}")
+set(DEME_RUNTIME_DATA_DIRECTORY "${CMAKE_BINARY_DIR}")
+set(DEME_RUNTIME_INCLUDE_DIRECTORY "${CMAKE_BINARY_DIR}")
 configure_file(
 	utils/RuntimeData.cpp.in utils/RuntimeDataBuild.cpp
 	@ONLY
 )
 
 message(STATUS "${core_message} Generating Runtime Data helper (install)...")
-set(RUNTIME_DATA_DIRECTORY "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/DEME")
-set(RUNTIME_INCLUDE_DIRECTORY "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}")
+set(DEME_RUNTIME_DATA_DIRECTORY "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/DEME")
+set(DEME_RUNTIME_INCLUDE_DIRECTORY "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}")
 configure_file(
 	utils/RuntimeData.cpp.in utils/RuntimeDataInstall.cpp
 	@ONLY
