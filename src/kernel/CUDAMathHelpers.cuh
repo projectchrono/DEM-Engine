@@ -36,8 +36,8 @@
  *    Thanks to Linh Hah for additions and fixes.
  */
 
-#ifndef HELPER_MATH_H
-#define HELPER_MATH_H
+#ifndef DEME_HELPER_MATH_CUH
+#define DEME_HELPER_MATH_CUH
 
 #if defined(_WIN32) || defined(_WIN64)
     #undef max
