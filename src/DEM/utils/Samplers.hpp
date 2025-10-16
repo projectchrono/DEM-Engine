@@ -38,7 +38,7 @@
 #include <random>
 #include <utility>
 #include <vector>
-#include <DEM/HostSideHelpers.hpp>
+#include "../HostSideHelpers.hpp"
 
 namespace deme {
 
