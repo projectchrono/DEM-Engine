@@ -4,7 +4,6 @@
 #include <cuda_runtime_api.h>
 #include <vector>
 #include <mutex>
-#include <core/ApiVersion.h>
 
 // A device number manager that evenly distributes the streams needed to all the available devices
 class GpuManager {

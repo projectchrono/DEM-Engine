@@ -9,8 +9,7 @@
 #include <filesystem>
 #include <cstring>
 
-#include <core/ApiVersion.h>
-#include <core/utils/RuntimeData.h>
+#include "RuntimeData.h"
 
 namespace deme {
 

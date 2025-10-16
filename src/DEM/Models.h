@@ -11,11 +11,11 @@
 #include <vector>
 #include <filesystem>
 
-#include <DEM/Defines.h>
-#include <DEM/Structs.h>
-#include <DEM/utils/HostSideHelpers.hpp>
-#include <core/utils/RuntimeData.h>
-#include <core/utils/DEMEPaths.h>
+#include "Defines.h"
+#include "Structs.h"
+#include "utils/HostSideHelpers.hpp"
+#include "../core/utils/RuntimeData.h"
+#include "../core/utils/DEMEPaths.h"
 
 namespace deme {
 

@@ -5,10 +5,10 @@
 
 #include <numeric>
 
-#include <DEM/API.h>
-#include <DEM/AuxClasses.h>
-#include <DEM/utils/HostSideHelpers.hpp>
-#include <DEM/Models.h>
+#include "API.h"
+#include "AuxClasses.h"
+#include "utils/HostSideHelpers.hpp"
+#include "Models.h"
 
 namespace deme {
 

@@ -13,17 +13,15 @@
 #include <set>
 #include <functional>
 
-#include <core/ApiVersion.h>
-#include <core/utils/CudaAllocator.hpp>
-#include <core/utils/ThreadManager.h>
-#include <core/utils/GpuManager.h>
-#include <core/utils/DataMigrationHelper.hpp>
-#include <kernel/DEMHelperKernels.cuh>
-#include <core/utils/GpuError.h>
-#include <DEM/BdrsAndObjs.h>
-#include <DEM/Defines.h>
-#include <DEM/Structs.h>
-#include <DEM/AuxClasses.h>
+#include "../core/utils/CudaAllocator.hpp"
+#include "../core/utils/ThreadManager.h"
+#include "../core/utils/GpuManager.h"
+#include "../core/utils/DataMigrationHelper.hpp"
+#include "../core/utils/GpuError.h"
+#include "BdrsAndObjs.h"
+#include "Defines.h"
+#include "Structs.h"
+#include "AuxClasses.h"
 
 // Forward declare jitify::Program to avoid downstream dependency
 namespace jitify {

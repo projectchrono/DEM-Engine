@@ -14,11 +14,11 @@
 #include <array>
 #include <cmath>
 
-#include <kernel/DEMHelperKernels.cuh>
-#include <DEM/Defines.h>
-#include <DEM/Structs.h>
-#include <core/utils/CudaAllocator.hpp>
-#include <DEM/utils/HostSideHelpers.hpp>
+#include "../kernel/DEMHelperKernels.cuh"
+#include "Defines.h"
+#include "Structs.h"
+#include "../core/utils/CudaAllocator.hpp"
+#include "utils/HostSideHelpers.hpp"
 
 namespace deme {
 

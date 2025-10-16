@@ -1,16 +1,15 @@
 // DEM device-side helper kernel collection
 
-#ifndef DEME_HELPER_KERNELS_CU
-#define DEME_HELPER_KERNELS_CU
+#ifndef DEME_HELPER_KERNELS_CUH
+#define DEME_HELPER_KERNELS_CUH
 
-#include <DEM/Defines.h>
-
-// CUDAMathHelpers.cuh is used in static compilation, and that needs to be found through src then kernel. But at
-// runtime, we ask jitify to find include files only at same level of all other fellow kernel files.
-#ifdef DEME_BEING_CMAKE_COMPILED
-    #include <kernel/CUDAMathHelpers.cuh>
+#include "CUDAMathHelpers.cuh"
+// If being statically compiled using CMake, then include DEM/Defines.h using relative path.
+// Otherwise, use the angle bracket form for jitify to pick it up from the build dir.
+#if __has_include("../DEM/Defines.h")
+    #include "../DEM/Defines.h"
 #else
-    #include <CUDAMathHelpers.cuh>
+    #include <DEM/Defines.h>
 #endif
 
 // inline __device__ voxelID_t position2VoxelID
