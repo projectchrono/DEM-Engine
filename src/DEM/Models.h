@@ -192,8 +192,8 @@ inline std::string VEL_TO_PASS_ON_FORWARD_EULER() {
 }
 
 inline std::string VEL_TO_PASS_ON_EXTENDED_TAYLOR() {
-    std::filesystem::path sourcefile =
-        DEMERuntimeDataHelper::data_path / "kernel" / "DEMCustomizablePolicies" / "IntegrationVelPassOnExtendedTaylor.cu";
+    std::filesystem::path sourcefile = DEMERuntimeDataHelper::data_path / "kernel" / "DEMCustomizablePolicies" /
+                                       "IntegrationVelPassOnExtendedTaylor.cu";
     if (!std::filesystem::exists(sourcefile)) {
         DEME_ERROR("The integration strategy file %s is not found.", sourcefile.string().c_str());
     }
