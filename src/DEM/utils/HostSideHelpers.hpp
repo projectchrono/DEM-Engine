@@ -124,13 +124,6 @@ inline void hostPrefixScan(T1* arr, size_t n) {
     }
 }
 
-template <typename T1>
-inline void elemSwap(T1* x, T1* y) {
-    T1 tmp = *x;
-    *x = *y;
-    *y = tmp;
-}
-
 /// Return a perpendicular unit vector of the input vector. Will not work well if the input vector is too short;
 /// consider normalizing it if it is the case.
 template <typename T1>
@@ -388,8 +381,8 @@ inline void hostSortByKey(T1* keys, T2* vals, size_t n) {
         swapped = false;
         for (size_t j = 0; j < n - i - 1; j++) {
             if (keys[j] > keys[j + 1]) {
-                elemSwap<T1>(&keys[j], &keys[j + 1]);
-                elemSwap<T2>(&vals[j], &vals[j + 1]);
+                std::swap(keys[j], keys[j + 1]);
+                std::swap(vals[j], vals[j + 1]);
                 swapped = true;
             }
         }

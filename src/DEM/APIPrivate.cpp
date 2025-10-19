@@ -379,8 +379,8 @@ void DEMSolver::figureOutNV() {
     for (int i = 0; i < 3 - 1; i++)
         for (int j = i + 1; j < 3; j++)
             if (XYZ[i] > XYZ[j]) {
-                elemSwap(XYZ + i, XYZ + j);
-                elemSwap(rankXYZ + i, rankXYZ + j);
+                std::swap(XYZ[i], XYZ[j]);
+                std::swap(rankXYZ[i], rankXYZ[j]);
             }
     // Record the size ranking
     float userSize321[3] = {XYZ[0], XYZ[1], XYZ[2]};
@@ -1077,9 +1077,10 @@ void DEMSolver::setSolverParams() {
     dT->solverFlags.useNoContactRecord = no_recording_contact_forces;
     dT->solverFlags.useForceCollectInPlace = collect_force_in_force_kernel;
 
-    // Whether sorts contact before using them (not implemented)
-    kT->solverFlags.should_sort_pairs = should_sort_contacts;
-    dT->solverFlags.should_sort_pairs = should_sort_contacts;
+    // Whether sorts contact before using them.
+    // NOTE: The current logic requires this to be true. We cannot set it to false now.
+    // kT->solverFlags.should_sort_pairs = should_sort_contacts;
+    // dT->solverFlags.should_sort_pairs = should_sort_contacts;
 
     // Error out policies
     kT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;

@@ -290,6 +290,9 @@ class DEMDynamicThread {
     // dT's copy of "clump template and their names" map
     std::unordered_map<unsigned int, std::string> templateNumNameMap;
 
+    // dT's storage of how many contact pairs of each contact type are currently present
+    std::array<contact_t, NUM_SUPPORTED_CONTACT_TYPES> possibleContactTypes = sorted_contact_type_array();
+
     // dT's timers
     std::vector<std::string> timer_names = {"Clear force array", "Calculate contact forces", "Optional force reduction",
                                             "Integration",       "Unpack updates from kT",   "Send to kT buffer",
