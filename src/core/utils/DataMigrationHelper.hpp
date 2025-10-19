@@ -9,6 +9,7 @@
 #include <cassert>
 #include <optional>
 #include <unordered_map>
+
 #include "GpuError.h"
 #include "../../DEM/VariableTypes.h"
 

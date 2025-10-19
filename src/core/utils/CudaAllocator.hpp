@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef CUDALLOC_HPP
-#define CUDALLOC_HPP
+#ifndef DEME_CUDALLOC_HPP
+#define DEME_CUDALLOC_HPP
 
 #include <core/ApiVersion.h>
 
