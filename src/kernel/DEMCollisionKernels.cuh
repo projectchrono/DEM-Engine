@@ -492,57 +492,61 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
     const T1 tri1[3] = {A1, B1, C1};
     // Triangle 2 vertices
     const T1 tri2[3] = {A2, B2, C2};
-    
+
     // Compute face normals
     T1 edge1_0 = B1 - A1;
     T1 edge1_1 = C1 - B1;
     T1 edge1_2 = A1 - C1;
     T1 normal1 = cross(edge1_0, C1 - A1);
-    
+
     T1 edge2_0 = B2 - A2;
     T1 edge2_1 = C2 - B2;
     T1 edge2_2 = A2 - C2;
     T1 normal2 = cross(edge2_0, C2 - A2);
-    
+
     // Track the MTV (minimum translation vector)
     T2 minOverlap = DEME_HUGE_FLOAT;
     T1 mtv_axis;
     int axisType = -1;  // 0: face1, 1: face2, 2+: edge-edge
     int edgeIndexA = -1, edgeIndexB = -1;
-    
+
     // Store edges for later use
     T1 edges1[3] = {edge1_0, edge1_1, edge1_2};
     T1 edges2[3] = {edge2_0, edge2_1, edge2_2};
-    
+
     // Test face normal of triangle 1
     {
         T2 len2 = dot(normal1, normal1);
         if (len2 > DEME_TINY_FLOAT) {
             T1 axis = normal1 * (T2(1.0) / sqrt(len2));
-            
+
             // Project triangle 1 vertices
             T2 min1 = dot(tri1[0], axis);
             T2 max1 = min1;
             for (int i = 1; i < 3; ++i) {
                 T2 proj = dot(tri1[i], axis);
-                if (proj < min1) min1 = proj;
-                if (proj > max1) max1 = proj;
+                if (proj < min1)
+                    min1 = proj;
+                if (proj > max1)
+                    max1 = proj;
             }
-            
+
             // Project triangle 2 vertices
             T2 min2 = dot(tri2[0], axis);
             T2 max2 = min2;
             for (int i = 1; i < 3; ++i) {
                 T2 proj = dot(tri2[i], axis);
-                if (proj < min2) min2 = proj;
-                if (proj > max2) max2 = proj;
+                if (proj < min2)
+                    min2 = proj;
+                if (proj > max2)
+                    max2 = proj;
             }
-            
+
             // Check overlap
             if (max1 < min2 || max2 < min1) {
                 return false;  // Separating axis found
             }
-            
+
             // Calculate overlap
             T2 overlap = DEME_MIN(max1 - min2, max2 - min1);
             if (overlap < minOverlap) {
@@ -556,36 +560,40 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
             }
         }
     }
-    
+
     // Test face normal of triangle 2
     {
         T2 len2 = dot(normal2, normal2);
         if (len2 > DEME_TINY_FLOAT) {
             T1 axis = normal2 * (T2(1.0) / sqrt(len2));
-            
+
             // Project triangle 1 vertices
             T2 min1 = dot(tri1[0], axis);
             T2 max1 = min1;
             for (int i = 1; i < 3; ++i) {
                 T2 proj = dot(tri1[i], axis);
-                if (proj < min1) min1 = proj;
-                if (proj > max1) max1 = proj;
+                if (proj < min1)
+                    min1 = proj;
+                if (proj > max1)
+                    max1 = proj;
             }
-            
+
             // Project triangle 2 vertices
             T2 min2 = dot(tri2[0], axis);
             T2 max2 = min2;
             for (int i = 1; i < 3; ++i) {
                 T2 proj = dot(tri2[i], axis);
-                if (proj < min2) min2 = proj;
-                if (proj > max2) max2 = proj;
+                if (proj < min2)
+                    min2 = proj;
+                if (proj > max2)
+                    max2 = proj;
             }
-            
+
             // Check overlap
             if (max1 < min2 || max2 < min1) {
                 return false;  // Separating axis found
             }
-            
+
             // Calculate overlap
             T2 overlap = DEME_MIN(max1 - min2, max2 - min1);
             if (overlap < minOverlap) {
@@ -599,39 +607,43 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
             }
         }
     }
-    
+
     // Test 9 edge-edge cross products
     for (int i = 0; i < 3; ++i) {
         for (int j = 0; j < 3; ++j) {
             T1 axis = cross(edges1[i], edges2[j]);
             T2 len2 = dot(axis, axis);
-            
+
             if (len2 > DEME_TINY_FLOAT) {
                 axis = axis * (T2(1.0) / sqrt(len2));
-                
+
                 // Project triangle 1 vertices
                 T2 min1 = dot(tri1[0], axis);
                 T2 max1 = min1;
                 for (int k = 1; k < 3; ++k) {
                     T2 proj = dot(tri1[k], axis);
-                    if (proj < min1) min1 = proj;
-                    if (proj > max1) max1 = proj;
+                    if (proj < min1)
+                        min1 = proj;
+                    if (proj > max1)
+                        max1 = proj;
                 }
-                
+
                 // Project triangle 2 vertices
                 T2 min2 = dot(tri2[0], axis);
                 T2 max2 = min2;
                 for (int k = 1; k < 3; ++k) {
                     T2 proj = dot(tri2[k], axis);
-                    if (proj < min2) min2 = proj;
-                    if (proj > max2) max2 = proj;
+                    if (proj < min2)
+                        min2 = proj;
+                    if (proj > max2)
+                        max2 = proj;
                 }
-                
+
                 // Check overlap
                 if (max1 < min2 || max2 < min1) {
                     return false;  // Separating axis found
                 }
-                
+
                 // Calculate overlap
                 T2 overlap = DEME_MIN(max1 - min2, max2 - min1);
                 if (overlap < minOverlap) {
@@ -648,16 +660,16 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
             }
         }
     }
-    
+
     // If we reach here, triangles are overlapping
     // Safety check: if no valid axis was found (degenerate triangles), return false
     if (axisType == -1) {
         return false;
     }
-    
+
     depth = minOverlap;
     normal = mtv_axis;
-    
+
     // Calculate contact point based on which axis "won"
     if (axisType == 0) {
         // Face A: project penetrating B-vertices onto A's plane and average
@@ -710,19 +722,19 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
         T1 edgeA_start = tri1[edgeIndexA];
         T1 edgeA_end = tri1[nextA];
         T1 edgeA = edges1[edgeIndexA];
-        
+
         // Edge from triangle 2
         int nextB = (edgeIndexB + 1) % 3;
         T1 edgeB_start = tri2[edgeIndexB];
         T1 edgeB_end = tri2[nextB];
         T1 edgeB = edges2[edgeIndexB];
-        
+
         // Compute closest points on two line segments
         T1 r = edgeB_start - edgeA_start;
         T2 a = dot(edgeA, edgeA);
         T2 e = dot(edgeB, edgeB);
         T2 f = dot(edgeB, r);
-        
+
         T2 s, t;
         if (a <= DEME_TINY_FLOAT && e <= DEME_TINY_FLOAT) {
             // Both edges degenerate to points
@@ -741,15 +753,15 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
                 // General case
                 T2 b = dot(edgeA, edgeB);
                 T2 denom = a * e - b * b;
-                
+
                 if (denom != T2(0.0)) {
                     s = clamp((b * f - c * e) / denom, T2(0.0), T2(1.0));
                 } else {
                     s = 0.0;
                 }
-                
+
                 t = (b * s + f) / e;
-                
+
                 if (t < T2(0.0)) {
                     t = 0.0;
                     s = clamp(-c / a, T2(0.0), T2(1.0));
@@ -759,12 +771,12 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
                 }
             }
         }
-        
+
         T1 closestA = edgeA_start + edgeA * s;
         T1 closestB = edgeB_start + edgeB * t;
         point = (closestA + closestB) * T2(0.5);
     }
-    
+
     return true;
 }
 
