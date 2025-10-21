@@ -556,6 +556,9 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
                 std::make_unique<DualArray<float>>(nTriGM, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
         }
     }
+    // existingContactTypes has a fixed size depending on how many contact types are defined
+    DEME_DUAL_ARRAY_RESIZE(existingContactTypes, NUM_SUPPORTED_CONTACT_TYPES + 1, NOT_A_CONTACT);
+    DEME_DUAL_ARRAY_RESIZE(typeStartOffsets, NUM_SUPPORTED_CONTACT_TYPES + 1, 0);
 
     // You know what, let's not init dT buffers, since kT will change it when needed anyway. Besides, changing it here
     // will cause problems in the case of a re-init-ed simulation with more clumps added to system, since we may
@@ -2261,6 +2264,35 @@ inline void DEMDynamicThread::unpack_impl() {
 
     // With unpacking finished, contactMapping temp array is no longer needed
     solverScratchSpace.finishUsingTempVector("contactMapping");
+
+    // On dT side, we also calculate how many (the offsets in contact arrays) contacts they are for each type
+    solverScratchSpace.allocateDualStruct("numExistingTypes");
+    contactPairs_t* typeCounts = (contactPairs_t*)solverScratchSpace.allocateTempVector(
+        "typeCounts", (NUM_SUPPORTED_CONTACT_TYPES + 1) * sizeof(contactPairs_t));
+    cubRunLengthEncode<contact_t, contactPairs_t>(granData->contactType, existingContactTypes.device(), typeCounts,
+                                                  solverScratchSpace.getDualStructDevice("numExistingTypes"),
+                                                  *solverScratchSpace.numContacts, streamInfo.stream,
+                                                  solverScratchSpace);
+    solverScratchSpace.syncDualStructDeviceToHost("numExistingTypes");
+    m_numExistingTypes = *solverScratchSpace.getDualStructHost("numExistingTypes");
+    solverScratchSpace.finishUsingDualStruct("numExistingTypes");
+    cubPrefixScan<contactPairs_t, contactPairs_t>(typeCounts, typeStartOffsets.device(), m_numExistingTypes,
+                                                  streamInfo.stream, solverScratchSpace);
+    solverScratchSpace.finishUsingTempVector("typeCounts");
+    existingContactTypes.toHost();
+    typeStartOffsets.toHost();
+    for (size_t i = 0; i < m_numExistingTypes; i++) {
+        DEME_DEBUG_PRINTF("Contact type %d starts at offset %u", existingContactTypes[i], typeStartOffsets[i]);
+        typeStartCountMap[existingContactTypes[i]] =
+            std::make_pair(typeStartOffsets[i],
+                           (i + 1 < m_numExistingTypes ? typeStartOffsets[i + 1] : *solverScratchSpace.numContacts) -
+                               typeStartOffsets[i]);
+    }
+    // Debug output of the map
+    // for (const auto& entry : typeStartCountMap) {
+    //     printf("Contact type %d starts at offset %u and has count %u\n", entry.first, entry.second.first,
+    //     entry.second.second);
+    // }
 }
 
 inline void DEMDynamicThread::ifProduceFreshThenUseIt() {

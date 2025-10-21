@@ -205,4 +205,37 @@ template void cubSortByKey<notStupidBool_t, double>(notStupidBool_t* d_keys_in,
                                                     size_t n,
                                                     cudaStream_t& this_stream,
                                                     DEMSolverScratchData& scratchPad);
+
+////////////////////////////////////////////////////////////////////////////////
+// Vector-wise encoding or scanning
+////////////////////////////////////////////////////////////////////////////////
+
+template <typename T1, typename T2>
+void cubRunLengthEncode(T1* d_in,
+                        T1* d_unique_out,
+                        T2* d_counts_out,
+                        size_t* d_num_out,
+                        size_t n,
+                        cudaStream_t& this_stream,
+                        DEMSolverScratchData& scratchPad) {
+    cubDEMRunLengthEncode<T1, T2>(d_in, d_unique_out, d_counts_out, d_num_out, n, this_stream, scratchPad);
+}
+template void cubRunLengthEncode<contact_t, contactPairs_t>(contact_t* d_in,
+                                                            contact_t* d_unique_out,
+                                                            contactPairs_t* d_counts_out,
+                                                            size_t* d_num_out,
+                                                            size_t n,
+                                                            cudaStream_t& this_stream,
+                                                            DEMSolverScratchData& scratchPad);
+
+template <typename T1, typename T2>
+void cubPrefixScan(T1* d_in, T2* d_out, size_t n, cudaStream_t& this_stream, DEMSolverScratchData& scratchPad) {
+    cubDEMPrefixScan<T1, T2>(d_in, d_out, n, this_stream, scratchPad);
+}
+template void cubPrefixScan<contactPairs_t, contactPairs_t>(contactPairs_t* d_in,
+                                                            contactPairs_t* d_out,
+                                                            size_t n,
+                                                            cudaStream_t& this_stream,
+                                                            DEMSolverScratchData& scratchPad);
+
 }  // namespace deme

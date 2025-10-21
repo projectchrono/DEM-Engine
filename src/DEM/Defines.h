@@ -101,21 +101,6 @@ const contact_t TRIANGLE_TRIANGLE_CONTACT = encodeContactType(GEO_T_TRIANGLE, GE
 const contact_t TRIANGLE_ANALYTICAL_CONTACT = encodeContactType(GEO_T_TRIANGLE, GEO_T_ANALYTICAL);
 const contact_t NUM_SUPPORTED_CONTACT_TYPES = 5;
 
-template <typename T1>
-inline constexpr void constexpr_sort(T1& arr) {
-    for (std::size_t i = 0; i < arr.size(); ++i)
-        for (std::size_t j = i + 1; j < arr.size(); ++j)
-            if (arr[j] < arr[i])
-                std::swap(arr[i], arr[j]);
-}
-constexpr auto sorted_contact_type_array() {
-    std::array<contact_t, NUM_SUPPORTED_CONTACT_TYPES> arr{SPHERE_SPHERE_CONTACT, SPHERE_ANALYTICAL_CONTACT,
-                                                           SPHERE_TRIANGLE_CONTACT, TRIANGLE_ANALYTICAL_CONTACT,
-                                                           TRIANGLE_TRIANGLE_CONTACT};
-    constexpr_sort(arr);
-    return arr;
-}
-
 // Device version of getting geo owner ID
 #define DEME_GET_GEO_OWNER_ID(geo, type)                                  \
     ((type) == deme::GEO_T_SPHERE       ? granData->ownerClumpBody[(geo)] \

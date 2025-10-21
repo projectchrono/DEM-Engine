@@ -72,6 +72,18 @@ void cubSortByKey(T1* d_keys_in,
                   cudaStream_t& this_stream,
                   DEMSolverScratchData& scratchPad);
 
+template <typename T1, typename T2>
+void cubRunLengthEncode(T1* d_in,
+                        T1* d_unique_out,
+                        T2* d_counts_out,
+                        size_t* d_num_out,
+                        size_t n,
+                        cudaStream_t& this_stream,
+                        DEMSolverScratchData& scratchPad);
+
+template <typename T1, typename T2>
+void cubPrefixScan(T1* d_in, T2* d_out, size_t n, cudaStream_t& this_stream, DEMSolverScratchData& scratchPad);
+
 ////////////////////////////////////////////////////////////////////////////////
 // For kT and dT's private usage
 ////////////////////////////////////////////////////////////////////////////////

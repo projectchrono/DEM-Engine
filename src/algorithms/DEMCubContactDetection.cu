@@ -1289,10 +1289,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         scratchPad.finishUsingTempVector("old_arr_unsort_to_sort_map");
 
     }  // End of contact sorting--mapping subroutine
-
-    // Now contactType is sorted. We can use cubDEMRunLengthEncode to find the run-length of each contact type for
-    // later usage in models that care about launching a kernel for each type.
-    {}
     timers.GetTimer("Build history map").stop();
 
     // Finally, don't forget to store the number of contacts for the next iteration, even if there is 0 contacts (in

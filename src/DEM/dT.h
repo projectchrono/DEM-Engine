@@ -291,7 +291,11 @@ class DEMDynamicThread {
     std::unordered_map<unsigned int, std::string> templateNumNameMap;
 
     // dT's storage of how many contact pairs of each contact type are currently present
-    std::array<contact_t, NUM_SUPPORTED_CONTACT_TYPES> possibleContactTypes = sorted_contact_type_array();
+    DualArray<contact_t> existingContactTypes;
+    DualArray<contactPairs_t> typeStartOffsets;
+    size_t m_numExistingTypes = 0;
+    // A map that records the contact <ID start, and count> for each contact type currently existing
+    std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>> typeStartCountMap;
 
     // dT's timers
     std::vector<std::string> timer_names = {"Clear force array", "Calculate contact forces", "Optional force reduction",
