@@ -1,10 +1,14 @@
 // DEM collision-related kernel collection
 
-#ifndef DEME_COLLI_KERNELS_CU
-#define DEME_COLLI_KERNELS_CU
+#ifndef DEME_COLLI_KERNELS_CUH
+#define DEME_COLLI_KERNELS_CUH
 
 #include <DEM/Defines.h>
 #include <DEMHelperKernels.cuh>
+
+// -----------------------------------------------------------------
+// Triangle-sphere collision detection utilities
+// -----------------------------------------------------------------
 
 /// This utility function takes the location 'P' and snaps it to the closest
 /// point on the triangular face with given vertices (A, B, and C). The result
@@ -240,118 +244,9 @@ __device__ bool checkTriSphereOverlap_directional(const T1& A,           ///< Fi
     return in_contact;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// Prism contact detection using the Separating Axis Theorem (SAT)
-////////////////////////////////////////////////////////////////////////////////
-
-template <typename T1, typename T2>
-inline __device__ void select_projection(const T1& pts, const T1& axis, T2& min_p, T2& max_p) {
-    T2 p = dot(pts, axis);
-    if (p < min_p)
-        min_p = p;
-    if (p > max_p)
-        max_p = p;
-}
-
-template <typename T1, typename T2>
-inline __device__ void project_points_on_axis(const T1* prism, const T1& axis, T2& out_min, T2& out_max) {
-    T2 min_p = dot(prism[0], axis);
-    T2 max_p = min_p;
-    for (int i = 1; i < 6; ++i) {
-        select_projection(prism[i], axis, min_p, max_p);
-    }
-    out_min = min_p;
-    out_max = max_p;
-}
-
-template <typename T>
-inline __device__ bool projections_overlap(T minA, T maxA, T minB, T maxB) {
-    return !(maxA < minB || maxB < minA);
-}
-
-template <typename T1>
-inline __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
-                                          const T1& prismAFaceANode2,
-                                          const T1& prismAFaceANode3,
-                                          const T1& prismAFaceBNode1,
-                                          const T1& prismAFaceBNode2,
-                                          const T1& prismAFaceBNode3,
-                                          const T1& prismBFaceANode1,
-                                          const T1& prismBFaceANode2,
-                                          const T1& prismBFaceANode3,
-                                          const T1& prismBFaceBNode1,
-                                          const T1& prismBFaceBNode2,
-                                          const T1& prismBFaceBNode3) {
-    float3 axes[11];
-    unsigned short int axisCount = 0;
-    // Pack as stack arrays for easier looping
-    T1 prismA[6] = {prismAFaceANode1, prismAFaceANode2, prismAFaceANode3,
-                    prismAFaceBNode1, prismAFaceBNode2, prismAFaceBNode3};
-    T1 prismB[6] = {prismBFaceANode1, prismBFaceANode2, prismBFaceANode3,
-                    prismBFaceBNode1, prismBFaceBNode2, prismBFaceBNode3};
-
-    // Base triangle normals
-    T1 A_faceNormal = cross(prismA[1] - prismA[0], prismA[2] - prismA[0]);
-    T1 B_faceNormal = cross(prismB[1] - prismB[0], prismB[2] - prismB[0]);
-
-    axes[axisCount++] = normalize(A_faceNormal);
-    axes[axisCount++] = normalize(B_faceNormal);
-
-    // Edges of each prism base
-    {
-        T1 A_edges[3] = {prismA[1] - prismA[0], prismA[2] - prismA[1], prismA[0] - prismA[2]};
-        T1 B_edges[3] = {prismB[1] - prismB[0], prismB[2] - prismB[1], prismB[0] - prismB[2]};
-
-        // Edge–edge cross products
-        for (unsigned short int i = 0; i < 3; ++i) {
-            for (unsigned short int j = 0; j < 3; ++j) {
-                T1 cp = cross(A_edges[i], B_edges[j]);
-                float len2 = dot(cp, cp);
-                if (len2 > DEME_TINY_FLOAT)
-                    axes[axisCount++] = normalize(cp);
-            }
-        }
-    }
-
-    // SAT test
-    for (unsigned short int i = 0; i < axisCount; ++i) {
-        float minA, maxA, minB, maxB;
-        project_points_on_axis(prismA, axes[i], minA, maxA);
-        project_points_on_axis(prismB, axes[i], minB, maxB);
-        if (!projections_overlap(minA, maxA, minB, maxB))
-            return false;  // separating axis found -> no contact
-    }
-
-    /*
-    // Contact confirmed... find lex smallest point from both prisms, used for the contact point
-    // The contact point does not need to be accurate, but consistent in terms of two metrics:
-    // 1. It should be the same for the same pair of prisms, regardless of their order.
-    // 2. It should be in the bin that one of the triangles lives
-    // And we use the computed midpoint of closest vertex pair
-    T1 closestA = prismA[0];
-    T1 closestB = prismB[0];
-    float minDist2 = DEME_HUGE_FLOAT;
-
-    for (int i = 0; i < 6; ++i) {
-        for (int j = 0; j < 6; ++j) {
-            T1 diff = prismA[i] - prismB[j];
-            float d2 = dot(diff, diff);
-            if (d2 < minDist2 || (d2 == minDist2 && (i < j))) {
-                minDist2 = d2;
-                closestA = prismA[i];
-                closestB = prismB[j];
-            }
-        }
-    }
-    contactPointOut = (closestA + closestB) * 0.5;
-    */
-
-    return true;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// Triangle-analytical contact
-////////////////////////////////////////////////////////////////////////////////
+// ------------------------------------------------------------------
+// Triangle-analytical object collision detection utilities
+// ------------------------------------------------------------------
 
 template <typename T1, typename T2>
 inline bool __device__
@@ -464,6 +359,136 @@ inline bool __device__ calcTriEntityOverlap(const T1& A,
         default:
             return false;
     }
+}
+
+// -----------------------------------------------------------------------------
+// Triangle-triangle collision detection utilities
+// -----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////
+// Prism contact detection using the Separating Axis Theorem (SAT)
+////////////////////////////////////////////////////////////////////////////////
+
+template <typename T1, typename T2>
+inline __device__ void select_projection(const T1& pts, const T1& axis, T2& min_p, T2& max_p) {
+    T2 p = dot(pts, axis);
+    if (p < min_p)
+        min_p = p;
+    if (p > max_p)
+        max_p = p;
+}
+
+template <typename T1, typename T2>
+inline __device__ void project_points_on_axis(const T1* prism, const T1& axis, T2& out_min, T2& out_max) {
+    T2 min_p = dot(prism[0], axis);
+    T2 max_p = min_p;
+    for (int i = 1; i < 6; ++i) {
+        select_projection(prism[i], axis, min_p, max_p);
+    }
+    out_min = min_p;
+    out_max = max_p;
+}
+
+template <typename T>
+inline __device__ bool projections_overlap(T minA, T maxA, T minB, T maxB) {
+    return !(maxA < minB || maxB < minA);
+}
+
+template <typename T1>
+inline __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
+                                          const T1& prismAFaceANode2,
+                                          const T1& prismAFaceANode3,
+                                          const T1& prismAFaceBNode1,
+                                          const T1& prismAFaceBNode2,
+                                          const T1& prismAFaceBNode3,
+                                          const T1& prismBFaceANode1,
+                                          const T1& prismBFaceANode2,
+                                          const T1& prismBFaceANode3,
+                                          const T1& prismBFaceBNode1,
+                                          const T1& prismBFaceBNode2,
+                                          const T1& prismBFaceBNode3) {
+    float3 axes[11];
+    unsigned short int axisCount = 0;
+    // Pack as stack arrays for easier looping
+    T1 prismA[6] = {prismAFaceANode1, prismAFaceANode2, prismAFaceANode3,
+                    prismAFaceBNode1, prismAFaceBNode2, prismAFaceBNode3};
+    T1 prismB[6] = {prismBFaceANode1, prismBFaceANode2, prismBFaceANode3,
+                    prismBFaceBNode1, prismBFaceBNode2, prismBFaceBNode3};
+
+    // Base triangle normals
+    T1 A_faceNormal = cross(prismA[1] - prismA[0], prismA[2] - prismA[0]);
+    T1 B_faceNormal = cross(prismB[1] - prismB[0], prismB[2] - prismB[0]);
+
+    axes[axisCount++] = normalize(A_faceNormal);
+    axes[axisCount++] = normalize(B_faceNormal);
+
+    // Edges of each prism base
+    {
+        T1 A_edges[3] = {prismA[1] - prismA[0], prismA[2] - prismA[1], prismA[0] - prismA[2]};
+        T1 B_edges[3] = {prismB[1] - prismB[0], prismB[2] - prismB[1], prismB[0] - prismB[2]};
+
+        // Edge–edge cross products
+        for (unsigned short int i = 0; i < 3; ++i) {
+            for (unsigned short int j = 0; j < 3; ++j) {
+                T1 cp = cross(A_edges[i], B_edges[j]);
+                float len2 = dot(cp, cp);
+                if (len2 > DEME_TINY_FLOAT)
+                    axes[axisCount++] = normalize(cp);
+            }
+        }
+    }
+
+    // SAT test
+    for (unsigned short int i = 0; i < axisCount; ++i) {
+        float minA, maxA, minB, maxB;
+        project_points_on_axis(prismA, axes[i], minA, maxA);
+        project_points_on_axis(prismB, axes[i], minB, maxB);
+        if (!projections_overlap(minA, maxA, minB, maxB))
+            return false;  // separating axis found -> no contact
+    }
+
+    /*
+    // Contact confirmed... find lex smallest point from both prisms, used for the contact point
+    // The contact point does not need to be accurate, but consistent in terms of two metrics:
+    // 1. It should be the same for the same pair of prisms, regardless of their order.
+    // 2. It should be in the bin that one of the triangles lives
+    // And we use the computed midpoint of closest vertex pair
+    T1 closestA = prismA[0];
+    T1 closestB = prismB[0];
+    float minDist2 = DEME_HUGE_FLOAT;
+
+    for (int i = 0; i < 6; ++i) {
+        for (int j = 0; j < 6; ++j) {
+            T1 diff = prismA[i] - prismB[j];
+            float d2 = dot(diff, diff);
+            if (d2 < minDist2 || (d2 == minDist2 && (i < j))) {
+                minDist2 = d2;
+                closestA = prismA[i];
+                closestB = prismB[j];
+            }
+        }
+    }
+    contactPointOut = (closestA + closestB) * 0.5;
+    */
+
+    return true;
+}
+
+/// SAT narrow-phase returning MTV info, across the two face normals (nA, nB), and the 9 edge--edge cross axes (edgeAi ×
+/// edgeBj). It then derives the contact point depending on which axis “won”: If FACE_A: project the penetrating
+/// B-vertices onto A’s plane and average. If FACE_B: symmetric. If EDGE_EDGE: compute closest points between the
+/// winning edge pair and average them.
+template <typename T1, typename T2>
+inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
+                                                    const T1& B1,
+                                                    const T1& C1,
+                                                    const T1& A2,
+                                                    const T1& B2,
+                                                    const T1& C2,
+                                                    T1& normal,   ///< contact normal
+                                                    T2& depth,    ///< penetration (positive if in contact)
+                                                    T1& point) {  ///< contact point
+    return false;
 }
 
 #endif
