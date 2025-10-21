@@ -650,6 +650,11 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
     }
     
     // If we reach here, triangles are overlapping
+    // Safety check: if no valid axis was found (degenerate triangles), return false
+    if (axisType == -1) {
+        return false;
+    }
+    
     depth = minOverlap;
     normal = mtv_axis;
     
