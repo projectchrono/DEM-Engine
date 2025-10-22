@@ -41,30 +41,32 @@ inline __device__ void equipOwnerPosRot(deme::DEMSimParams* simParams,
     bodyPos.z = ownerPos.z + (double)relPos.z;
 }
 
-__global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMDataDT* granData, size_t nContactPairs) {
-    deme::contactPairs_t myContactID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (myContactID < nContactPairs) {
-        // Identify contact type first
-        deme::contact_t ContactType = granData->contactType[myContactID];
-        // The following quantities are always calculated, regardless of force model
-        double3 contactPnt;
-        float3 B2A;  // Unit vector pointing from body B to body A (contact normal)
-        double overlapDepth;
-        double3 AOwnerPos, bodyAPos, BOwnerPos, bodyBPos;
-        float AOwnerMass, ARadius, BOwnerMass, BRadius;
-        float4 AOriQ, BOriQ;
-        deme::materialsOffset_t bodyAMatType, bodyBMatType;
-        // The user-specified extra margin size (how much we should be lenient in determining `in-contact')
-        float extraMarginSize = 0.;
-        // Triangle A's three points are defined outside, as may be reused in B's acquisition and penetration calc.
-        double3 triANode1, triANode2, triANode3;
-        // Then allocate the optional quantities that will be needed in the force model (note: this one can't be in a
-        // curly bracket, obviously...)
-        _forceModelIngredientDefinition_;
-        // Take care of 2 bodies in order, bodyA first, grab location and velocity to local cache
-        // Decompose ContactType to get the types of A and B
-        deme::geoType_t AType = deme::decodeTypeA(ContactType);
-        deme::geoType_t BType = deme::decodeTypeB(ContactType);
+// Template device function for contact force calculation - will be called by 5 specialized kernels
+template <deme::contact_t CONTACT_TYPE>
+__device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* simParams,
+                                                           deme::DEMDataDT* granData,
+                                                           deme::contactPairs_t myContactID) {
+    // Contact type is known at compile time
+    deme::contact_t ContactType = CONTACT_TYPE;
+    // The following quantities are always calculated, regardless of force model
+    double3 contactPnt;
+    float3 B2A;  // Unit vector pointing from body B to body A (contact normal)
+    double overlapDepth;
+    double3 AOwnerPos, bodyAPos, BOwnerPos, bodyBPos;
+    float AOwnerMass, ARadius, BOwnerMass, BRadius;
+    float4 AOriQ, BOriQ;
+    deme::materialsOffset_t bodyAMatType, bodyBMatType;
+    // The user-specified extra margin size (how much we should be lenient in determining `in-contact')
+    float extraMarginSize = 0.;
+    // Triangle A's three points are defined outside, as may be reused in B's acquisition and penetration calc.
+    double3 triANode1, triANode2, triANode3;
+    // Then allocate the optional quantities that will be needed in the force model (note: this one can't be in a
+    // curly bracket, obviously...)
+    _forceModelIngredientDefinition_;
+    // Take care of 2 bodies in order, bodyA first, grab location and velocity to local cache
+    // Decompose ContactType to get the types of A and B (known at compile time)
+    constexpr deme::geoType_t AType = (CONTACT_TYPE >> 4);
+    constexpr deme::geoType_t BType = (CONTACT_TYPE & 0xF);
 
         // ----------------------------------------------------------------
         // Based on A's type, equip info
@@ -348,5 +350,55 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
         // Updated contact wildcards need to be write back to global mem. It is here because contact wildcard may need
         // to be destroyed for non-contact, so it has to go last.
         _forceModelContactWildcardWrite_;
+}
+
+// 5 specialized kernels for different contact types
+__global__ void calculateContactForces_SphSph(deme::DEMSimParams* simParams,
+                                              deme::DEMDataDT* granData,
+                                              size_t startOffset,
+                                              size_t nContactPairs) {
+    deme::contactPairs_t myContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
+    if (myContactID < startOffset + nContactPairs) {
+        calculateContactForcesImpl<deme::SPHERE_SPHERE_CONTACT>(simParams, granData, myContactID);
+    }
+}
+
+__global__ void calculateContactForces_SphTri(deme::DEMSimParams* simParams,
+                                              deme::DEMDataDT* granData,
+                                              size_t startOffset,
+                                              size_t nContactPairs) {
+    deme::contactPairs_t myContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
+    if (myContactID < startOffset + nContactPairs) {
+        calculateContactForcesImpl<deme::SPHERE_TRIANGLE_CONTACT>(simParams, granData, myContactID);
+    }
+}
+
+__global__ void calculateContactForces_SphAnal(deme::DEMSimParams* simParams,
+                                               deme::DEMDataDT* granData,
+                                               size_t startOffset,
+                                               size_t nContactPairs) {
+    deme::contactPairs_t myContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
+    if (myContactID < startOffset + nContactPairs) {
+        calculateContactForcesImpl<deme::SPHERE_ANALYTICAL_CONTACT>(simParams, granData, myContactID);
+    }
+}
+
+__global__ void calculateContactForces_TriTri(deme::DEMSimParams* simParams,
+                                              deme::DEMDataDT* granData,
+                                              size_t startOffset,
+                                              size_t nContactPairs) {
+    deme::contactPairs_t myContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
+    if (myContactID < startOffset + nContactPairs) {
+        calculateContactForcesImpl<deme::TRIANGLE_TRIANGLE_CONTACT>(simParams, granData, myContactID);
+    }
+}
+
+__global__ void calculateContactForces_TriAnal(deme::DEMSimParams* simParams,
+                                               deme::DEMDataDT* granData,
+                                               size_t startOffset,
+                                               size_t nContactPairs) {
+    deme::contactPairs_t myContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
+    if (myContactID < startOffset + nContactPairs) {
+        calculateContactForcesImpl<deme::TRIANGLE_ANALYTICAL_CONTACT>(simParams, granData, myContactID);
     }
 }

@@ -2177,11 +2177,68 @@ inline void DEMDynamicThread::calculateForces() {
     // or other sources.
     if (blocks_needed_for_contacts > 0) {
         timers.GetTimer("Calculate contact forces").start();
-        // a custom kernel to compute forces
-        cal_force_kernels->kernel("calculateContactForces")
-            .instantiate()
-            .configure(dim3(blocks_needed_for_contacts), dim3(DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(&simParams, &granData, nContactPairs);
+        
+        // Call specialized kernels for each contact type that exists
+        // Sphere-Sphere contacts
+        if (typeStartCountMap.count(deme::SPHERE_SPHERE_CONTACT)) {
+            const auto& [startOffset, count] = typeStartCountMap[deme::SPHERE_SPHERE_CONTACT];
+            size_t blocks = (count + DT_FORCE_CALC_NTHREADS_PER_BLOCK - 1) / DT_FORCE_CALC_NTHREADS_PER_BLOCK;
+            if (blocks > 0) {
+                cal_force_kernels->kernel("calculateContactForces_SphSph")
+                    .instantiate()
+                    .configure(dim3(blocks), dim3(DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0, streamInfo.stream)
+                    .launch(&simParams, &granData, startOffset, count);
+            }
+        }
+        
+        // Sphere-Triangle contacts
+        if (typeStartCountMap.count(deme::SPHERE_TRIANGLE_CONTACT)) {
+            const auto& [startOffset, count] = typeStartCountMap[deme::SPHERE_TRIANGLE_CONTACT];
+            size_t blocks = (count + DT_FORCE_CALC_NTHREADS_PER_BLOCK - 1) / DT_FORCE_CALC_NTHREADS_PER_BLOCK;
+            if (blocks > 0) {
+                cal_force_kernels->kernel("calculateContactForces_SphTri")
+                    .instantiate()
+                    .configure(dim3(blocks), dim3(DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0, streamInfo.stream)
+                    .launch(&simParams, &granData, startOffset, count);
+            }
+        }
+        
+        // Sphere-Analytical contacts
+        if (typeStartCountMap.count(deme::SPHERE_ANALYTICAL_CONTACT)) {
+            const auto& [startOffset, count] = typeStartCountMap[deme::SPHERE_ANALYTICAL_CONTACT];
+            size_t blocks = (count + DT_FORCE_CALC_NTHREADS_PER_BLOCK - 1) / DT_FORCE_CALC_NTHREADS_PER_BLOCK;
+            if (blocks > 0) {
+                cal_force_kernels->kernel("calculateContactForces_SphAnal")
+                    .instantiate()
+                    .configure(dim3(blocks), dim3(DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0, streamInfo.stream)
+                    .launch(&simParams, &granData, startOffset, count);
+            }
+        }
+        
+        // Triangle-Triangle contacts
+        if (typeStartCountMap.count(deme::TRIANGLE_TRIANGLE_CONTACT)) {
+            const auto& [startOffset, count] = typeStartCountMap[deme::TRIANGLE_TRIANGLE_CONTACT];
+            size_t blocks = (count + DT_FORCE_CALC_NTHREADS_PER_BLOCK - 1) / DT_FORCE_CALC_NTHREADS_PER_BLOCK;
+            if (blocks > 0) {
+                cal_force_kernels->kernel("calculateContactForces_TriTri")
+                    .instantiate()
+                    .configure(dim3(blocks), dim3(DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0, streamInfo.stream)
+                    .launch(&simParams, &granData, startOffset, count);
+            }
+        }
+        
+        // Triangle-Analytical contacts
+        if (typeStartCountMap.count(deme::TRIANGLE_ANALYTICAL_CONTACT)) {
+            const auto& [startOffset, count] = typeStartCountMap[deme::TRIANGLE_ANALYTICAL_CONTACT];
+            size_t blocks = (count + DT_FORCE_CALC_NTHREADS_PER_BLOCK - 1) / DT_FORCE_CALC_NTHREADS_PER_BLOCK;
+            if (blocks > 0) {
+                cal_force_kernels->kernel("calculateContactForces_TriAnal")
+                    .instantiate()
+                    .configure(dim3(blocks), dim3(DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0, streamInfo.stream)
+                    .launch(&simParams, &granData, startOffset, count);
+            }
+        }
+        
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         // displayDeviceFloat3(granData->contactForces, nContactPairs);
         // displayDeviceArray<contact_t>(granData->contactType, nContactPairs);
