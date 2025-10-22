@@ -521,7 +521,7 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
     {
         T2 len2 = dot(normal1, normal1);
         if (len2 > DEME_TINY_FLOAT) {
-            T1 axis = normal1 * (T2(1.0) / sqrt(len2));
+            T1 axis = normal1 * rsqrt(len2);
 
             // Project triangle 1 vertices
             T2 min1 = dot(tri1[0], axis);
@@ -577,7 +577,7 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
     {
         T2 len2 = dot(normal2, normal2);
         if (len2 > DEME_TINY_FLOAT) {
-            T1 axis = normal2 * (T2(1.0) / sqrt(len2));
+            T1 axis = normal2 * rsqrt(len2);
 
             // Project triangle 1 vertices
             T2 min1 = dot(tri1[0], axis);
@@ -636,7 +636,7 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
             T2 len2 = dot(axis, axis);
 
             if (len2 > DEME_TINY_FLOAT) {
-                axis = axis * (T2(1.0) / sqrt(len2));
+                axis = axis * rsqrt(len2);
 
                 // Project triangle 1 vertices
                 T2 min1 = dot(tri1[0], axis);
@@ -792,18 +792,18 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
             s = t = 0.0;
         } else if (a <= DEME_TINY_FLOAT) {
             s = 0.0;
-            t = clamp(f / e, T2(0.0), T2(1.0));
+            t = clampBetween(f / e, T2(0.0), T2(1.0));
         } else {
             T2 c = dot(edgeA, r);
             if (e <= DEME_TINY_FLOAT) {
                 t = 0.0;
-                s = clamp(-c / a, T2(0.0), T2(1.0));
+                s = clampBetween(-c / a, T2(0.0), T2(1.0));
             } else {
                 T2 b = dot(edgeA, edgeB);
                 T2 denom = a * e - b * b;
 
                 if (denom != T2(0.0)) {
-                    s = clamp((b * f - c * e) / denom, T2(0.0), T2(1.0));
+                    s = clampBetween((b * f - c * e) / denom, T2(0.0), T2(1.0));
                 } else {
                     s = 0.0;
                 }
@@ -812,10 +812,10 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
 
                 if (t < T2(0.0)) {
                     t = 0.0;
-                    s = clamp(-c / a, T2(0.0), T2(1.0));
+                    s = clampBetween(-c / a, T2(0.0), T2(1.0));
                 } else if (t > T2(1.0)) {
                     t = 1.0;
-                    s = clamp((b - c) / a, T2(0.0), T2(1.0));
+                    s = clampBetween((b - c) / a, T2(0.0), T2(1.0));
                 }
             }
         }

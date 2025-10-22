@@ -201,6 +201,9 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             extraMarginSize = (extraMarginSize > granData->familyExtraMarginSize[BOwnerFamily])
                                   ? extraMarginSize
                                   : granData->familyExtraMarginSize[BOwnerFamily];
+            // extraMarginSize here is purely family-based extra margin, so it can be used to determine if the user
+            // potentially needs remote (non-contact) force calculation.
+            bool needsNonContactPenetrationCalc = (extraMarginSize > 0.);
 
             double3 triBNode1 = to_double3(granData->relPosNode1[sphereID]);
             double3 triBNode2 = to_double3(granData->relPosNode2[sphereID]);
@@ -246,8 +249,16 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                     ContactType = deme::NOT_A_CONTACT;
                 }
             } else if (AType == deme::GEO_T_TRIANGLE) {
-                // Triangle--triangle contact is not supported yet, so we just skip it.
-                ContactType = deme::NOT_A_CONTACT;
+                // Triangle--triangle contact, a bit more complex...
+                double3 contact_normal;
+                checkTriangleTriangleOverlap<double3, double>(triANode1, triANode2, triANode3, triBNode1, triBNode2,
+                                                              triBNode3, contact_normal, overlapDepth, contactPnt,
+                                                              needsNonContactPenetrationCalc);
+                B2A = to_float3(contact_normal);
+                // Fix ContactType if needed
+                if (overlapDepth < -extraMarginSize) {
+                    ContactType = deme::NOT_A_CONTACT;
+                }
             }
 
         } else if (BType == deme::GEO_T_ANALYTICAL) {
