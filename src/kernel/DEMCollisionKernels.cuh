@@ -485,9 +485,10 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
                                                     const T1& A2,
                                                     const T1& B2,
                                                     const T1& C2,
-                                                    T1& normal,   ///< contact normal
-                                                    T2& depth,    ///< penetration (positive if in contact)
-                                                    T1& point) {  ///< contact point
+                                                    T1& normal,              ///< contact normal
+                                                    T2& depth,               ///< penetration (positive if in contact)
+                                                    T1& point,               ///< contact point
+                                                    bool outputNoContact) {  ///< output info even when no contact
     // Triangle 1 vertices
     const T1 tri1[3] = {A1, B1, C1};
     // Triangle 2 vertices
@@ -504,11 +505,13 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
     T1 edge2_2 = A2 - C2;
     T1 normal2 = cross(edge2_0, C2 - A2);
 
-    // Track the MTV (minimum translation vector)
+    // Track the MTV (minimum translation vector) or maximum separation
     T2 minOverlap = DEME_HUGE_FLOAT;
     T1 mtv_axis;
     int axisType = -1;  // 0: face1, 1: face2, 2+: edge-edge
     int edgeIndexA = -1, edgeIndexB = -1;
+    bool foundSeparation = false;
+    T2 maxSeparation = -DEME_HUGE_FLOAT;  // Track largest separation gap
 
     // Store edges for later use
     T1 edges1[3] = {edge1_0, edge1_1, edge1_2};
@@ -542,20 +545,29 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
                     max2 = proj;
             }
 
-            // Check overlap
+            // Check overlap or separation
             if (max1 < min2 || max2 < min1) {
-                return false;  // Separating axis found
-            }
-
-            // Calculate overlap
-            T2 overlap = DEME_MIN(max1 - min2, max2 - min1);
-            if (overlap < minOverlap) {
-                minOverlap = overlap;
-                mtv_axis = axis;
-                axisType = 0;
-                // Ensure MTV points from tri2 to tri1
-                if (max1 - min2 < max2 - min1) {
-                    mtv_axis = axis * T2(-1.0);
+                // Separating axis found
+                T2 separation = (max1 < min2) ? (min2 - max1) : (min1 - max2);
+                if (separation > maxSeparation) {
+                    maxSeparation = separation;
+                    mtv_axis = (max1 < min2) ? axis : (axis * T2(-1.0));
+                    axisType = 0;
+                    foundSeparation = true;
+                }
+                if (!outputNoContact)
+                    return false;
+            } else {
+                // Calculate overlap
+                T2 overlap = DEME_MIN(max1 - min2, max2 - min1);
+                if (overlap < minOverlap) {
+                    minOverlap = overlap;
+                    mtv_axis = axis;
+                    axisType = 0;
+                    // Ensure MTV points from tri2 to tri1
+                    if (max1 - min2 < max2 - min1) {
+                        mtv_axis = axis * T2(-1.0);
+                    }
                 }
             }
         }
@@ -589,20 +601,29 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
                     max2 = proj;
             }
 
-            // Check overlap
+            // Check overlap or separation
             if (max1 < min2 || max2 < min1) {
-                return false;  // Separating axis found
-            }
-
-            // Calculate overlap
-            T2 overlap = DEME_MIN(max1 - min2, max2 - min1);
-            if (overlap < minOverlap) {
-                minOverlap = overlap;
-                mtv_axis = axis;
-                axisType = 1;
-                // Ensure MTV points from tri2 to tri1
-                if (max1 - min2 < max2 - min1) {
-                    mtv_axis = axis * T2(-1.0);
+                // Separating axis found
+                T2 separation = (max1 < min2) ? (min2 - max1) : (min1 - max2);
+                if (separation > maxSeparation) {
+                    maxSeparation = separation;
+                    mtv_axis = (max1 < min2) ? axis : (axis * T2(-1.0));
+                    axisType = 1;
+                    foundSeparation = true;
+                }
+                if (!outputNoContact)
+                    return false;
+            } else {
+                // Calculate overlap
+                T2 overlap = DEME_MIN(max1 - min2, max2 - min1);
+                if (overlap < minOverlap) {
+                    minOverlap = overlap;
+                    mtv_axis = axis;
+                    axisType = 1;
+                    // Ensure MTV points from tri2 to tri1
+                    if (max1 - min2 < max2 - min1) {
+                        mtv_axis = axis * T2(-1.0);
+                    }
                 }
             }
         }
@@ -639,94 +660,125 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
                         max2 = proj;
                 }
 
-                // Check overlap
+                // Check overlap or separation
                 if (max1 < min2 || max2 < min1) {
-                    return false;  // Separating axis found
-                }
-
-                // Calculate overlap
-                T2 overlap = DEME_MIN(max1 - min2, max2 - min1);
-                if (overlap < minOverlap) {
-                    minOverlap = overlap;
-                    mtv_axis = axis;
-                    axisType = 2;
-                    edgeIndexA = i;
-                    edgeIndexB = j;
-                    // Ensure MTV points from tri2 to tri1
-                    if (max1 - min2 < max2 - min1) {
-                        mtv_axis = axis * T2(-1.0);
+                    // Separating axis found
+                    T2 separation = (max1 < min2) ? (min2 - max1) : (min1 - max2);
+                    if (separation > maxSeparation) {
+                        maxSeparation = separation;
+                        mtv_axis = (max1 < min2) ? axis : (axis * T2(-1.0));
+                        axisType = 2;
+                        edgeIndexA = i;
+                        edgeIndexB = j;
+                        foundSeparation = true;
+                    }
+                    if (!outputNoContact)
+                        return false;
+                } else {
+                    // Calculate overlap
+                    T2 overlap = DEME_MIN(max1 - min2, max2 - min1);
+                    if (overlap < minOverlap) {
+                        minOverlap = overlap;
+                        mtv_axis = axis;
+                        axisType = 2;
+                        edgeIndexA = i;
+                        edgeIndexB = j;
+                        // Ensure MTV points from tri2 to tri1
+                        if (max1 - min2 < max2 - min1) {
+                            mtv_axis = axis * T2(-1.0);
+                        }
                     }
                 }
             }
         }
     }
 
-    // If we reach here, triangles are overlapping
     // Safety check: if no valid axis was found (degenerate triangles), return false
     if (axisType == -1) {
         return false;
     }
 
-    depth = minOverlap;
+    // Determine if contact exists
+    bool inContact = !foundSeparation;
+
+    // Set output depth and normal
+    if (inContact) {
+        depth = minOverlap;
+    } else {
+        depth = -maxSeparation;  // Negative for no contact
+    }
     normal = mtv_axis;
 
-    // Calculate contact point based on which axis "won"
-    if (axisType == 0) {
-        // Face A: project penetrating B-vertices onto A's plane and average
-        T1 sum;
-        sum.x = 0.0;
-        sum.y = 0.0;
-        sum.z = 0.0;
-        int count = 0;
-        T1 planeNormal = normalize(normal1);
+    // Calculate contact point as centroid of penetrating region
+    // Use a polygon clipping approach similar to tri_plane_penetration
+    if (axisType == 0 || axisType == 1) {
+        // Face-based contact: clip one triangle against the other's plane
+        const T1* refTri = (axisType == 0) ? tri1 : tri2;
+        const T1* incTri = (axisType == 0) ? tri2 : tri1;
+        T1 planeNormal = (axisType == 0) ? normalize(normal1) : normalize(normal2);
+
+        // Compute signed distances
+        T2 d[3];
         for (int i = 0; i < 3; ++i) {
-            T2 dist = dot(tri2[i] - tri1[0], planeNormal);
-            if (dist < 0.0) {  // Vertex is on penetrating side
-                T1 proj = tri2[i] - planeNormal * dist;
-                sum = sum + proj;
-                count++;
+            d[i] = dot(incTri[i] - refTri[0], planeNormal);
+        }
+
+        // Build clipped polygon
+        T1 poly[6];  // Maximum 6 vertices for clipped triangle
+        int nNode = 0;
+
+        for (int i = 0; i < 3; ++i) {
+            int j = (i + 1) % 3;
+            bool in_i = (d[i] < 0.0);
+            bool in_j = (d[j] < 0.0);
+
+            // Add vertex i if it's inside
+            if (in_i) {
+                poly[nNode++] = incTri[i];
+            }
+
+            // Add intersection point if edge crosses plane
+            if (in_i != in_j) {
+                T2 t = d[i] / (d[i] - d[j]);
+                T1 inter = incTri[i] + (incTri[j] - incTri[i]) * t;
+                poly[nNode++] = inter;
             }
         }
-        if (count > 0) {
-            point = sum / T2(count);
-        } else {
-            // Fallback: use centroid of triangle 2
-            point = (tri2[0] + tri2[1] + tri2[2]) / T2(3.0);
-        }
-    } else if (axisType == 1) {
-        // Face B: project penetrating A-vertices onto B's plane and average
-        T1 sum;
-        sum.x = 0.0;
-        sum.y = 0.0;
-        sum.z = 0.0;
-        int count = 0;
-        T1 planeNormal = normalize(normal2);
-        for (int i = 0; i < 3; ++i) {
-            T2 dist = dot(tri1[i] - tri2[0], planeNormal);
-            if (dist < 0.0) {  // Vertex is on penetrating side
-                T1 proj = tri1[i] - planeNormal * dist;
-                sum = sum + proj;
-                count++;
+
+        // Compute centroid of clipped polygon
+        T1 centroid;
+        centroid.x = 0.0;
+        centroid.y = 0.0;
+        centroid.z = 0.0;
+
+        if (nNode > 0) {
+            for (int i = 0; i < nNode; i++) {
+                centroid = centroid + poly[i];
             }
-        }
-        if (count > 0) {
-            point = sum / T2(count);
+            centroid = centroid / T2(nNode);
         } else {
-            // Fallback: use centroid of triangle 1
-            point = (tri1[0] + tri1[1] + tri1[2]) / T2(3.0);
+            // Fallback: use centroid of incident triangle
+            centroid = (incTri[0] + incTri[1] + incTri[2]) / T2(3.0);
+        }
+
+        // Project centroid onto plane if in contact, or compute midpoint trajectory if not
+        if (inContact) {
+            T2 centroidDist = dot(centroid - refTri[0], planeNormal);
+            point = centroid - planeNormal * (centroidDist + depth * T2(0.5));
+        } else {
+            // For no contact: midpoint between centroids along separation axis
+            T1 cent1 = (tri1[0] + tri1[1] + tri1[2]) / T2(3.0);
+            T1 cent2 = (tri2[0] + tri2[1] + tri2[2]) / T2(3.0);
+            point = (cent1 + cent2) * T2(0.5);
         }
     } else {
         // Edge-edge: compute closest points between the winning edge pair
-        // Edge from triangle 1
         int nextA = (edgeIndexA + 1) % 3;
         T1 edgeA_start = tri1[edgeIndexA];
-        T1 edgeA_end = tri1[nextA];
         T1 edgeA = edges1[edgeIndexA];
 
-        // Edge from triangle 2
         int nextB = (edgeIndexB + 1) % 3;
         T1 edgeB_start = tri2[edgeIndexB];
-        T1 edgeB_end = tri2[nextB];
         T1 edgeB = edges2[edgeIndexB];
 
         // Compute closest points on two line segments
@@ -737,20 +789,16 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
 
         T2 s, t;
         if (a <= DEME_TINY_FLOAT && e <= DEME_TINY_FLOAT) {
-            // Both edges degenerate to points
             s = t = 0.0;
         } else if (a <= DEME_TINY_FLOAT) {
-            // First edge degenerates to a point
             s = 0.0;
             t = clamp(f / e, T2(0.0), T2(1.0));
         } else {
             T2 c = dot(edgeA, r);
             if (e <= DEME_TINY_FLOAT) {
-                // Second edge degenerates to a point
                 t = 0.0;
                 s = clamp(-c / a, T2(0.0), T2(1.0));
             } else {
-                // General case
                 T2 b = dot(edgeA, edgeB);
                 T2 denom = a * e - b * b;
 
@@ -777,7 +825,7 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
         point = (closestA + closestB) * T2(0.5);
     }
 
-    return true;
+    return inContact;
 }
 
 #endif
