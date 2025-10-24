@@ -243,21 +243,21 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
             // Sphere--triangle is a bit tricky. Extra margin should only take effect when it comes from the
             // positive direction of the mesh facet. If not, sphere-setting-on-needle case will give huge
             // penetration since in that case, overlapDepth is very negative and this will be considered in-contact.
-            // So the cases we exclude are: too far away while at the positive direction; not in contact while at
-            // the negative side.
-            // Also checkTriSphereOverlap gives positive number for overlapping cases
+            // So the cases we exclude are: too far away while sph is outside the mesh; not in contact while sph is
+            // inside the mesh.
+            // Also checkTriSphereOverlap gives positive number for overlapping cases.
             if ((overlapDepth < -extraMarginSize) || (!in_contact && overlapDepth > 0.)) {
                 ContactType = deme::NOT_A_CONTACT;
             }
         } else if constexpr (AType == deme::GEO_T_TRIANGLE) {
             // Triangle--triangle contact, a bit more complex...
             double3 contact_normal;
-            checkTriangleTriangleOverlap<double3, double>(triANode1, triANode2, triANode3, triBNode1, triBNode2,
-                                                          triBNode3, contact_normal, overlapDepth, contactPnt,
-                                                          needsNonContactPenetrationCalc);
+            bool in_contact = checkTriangleTriangleOverlap<double3, double>(
+                triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3, contact_normal, overlapDepth,
+                contactPnt, needsNonContactPenetrationCalc);
             B2A = to_float3(contact_normal);
             // Fix ContactType if needed
-            if (overlapDepth < -extraMarginSize) {
+            if ((overlapDepth < -extraMarginSize) || (!in_contact && overlapDepth > 0.)) {
                 ContactType = deme::NOT_A_CONTACT;
             }
         }

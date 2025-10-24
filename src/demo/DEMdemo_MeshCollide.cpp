@@ -33,13 +33,13 @@ int main() {
     DEMSim.SetMeshUniversalContact(true);
 
     // Special material: has a cohesion param
-    auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e7}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.3}, {"Crr", 0.01}});
-    auto mat_type_2 = DEMSim.LoadMaterial({{"E", 2e7}, {"nu", 0.4}, {"CoR", 0.6}, {"mu", 0.3}, {"Crr", 0.01}});
+    auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e5}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.3}, {"Crr", 0.01}});
+    auto mat_type_2 = DEMSim.LoadMaterial({{"E", 1e7}, {"nu", 0.4}, {"CoR", 0.6}, {"mu", 0.3}, {"Crr", 0.01}});
     // If you don't have this line, then CoR between thw 2 materials will take average when they are in contact
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_1, mat_type_2, 0.6);
 
     // Add a bottom plane
-    DEMSim.AddBCPlane(make_float3(0, 0, -1.8), make_float3(0, 0, 1), mat_type_1);
+    DEMSim.AddBCPlane(make_float3(0, 0, -1.8), make_float3(0, 0, 1), mat_type_2);
 
     auto particle1 = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cube.obj").string(), mat_type_1);
     particle1->SetFamily(0);
