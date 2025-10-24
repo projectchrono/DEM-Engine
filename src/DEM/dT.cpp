@@ -2149,7 +2149,9 @@ inline void DEMDynamicThread::dispatchCalcForceKernels(
     const std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>&
         typeKernelMap) {
     // For each contact type that exists, call its corresponding kernel(s)
-    for (const auto& [contact_type, start_count] : typeStartCountMap) {
+    for (size_t i = 0; i < m_numExistingTypes; i++) {
+        contact_t contact_type = existingContactTypes[i];
+        const auto& start_count = typeStartCountMap.at(contact_type);
         // Offset and count being contactPairs_t is very important, as CUDA kernel arguments cannot safely implicitly
         // convert type (from size_t to unsigned int, for example)
         contactPairs_t startOffset = start_count.first;
@@ -2608,17 +2610,16 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     }
 
     // For now, the contact type to kernel map is known and hard-coded after jitification
-    contactTypeKernelMap = {
-        // Sphere-Sphere contact
-        {deme::SPHERE_SPHERE_CONTACT, {{cal_force_kernels, "calculateContactForces_SphSph"}}},
-        // Sphere-Triangle contact
-        {deme::SPHERE_TRIANGLE_CONTACT, {{cal_force_kernels, "calculateContactForces_SphTri"}}},
-        // Sphere-Analytical contact
-        {deme::SPHERE_ANALYTICAL_CONTACT, {{cal_force_kernels, "calculateContactForces_SphAnal"}}},
-        // Triangle-Triangle contact
-        {deme::TRIANGLE_TRIANGLE_CONTACT, {{cal_force_kernels, "calculateContactForces_TriTri"}}},
-        // Triangle-Analytical contact
-        {deme::TRIANGLE_ANALYTICAL_CONTACT, {{cal_force_kernels, "calculateContactForces_TriAnal"}}}};
+    contactTypeKernelMap = {// Sphere-Sphere contact
+                            {SPHERE_SPHERE_CONTACT, {{cal_force_kernels, "calculateContactForces_SphSph"}}},
+                            // Sphere-Triangle contact
+                            {SPHERE_TRIANGLE_CONTACT, {{cal_force_kernels, "calculateContactForces_SphTri"}}},
+                            // Sphere-Analytical contact
+                            {SPHERE_ANALYTICAL_CONTACT, {{cal_force_kernels, "calculateContactForces_SphAnal"}}},
+                            // Triangle-Triangle contact
+                            {TRIANGLE_TRIANGLE_CONTACT, {{cal_force_kernels, "calculateContactForces_TriTri"}}},
+                            // Triangle-Analytical contact
+                            {TRIANGLE_ANALYTICAL_CONTACT, {{cal_force_kernels, "calculateContactForces_TriAnal"}}}};
 }
 
 float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
