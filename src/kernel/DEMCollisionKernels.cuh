@@ -595,7 +595,9 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
             depth = totalDepth / T2(validCount);
             T1 avgProjection = contactSum / T2(validCount);
             // Contact point is offset from the average projection by half the depth
-            // Similar to tri_plane_penetration convention
+            // This follows the convention used in tri_plane_penetration (line ~311):
+            // the contact point lies at the midpoint of the penetration, not on the surface.
+            // This ensures consistency across different contact detection methods.
             point = avgProjection - refNormal * (depth * T2(0.5));
             // Normal points from tri2 to tri1
             normal = deepPenetration1to2 ? (refNormal * T2(-1.0)) : refNormal;
