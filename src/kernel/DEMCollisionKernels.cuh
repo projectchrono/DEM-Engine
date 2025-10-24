@@ -593,7 +593,10 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
 
         if (validCount > 0) {
             depth = totalDepth / T2(validCount);
-            point = contactSum / T2(validCount);
+            T1 avgProjection = contactSum / T2(validCount);
+            // Contact point is offset from the average projection by half the depth
+            // Similar to tri_plane_penetration convention
+            point = avgProjection - refNormal * (depth * T2(0.5));
             // Normal points from tri2 to tri1
             normal = deepPenetration1to2 ? (refNormal * T2(-1.0)) : refNormal;
             return true;  // Deep penetration is always in contact
