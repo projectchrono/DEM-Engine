@@ -485,10 +485,347 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
                                                     const T1& A2,
                                                     const T1& B2,
                                                     const T1& C2,
-                                                    T1& normal,   ///< contact normal
-                                                    T2& depth,    ///< penetration (positive if in contact)
-                                                    T1& point) {  ///< contact point
-    return false;
+                                                    T1& normal,              ///< contact normal
+                                                    T2& depth,               ///< penetration (positive if in contact)
+                                                    T1& point,               ///< contact point
+                                                    bool outputNoContact) {  ///< output info even when no contact
+    // Triangle 1 vertices
+    const T1 tri1[3] = {A1, B1, C1};
+    // Triangle 2 vertices
+    const T1 tri2[3] = {A2, B2, C2};
+
+    // Compute face normals
+    T1 edge1_0 = B1 - A1;
+    T1 edge1_1 = C1 - B1;
+    T1 edge1_2 = A1 - C1;
+    T1 normal1 = cross(edge1_0, C1 - A1);
+
+    T1 edge2_0 = B2 - A2;
+    T1 edge2_1 = C2 - B2;
+    T1 edge2_2 = A2 - C2;
+    T1 normal2 = cross(edge2_0, C2 - A2);
+
+    // Track the MTV (minimum translation vector) or maximum separation
+    T2 minOverlap = DEME_HUGE_FLOAT;
+    T1 mtv_axis;
+    int axisType = -1;  // 0: face1, 1: face2, 2+: edge-edge
+    int edgeIndexA = -1, edgeIndexB = -1;
+    bool foundSeparation = false;
+    T2 maxSeparation = -DEME_HUGE_FLOAT;  // Track largest separation gap
+
+    // Store edges for later use
+    T1 edges1[3] = {edge1_0, edge1_1, edge1_2};
+    T1 edges2[3] = {edge2_0, edge2_1, edge2_2};
+
+    // Test face normal of triangle 1
+    {
+        T2 len2 = dot(normal1, normal1);
+        if (len2 > DEME_TINY_FLOAT) {
+            T1 axis = normal1 * rsqrt(len2);
+
+            // Project triangle 1 vertices
+            T2 min1 = dot(tri1[0], axis);
+            T2 max1 = min1;
+            for (int i = 1; i < 3; ++i) {
+                T2 proj = dot(tri1[i], axis);
+                if (proj < min1)
+                    min1 = proj;
+                if (proj > max1)
+                    max1 = proj;
+            }
+
+            // Project triangle 2 vertices
+            T2 min2 = dot(tri2[0], axis);
+            T2 max2 = min2;
+            for (int i = 1; i < 3; ++i) {
+                T2 proj = dot(tri2[i], axis);
+                if (proj < min2)
+                    min2 = proj;
+                if (proj > max2)
+                    max2 = proj;
+            }
+
+            // Check overlap or separation
+            if (max1 < min2 || max2 < min1) {
+                // Separating axis found
+                T2 separation = (max1 < min2) ? (min2 - max1) : (min1 - max2);
+                if (separation > maxSeparation) {
+                    maxSeparation = separation;
+                    mtv_axis = (max1 < min2) ? axis : (axis * T2(-1.0));
+                    axisType = 0;
+                    foundSeparation = true;
+                }
+                if (!outputNoContact)
+                    return false;
+            } else {
+                // Calculate overlap
+                T2 overlap = DEME_MIN(max1 - min2, max2 - min1);
+                if (overlap < minOverlap) {
+                    minOverlap = overlap;
+                    mtv_axis = axis;
+                    axisType = 0;
+                    // Ensure MTV points from tri2 to tri1
+                    if (max1 - min2 < max2 - min1) {
+                        mtv_axis = axis * T2(-1.0);
+                    }
+                }
+            }
+        }
+    }
+
+    // Test face normal of triangle 2
+    {
+        T2 len2 = dot(normal2, normal2);
+        if (len2 > DEME_TINY_FLOAT) {
+            T1 axis = normal2 * rsqrt(len2);
+
+            // Project triangle 1 vertices
+            T2 min1 = dot(tri1[0], axis);
+            T2 max1 = min1;
+            for (int i = 1; i < 3; ++i) {
+                T2 proj = dot(tri1[i], axis);
+                if (proj < min1)
+                    min1 = proj;
+                if (proj > max1)
+                    max1 = proj;
+            }
+
+            // Project triangle 2 vertices
+            T2 min2 = dot(tri2[0], axis);
+            T2 max2 = min2;
+            for (int i = 1; i < 3; ++i) {
+                T2 proj = dot(tri2[i], axis);
+                if (proj < min2)
+                    min2 = proj;
+                if (proj > max2)
+                    max2 = proj;
+            }
+
+            // Check overlap or separation
+            if (max1 < min2 || max2 < min1) {
+                // Separating axis found
+                T2 separation = (max1 < min2) ? (min2 - max1) : (min1 - max2);
+                if (separation > maxSeparation) {
+                    maxSeparation = separation;
+                    mtv_axis = (max1 < min2) ? axis : (axis * T2(-1.0));
+                    axisType = 1;
+                    foundSeparation = true;
+                }
+                if (!outputNoContact)
+                    return false;
+            } else {
+                // Calculate overlap
+                T2 overlap = DEME_MIN(max1 - min2, max2 - min1);
+                if (overlap < minOverlap) {
+                    minOverlap = overlap;
+                    mtv_axis = axis;
+                    axisType = 1;
+                    // Ensure MTV points from tri2 to tri1
+                    if (max1 - min2 < max2 - min1) {
+                        mtv_axis = axis * T2(-1.0);
+                    }
+                }
+            }
+        }
+    }
+
+    // Test 9 edge-edge cross products
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            T1 axis = cross(edges1[i], edges2[j]);
+            T2 len2 = dot(axis, axis);
+
+            if (len2 > DEME_TINY_FLOAT) {
+                axis = axis * rsqrt(len2);
+
+                // Project triangle 1 vertices
+                T2 min1 = dot(tri1[0], axis);
+                T2 max1 = min1;
+                for (int k = 1; k < 3; ++k) {
+                    T2 proj = dot(tri1[k], axis);
+                    if (proj < min1)
+                        min1 = proj;
+                    if (proj > max1)
+                        max1 = proj;
+                }
+
+                // Project triangle 2 vertices
+                T2 min2 = dot(tri2[0], axis);
+                T2 max2 = min2;
+                for (int k = 1; k < 3; ++k) {
+                    T2 proj = dot(tri2[k], axis);
+                    if (proj < min2)
+                        min2 = proj;
+                    if (proj > max2)
+                        max2 = proj;
+                }
+
+                // Check overlap or separation
+                if (max1 < min2 || max2 < min1) {
+                    // Separating axis found
+                    T2 separation = (max1 < min2) ? (min2 - max1) : (min1 - max2);
+                    if (separation > maxSeparation) {
+                        maxSeparation = separation;
+                        mtv_axis = (max1 < min2) ? axis : (axis * T2(-1.0));
+                        axisType = 2;
+                        edgeIndexA = i;
+                        edgeIndexB = j;
+                        foundSeparation = true;
+                    }
+                    if (!outputNoContact)
+                        return false;
+                } else {
+                    // Calculate overlap
+                    T2 overlap = DEME_MIN(max1 - min2, max2 - min1);
+                    if (overlap < minOverlap) {
+                        minOverlap = overlap;
+                        mtv_axis = axis;
+                        axisType = 2;
+                        edgeIndexA = i;
+                        edgeIndexB = j;
+                        // Ensure MTV points from tri2 to tri1
+                        if (max1 - min2 < max2 - min1) {
+                            mtv_axis = axis * T2(-1.0);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Safety check: if no valid axis was found (degenerate triangles), return false
+    if (axisType == -1) {
+        return false;
+    }
+
+    // Determine if contact exists
+    bool inContact = !foundSeparation;
+
+    // Set output depth and normal
+    if (inContact) {
+        depth = minOverlap;
+    } else {
+        depth = -maxSeparation;  // Negative for no contact
+    }
+    normal = mtv_axis;
+
+    // Calculate contact point as centroid of penetrating region
+    // Use a polygon clipping approach similar to tri_plane_penetration
+    if (axisType == 0 || axisType == 1) {
+        // Face-based contact: clip one triangle against the other's plane
+        const T1* refTri = (axisType == 0) ? tri1 : tri2;
+        const T1* incTri = (axisType == 0) ? tri2 : tri1;
+        T1 planeNormal = (axisType == 0) ? normalize(normal1) : normalize(normal2);
+
+        // Compute signed distances
+        T2 d[3];
+        for (int i = 0; i < 3; ++i) {
+            d[i] = dot(incTri[i] - refTri[0], planeNormal);
+        }
+
+        // Build clipped polygon
+        T1 poly[6];  // Maximum 6 vertices for clipped triangle
+        int nNode = 0;
+
+        for (int i = 0; i < 3; ++i) {
+            int j = (i + 1) % 3;
+            bool in_i = (d[i] < 0.0);
+            bool in_j = (d[j] < 0.0);
+
+            // Add vertex i if it's inside
+            if (in_i) {
+                poly[nNode++] = incTri[i];
+            }
+
+            // Add intersection point if edge crosses plane
+            if (in_i != in_j) {
+                T2 t = d[i] / (d[i] - d[j]);
+                T1 inter = incTri[i] + (incTri[j] - incTri[i]) * t;
+                poly[nNode++] = inter;
+            }
+        }
+
+        // Compute centroid of clipped polygon
+        T1 centroid;
+        centroid.x = 0.0;
+        centroid.y = 0.0;
+        centroid.z = 0.0;
+
+        if (nNode > 0) {
+            for (int i = 0; i < nNode; i++) {
+                centroid = centroid + poly[i];
+            }
+            centroid = centroid / T2(nNode);
+        } else {
+            // Fallback: use centroid of incident triangle
+            centroid = (incTri[0] + incTri[1] + incTri[2]) / T2(3.0);
+        }
+
+        // Project centroid onto plane if in contact, or compute midpoint trajectory if not
+        if (inContact) {
+            T2 centroidDist = dot(centroid - refTri[0], planeNormal);
+            point = centroid - planeNormal * (centroidDist + depth * T2(0.5));
+        } else {
+            // For no contact: midpoint between centroids along separation axis
+            T1 cent1 = (tri1[0] + tri1[1] + tri1[2]) / T2(3.0);
+            T1 cent2 = (tri2[0] + tri2[1] + tri2[2]) / T2(3.0);
+            point = (cent1 + cent2) * T2(0.5);
+        }
+    } else {
+        // Edge-edge: compute closest points between the winning edge pair
+        int nextA = (edgeIndexA + 1) % 3;
+        T1 edgeA_start = tri1[edgeIndexA];
+        T1 edgeA = edges1[edgeIndexA];
+
+        int nextB = (edgeIndexB + 1) % 3;
+        T1 edgeB_start = tri2[edgeIndexB];
+        T1 edgeB = edges2[edgeIndexB];
+
+        // Compute closest points on two line segments
+        T1 r = edgeB_start - edgeA_start;
+        T2 a = dot(edgeA, edgeA);
+        T2 e = dot(edgeB, edgeB);
+        T2 f = dot(edgeB, r);
+
+        T2 s, t;
+        if (a <= DEME_TINY_FLOAT && e <= DEME_TINY_FLOAT) {
+            s = t = 0.0;
+        } else if (a <= DEME_TINY_FLOAT) {
+            s = 0.0;
+            t = clampBetween(f / e, T2(0.0), T2(1.0));
+        } else {
+            T2 c = dot(edgeA, r);
+            if (e <= DEME_TINY_FLOAT) {
+                t = 0.0;
+                s = clampBetween(-c / a, T2(0.0), T2(1.0));
+            } else {
+                T2 b = dot(edgeA, edgeB);
+                T2 denom = a * e - b * b;
+
+                if (denom != T2(0.0)) {
+                    s = clampBetween((b * f - c * e) / denom, T2(0.0), T2(1.0));
+                } else {
+                    s = 0.0;
+                }
+
+                t = (b * s + f) / e;
+
+                if (t < T2(0.0)) {
+                    t = 0.0;
+                    s = clampBetween(-c / a, T2(0.0), T2(1.0));
+                } else if (t > T2(1.0)) {
+                    t = 1.0;
+                    s = clampBetween((b - c) / a, T2(0.0), T2(1.0));
+                }
+            }
+        }
+
+        T1 closestA = edgeA_start + edgeA * s;
+        T1 closestB = edgeB_start + edgeB * t;
+        point = (closestA + closestB) * T2(0.5);
+    }
+
+    return inContact;
 }
 
 #endif

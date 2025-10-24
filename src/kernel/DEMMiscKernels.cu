@@ -45,8 +45,10 @@ __global__ void computeMarginFromAbsv(deme::DEMSimParams* simParams,
         unsigned int my_family = granData->familyID[ownerID];
         if (!isfinite(absv)) {
             // May produce messy error messages, but it's still good to know what entities went wrong
-            DEME_ABORT_KERNEL("Absolute velocity for ownerID %llu is not finite. This happened at time %.9g.\n",
-                              static_cast<unsigned long long>(ownerID), simParams->timeElapsed);
+            DEME_ABORT_KERNEL(
+                "Absolute velocity for ownerID %llu is infinite (and it's a worse version of "
+                "max-velocity-exceeded-allowance).\n",
+                static_cast<unsigned long long>(ownerID));
         }
         if (absv > simParams->approxMaxVel) {
             absv = simParams->approxMaxVel;

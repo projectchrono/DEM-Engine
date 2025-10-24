@@ -2142,7 +2142,40 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
     granData.toDevice();
 }
 
-inline void DEMDynamicThread::calculateForces() {
+// The argument is two maps: contact type -> (start offset, count), contact type -> list of [(program bundle name,
+// kernel name)]
+inline void DEMDynamicThread::dispatchCalcForceKernels(
+    const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountMap,
+    const std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>&
+        typeKernelMap) {
+    // For each contact type that exists, call its corresponding kernel(s)
+    for (size_t i = 0; i < m_numExistingTypes; i++) {
+        contact_t contact_type = existingContactTypes[i];
+        const auto& start_count = typeStartCountMap.at(contact_type);
+        // Offset and count being contactPairs_t is very important, as CUDA kernel arguments cannot safely implicitly
+        // convert type (from size_t to unsigned int, for example)
+        contactPairs_t startOffset = start_count.first;
+        contactPairs_t count = start_count.second;
+
+        // For this contact type, get its list of (program bundle name, kernel name)
+        if (typeKernelMap.count(contact_type) == 0) {
+            DEME_ERROR("Contact type %d has no associated force kernel in to execute!", contact_type);
+        }
+        const auto& kernelList = typeKernelMap.at(contact_type);
+        for (const auto& [progName, kernelName] : kernelList) {
+            size_t blocks = (count + DT_FORCE_CALC_NTHREADS_PER_BLOCK - 1) / DT_FORCE_CALC_NTHREADS_PER_BLOCK;
+            if (blocks > 0) {
+                progName->kernel(kernelName)
+                    .instantiate()
+                    .configure(dim3(blocks), dim3(DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0, streamInfo.stream)
+                    .launch(&simParams, &granData, startOffset, count);
+            }
+        }
+    }
+    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+}
+
+void DEMDynamicThread::calculateForces() {
     // Reset force (acceleration) arrays for this time step
     size_t nContactPairs = *solverScratchSpace.numContacts;
 
@@ -2171,18 +2204,14 @@ inline void DEMDynamicThread::calculateForces() {
     }
     timers.GetTimer("Clear force array").stop();
 
-    size_t blocks_needed_for_contacts =
-        (nContactPairs + DT_FORCE_CALC_NTHREADS_PER_BLOCK - 1) / DT_FORCE_CALC_NTHREADS_PER_BLOCK;
     // If no contact then we don't have to calculate forces. Note there might still be forces, coming from prescription
     // or other sources.
-    if (blocks_needed_for_contacts > 0) {
+    if (nContactPairs > 0) {
         timers.GetTimer("Calculate contact forces").start();
-        // a custom kernel to compute forces
-        cal_force_kernels->kernel("calculateContactForces")
-            .instantiate()
-            .configure(dim3(blocks_needed_for_contacts), dim3(DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(&simParams, &granData, nContactPairs);
-        DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+        // Call specialized kernels for each contact type that exists
+        dispatchCalcForceKernels(typeStartCountMap, contactTypeKernelMap);
+
         // displayDeviceFloat3(granData->contactForces, nContactPairs);
         // displayDeviceArray<contact_t>(granData->contactType, nContactPairs);
         // std::cout << "===========================" << std::endl;
@@ -2195,7 +2224,7 @@ inline void DEMDynamicThread::calculateForces() {
                 collectContactForcesThruCub(collect_force_kernels, granData, nContactPairs, simParams->nOwnerBodies,
                                             contactPairArr_isFresh, streamInfo.stream, solverScratchSpace, timers);
             } else {
-                blocks_needed_for_contacts =
+                size_t blocks_needed_for_contacts =
                     (nContactPairs + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
                 // This does both acc and ang acc
                 collect_force_kernels->kernel("forceToAcc")
@@ -2283,10 +2312,10 @@ inline void DEMDynamicThread::unpack_impl() {
     typeStartOffsets.toHost();
     for (size_t i = 0; i < m_numExistingTypes; i++) {
         DEME_DEBUG_PRINTF("Contact type %d starts at offset %u", existingContactTypes[i], typeStartOffsets[i]);
-        typeStartCountMap[existingContactTypes[i]] =
-            std::make_pair(typeStartOffsets[i],
-                           (i + 1 < m_numExistingTypes ? typeStartOffsets[i + 1] : *solverScratchSpace.numContacts) -
-                               typeStartOffsets[i]);
+        typeStartCountMap[existingContactTypes[i]] = std::make_pair(
+            typeStartOffsets[i],
+            (i + 1 < m_numExistingTypes ? typeStartOffsets[i + 1] : (contactPairs_t)*solverScratchSpace.numContacts) -
+                typeStartOffsets[i]);
     }
     // Debug output of the map
     // for (const auto& entry : typeStartCountMap) {
@@ -2579,6 +2608,18 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
         misc_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMMiscKernels", JitHelper::KERNEL_DIR / "DEMMiscKernels.cu", Subs, JitifyOptions)));
     }
+
+    // For now, the contact type to kernel map is known and hard-coded after jitification
+    contactTypeKernelMap = {// Sphere-Sphere contact
+                            {SPHERE_SPHERE_CONTACT, {{cal_force_kernels, "calculateContactForces_SphSph"}}},
+                            // Sphere-Triangle contact
+                            {SPHERE_TRIANGLE_CONTACT, {{cal_force_kernels, "calculateContactForces_SphTri"}}},
+                            // Sphere-Analytical contact
+                            {SPHERE_ANALYTICAL_CONTACT, {{cal_force_kernels, "calculateContactForces_SphAnal"}}},
+                            // Triangle-Triangle contact
+                            {TRIANGLE_TRIANGLE_CONTACT, {{cal_force_kernels, "calculateContactForces_TriTri"}}},
+                            // Triangle-Analytical contact
+                            {TRIANGLE_ANALYTICAL_CONTACT, {{cal_force_kernels, "calculateContactForces_TriAnal"}}}};
 }
 
 float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
