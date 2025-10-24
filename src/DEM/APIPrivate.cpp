@@ -2142,8 +2142,13 @@ inline void DEMSolver::equipKernelIncludes(std::unordered_map<std::string, std::
 // It's put here as ApiVersion.h.in (which sets DEME_CUDA_TOOLKIT_HEADERS) is a CMake-in configuration file, we don't
 // want to include it anywhere in the h headers in case DEM-Engine is included by some parent project.
 void DEMSolver::setDefaultSolverParams() {
-    m_jitify_options = {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(),
-                        "-I" + std::string(DEME_CUDA_TOOLKIT_HEADERS), "-diag-suppress=550", "-diag-suppress=177"};
+    m_jitify_options = {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(),
+                        "-I" + (JitHelper::KERNEL_DIR).string(),
+                        "-I" + std::string(DEME_CUDA_TOOLKIT_HEADERS),
+                        "-diag-suppress=177",
+                        "-diag-suppress=549",
+                        "-diag-suppress=550",
+                        "-std=c++17"};
 }
 
 }  // namespace deme

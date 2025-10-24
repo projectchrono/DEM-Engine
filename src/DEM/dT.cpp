@@ -2171,13 +2171,11 @@ inline void DEMDynamicThread::calculateForces() {
     }
     timers.GetTimer("Clear force array").stop();
 
-    size_t blocks_needed_for_contacts =
-        (nContactPairs + DT_FORCE_CALC_NTHREADS_PER_BLOCK - 1) / DT_FORCE_CALC_NTHREADS_PER_BLOCK;
     // If no contact then we don't have to calculate forces. Note there might still be forces, coming from prescription
     // or other sources.
-    if (blocks_needed_for_contacts > 0) {
+    if (nContactPairs > 0) {
         timers.GetTimer("Calculate contact forces").start();
-        
+
         // Call specialized kernels for each contact type that exists
         // Sphere-Sphere contacts
         if (typeStartCountMap.count(deme::SPHERE_SPHERE_CONTACT)) {
@@ -2190,7 +2188,7 @@ inline void DEMDynamicThread::calculateForces() {
                     .launch(&simParams, &granData, startOffset, count);
             }
         }
-        
+
         // Sphere-Triangle contacts
         if (typeStartCountMap.count(deme::SPHERE_TRIANGLE_CONTACT)) {
             const auto& [startOffset, count] = typeStartCountMap[deme::SPHERE_TRIANGLE_CONTACT];
@@ -2202,7 +2200,7 @@ inline void DEMDynamicThread::calculateForces() {
                     .launch(&simParams, &granData, startOffset, count);
             }
         }
-        
+
         // Sphere-Analytical contacts
         if (typeStartCountMap.count(deme::SPHERE_ANALYTICAL_CONTACT)) {
             const auto& [startOffset, count] = typeStartCountMap[deme::SPHERE_ANALYTICAL_CONTACT];
@@ -2214,7 +2212,7 @@ inline void DEMDynamicThread::calculateForces() {
                     .launch(&simParams, &granData, startOffset, count);
             }
         }
-        
+
         // Triangle-Triangle contacts
         if (typeStartCountMap.count(deme::TRIANGLE_TRIANGLE_CONTACT)) {
             const auto& [startOffset, count] = typeStartCountMap[deme::TRIANGLE_TRIANGLE_CONTACT];
@@ -2226,7 +2224,7 @@ inline void DEMDynamicThread::calculateForces() {
                     .launch(&simParams, &granData, startOffset, count);
             }
         }
-        
+
         // Triangle-Analytical contacts
         if (typeStartCountMap.count(deme::TRIANGLE_ANALYTICAL_CONTACT)) {
             const auto& [startOffset, count] = typeStartCountMap[deme::TRIANGLE_ANALYTICAL_CONTACT];
@@ -2238,7 +2236,7 @@ inline void DEMDynamicThread::calculateForces() {
                     .launch(&simParams, &granData, startOffset, count);
             }
         }
-        
+
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         // displayDeviceFloat3(granData->contactForces, nContactPairs);
         // displayDeviceArray<contact_t>(granData->contactType, nContactPairs);
@@ -2252,7 +2250,7 @@ inline void DEMDynamicThread::calculateForces() {
                 collectContactForcesThruCub(collect_force_kernels, granData, nContactPairs, simParams->nOwnerBodies,
                                             contactPairArr_isFresh, streamInfo.stream, solverScratchSpace, timers);
             } else {
-                blocks_needed_for_contacts =
+                size_t blocks_needed_for_contacts =
                     (nContactPairs + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
                 // This does both acc and ang acc
                 collect_force_kernels->kernel("forceToAcc")
