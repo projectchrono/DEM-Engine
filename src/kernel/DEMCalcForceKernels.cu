@@ -233,8 +233,7 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
         // Assign the correct bodyBPos
         bodyBPos = triangleCentroid<double3>(triBNode1, triBNode2, triBNode3);
 
-        // If B is a triangle, then A can be a sphere or a triangle. But this branching is not too bad, as most
-        // threads in this block will have the same ContactType.
+        // If B is a triangle, then A can be a sphere or a triangle.
         if constexpr (AType == deme::GEO_T_SPHERE) {
             double3 contact_normal;
             bool in_contact = checkTriSphereOverlap<double3, double>(triBNode1, triBNode2, triBNode3, bodyAPos, ARadius,
@@ -295,8 +294,7 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
         bodyBRot.z = objRotZ[sphereID];
         applyOriQToVector3<float, deme::oriQ_t>(bodyBRot.x, bodyBRot.y, bodyBRot.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
 
-        // If B is an analytical entity, then A can be a sphere or a triangle. But this branching is not too bad, as
-        // most threads in this block will have the same ContactType.
+        // If B is an analytical entity, then A can be a sphere or a triangle.
         if constexpr (AType == deme::GEO_T_SPHERE) {
             // Note for this test on dT side we don't enlarge entities
             checkSphereEntityOverlap<double3, float, double>(bodyAPos, ARadius, objType[sphereID], bodyBPos, bodyBRot,
@@ -352,8 +350,8 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
 // 5 specialized kernels for different contact types
 __global__ void calculateContactForces_SphSph(deme::DEMSimParams* simParams,
                                               deme::DEMDataDT* granData,
-                                              size_t startOffset,
-                                              size_t nContactPairs) {
+                                              deme::contactPairs_t startOffset,
+                                              deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myContactID < startOffset + nContactPairs) {
         calculateContactForcesImpl<deme::SPHERE_SPHERE_CONTACT>(simParams, granData, myContactID);
@@ -362,8 +360,8 @@ __global__ void calculateContactForces_SphSph(deme::DEMSimParams* simParams,
 
 __global__ void calculateContactForces_SphTri(deme::DEMSimParams* simParams,
                                               deme::DEMDataDT* granData,
-                                              size_t startOffset,
-                                              size_t nContactPairs) {
+                                              deme::contactPairs_t startOffset,
+                                              deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myContactID < startOffset + nContactPairs) {
         calculateContactForcesImpl<deme::SPHERE_TRIANGLE_CONTACT>(simParams, granData, myContactID);
@@ -372,8 +370,8 @@ __global__ void calculateContactForces_SphTri(deme::DEMSimParams* simParams,
 
 __global__ void calculateContactForces_SphAnal(deme::DEMSimParams* simParams,
                                                deme::DEMDataDT* granData,
-                                               size_t startOffset,
-                                               size_t nContactPairs) {
+                                               deme::contactPairs_t startOffset,
+                                               deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myContactID < startOffset + nContactPairs) {
         calculateContactForcesImpl<deme::SPHERE_ANALYTICAL_CONTACT>(simParams, granData, myContactID);
@@ -382,8 +380,8 @@ __global__ void calculateContactForces_SphAnal(deme::DEMSimParams* simParams,
 
 __global__ void calculateContactForces_TriTri(deme::DEMSimParams* simParams,
                                               deme::DEMDataDT* granData,
-                                              size_t startOffset,
-                                              size_t nContactPairs) {
+                                              deme::contactPairs_t startOffset,
+                                              deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myContactID < startOffset + nContactPairs) {
         calculateContactForcesImpl<deme::TRIANGLE_TRIANGLE_CONTACT>(simParams, granData, myContactID);
@@ -392,8 +390,8 @@ __global__ void calculateContactForces_TriTri(deme::DEMSimParams* simParams,
 
 __global__ void calculateContactForces_TriAnal(deme::DEMSimParams* simParams,
                                                deme::DEMDataDT* granData,
-                                               size_t startOffset,
-                                               size_t nContactPairs) {
+                                               deme::contactPairs_t startOffset,
+                                               deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myContactID < startOffset + nContactPairs) {
         calculateContactForcesImpl<deme::TRIANGLE_ANALYTICAL_CONTACT>(simParams, granData, myContactID);

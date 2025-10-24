@@ -296,6 +296,9 @@ class DEMDynamicThread {
     size_t m_numExistingTypes = 0;
     // A map that records the contact <ID start, and count> for each contact type currently existing
     std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>> typeStartCountMap;
+    // A map that records the corresponding jitify program bundle and kernel name for each contact type
+    std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>
+        contactTypeKernelMap;
 
     // dT's timers
     std::vector<std::string> timer_names = {"Clear force array", "Calculate contact forces", "Optional force reduction",
@@ -673,8 +676,13 @@ class DEMDynamicThread {
     // Migrate contact history to fit the structure of the newly received contact array
     inline void migrateEnduringContacts();
 
+    // Impl of calculateForces
+    inline void dispatchCalcForceKernels(
+        const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountMap,
+        const std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>&
+            typeKernelMap);
     // Update clump-based acceleration array based on sphere-based force array
-    inline void calculateForces();
+    void calculateForces();
 
     // Update clump pos/oriQ and vel/omega based on acceleration
     inline void integrateOwnerMotions();
