@@ -517,6 +517,89 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
     T1 edges1[3] = {edge1_0, edge1_1, edge1_2};
     T1 edges2[3] = {edge2_0, edge2_1, edge2_2};
 
+    // Bias factor to prefer face normals over edge-edge for stability (Issue 1)
+    const T2 faceNormalBias = T2(1.05);
+
+    // Issue 2: Check for deep penetration case where all vertices of one triangle 
+    // are on the opposite side of the other triangle's plane
+    bool deepPenetration1to2 = false;  // All tri1 vertices beyond tri2's plane
+    bool deepPenetration2to1 = false;  // All tri2 vertices beyond tri1's plane
+    T2 len1_2 = dot(normal1, normal1);
+    T2 len2_2 = dot(normal2, normal2);
+
+    if (len1_2 > DEME_TINY_FLOAT) {
+        T1 norm1 = normal1 * rsqrt(len1_2);
+        // Check if all tri2 vertices are on the negative side of tri1's plane
+        int negCount = 0;
+        for (int i = 0; i < 3; ++i) {
+            T2 dist = dot(tri2[i] - tri1[0], norm1);
+            if (dist < T2(0.0)) negCount++;
+        }
+        if (negCount == 3) deepPenetration2to1 = true;
+    }
+
+    if (len2_2 > DEME_TINY_FLOAT) {
+        T1 norm2 = normal2 * rsqrt(len2_2);
+        // Check if all tri1 vertices are on the negative side of tri2's plane
+        int negCount = 0;
+        for (int i = 0; i < 3; ++i) {
+            T2 dist = dot(tri1[i] - tri2[0], norm2);
+            if (dist < T2(0.0)) negCount++;
+        }
+        if (negCount == 3) deepPenetration1to2 = true;
+    }
+
+    // If deep penetration is detected, handle it specially
+    if (deepPenetration1to2 || deepPenetration2to1) {
+        // Use the face normal of the reference triangle as separation direction
+        const T1* refTri = deepPenetration1to2 ? tri2 : tri1;
+        const T1* incTri = deepPenetration1to2 ? tri1 : tri2;
+        T1 refNormal = deepPenetration1to2 ? normalize(normal2) : normalize(normal1);
+        
+        // Calculate penetration depth and contact point using vertices that project inside reference triangle
+        T2 totalDepth = T2(0.0);
+        int validCount = 0;
+        T1 contactSum;
+        contactSum.x = T2(0.0);
+        contactSum.y = T2(0.0);
+        contactSum.z = T2(0.0);
+
+        for (int i = 0; i < 3; ++i) {
+            T2 dist = dot(incTri[i] - refTri[0], refNormal);
+            T1 projection = incTri[i] - dist * refNormal;
+            
+            // Check if projection is inside the reference triangle using snap_to_face
+            T1 closestPoint;
+            bool isOnEdge = snap_to_face<T1, T2>(refTri[0], refTri[1], refTri[2], projection, closestPoint);
+            
+            // If projection is inside the triangle (not on edge), use this vertex
+            if (!isOnEdge) {
+                totalDepth += (-dist);  // Negative because they're on opposite side
+                contactSum = contactSum + projection;
+                validCount++;
+            }
+        }
+
+        // If no vertices project inside, use all vertices as fallback
+        if (validCount == 0) {
+            for (int i = 0; i < 3; ++i) {
+                T2 dist = dot(incTri[i] - refTri[0], refNormal);
+                T1 projection = incTri[i] - dist * refNormal;
+                totalDepth += (-dist);
+                contactSum = contactSum + projection;
+                validCount++;
+            }
+        }
+
+        if (validCount > 0) {
+            depth = totalDepth / T2(validCount);
+            point = contactSum / T2(validCount);
+            // Normal points from tri2 to tri1
+            normal = deepPenetration1to2 ? (refNormal * T2(-1.0)) : refNormal;
+            return true;  // Deep penetration is always in contact
+        }
+    }
+
     // Test face normal of triangle 1
     {
         T2 len2 = dot(normal1, normal1);
@@ -560,8 +643,10 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
             } else {
                 // Calculate overlap
                 T2 overlap = DEME_MIN(max1 - min2, max2 - min1);
-                if (overlap < minOverlap) {
-                    minOverlap = overlap;
+                // Apply bias to face normals for stability (Issue 1)
+                T2 biasedOverlap = overlap * faceNormalBias;
+                if (biasedOverlap < minOverlap) {
+                    minOverlap = overlap;  // Store actual overlap, not biased
                     mtv_axis = axis;
                     axisType = 0;
                     // Ensure MTV points from tri2 to tri1
@@ -616,8 +701,10 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
             } else {
                 // Calculate overlap
                 T2 overlap = DEME_MIN(max1 - min2, max2 - min1);
-                if (overlap < minOverlap) {
-                    minOverlap = overlap;
+                // Apply bias to face normals for stability (Issue 1)
+                T2 biasedOverlap = overlap * faceNormalBias;
+                if (biasedOverlap < minOverlap) {
+                    minOverlap = overlap;  // Store actual overlap, not biased
                     mtv_axis = axis;
                     axisType = 1;
                     // Ensure MTV points from tri2 to tri1
