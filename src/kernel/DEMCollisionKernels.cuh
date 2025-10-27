@@ -497,15 +497,15 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
     // Step 1: Compute face normals
     T1 nA_unnorm = cross(B1 - A1, C1 - A1);
     T1 nB_unnorm = cross(B2 - A2, C2 - A2);
-    
+
     T2 lenA2 = dot(nA_unnorm, nA_unnorm);
     T2 lenB2 = dot(nB_unnorm, nB_unnorm);
-    
+
     // Check for degenerate triangles
     if (lenA2 <= DEME_TINY_FLOAT || lenB2 <= DEME_TINY_FLOAT) {
         return false;
     }
-    
+
     T1 nA = nA_unnorm * rsqrt(lenA2);
     T1 nB = nB_unnorm * rsqrt(lenB2);
 
@@ -514,7 +514,7 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
     for (int i = 0; i < 3; ++i) {
         dB[i] = dot(triB[i] - triA[0], nA);
     }
-    
+
     // Step 3: Compute signed distances of A vertices to plane of B
     T2 dA[3];
     for (int i = 0; i < 3; ++i) {
@@ -531,7 +531,7 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
             deepestB_idx = i;
         }
     }
-    
+
     // For A->B contact: find A vertex with most negative distance to B's plane
     T2 deepestA_dist = DEME_HUGE_FLOAT;
     int deepestA_idx = -1;
@@ -552,7 +552,7 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
     if (deepestB_dist < T2(0.0)) {
         T1 projected;
         bool onEdge = snap_to_face<T1, T2>(triA[0], triA[1], triA[2], triB[deepestB_idx], projected);
-        
+
         // Check if projection is inside triangle (onEdge == false means inside)
         if (!onEdge) {
             // Valid face contact
@@ -570,7 +570,7 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
     if (deepestA_dist < T2(0.0)) {
         T1 projected;
         bool onEdge = snap_to_face<T1, T2>(triB[0], triB[1], triB[2], triA[deepestA_idx], projected);
-        
+
         // Check if projection is inside triangle
         if (!onEdge) {
             // Valid face contact
@@ -587,7 +587,7 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
     // Step 7: Edge-edge fallback - compute closest points for all 9 edge pairs
     T1 edgesA[3] = {triA[1] - triA[0], triA[2] - triA[1], triA[0] - triA[2]};
     T1 edgesB[3] = {triB[1] - triB[0], triB[2] - triB[1], triB[0] - triB[2]};
-    
+
     for (int i = 0; i < 3; ++i) {
         for (int j = 0; j < 3; ++j) {
             // Edge A: from triA[i] in direction edgesA[i]
@@ -596,13 +596,13 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
             T1 edgeA = edgesA[i];
             T1 edgeB_start = triB[j];
             T1 edgeB = edgesB[j];
-            
+
             // Closest points on two line segments
             T1 r = edgeB_start - edgeA_start;
             T2 a = dot(edgeA, edgeA);
             T2 e = dot(edgeB, edgeB);
             T2 f = dot(edgeB, r);
-            
+
             T2 s, t;
             if (a <= DEME_TINY_FLOAT && e <= DEME_TINY_FLOAT) {
                 s = t = T2(0.0);
@@ -617,15 +617,15 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
                 } else {
                     T2 b = dot(edgeA, edgeB);
                     T2 denom = a * e - b * b;
-                    
+
                     if (denom > DEME_TINY_FLOAT) {
                         s = clampBetween((b * f - c * e) / denom, T2(0.0), T2(1.0));
                     } else {
                         s = T2(0.0);
                     }
-                    
+
                     t = (b * s + f) / e;
-                    
+
                     if (t < T2(0.0)) {
                         t = T2(0.0);
                         s = clampBetween(-c / a, T2(0.0), T2(1.0));
@@ -635,16 +635,16 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
                     }
                 }
             }
-            
+
             T1 closestA = edgeA_start + edgeA * s;
             T1 closestB = edgeB_start + edgeB * t;
             T1 diff = closestA - closestB;
             T2 dist2 = dot(diff, diff);
-            
+
             if (dist2 > DEME_TINY_FLOAT) {
                 T2 dist = sqrt(dist2);
                 T2 contactDepth = -dist;  // Negative because edges are separated
-                
+
                 if (contactDepth > bestDepth) {
                     bestDepth = contactDepth;
                     bestNormal = diff * (T2(1.0) / dist);
@@ -679,7 +679,7 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
     depth = bestDepth;
     normal = bestNormal;
     point = bestPoint;
-    
+
     return (bestDepth > T2(0.0));
 }
 
