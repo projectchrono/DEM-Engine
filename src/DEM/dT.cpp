@@ -2521,6 +2521,8 @@ void DEMDynamicThread::workerThread() {
             // timeElapsed needs to be updated to the device each time step
             // simParams.syncMemberToDevice<double>(offsetof(DEMSimParams, timeElapsed));
             simParams.toDevice();
+
+            DEME_STEP_DEBUG_PRINTF("Completed step %zu, time %.9g", nTotalSteps, simParams->timeElapsed);
         }
 
         // Unless the user did something critical, must we wait for a kT update before next step
