@@ -257,9 +257,10 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
             double3 contact_normal;
             // The contact solver might notify us that it thinks this contact may be true, but it's redundant to include
             bool shouldDropContact = false;
+            double projectedArea = 0.0;  // Area of the clipping polygon projection
             bool in_contact = checkTriangleTriangleOverlap<double3, double>(
                 triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3, contact_normal, overlapDepth,
-                contactPnt, shouldDropContact, needsNonContactPenetrationCalc);
+                contactPnt, shouldDropContact, needsNonContactPenetrationCalc, &projectedArea);
             B2A = to_float3(contact_normal);
             // Fix ContactType if needed
             // If the solver thinks this contact is redundant, we drop it directly
