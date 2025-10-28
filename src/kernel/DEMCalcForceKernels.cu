@@ -275,9 +275,9 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
                     ContactType = deme::NOT_A_CONTACT;
                 }
             }
-            if (ContactType != deme::NOT_A_CONTACT) {
-                printf("Triangle-Triangle contact retained: overlapDepth = %f\n", overlapDepth);
-            }
+            // if (ContactType != deme::NOT_A_CONTACT) {
+            //     printf("Triangle-Triangle contact retained: overlapDepth = %f\n", overlapDepth);
+            // }
         }
 
     } else if constexpr (BType == deme::GEO_T_ANALYTICAL) {

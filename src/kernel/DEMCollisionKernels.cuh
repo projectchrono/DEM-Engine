@@ -515,11 +515,13 @@ inline __device__ bool checkTriangleTriangleOverlap(
 
     // Compute signed distances
     T2 dB[3];  // B vertices to A's plane
+#pragma unroll
     for (int i = 0; i < 3; ++i) {
         dB[i] = dot(triB[i] - triA[0], nA);
     }
 
     T2 dA[3];  // A vertices to B's plane
+#pragma unroll
     for (int i = 0; i < 3; ++i) {
         dA[i] = dot(triA[i] - triB[0], nB);
     }
@@ -527,6 +529,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
     // Count vertices below planes
     int numB_below_A = 0;
     int numA_below_B = 0;
+#pragma unroll
     for (int i = 0; i < 3; ++i) {
         if (dB[i] < T2(0.0))
             numB_below_A++;
@@ -547,6 +550,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
 
         // Find deepest penetration (largest magnitude negative distance)
         T2 maxPenetration = T2(0.0);
+#pragma unroll
         for (int i = 0; i < 3; ++i) {
             T2 pen = -subDists[i];  // positive value
             if (pen > maxPenetration)
@@ -558,6 +562,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
         bool insideFlags[3];
         int numInside = 0;
 
+#pragma unroll
         for (int i = 0; i < 3; ++i) {
             T1 projected;
             bool onEdge = snap_to_face<T1, T2>(refTri[0], refTri[1], refTri[2], subTri[i], projected);
@@ -571,10 +576,11 @@ inline __device__ bool checkTriangleTriangleOverlap(
         if (numInside >= 2) {
             // Compute centroid of projected points that are inside
             T1 centroid;
-            centroid.x = T2(0.0);
-            centroid.y = T2(0.0);
-            centroid.z = T2(0.0);
+            centroid.x = 0.;
+            centroid.y = 0.;
+            centroid.z = 0.;
 
+#pragma unroll
             for (int i = 0; i < 3; ++i) {
                 if (insideFlags[i]) {
                     centroid = centroid + projections[i];
@@ -585,6 +591,16 @@ inline __device__ bool checkTriangleTriangleOverlap(
             depth = maxPenetration;
             normal = B_submerged ? nA : (nB * T2(-1.0));  // From B to A
             point = centroid;
+            // printf("Got case 1 contact, depth: %f, centroid: (%f, %f, %f)\n", (double)depth, (double)centroid.x,
+            //        (double)centroid.y, (double)centroid.z);
+            // printf("Submerged tri: %s\n", B_submerged ? "B" : "A");
+            // printf("A nodes: (%f,%f,%f), (%f,%f,%f), (%f,%f,%f)\n", (double)triA[0].x, (double)triA[0].y,
+            //        (double)triA[0].z, (double)triA[1].x, (double)triA[1].y, (double)triA[1].z, (double)triA[2].x,
+            //        (double)triA[2].y, (double)triA[2].z);
+            // printf("B nodes: (%f,%f,%f), (%f,%f,%f), (%f,%f,%f)\n", (double)triB[0].x, (double)triB[0].y,
+            //        (double)triB[0].z, (double)triB[1].x, (double)triB[1].y, (double)triB[1].z, (double)triB[2].x,
+            //        (double)triB[2].y, (double)triB[2].z);
+            // printf("=====================================\n");
         } else {
             // Not enough head-on contact, drop this contact
             // This is fine as other triangles will have head-on contact
@@ -604,6 +620,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
                 point = (centA + centB) * T2(0.5);
             }
         }
+
         // It is always contact in this case; yet we may instruct caller to drop it
         return true;
     }
@@ -656,6 +673,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
         // Project triangle A vertices
         T2 min1 = dot(triA[0], axis);
         T2 max1 = min1;
+#pragma unroll
         for (int i = 1; i < 3; ++i) {
             T2 proj = dot(triA[i], axis);
             if (proj < min1)
@@ -667,6 +685,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
         // Project triangle B vertices
         T2 min2 = dot(triB[0], axis);
         T2 max2 = min2;
+#pragma unroll
         for (int i = 1; i < 3; ++i) {
             T2 proj = dot(triB[i], axis);
             if (proj < min2)
@@ -710,6 +729,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
         // Project triangle A vertices
         T2 min1 = dot(triA[0], axis);
         T2 max1 = min1;
+#pragma unroll
         for (int i = 1; i < 3; ++i) {
             T2 proj = dot(triA[i], axis);
             if (proj < min1)
@@ -721,6 +741,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
         // Project triangle B vertices
         T2 min2 = dot(triB[0], axis);
         T2 max2 = min2;
+#pragma unroll
         for (int i = 1; i < 3; ++i) {
             T2 proj = dot(triB[i], axis);
             if (proj < min2)
@@ -770,6 +791,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
                 // Project triangle A vertices
                 T2 min1 = dot(triA[0], axis);
                 T2 max1 = min1;
+#pragma unroll
                 for (int k = 1; k < 3; ++k) {
                     T2 proj = dot(triA[k], axis);
                     if (proj < min1)
@@ -781,6 +803,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
                 // Project triangle B vertices
                 T2 min2 = dot(triB[0], axis);
                 T2 max2 = min2;
+#pragma unroll
                 for (int k = 1; k < 3; ++k) {
                     T2 proj = dot(triB[k], axis);
                     if (proj < min2)
@@ -826,7 +849,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
     if (axisType == -1 && !outputNoContact) {
         return false;
     }
-    printf("Best overlap: %f on axis type %d\n", float(minOverlap), axisType);
+    // printf("Best overlap: %f on axis type %d\n", float(minOverlap), axisType);
 
     // Determine contact status
     bool inContact = !foundSeparation;
@@ -845,6 +868,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
 
             // Compute signed distances
             T2 d[3];
+#pragma unroll
             for (int i = 0; i < 3; ++i) {
                 d[i] = dot(incTri[i] - refTri[0], planeNormal);
             }
@@ -853,6 +877,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
             T1 poly[6];
             int nNode = 0;
 
+#pragma unroll
             for (int i = 0; i < 3; ++i) {
                 int j = (i + 1) % 3;
                 bool in_i = (d[i] < T2(0.0));
