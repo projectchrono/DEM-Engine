@@ -563,8 +563,9 @@ inline __device__ bool checkTriangleTriangleOverlap(
         T1 projectedOntoPlane[3];
 #pragma unroll
         for (int i = 0; i < 3; ++i) {
-            T2 dist = -subDists[i];  // distance from vertex to reference plane
-            projectedOntoPlane[i] = subTri[i] - refNormal * dist;
+            // subDists[i] is negative for vertices below the plane
+            // To project onto plane: move by -subDists[i] along refNormal direction
+            projectedOntoPlane[i] = subTri[i] - refNormal * subDists[i];
         }
 
         // Now find the intersection of the projected triangle with the reference triangle
