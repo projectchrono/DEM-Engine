@@ -264,9 +264,7 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                     bool in_contact_A, in_contact_B;
                     // NOTE: checkTriSphereOverlap_directional, instead of checkTriSphereOverlap, is in use here. This
                     // is because if the later is in use, then if a sphere is between 2 sandwiching triangles, then its
-                    // potential contact with the original triangle will not be registered. At the same time, we don't
-                    // want to use checkTriSphereOverlap_directional for the real force calculation, and the concern is
-                    // mainly "sphere near needle tip" scenario. Think about it.
+                    // potential contact with the original triangle will not be registered.
                     in_contact_A = checkTriSphereOverlap_directional<float3, float>(
                         triANode1[ind], triANode2[ind], triANode3[ind], sphXYZ, myRadius, normal, depth, cntPnt);
                     // If the contact is too shallow (smaller than the smaller of artificial margin, then it can be
@@ -536,9 +534,7 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                     bool in_contact_A, in_contact_B;
                     // NOTE: checkTriSphereOverlap_directional, instead of checkTriSphereOverlap, is in use here. This
                     // is because if the later is in use, then if a sphere is between 2 sandwiching triangles, then its
-                    // potential contact with the original triangle will not be registered. At the same time, we don't
-                    // want to use checkTriSphereOverlap_directional for the real force calculation, and the concern is
-                    // mainly "sphere near needle tip" scenario. Think about it.
+                    // potential contact with the original triangle will not be registered.
                     in_contact_A = checkTriSphereOverlap_directional<float3, float>(
                         triANode1[ind], triANode2[ind], triANode3[ind], sphXYZ, myRadius, normal, depth, cntPnt);
                     // If the contact is too shallow (smaller than the smaller of artificial margin, then it can be
