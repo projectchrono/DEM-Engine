@@ -486,12 +486,12 @@ inline __device__ bool checkTriangleTriangleOverlap(
     const T1& A2,
     const T1& B2,
     const T1& C2,
-    T1& normal,                      ///< contact normal
-    T2& depth,                       ///< penetration (positive if in contact)
-    T1& point,                       ///< contact point
-    bool& shouldDropContact,         ///< true if solver thinks this true contact is redundant
-    bool outputNoContact = false,    ///< output info even when no contact
-    T2* projectedArea = nullptr) {   ///< projected area of clipping polygon (optional output)
+    T1& normal,                     ///< contact normal
+    T2& depth,                      ///< penetration (positive if in contact)
+    T1& point,                      ///< contact point
+    bool& shouldDropContact,        ///< true if solver thinks this true contact is redundant
+    bool outputNoContact = false,   ///< output info even when no contact
+    T2* projectedArea = nullptr) {  ///< projected area of clipping polygon (optional output)
     shouldDropContact = false;
 
     // Triangle A vertices (tri1)
