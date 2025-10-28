@@ -236,29 +236,47 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
         // If B is a triangle, then A can be a sphere or a triangle.
         if constexpr (AType == deme::GEO_T_SPHERE) {
             double3 contact_normal;
+            // Note checkTriSphereOverlap gives positive number for overlapping cases
             bool in_contact = checkTriSphereOverlap<double3, double>(triBNode1, triBNode2, triBNode3, bodyAPos, ARadius,
                                                                      contact_normal, overlapDepth, contactPnt);
             B2A = to_float3(contact_normal);
 
-            // Sphere--triangle is a bit tricky. Extra margin should only take effect when it comes from the
-            // positive direction of the mesh facet. If not, sphere-setting-on-needle case will give huge
-            // penetration since in that case, overlapDepth is very negative and this will be considered in-contact.
-            // So the cases we exclude are: too far away while sph is outside the mesh; not in contact while sph is
-            // inside the mesh.
-            // Also checkTriSphereOverlap gives positive number for overlapping cases.
-            if ((overlapDepth < -extraMarginSize) || (!in_contact && overlapDepth > 0.)) {
-                ContactType = deme::NOT_A_CONTACT;
+            // If the solver says in contact, we do not question it
+            if (!in_contact) {
+                // Sphere--triangle is a bit tricky. Extra margin should only take effect when it comes from the
+                // positive direction of the mesh facet (aka excluding the too-far-away cases). Then if the solver says
+                // no contact and we got overlapDepth > 0, that is by design a flag telling the process exited early
+                // with no contact (in sph-tri case it should never happen tho).
+                if ((overlapDepth < -extraMarginSize) || (overlapDepth > 0.)) {
+                    ContactType = deme::NOT_A_CONTACT;
+                }
             }
+
         } else if constexpr (AType == deme::GEO_T_TRIANGLE) {
             // Triangle--triangle contact, a bit more complex...
             double3 contact_normal;
+            // The contact solver might notify us that it thinks this contact may be true, but it's redundant to include
+            bool shouldDropContact = false;
             bool in_contact = checkTriangleTriangleOverlap<double3, double>(
                 triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3, contact_normal, overlapDepth,
-                contactPnt, needsNonContactPenetrationCalc);
+                contactPnt, shouldDropContact, needsNonContactPenetrationCalc);
             B2A = to_float3(contact_normal);
             // Fix ContactType if needed
-            if ((overlapDepth < -extraMarginSize) || (!in_contact && overlapDepth > 0.)) {
+            // If the solver thinks this contact is redundant, we drop it directly
+            if (shouldDropContact) {
                 ContactType = deme::NOT_A_CONTACT;
+            }
+            // Then, if the solver says in contact, we do not question it
+            if (!in_contact) {
+                // Then, if we have extra margin, we check that if the distance is within the extra margin.
+                // Or, if the solver says no contact and we got overlapDepth > 0, that is by design a flag telling the
+                // process exited early with no contact.
+                if ((overlapDepth < -extraMarginSize) || (overlapDepth > 0.)) {
+                    ContactType = deme::NOT_A_CONTACT;
+                }
+            }
+            if (ContactType != deme::NOT_A_CONTACT) {
+                printf("Triangle-Triangle contact retained: overlapDepth = %f\n", overlapDepth);
             }
         }
 

@@ -131,9 +131,8 @@ __device__ bool checkTriSphereOverlap(const T1& A,           ///< First vertex o
         normal.x = face_n.x;
         normal.y = face_n.y;
         normal.z = face_n.z;
-        // Note checkTriSphereOverlap is used in force calc, so we follow the convention that the contact point is
-        // somewhere in the midpoint of the deepest penetration line segment. Go from faceLoc, backwards wrt normal,
-        // half the penetration depth.
+        // The contact point is somewhere in the midpoint of the deepest penetration line segment. Go from faceLoc,
+        // backwards wrt normal, half the penetration depth.
         pt1 = faceLoc - (depth * 0.5) * normal;
         if (h >= radius || h <= -radius) {
             in_contact = false;
@@ -213,9 +212,9 @@ __device__ bool checkTriSphereOverlap_directional(const T1& A,           ///< Fi
         normal.x = face_n.x;
         normal.y = face_n.y;
         normal.z = face_n.z;
-        // Note checkTriSphereOverlap_directional is never used in force calc, so pt1 being an approximation is ok, just
-        // leave it as a point on facet
-        pt1 = faceLoc;
+        // The contact point is somewhere in the midpoint of the deepest penetration line segment. Go from faceLoc,
+        // backwards wrt normal, half the penetration depth.
+        pt1 = faceLoc - (depth * 0.5) * normal;
         if (depth < 0.) {
             in_contact = false;
         } else {
@@ -234,7 +233,8 @@ __device__ bool checkTriSphereOverlap_directional(const T1& A,           ///< Fi
         depth = radius - dist;  // Positive for contact
 
         normal = (1.0 / dist) * normal;
-        pt1 = faceLoc;
+        // Go from faceLoc, backwards wrt normal, half the penetration depth
+        pt1 = faceLoc - (depth * 0.5) * normal;
         if (depth < 0. || h >= radius) {
             in_contact = false;
         } else {
@@ -479,16 +479,20 @@ inline __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
 /// Case 2: Complete separation - both triangles above each other's planes
 /// Case 3: Partial overlap - use SAT to find MTV and contact via clipping polygon
 template <typename T1, typename T2>
-inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
-                                                    const T1& B1,
-                                                    const T1& C1,
-                                                    const T1& A2,
-                                                    const T1& B2,
-                                                    const T1& C2,
-                                                    T1& normal,              ///< contact normal
-                                                    T2& depth,               ///< penetration (positive if in contact)
-                                                    T1& point,               ///< contact point
-                                                    bool outputNoContact) {  ///< output info even when no contact
+inline __device__ bool checkTriangleTriangleOverlap(
+    const T1& A1,
+    const T1& B1,
+    const T1& C1,
+    const T1& A2,
+    const T1& B2,
+    const T1& C2,
+    T1& normal,                      ///< contact normal
+    T2& depth,                       ///< penetration (positive if in contact)
+    T1& point,                       ///< contact point
+    bool& shouldDropContact,         ///< true if solver thinks this true contact is redundant
+    bool outputNoContact = false) {  ///< output info even when no contact
+    shouldDropContact = false;
+
     // Triangle A vertices (tri1)
     const T1 triA[3] = {A1, B1, C1};
     // Triangle B vertices (tri2)
@@ -581,13 +585,13 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
             depth = maxPenetration;
             normal = B_submerged ? nA : (nB * T2(-1.0));  // From B to A
             point = centroid;
-            return true;
         } else {
             // Not enough head-on contact, drop this contact
             // This is fine as other triangles will have head-on contact
+            shouldDropContact = true;
             if (outputNoContact) {
                 // Still need to provide some output
-                depth = -DEME_HUGE_FLOAT;
+                depth = maxPenetration;
                 T1 centA = (triA[0] + triA[1] + triA[2]) / T2(3.0);
                 T1 centB = (triB[0] + triB[1] + triB[2]) / T2(3.0);
                 T1 sep = centA - centB;
@@ -599,8 +603,9 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
                 }
                 point = (centA + centB) * T2(0.5);
             }
-            return false;
         }
+        // It is always contact in this case; yet we may instruct caller to drop it
+        return true;
     }
 
     // ========================================================================
@@ -615,7 +620,7 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
             T1 sep = centA - centB;
             T2 sepLen2 = dot(sep, sep);
 
-            if (sepLen2 > DEME_TINY_FLOAT) {
+            if (sepLen2 > (DEME_TINY_FLOAT * DEME_TINY_FLOAT)) {
                 T2 sepLen = sqrt(sepLen2);
                 normal = sep / sepLen;
                 depth = -sepLen;  // Negative for separation
@@ -674,6 +679,7 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
         if (max1 < min2 || max2 < min1) {
             // Separating axis found
             T2 separation = (max1 < min2) ? (min2 - max1) : (min1 - max2);
+            // Recording maxSeparation is for when outputNoContact is true
             if (separation > maxSeparation) {
                 maxSeparation = separation;
                 mtv_axis = (max1 < min2) ? axis : (axis * T2(-1.0));
@@ -750,8 +756,10 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
         }
     }
 
-    // Test 9 edge-edge cross products
+// Test 9 edge-edge cross products
+#pragma unroll
     for (int i = 0; i < 3; ++i) {
+#pragma unroll
         for (int j = 0; j < 3; ++j) {
             T1 axis = cross(edges1[i], edges2[j]);
             T2 len2 = dot(axis, axis);
@@ -814,10 +822,11 @@ inline __device__ bool checkTriangleTriangleOverlap(const T1& A1,
         }
     }
 
-    // Safety check
-    if (axisType == -1) {
+    // Safety check: if no valid axis was found (degenerate triangles), return false
+    if (axisType == -1 && !outputNoContact) {
         return false;
     }
+    printf("Best overlap: %f on axis type %d\n", float(minOverlap), axisType);
 
     // Determine contact status
     bool inContact = !foundSeparation;
