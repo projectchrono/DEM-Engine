@@ -51,7 +51,11 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
     // The following quantities are always calculated, regardless of force model
     double3 contactPnt;
     float3 B2A;  // Unit vector pointing from body B to body A (contact normal)
-    double overlapDepth;
+    // Penetration depth
+    // Positive number for overlapping cases, negative for non-overlapping cases
+    double overlapDepth = 0.0;
+    // Area of the contact surface, or in the mesh--mesh case, area of the clipping polygon projection
+    double overlapArea = 0.0;
     double3 AOwnerPos, bodyAPos, BOwnerPos, bodyBPos;
     float AOwnerMass, ARadius, BOwnerMass, BRadius;
     float4 AOriQ, BOriQ;
@@ -257,10 +261,9 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
             double3 contact_normal;
             // The contact solver might notify us that it thinks this contact may be true, but it's redundant to include
             bool shouldDropContact = false;
-            double projectedArea = 0.0;  // Area of the clipping polygon projection
             bool in_contact = checkTriangleTriangleOverlap<double3, double>(
                 triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3, contact_normal, overlapDepth,
-                contactPnt, shouldDropContact, needsNonContactPenetrationCalc, &projectedArea);
+                overlapArea, contactPnt, shouldDropContact, needsNonContactPenetrationCalc);
             B2A = to_float3(contact_normal);
             // Fix ContactType if needed
             // If the solver thinks this contact is redundant, we drop it directly
@@ -276,9 +279,9 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
                     ContactType = deme::NOT_A_CONTACT;
                 }
             }
-            // if (ContactType != deme::NOT_A_CONTACT) {
-            //     printf("Triangle-Triangle contact retained: overlapDepth = %f\n", overlapDepth);
-            // }
+            if (ContactType != deme::NOT_A_CONTACT) {
+                printf("Triangle-Triangle contact retained: overlapDepth = %f\n", overlapDepth);
+            }
         }
 
     } else if constexpr (BType == deme::GEO_T_ANALYTICAL) {
@@ -326,7 +329,7 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
         } else if constexpr (AType == deme::GEO_T_TRIANGLE) {
             calcTriEntityOverlap<double3, double>(triANode1, triANode2, triANode3, objType[sphereID], bodyBPos,
                                                   bodyBRot, objSize1[sphereID], objSize2[sphereID], objSize3[sphereID],
-                                                  objNormal[sphereID], contactPnt, B2A, overlapDepth);
+                                                  objNormal[sphereID], contactPnt, B2A, overlapDepth, overlapArea);
             // Fix ContactType if needed
             if (overlapDepth < -extraMarginSize) {
                 ContactType = deme::NOT_A_CONTACT;

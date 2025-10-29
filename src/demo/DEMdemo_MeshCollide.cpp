@@ -74,7 +74,8 @@ int main() {
     float frame_time = 1e-2;
     int frame = 0;
     int frame_step = (int)(frame_time / step_time);
-    for (int i = 0; i < (int)(1.0 / step_time); i++) {
+    double final_time = 0.25;
+    for (int i = 0; i < (int)(final_time / step_time); i++) {
         if (i % frame_step == 0) {
             frame++;
             std::cout << "Frame: " << frame << std::endl;
