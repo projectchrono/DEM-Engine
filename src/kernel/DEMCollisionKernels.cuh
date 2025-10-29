@@ -989,6 +989,19 @@ inline __device__ bool checkTriangleTriangleOverlap(
                 centroid = (incTri[0] + incTri[1] + incTri[2]) / T2(3.0);
             }
 
+            // Calculate the area of the clipping polygon for Case 3 face-based contact
+            if (projectedArea != nullptr && nNode >= 3) {
+                T2 area = T2(0.0);
+                for (int i = 0; i < nNode; ++i) {
+                    T1 v1 = poly[i] - centroid;
+                    T1 v2 = poly[(i + 1) % nNode] - centroid;
+                    T1 crossProd = cross(v1, v2);
+                    area += sqrt(dot(crossProd, crossProd));
+                }
+                area *= T2(0.5);
+                *projectedArea = area;
+            }
+
             T2 centroidDist = dot(centroid - refTri[0], planeNormal);
             point = centroid - planeNormal * (centroidDist + depth * T2(0.5));
         } else {
@@ -1043,11 +1056,20 @@ inline __device__ bool checkTriangleTriangleOverlap(
             T1 closestA = edgeA_start + edgeA * s;
             T1 closestB = edgeB_start + edgeB * t;
             point = (closestA + closestB) * T2(0.5);
+
+            // For edge-edge contact, the clipping "polygon" is degenerate (a line segment)
+            // The area is essentially zero
+            if (projectedArea != nullptr) {
+                *projectedArea = T2(0.0);
+            }
         }
 
         return true;
     } else {
         // No contact - separation found
+        if (projectedArea != nullptr) {
+            *projectedArea = T2(0.0);
+        }
         if (outputNoContact) {
             // Provide separation info
             depth = -maxSeparation;
