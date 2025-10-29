@@ -40,4 +40,6 @@ if (overlapDepth > 0) {
     const float gamma_n = (2.f * sqrtf(5.f / 6.f)) * beta * sqrtf(Sn * mass_eff);
 
     force += (k_n * overlapDepth + gamma_n * projection) * B2A;
+    printf("Area is %f, cnt_rad is %f, Sn is %f, k_n is %f, gamma_n is %f, force is %f %f %f\n", overlapArea, cnt_rad,
+           Sn, k_n, gamma_n, force.x, force.y, force.z);
 }

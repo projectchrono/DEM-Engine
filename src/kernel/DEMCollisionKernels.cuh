@@ -670,16 +670,16 @@ inline __device__ bool checkTriangleTriangleOverlap(
             depth = maxPenetration;
             normal = B_submerged ? nA : (nB * T2(-1.0));  // From B to A
             point = centroid;
-            printf("Got case 1 contact, depth: %f, centroid: (%f, %f, %f), area: %f\n", (double)depth,
-                   (double)centroid.x, (double)centroid.y, (double)centroid.z, (double)(projectedArea));
-            printf("Submerged tri: %s\n", B_submerged ? "B" : "A");
-            printf("A nodes: (%f,%f,%f), (%f,%f,%f), (%f,%f,%f)\n", (double)triA[0].x, (double)triA[0].y,
-                   (double)triA[0].z, (double)triA[1].x, (double)triA[1].y, (double)triA[1].z, (double)triA[2].x,
-                   (double)triA[2].y, (double)triA[2].z);
-            printf("B nodes: (%f,%f,%f), (%f,%f,%f), (%f,%f,%f)\n", (double)triB[0].x, (double)triB[0].y,
-                   (double)triB[0].z, (double)triB[1].x, (double)triB[1].y, (double)triB[1].z, (double)triB[2].x,
-                   (double)triB[2].y, (double)triB[2].z);
-            printf("=====================================\n");
+            // printf("Got case 1 contact, depth: %f, centroid: (%f, %f, %f), area: %f\n", (double)depth,
+            //        (double)centroid.x, (double)centroid.y, (double)centroid.z, (double)(projectedArea));
+            // printf("Submerged tri: %s\n", B_submerged ? "B" : "A");
+            // printf("A nodes: (%f,%f,%f), (%f,%f,%f), (%f,%f,%f)\n", (double)triA[0].x, (double)triA[0].y,
+            //        (double)triA[0].z, (double)triA[1].x, (double)triA[1].y, (double)triA[1].z, (double)triA[2].x,
+            //        (double)triA[2].y, (double)triA[2].z);
+            // printf("B nodes: (%f,%f,%f), (%f,%f,%f), (%f,%f,%f)\n", (double)triB[0].x, (double)triB[0].y,
+            //        (double)triB[0].z, (double)triB[1].x, (double)triB[1].y, (double)triB[1].z, (double)triB[2].x,
+            //        (double)triB[2].y, (double)triB[2].z);
+            // printf("=====================================\n");
         } else {
             // Not enough vertices in clipping polygon, drop this contact
             // This is fine as other triangles will have head-on contact
@@ -929,7 +929,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
     if (axisType == -1 && !outputNoContact) {
         return false;
     }
-    printf("Best overlap: %f on axis type %d\n", float(minOverlap), axisType);
+    // printf("Best overlap: %f on axis type %d\n", float(minOverlap), axisType);
 
     // Determine contact status
     bool inContact = !foundSeparation;
