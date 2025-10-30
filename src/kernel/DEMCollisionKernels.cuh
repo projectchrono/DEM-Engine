@@ -464,9 +464,11 @@ inline __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
     T1 A_baseEdges[3] = {prismA[1] - prismA[0], prismA[2] - prismA[1], prismA[0] - prismA[2]};
     T1 B_baseEdges[3] = {prismB[1] - prismB[0], prismB[2] - prismB[1], prismB[0] - prismB[2]};
     
-    // Height edges connecting the two triangular bases
-    T1 A_heightEdges[3] = {prismA[3] - prismA[0], prismA[4] - prismA[1], prismA[5] - prismA[2]};
-    T1 B_heightEdges[3] = {prismB[3] - prismB[0], prismB[4] - prismB[1], prismB[5] - prismB[2]};
+    // Height edges connecting corresponding vertices of the two triangular bases
+    // Note: Due to winding order to maintain opposite normals, the vertex correspondence is:
+    // FaceA[0,1,2] corresponds to FaceB[0,2,1] (i.e., Node1->Node1, Node2->Node3, Node3->Node2)
+    T1 A_heightEdges[3] = {prismA[3] - prismA[0], prismA[5] - prismA[1], prismA[4] - prismA[2]};
+    T1 B_heightEdges[3] = {prismB[3] - prismB[0], prismB[5] - prismB[1], prismB[4] - prismB[2]};
 
     // Side face normals for prism A (3 rectangular side faces)
     // Each side face is formed by an edge of the base and the corresponding height edges
