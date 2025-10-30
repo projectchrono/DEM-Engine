@@ -309,7 +309,7 @@ inline bool __device__ tri_plane_penetration(const T1** tri,
     // The centroid's projection to the plane
     T1 projection =
         centroid - planeSignedDistance<T2>(centroid, entityLoc, entityDir) * to_real3<float3, T1>(entityDir);
-    overlapArea = 1.;
+    overlapArea = 0.5;
     // cntPnt is from the projection point, go half penetration depth.
     // Note this penetration depth is signed, so if no contact, we go positive plane normal; if in contact, we go
     // negative plane normal. As such, cntPnt always exists and this is important for the cases with extraMargin.
@@ -541,16 +541,25 @@ inline __device__ bool checkTriangleTriangleOverlap(
     int numA_below_B = 0;
 #pragma unroll
     for (int i = 0; i < 3; ++i) {
-        if (dB[i] < T2(0.0))
+        if (dB[i] < 0.0)
             numB_below_A++;
-        if (dA[i] < T2(0.0))
+        if (dA[i] < 0.0)
             numA_below_B++;
     }
+    // if ((abs(abs(nA.z) - 1.) < DEME_TINY_FLOAT && abs(abs(nB.z) - 1.) < DEME_TINY_FLOAT)) {
+    //     // Both triangles are nearly horizontal and not submerged
+    //     printf("Both triangles nearly horizontal with nA = (%f, %f, %f) and nB = (%f, %f, %f)\n", nA.x, nA.y, nA.z,
+    //            nB.x, nB.y, nB.z);
+    //     printf("dA = (%f, %f, %f) and dB = (%f, %f, %f)\n", dA[0], dA[1], dA[2], dB[0], dB[1], dB[2]);
+    // }
 
     // ========================================================================
     // CASE 1: Complete submersion - all vertices of one triangle below the other's plane
     // ========================================================================
     if (numB_below_A == 3 || numA_below_B == 3) {
+        // printf("There is a submerged case with nA = (%f, %f, %f) and nB = (%f, %f, %f)\n", nA.x, nA.y, nA.z, nB.x,
+        // nB.y,
+        //        nB.z);
         // Determine which triangle is submerged
         bool B_submerged = (numB_below_A == 3);
         const T1* subTri = B_submerged ? triB : triA;
@@ -612,6 +621,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
                 bool in1 = (d1 >= -DEME_TINY_FLOAT);
                 bool in2 = (d2 >= -DEME_TINY_FLOAT);
 
+                // Inside point forms in the output polygon
                 if (in1) {
                     outputPoly[numOutputVerts++] = v1;
                 }
@@ -990,7 +1000,8 @@ inline __device__ bool checkTriangleTriangleOverlap(
             }
 
             // Calculate the area of the clipping polygon for Case 3 face-based contact
-            if (projectedArea != nullptr && nNode >= 3) {
+            projectedArea = 0.0;
+            if (nNode >= 3) {
                 T2 area = T2(0.0);
                 for (int i = 0; i < nNode; ++i) {
                     T1 v1 = poly[i] - centroid;
@@ -999,7 +1010,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
                     area += sqrt(dot(crossProd, crossProd));
                 }
                 area *= T2(0.5);
-                *projectedArea = area;
+                projectedArea = area;
             }
 
             T2 centroidDist = dot(centroid - refTri[0], planeNormal);
@@ -1059,17 +1070,13 @@ inline __device__ bool checkTriangleTriangleOverlap(
 
             // For edge-edge contact, the clipping "polygon" is degenerate (a line segment)
             // The area is essentially zero
-            if (projectedArea != nullptr) {
-                *projectedArea = T2(0.0);
-            }
+            projectedArea = 0.0;
         }
 
         return true;
     } else {
         // No contact - separation found
-        if (projectedArea != nullptr) {
-            *projectedArea = T2(0.0);
-        }
+        projectedArea = 0.0;
         if (outputNoContact) {
             // Provide separation info
             depth = -maxSeparation;
