@@ -375,6 +375,22 @@ inline bool __device__ calcTriEntityOverlap(const T1& A,
 
 ////////////////////////////////////////////////////////////////////////////////
 // Prism contact detection using the Separating Axis Theorem (SAT)
+//
+// A prism is formed by two parallel triangular faces (bases) connected by three
+// rectangular side faces. For proper contact detection between two prisms, SAT
+// requires testing multiple potential separating axes:
+//
+// 1. Face normals of both triangular bases (2 axes)
+// 2. Face normals of all rectangular side faces (6 axes, 3 per prism)
+// 3. Cross products of edges from different prisms to detect edge-edge contacts
+//    - Base edges × Base edges (9 axes)
+//    - Height edges × Base edges (18 axes)
+//
+// This comprehensive approach ensures detection of:
+// - Face-face contacts (parallel prisms)
+// - Edge-face contacts (side intersecting base/side)
+// - Edge-edge contacts
+// - Complete containment (one prism inside another)
 ////////////////////////////////////////////////////////////////////////////////
 
 template <typename T1, typename T2>
@@ -402,6 +418,17 @@ inline __device__ bool projections_overlap(T minA, T maxA, T minB, T maxB) {
     return !(maxA < minB || maxB < minA);
 }
 
+/**
+ * @brief Detect contact between two triangular prisms using comprehensive SAT.
+ * 
+ * Each prism is defined by two triangular faces (Face A and Face B) with 3 vertices each.
+ * Vertices are ordered: Face A nodes 1-3, then Face B nodes 1-3 (corresponding vertices).
+ * The function tests up to 35 potential separating axes to ensure complete coverage
+ * of all contact scenarios including parallel prisms, side-side intersections, and
+ * containment cases.
+ * 
+ * @return true if prisms are in contact (no separating axis found), false otherwise
+ */
 template <typename T1>
 inline __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
                                           const T1& prismAFaceANode2,
