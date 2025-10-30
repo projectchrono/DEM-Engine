@@ -28,24 +28,19 @@ if (overlapDepth > 0) {
     const float projection = dot(velB2A, B2A);
 
     const float mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
-    float sqrt_Rd = sqrt(overlapDepth * (ARadius * BRadius) / (ARadius + BRadius));
-    const float Sn = 2. * E_cnt * sqrt_Rd;
+
+    // Contact radius (radial distance from contact center axis) called cnt_rad, computed from area
+    const float cnt_rad = sqrtf(overlapArea / deme::PI);
+    const float Sn = 2.f * E_cnt * cnt_rad;
 
     const float loge = (CoR_cnt < DEME_TINY_FLOAT) ? log(DEME_TINY_FLOAT) : log(CoR_cnt);
-    float beta = loge / sqrt(loge * loge + deme::PI_SQUARED);
+    const float beta = loge / sqrt(loge * loge + deme::PI_SQUARED);
 
-    const float k_n = deme::TWO_OVER_THREE * Sn;
-    const float gamma_n = deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
+    const float k_n = (2.f / 3.f) * Sn;
+    const float gamma_n = (2.f * sqrtf(5.f / 6.f)) * beta * sqrtf(Sn * mass_eff);
 
-    // normal force (that A feels)
     force += (k_n * overlapDepth + gamma_n * projection) * B2A;
-
-    // printf("A linear vel is (%.9g, %.9g, %.9g)\n", ALinVel.x, ALinVel.y, ALinVel.z);
-    // printf("A rotational vel is (%.9g, %.9g, %.9g)\n", ARotVel.x, ARotVel.y, ARotVel.z);
-    // printf("locCPA is (%.9g, %.9g, %.9g)\n", locCPA.x, locCPA.y, locCPA.z);
-    // printf("Force is (%.9g, %.9g, %.9g) on body %d\n", force.x, force.y, force.z, AOwner);
-    // printf("CoR_cnt is %.9g\n", CoR_cnt);
-    // printf("Sn is %.9g, sqrt_Rd is %.9g\n", Sn, sqrt_Rd);
-    // printf("k_n is %.9g, gamma_n is %.9g\n", k_n, gamma_n);
-    // printf("overlapDepth is %.9g, projection is %.9g\n", overlapDepth, projection);
+    // printf("Area is %f, cnt_rad is %f, penetration is %f, Sn is %f, k_n is %f, gamma_n is %f, force is %f %f %f, B2A
+    // is %f %f %f\n", overlapArea, cnt_rad, overlapDepth, Sn, k_n, gamma_n, force.x, force.y, force.z, B2A.x, B2A.y,
+    // B2A.z);
 }

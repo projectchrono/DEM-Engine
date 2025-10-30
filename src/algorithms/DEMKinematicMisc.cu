@@ -2,6 +2,8 @@
 #include <DEM/Defines.h>
 #include <kernel/DEMHelperKernels.cuh>
 
+// #include <stdio.h>
+
 __global__ void fillRunLengthArray(deme::geoSphereTouches_t* runlength_full,
                                    deme::bodyID_t* unique_ids,
                                    deme::geoSphereTouches_t* runlength,

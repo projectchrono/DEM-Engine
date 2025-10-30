@@ -80,10 +80,11 @@ inline void removeDuplicateContacts(DualStruct<DEMDataKT>& granData,
             retain_flags, numTotalCnts, (notStupidBool_t)1);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
+
     size_t blocks_needed_for_flagging = (*pNumUniqueA + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
     if (blocks_needed_for_flagging > 0) {
         markDuplicateContacts<<<dim3(blocks_needed_for_flagging), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream>>>(
-            idA_runlength, idA_scanned_runlength, idA_sorted, contactType_sorted, persistency_sorted, retain_flags,
+            idA_runlength, idA_scanned_runlength, idB_sorted, contactType_sorted, persistency_sorted, retain_flags,
             *pNumUniqueA, process_persistency);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
@@ -923,6 +924,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // displayDeviceArray<bodyID_t>(idB_sorted, numTotalCnts);
             // displayDeviceArray<contact_t>(contactType_sorted, numTotalCnts);
             // displayDeviceArray<notStupidBool_t>(persistency_sorted, numTotalCnts);
+
             scratchPad.finishUsingTempVector("total_idA");
             scratchPad.finishUsingTempVector("total_idB");
             scratchPad.finishUsingTempVector("total_types");
@@ -969,11 +971,19 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                                                   contactType_sorted, numTotalCnts, this_stream, scratchPad);
             cubDEMSortByKeys<bodyID_t, notStupidBool_t>(granData->idGeometryA, idA_sorted, granData->contactPersistency,
                                                         persistency_sorted, numTotalCnts, this_stream, scratchPad);
+            // std::cout << "Contacts before duplication check: " << std::endl;
+            // displayDeviceArray<bodyID_t>(idA_sorted, numTotalCnts);
+            // displayDeviceArray<bodyID_t>(idB_sorted, numTotalCnts);
+            // displayDeviceArray<contact_t>(contactType_sorted, numTotalCnts);
 
             removeDuplicateContacts(granData, idA_sorted, idB_sorted, contactType_sorted, persistency_sorted,
                                     idGeometryA, idGeometryB, contactType, contactPersistency, false,
                                     DEME_MAX(simParams->nSpheresGM, simParams->nTriGM), numTotalCnts, this_stream,
                                     scratchPad);
+            std::cout << "Contacts after duplication check: " << std::endl;
+            displayDeviceArray<bodyID_t>(granData->idGeometryA, *scratchPad.numContacts);
+            displayDeviceArray<bodyID_t>(granData->idGeometryB, *scratchPad.numContacts);
+            displayDeviceArray<contact_t>(granData->contactType, *scratchPad.numContacts);
 
             scratchPad.finishUsingTempVector("contactType_sorted");
             scratchPad.finishUsingTempVector("idA_sorted");

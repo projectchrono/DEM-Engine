@@ -249,8 +249,12 @@ __device__ bool checkTriSphereOverlap_directional(const T1& A,           ///< Fi
 // ------------------------------------------------------------------
 
 template <typename T1, typename T2>
-inline bool __device__
-tri_plane_penetration(const T1** tri, const T1& entityLoc, const float3& entityDir, T2& overlapDepth, T1& contactPnt) {
+inline bool __device__ tri_plane_penetration(const T1** tri,
+                                             const T1& entityLoc,
+                                             const float3& entityDir,
+                                             T2& overlapDepth,
+                                             T2& overlapArea,
+                                             T1& contactPnt) {
     // signed distances
     T2 d[3];
     // penetration depth: deepest point in triangle
@@ -305,6 +309,7 @@ tri_plane_penetration(const T1** tri, const T1& entityLoc, const float3& entityD
     // The centroid's projection to the plane
     T1 projection =
         centroid - planeSignedDistance<T2>(centroid, entityLoc, entityDir) * to_real3<float3, T1>(entityDir);
+    overlapArea = 0.5;
     // cntPnt is from the projection point, go half penetration depth.
     // Note this penetration depth is signed, so if no contact, we go positive plane normal; if in contact, we go
     // negative plane normal. As such, cntPnt always exists and this is important for the cases with extraMargin.
@@ -321,6 +326,7 @@ inline bool __device__ tri_cyl_penetration(const T1** tri,
                                            const float& normal_sign,
                                            float3& contact_normal,
                                            T2& overlapDepth,
+                                           T2& overlapArea,
                                            T1& contactPnt) {
     return false;
 }
@@ -343,18 +349,20 @@ inline bool __device__ calcTriEntityOverlap(const T1& A,
                                             const float& normal_sign,
                                             T1& contactPnt,
                                             float3& contact_normal,
-                                            T2& overlapDepth) {
+                                            T2& overlapDepth,
+                                            T2& overlapArea) {
     const T1* tri[] = {&A, &B, &C};
     bool in_contact;
     switch (entityType) {
         case deme::ANAL_OBJ_TYPE_PLANE:
-            in_contact = tri_plane_penetration<T1, T2>(tri, entityLoc, entityDir, overlapDepth, contactPnt);
+            in_contact =
+                tri_plane_penetration<T1, T2>(tri, entityLoc, entityDir, overlapDepth, overlapArea, contactPnt);
             // Plane contact's normal is always the plane's normal
             contact_normal = entityDir;
             return in_contact;
         case deme::ANAL_OBJ_TYPE_CYL_INF:
             in_contact = tri_cyl_penetration<T1, T2>(tri, entityLoc, entityDir, entitySize1, entitySize2, normal_sign,
-                                                     contact_normal, overlapDepth, contactPnt);
+                                                     contact_normal, overlapDepth, overlapArea, contactPnt);
             return in_contact;
         default:
             return false;
@@ -488,9 +496,11 @@ inline __device__ bool checkTriangleTriangleOverlap(
     const T1& C2,
     T1& normal,                      ///< contact normal
     T2& depth,                       ///< penetration (positive if in contact)
+    T2& projectedArea,               ///< projected area of clipping polygon (optional output)
     T1& point,                       ///< contact point
     bool& shouldDropContact,         ///< true if solver thinks this true contact is redundant
     bool outputNoContact = false) {  ///< output info even when no contact
+    // Default: don't drop contact
     shouldDropContact = false;
 
     // Triangle A vertices (tri1)
@@ -531,16 +541,25 @@ inline __device__ bool checkTriangleTriangleOverlap(
     int numA_below_B = 0;
 #pragma unroll
     for (int i = 0; i < 3; ++i) {
-        if (dB[i] < T2(0.0))
+        if (dB[i] < 0.0)
             numB_below_A++;
-        if (dA[i] < T2(0.0))
+        if (dA[i] < 0.0)
             numA_below_B++;
     }
+    // if ((abs(abs(nA.z) - 1.) < DEME_TINY_FLOAT && abs(abs(nB.z) - 1.) < DEME_TINY_FLOAT)) {
+    //     // Both triangles are nearly horizontal and not submerged
+    //     printf("Both triangles nearly horizontal with nA = (%f, %f, %f) and nB = (%f, %f, %f)\n", nA.x, nA.y, nA.z,
+    //            nB.x, nB.y, nB.z);
+    //     printf("dA = (%f, %f, %f) and dB = (%f, %f, %f)\n", dA[0], dA[1], dA[2], dB[0], dB[1], dB[2]);
+    // }
 
     // ========================================================================
     // CASE 1: Complete submersion - all vertices of one triangle below the other's plane
     // ========================================================================
     if (numB_below_A == 3 || numA_below_B == 3) {
+        // printf("There is a submerged case with nA = (%f, %f, %f) and nB = (%f, %f, %f)\n", nA.x, nA.y, nA.z, nB.x,
+        // nB.y,
+        //        nB.z);
         // Determine which triangle is submerged
         bool B_submerged = (numB_below_A == 3);
         const T1* subTri = B_submerged ? triB : triA;
@@ -558,41 +577,111 @@ inline __device__ bool checkTriangleTriangleOverlap(
         }
 
         // Build clipping polygon by projecting submerged vertices onto reference triangle
-        T1 projections[3];
-        bool insideFlags[3];
-        int numInside = 0;
-
+        // First, project each vertex of the submerged triangle onto the reference plane
+        T1 projectedOntoPlane[3];
 #pragma unroll
         for (int i = 0; i < 3; ++i) {
-            T1 projected;
-            bool onEdge = snap_to_face<T1, T2>(refTri[0], refTri[1], refTri[2], subTri[i], projected);
-            projections[i] = projected;
-            insideFlags[i] = !onEdge;  // inside if not on edge
-            if (!onEdge)
-                numInside++;
+            // subDists[i] is negative for vertices below the plane
+            // To project onto plane: move by -subDists[i] along refNormal direction
+            projectedOntoPlane[i] = subTri[i] - refNormal * subDists[i];
         }
 
-        // If we have at least 2 inside projections, we can form a valid contact
-        if (numInside >= 2) {
-            // Compute centroid of projected points that are inside
+        // Now find the intersection of the projected triangle with the reference triangle
+        // This forms the clipping polygon
+        // We'll use Sutherland-Hodgman algorithm to clip the projected triangle against the reference triangle
+        T1 clippingPoly[9];  // Max 9 vertices for triangle-triangle intersection
+        int numClipVerts = 0;
+
+        // Initialize with the projected triangle
+        T1 inputPoly[3];
+        for (int i = 0; i < 3; ++i) {
+            inputPoly[i] = projectedOntoPlane[i];
+        }
+        int numInputVerts = 3;
+
+        // Clip against each edge of the reference triangle
+        T1 outputPoly[9];
+        for (int edge = 0; edge < 3; ++edge) {
+            int numOutputVerts = 0;
+            T1 edgeStart = refTri[edge];
+            T1 edgeEnd = refTri[(edge + 1) % 3];
+            T1 edgeDir = edgeEnd - edgeStart;
+            T1 edgeNormal = cross(refNormal, edgeDir);
+            T2 edgeNormalLen2 = dot(edgeNormal, edgeNormal);
+            if (edgeNormalLen2 > DEME_TINY_FLOAT) {
+                edgeNormal = edgeNormal * rsqrt(edgeNormalLen2);
+            }
+
+            // Clip input polygon against this edge
+            for (int i = 0; i < numInputVerts; ++i) {
+                T1 v1 = inputPoly[i];
+                T1 v2 = inputPoly[(i + 1) % numInputVerts];
+                T2 d1 = dot(v1 - edgeStart, edgeNormal);
+                T2 d2 = dot(v2 - edgeStart, edgeNormal);
+                bool in1 = (d1 >= -DEME_TINY_FLOAT);
+                bool in2 = (d2 >= -DEME_TINY_FLOAT);
+
+                // Inside point forms in the output polygon
+                if (in1) {
+                    outputPoly[numOutputVerts++] = v1;
+                }
+                if (in1 != in2) {
+                    // Edge crosses the clipping edge
+                    T2 t = d1 / (d1 - d2);
+                    T1 inter = v1 + (v2 - v1) * t;
+                    outputPoly[numOutputVerts++] = inter;
+                }
+            }
+
+            // Copy output to input for next iteration
+            for (int i = 0; i < numOutputVerts; ++i) {
+                inputPoly[i] = outputPoly[i];
+            }
+            numInputVerts = numOutputVerts;
+
+            if (numInputVerts == 0) {
+                break;  // No intersection
+            }
+        }
+
+        numClipVerts = numInputVerts;
+        for (int i = 0; i < numClipVerts; ++i) {
+            clippingPoly[i] = inputPoly[i];
+        }
+
+        // Now we have the clipping polygon
+        // Check if we have a valid contact (at least 3 vertices)
+        if (numClipVerts >= 3) {
+            // Compute centroid of clipping polygon
             T1 centroid;
             centroid.x = 0.;
             centroid.y = 0.;
             centroid.z = 0.;
 
-#pragma unroll
-            for (int i = 0; i < 3; ++i) {
-                if (insideFlags[i]) {
-                    centroid = centroid + projections[i];
-                }
+            for (int i = 0; i < numClipVerts; ++i) {
+                centroid = centroid + clippingPoly[i];
             }
-            centroid = centroid / T2(numInside);
+            centroid = centroid / T2(numClipVerts);
+
+            // Calculate the area of the clipping polygon
+            // Use the fan triangulation method from the centroid
+            {
+                T2 area = T2(0.0);
+                for (int i = 0; i < numClipVerts; ++i) {
+                    T1 v1 = clippingPoly[i] - centroid;
+                    T1 v2 = clippingPoly[(i + 1) % numClipVerts] - centroid;
+                    T1 crossProd = cross(v1, v2);
+                    area += sqrt(dot(crossProd, crossProd));
+                }
+                area *= T2(0.5);
+                projectedArea = area;
+            }
 
             depth = maxPenetration;
             normal = B_submerged ? nA : (nB * T2(-1.0));  // From B to A
             point = centroid;
-            // printf("Got case 1 contact, depth: %f, centroid: (%f, %f, %f)\n", (double)depth, (double)centroid.x,
-            //        (double)centroid.y, (double)centroid.z);
+            // printf("Got case 1 contact, depth: %f, centroid: (%f, %f, %f), area: %f\n", (double)depth,
+            //        (double)centroid.x, (double)centroid.y, (double)centroid.z, (double)(projectedArea));
             // printf("Submerged tri: %s\n", B_submerged ? "B" : "A");
             // printf("A nodes: (%f,%f,%f), (%f,%f,%f), (%f,%f,%f)\n", (double)triA[0].x, (double)triA[0].y,
             //        (double)triA[0].z, (double)triA[1].x, (double)triA[1].y, (double)triA[1].z, (double)triA[2].x,
@@ -602,9 +691,10 @@ inline __device__ bool checkTriangleTriangleOverlap(
             //        (double)triB[2].y, (double)triB[2].z);
             // printf("=====================================\n");
         } else {
-            // Not enough head-on contact, drop this contact
+            // Not enough vertices in clipping polygon, drop this contact
             // This is fine as other triangles will have head-on contact
             shouldDropContact = true;
+            projectedArea = T2(0.0);
             if (outputNoContact) {
                 // Still need to provide some output
                 depth = maxPenetration;
@@ -909,6 +999,20 @@ inline __device__ bool checkTriangleTriangleOverlap(
                 centroid = (incTri[0] + incTri[1] + incTri[2]) / T2(3.0);
             }
 
+            // Calculate the area of the clipping polygon for Case 3 face-based contact
+            projectedArea = 0.0;
+            if (nNode >= 3) {
+                T2 area = T2(0.0);
+                for (int i = 0; i < nNode; ++i) {
+                    T1 v1 = poly[i] - centroid;
+                    T1 v2 = poly[(i + 1) % nNode] - centroid;
+                    T1 crossProd = cross(v1, v2);
+                    area += sqrt(dot(crossProd, crossProd));
+                }
+                area *= T2(0.5);
+                projectedArea = area;
+            }
+
             T2 centroidDist = dot(centroid - refTri[0], planeNormal);
             point = centroid - planeNormal * (centroidDist + depth * T2(0.5));
         } else {
@@ -963,11 +1067,16 @@ inline __device__ bool checkTriangleTriangleOverlap(
             T1 closestA = edgeA_start + edgeA * s;
             T1 closestB = edgeB_start + edgeB * t;
             point = (closestA + closestB) * T2(0.5);
+
+            // For edge-edge contact, the clipping "polygon" is degenerate (a line segment)
+            // The area is essentially zero
+            projectedArea = 0.0;
         }
 
         return true;
     } else {
         // No contact - separation found
+        projectedArea = 0.0;
         if (outputNoContact) {
             // Provide separation info
             depth = -maxSeparation;

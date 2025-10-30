@@ -2214,6 +2214,8 @@ void DEMDynamicThread::calculateForces() {
 
         // displayDeviceFloat3(granData->contactForces, nContactPairs);
         // displayDeviceArray<contact_t>(granData->contactType, nContactPairs);
+        // displayDeviceArray<bodyID_t>(granData->idGeometryA, nContactPairs);
+        // displayDeviceArray<bodyID_t>(granData->idGeometryB, nContactPairs);
         // std::cout << "===========================" << std::endl;
         timers.GetTimer("Calculate contact forces").stop();
 
