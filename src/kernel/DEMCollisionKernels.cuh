@@ -289,7 +289,7 @@ inline bool __device__ tri_plane_penetration(const T1** tri,
             hasIntersection = true;
         }
     }
-    
+
     // Handle the case where all three vertices are submerged (no edge crosses the plane)
     if (!hasIntersection) {
         // Check if all vertices are below the plane
@@ -334,9 +334,9 @@ inline bool __device__ tri_plane_penetration(const T1** tri,
     // The centroid's projection to the plane
     T1 projection =
         centroid - planeSignedDistance<T2>(centroid, entityLoc, entityDir) * to_real3<float3, T1>(entityDir);
-    
+
     // Calculate the area of the clipping polygon using fan triangulation from centroid
-    overlapArea = T2(0.0);
+    overlapArea = 0.0;
     if (hasIntersection && nNode >= 3) {
         for (int i = 0; i < nNode; ++i) {
             T1 v1 = poly[i] - centroid;
@@ -344,12 +344,9 @@ inline bool __device__ tri_plane_penetration(const T1** tri,
             T1 crossProd = cross(v1, v2);
             overlapArea += sqrt(dot(crossProd, crossProd));
         }
-        overlapArea *= T2(0.5);
-    } else {
-        // If no valid clipping polygon, use a default small area
-        overlapArea = T2(0.5);
+        overlapArea *= 0.5;
     }
-    
+
     // cntPnt is from the projection point, go half penetration depth.
     // Note this penetration depth is signed, so if no contact, we go positive plane normal; if in contact, we go
     // negative plane normal. As such, cntPnt always exists and this is important for the cases with extraMargin.
