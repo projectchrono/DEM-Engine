@@ -1064,74 +1064,120 @@ inline __device__ bool checkTriangleTriangleOverlap(
         depth = minOverlap;
         normal = mtv_axis;
 
-        // Use clipping polygon approach similar to tri_plane_penetration
+        // Use clipping polygon approach similar to Case 1
         if (axisType == 0 || axisType == 1) {
             // Face-based contact
             const T1* refTri = (axisType == 0) ? triA : triB;
             const T1* incTri = (axisType == 0) ? triB : triA;
-            T1 planeNormal = (axisType == 0) ? nA : nB;
+            T1 refNormal = (axisType == 0) ? nA : nB;
 
-            // Compute signed distances
-            T2 d[3];
+            // Compute signed distances of incident triangle vertices to reference plane
+            T2 incDists[3];
 #pragma unroll
             for (int i = 0; i < 3; ++i) {
-                d[i] = dot(incTri[i] - refTri[0], planeNormal);
+                incDists[i] = dot(incTri[i] - refTri[0], refNormal);
             }
 
-            // Build clipped polygon
-            T1 poly[6];
-            int nNode = 0;
-
+            // Project all incident triangle vertices onto the reference plane
+            T1 projectedOntoPlane[3];
 #pragma unroll
             for (int i = 0; i < 3; ++i) {
-                int j = (i + 1) % 3;
-                bool in_i = (d[i] < T2(0.0));
-                bool in_j = (d[j] < T2(0.0));
+                projectedOntoPlane[i] = incTri[i] - refNormal * incDists[i];
+            }
 
-                if (in_i) {
-                    poly[nNode++] = incTri[i];
+            // Clip the projected incident triangle against the reference triangle
+            // using Sutherland-Hodgman algorithm
+            T1 clippingPoly[9];
+            int numClipVerts = 0;
+
+            // Initialize with the projected triangle
+            T1 inputPoly[9];
+            for (int i = 0; i < 3; ++i) {
+                inputPoly[i] = projectedOntoPlane[i];
+            }
+            int numInputVerts = 3;
+
+            // Clip against each edge of the reference triangle
+            T1 outputPoly[9];
+            for (int edge = 0; edge < 3; ++edge) {
+                int numOutputVerts = 0;
+                T1 edgeStart = refTri[edge];
+                T1 edgeEnd = refTri[(edge + 1) % 3];
+                T1 edgeDir = edgeEnd - edgeStart;
+                T1 edgeNormal = cross(refNormal, edgeDir);
+                T2 edgeNormalLen2 = dot(edgeNormal, edgeNormal);
+                if (edgeNormalLen2 > DEME_TINY_FLOAT) {
+                    edgeNormal = edgeNormal * rsqrt(edgeNormalLen2);
                 }
 
-                if (in_i != in_j) {
-                    T2 t = d[i] / (d[i] - d[j]);
-                    T1 inter = incTri[i] + (incTri[j] - incTri[i]) * t;
-                    poly[nNode++] = inter;
+                // Clip input polygon against this edge
+                for (int i = 0; i < numInputVerts; ++i) {
+                    T1 v1 = inputPoly[i];
+                    T1 v2 = inputPoly[(i + 1) % numInputVerts];
+                    T2 d1 = dot(v1 - edgeStart, edgeNormal);
+                    T2 d2 = dot(v2 - edgeStart, edgeNormal);
+                    bool in1 = (d1 >= -DEME_TINY_FLOAT);
+                    bool in2 = (d2 >= -DEME_TINY_FLOAT);
+
+                    // Inside point forms in the output polygon
+                    if (in1) {
+                        outputPoly[numOutputVerts++] = v1;
+                    }
+                    if (in1 != in2) {
+                        // Edge crosses the clipping edge
+                        T2 t = d1 / (d1 - d2);
+                        T1 inter = v1 + (v2 - v1) * t;
+                        outputPoly[numOutputVerts++] = inter;
+                    }
+                }
+
+                // Copy output to input for next iteration
+                for (int i = 0; i < numOutputVerts; ++i) {
+                    inputPoly[i] = outputPoly[i];
+                }
+                numInputVerts = numOutputVerts;
+
+                if (numInputVerts == 0) {
+                    break;  // No intersection
                 }
             }
 
-            // Compute centroid
+            numClipVerts = numInputVerts;
+            for (int i = 0; i < numClipVerts; ++i) {
+                clippingPoly[i] = inputPoly[i];
+            }
+
+            // Compute centroid and area of the clipping polygon
             T1 centroid;
             centroid.x = T2(0.0);
             centroid.y = T2(0.0);
             centroid.z = T2(0.0);
 
-            if (nNode > 0) {
-                for (int i = 0; i < nNode; i++) {
-                    centroid = centroid + poly[i];
+            projectedArea = T2(0.0);
+            if (numClipVerts >= 3) {
+                for (int i = 0; i < numClipVerts; ++i) {
+                    centroid = centroid + clippingPoly[i];
                 }
-                centroid = centroid / T2(nNode);
-            } else {
-                centroid = (incTri[0] + incTri[1] + incTri[2]) / T2(3.0);
-            }
+                centroid = centroid / T2(numClipVerts);
 
-            // Calculate the area of the clipping polygon for Case 3 face-based contact
-            projectedArea = 0.0;
-            if (nNode >= 3) {
+                // Calculate the area using fan triangulation
                 T2 area = T2(0.0);
-                for (int i = 0; i < nNode; ++i) {
-                    T1 v1 = poly[i] - centroid;
-                    T1 v2 = poly[(i + 1) % nNode] - centroid;
+                for (int i = 0; i < numClipVerts; ++i) {
+                    T1 v1 = clippingPoly[i] - centroid;
+                    T1 v2 = clippingPoly[(i + 1) % numClipVerts] - centroid;
                     T1 crossProd = cross(v1, v2);
                     area += sqrt(dot(crossProd, crossProd));
                 }
                 area *= T2(0.5);
                 projectedArea = area;
+            } else {
+                centroid = (incTri[0] + incTri[1] + incTri[2]) / T2(3.0);
             }
 
-            T2 centroidDist = dot(centroid - refTri[0], planeNormal);
-            point = centroid - planeNormal * (centroidDist + depth * T2(0.5));
+            T2 centroidDist = dot(centroid - refTri[0], refNormal);
+            point = centroid - refNormal * (centroidDist + depth * T2(0.5));
         } else {
-            // Edge-edge contact
+            // Edge-edge contact (axisType == 2)
             int nextA = (edgeIndexA + 1) % 3;
             T1 edgeA_start = triA[edgeIndexA];
             T1 edgeA = edges1[edgeIndexA];
@@ -1140,7 +1186,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
             T1 edgeB_start = triB[edgeIndexB];
             T1 edgeB = edges2[edgeIndexB];
 
-            // Compute closest points
+            // Compute closest points on edges
             T1 r = edgeB_start - edgeA_start;
             T2 a = dot(edgeA, edgeA);
             T2 e = dot(edgeB, edgeB);
@@ -1183,9 +1229,106 @@ inline __device__ bool checkTriangleTriangleOverlap(
             T1 closestB = edgeB_start + edgeB * t;
             point = (closestA + closestB) * T2(0.5);
 
-            // For edge-edge contact, the clipping "polygon" is degenerate (a line segment)
-            // The area is essentially zero
-            projectedArea = 0.0;
+            // For edge-edge contact, use projection approach similar to face-based contact
+            // Choose one triangle as reference (use triA) and project triB onto its plane
+            const T1* refTri = triA;
+            const T1* incTri = triB;
+            T1 refNormal = nA;
+
+            // Compute signed distances of incident triangle vertices to reference plane
+            T2 incDists[3];
+#pragma unroll
+            for (int i = 0; i < 3; ++i) {
+                incDists[i] = dot(incTri[i] - refTri[0], refNormal);
+            }
+
+            // Project all incident triangle vertices onto the reference plane
+            T1 projectedOntoPlane[3];
+#pragma unroll
+            for (int i = 0; i < 3; ++i) {
+                projectedOntoPlane[i] = incTri[i] - refNormal * incDists[i];
+            }
+
+            // Clip the projected incident triangle against the reference triangle
+            T1 clippingPoly[9];
+            int numClipVerts = 0;
+
+            T1 inputPoly[9];
+            for (int i = 0; i < 3; ++i) {
+                inputPoly[i] = projectedOntoPlane[i];
+            }
+            int numInputVerts = 3;
+
+            // Clip against each edge of the reference triangle
+            T1 outputPoly[9];
+            for (int edge = 0; edge < 3; ++edge) {
+                int numOutputVerts = 0;
+                T1 edgeStart = refTri[edge];
+                T1 edgeEnd = refTri[(edge + 1) % 3];
+                T1 edgeDir = edgeEnd - edgeStart;
+                T1 edgeNormal = cross(refNormal, edgeDir);
+                T2 edgeNormalLen2 = dot(edgeNormal, edgeNormal);
+                if (edgeNormalLen2 > DEME_TINY_FLOAT) {
+                    edgeNormal = edgeNormal * rsqrt(edgeNormalLen2);
+                }
+
+                for (int i = 0; i < numInputVerts; ++i) {
+                    T1 v1 = inputPoly[i];
+                    T1 v2 = inputPoly[(i + 1) % numInputVerts];
+                    T2 d1 = dot(v1 - edgeStart, edgeNormal);
+                    T2 d2 = dot(v2 - edgeStart, edgeNormal);
+                    bool in1 = (d1 >= -DEME_TINY_FLOAT);
+                    bool in2 = (d2 >= -DEME_TINY_FLOAT);
+
+                    if (in1) {
+                        outputPoly[numOutputVerts++] = v1;
+                    }
+                    if (in1 != in2) {
+                        T2 t_clip = d1 / (d1 - d2);
+                        T1 inter = v1 + (v2 - v1) * t_clip;
+                        outputPoly[numOutputVerts++] = inter;
+                    }
+                }
+
+                for (int i = 0; i < numOutputVerts; ++i) {
+                    inputPoly[i] = outputPoly[i];
+                }
+                numInputVerts = numOutputVerts;
+
+                if (numInputVerts == 0) {
+                    break;
+                }
+            }
+
+            numClipVerts = numInputVerts;
+            for (int i = 0; i < numClipVerts; ++i) {
+                clippingPoly[i] = inputPoly[i];
+            }
+
+            // Calculate projected area if we have a non-degenerate polygon
+            projectedArea = T2(0.0);
+            if (numClipVerts >= 3) {
+                T1 centroid;
+                centroid.x = T2(0.0);
+                centroid.y = T2(0.0);
+                centroid.z = T2(0.0);
+
+                for (int i = 0; i < numClipVerts; ++i) {
+                    centroid = centroid + clippingPoly[i];
+                }
+                centroid = centroid / T2(numClipVerts);
+
+                T2 area = T2(0.0);
+                for (int i = 0; i < numClipVerts; ++i) {
+                    T1 v1 = clippingPoly[i] - centroid;
+                    T1 v2 = clippingPoly[(i + 1) % numClipVerts] - centroid;
+                    T1 crossProd = cross(v1, v2);
+                    area += sqrt(dot(crossProd, crossProd));
+                }
+                area *= T2(0.5);
+                projectedArea = area;
+            }
+            // If numClipVerts < 3, the polygon is degenerate and projectedArea remains 0
         }
 
         return true;
