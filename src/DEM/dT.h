@@ -369,7 +369,10 @@ class DEMDynamicThread {
                       float expand_safety_adder,
                       const std::set<std::string>& contact_wildcards,
                       const std::set<std::string>& owner_wildcards,
-                      const std::set<std::string>& geo_wildcards);
+                      const std::set<std::string>& geo_wildcards,
+                      const std::unordered_map<std::string, WILDCARD_TYPE>& contact_wildcard_types,
+                      const std::unordered_map<std::string, WILDCARD_TYPE>& owner_wildcard_types,
+                      const std::unordered_map<std::string, WILDCARD_TYPE>& geo_wildcard_types);
 
     /// @brief Get total number of contacts.
     /// @return Number of contacts.

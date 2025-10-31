@@ -321,7 +321,10 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                     float expand_safety_adder,
                                     const std::set<std::string>& contact_wildcards,
                                     const std::set<std::string>& owner_wildcards,
-                                    const std::set<std::string>& geo_wildcards) {
+                                    const std::set<std::string>& geo_wildcards,
+                                    const std::unordered_map<std::string, WILDCARD_TYPE>& contact_wildcard_types,
+                                    const std::unordered_map<std::string, WILDCARD_TYPE>& owner_wildcard_types,
+                                    const std::unordered_map<std::string, WILDCARD_TYPE>& geo_wildcard_types) {
     simParams->nvXp2 = nvXp2;
     simParams->nvYp2 = nvYp2;
     simParams->nvZp2 = nvZp2;
@@ -349,9 +352,41 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->nOwnerWildcards = owner_wildcards.size();
     simParams->nGeoWildcards = geo_wildcards.size();
 
+    // Store wildcard type information in simParams
+    unsigned int i = 0;
+    for (const auto& name : contact_wildcards) {
+        auto it = contact_wildcard_types.find(name);
+        simParams->contactWildcardTypes[i] = (it != contact_wildcard_types.end()) 
+            ? static_cast<uint8_t>(it->second) 
+            : static_cast<uint8_t>(WILDCARD_TYPE::FLOAT);  // default to FLOAT
+        i++;
+    }
+    
+    i = 0;
+    for (const auto& name : owner_wildcards) {
+        auto it = owner_wildcard_types.find(name);
+        simParams->ownerWildcardTypes[i] = (it != owner_wildcard_types.end()) 
+            ? static_cast<uint8_t>(it->second) 
+            : static_cast<uint8_t>(WILDCARD_TYPE::FLOAT);
+        i++;
+    }
+    
+    i = 0;
+    for (const auto& name : geo_wildcards) {
+        auto it = geo_wildcard_types.find(name);
+        simParams->geoWildcardTypes[i] = (it != geo_wildcard_types.end()) 
+            ? static_cast<uint8_t>(it->second) 
+            : static_cast<uint8_t>(WILDCARD_TYPE::FLOAT);
+        i++;
+    }
+
     m_contact_wildcard_names = contact_wildcards;
     m_owner_wildcard_names = owner_wildcards;
     m_geo_wildcard_names = geo_wildcards;
+    
+    m_contact_wildcard_types = contact_wildcard_types;
+    m_owner_wildcard_types = owner_wildcard_types;
+    m_geo_wildcard_types = geo_wildcard_types;
 }
 
 void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {
