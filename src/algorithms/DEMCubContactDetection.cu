@@ -980,10 +980,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                                     idGeometryA, idGeometryB, contactType, contactPersistency, false,
                                     DEME_MAX(simParams->nSpheresGM, simParams->nTriGM), numTotalCnts, this_stream,
                                     scratchPad);
-            std::cout << "Contacts after duplication check: " << std::endl;
-            displayDeviceArray<bodyID_t>(granData->idGeometryA, *scratchPad.numContacts);
-            displayDeviceArray<bodyID_t>(granData->idGeometryB, *scratchPad.numContacts);
-            displayDeviceArray<contact_t>(granData->contactType, *scratchPad.numContacts);
+            // std::cout << "Contacts after duplication check: " << std::endl;
+            // displayDeviceArray<bodyID_t>(granData->idGeometryA, *scratchPad.numContacts);
+            // displayDeviceArray<bodyID_t>(granData->idGeometryB, *scratchPad.numContacts);
+            // displayDeviceArray<contact_t>(granData->contactType, *scratchPad.numContacts);
 
             scratchPad.finishUsingTempVector("contactType_sorted");
             scratchPad.finishUsingTempVector("idA_sorted");
