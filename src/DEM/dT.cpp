@@ -861,9 +861,17 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                             "clumps.\nTheir initial values are defauled to 0.",
                             w_name.c_str());
                     } else {
+                        WILDCARD_TYPE wc_type = m_owner_wildcard_types.at(w_name);
                         for (size_t jj = 0; jj < a_batch->GetNumClumps(); jj++) {
-                            (*ownerWildcards[w_num])[nExistOwners + nTotalClumpsThisCall + jj] =
-                                a_batch->owner_wildcards[w_name].at(jj);
+                            float val = a_batch->owner_wildcards[w_name].at(jj);
+                            size_t idx = nExistOwners + nTotalClumpsThisCall + jj;
+                            if (wc_type == WILDCARD_TYPE::FLOAT) {
+                                ((float*)(ownerWildcards[w_num]->host))[idx] = val;
+                            } else if (wc_type == WILDCARD_TYPE::UINT8) {
+                                ((uint8_t*)(ownerWildcards[w_num]->host))[idx] = static_cast<uint8_t>(val);
+                            } else if (wc_type == WILDCARD_TYPE::BOOL) {
+                                ((notStupidBool_t*)(ownerWildcards[w_num]->host))[idx] = static_cast<notStupidBool_t>(val);
+                            }
                         }
                     }
                     w_num++;
@@ -878,9 +886,17 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                             "clumps.\nTheir initial values are defauled to 0.",
                             w_name.c_str());
                     } else {
+                        WILDCARD_TYPE wc_type = m_geo_wildcard_types.at(w_name);
                         for (size_t jj = 0; jj < a_batch->GetNumSpheres(); jj++) {
-                            (*sphereWildcards[w_num])[nExistSpheres + n_processed_sp_comp + jj] =
-                                a_batch->geo_wildcards[w_name].at(jj);
+                            float val = a_batch->geo_wildcards[w_name].at(jj);
+                            size_t idx = nExistSpheres + n_processed_sp_comp + jj;
+                            if (wc_type == WILDCARD_TYPE::FLOAT) {
+                                ((float*)(sphereWildcards[w_num]->host))[idx] = val;
+                            } else if (wc_type == WILDCARD_TYPE::UINT8) {
+                                ((uint8_t*)(sphereWildcards[w_num]->host))[idx] = static_cast<uint8_t>(val);
+                            } else if (wc_type == WILDCARD_TYPE::BOOL) {
+                                ((notStupidBool_t*)(sphereWildcards[w_num]->host))[idx] = static_cast<notStupidBool_t>(val);
+                            }
                         }
                     }
                     w_num++;
@@ -900,7 +916,17 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                 contactType[cnt_arr_offset] = SPHERE_SPHERE_CONTACT;  // Only sph--sph cnt for now
                 unsigned int w_num = 0;
                 for (const auto& w_name : m_contact_wildcard_names) {
-                    (*contactWildcards[w_num])[cnt_arr_offset] = a_batch->contact_wildcards.at(w_name).at(jj);
+                    float val = a_batch->contact_wildcards.at(w_name).at(jj);
+                    // Cast to the appropriate type based on type information
+                    WILDCARD_TYPE wc_type = m_contact_wildcard_types.at(w_name);
+                    size_t offset = cnt_arr_offset * getWildcardTypeSize(wc_type);
+                    if (wc_type == WILDCARD_TYPE::FLOAT) {
+                        ((float*)(contactWildcards[w_num]->host))[cnt_arr_offset] = val;
+                    } else if (wc_type == WILDCARD_TYPE::UINT8) {
+                        ((uint8_t*)(contactWildcards[w_num]->host))[cnt_arr_offset] = static_cast<uint8_t>(val);
+                    } else if (wc_type == WILDCARD_TYPE::BOOL) {
+                        ((notStupidBool_t*)(contactWildcards[w_num]->host))[cnt_arr_offset] = static_cast<notStupidBool_t>(val);
+                    }
                     w_num++;
                 }
                 cnt_arr_offset++;
@@ -2080,12 +2106,23 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
 inline void DEMDynamicThread::migrateEnduringContacts() {
     // Use granData->contactMapping's information (stored in temp device vector) to map old and new contacts
 
-    // All contact wildcards are the same type, so we can just allocate one temp array for all of them
-    float* newWildcards[DEME_MAX_WILDCARD_NUM];
-    size_t wildcard_arr_bytes = (*solverScratchSpace.numContacts) * sizeof(float) * simParams->nContactWildcards;
-    newWildcards[0] = (float*)solverScratchSpace.allocateTempVector("newWildcards", wildcard_arr_bytes);
-    for (unsigned int i = 1; i < simParams->nContactWildcards; i++) {
-        newWildcards[i] = newWildcards[i - 1] + (*solverScratchSpace.numContacts);
+    // Allocate temporary arrays for wildcards based on their actual types
+    scratch_t* newWildcards[DEME_MAX_WILDCARD_NUM];
+    size_t wildcard_arr_bytes = 0;
+    // Calculate total bytes needed for all wildcards
+    for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
+        wildcard_arr_bytes += (*solverScratchSpace.numContacts) * 
+                             getWildcardTypeSize(static_cast<WILDCARD_TYPE>(simParams->contactWildcardTypes[i]));
+    }
+    
+    if (wildcard_arr_bytes > 0) {
+        newWildcards[0] = (scratch_t*)solverScratchSpace.allocateTempVector("newWildcards", wildcard_arr_bytes);
+        // Calculate offsets for each wildcard based on their types
+        for (unsigned int i = 1; i < simParams->nContactWildcards; i++) {
+            size_t prev_size = (*solverScratchSpace.numContacts) * 
+                              getWildcardTypeSize(static_cast<WILDCARD_TYPE>(simParams->contactWildcardTypes[i-1]));
+            newWildcards[i] = newWildcards[i - 1] + prev_size;
+        }
     }
 
     // This is used for checking if there are contact history got lost in the transition by surprise. But no need to
@@ -2099,7 +2136,7 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
     // non-0, whatever it represents.
     size_t blocks_needed_for_rearrange;
     if (verbosity >= VERBOSITY::STEP_METRIC) {
-        if (*solverScratchSpace.numPrevContacts > 0) {
+        if (*solverScratchSpace.numPrevContacts > 0 && simParams->nContactWildcards > 0) {
             // DEME_GPU_CALL(cudaMemset(contactSentry, 0, sentry_bytes));
             blocks_needed_for_rearrange =
                 (*solverScratchSpace.numPrevContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
@@ -2165,15 +2202,19 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
     }
 
     // Copy new history back to history array (after resizing the `main' history array)
-    if (*solverScratchSpace.numContacts > contactWildcards[0]->size()) {
+    if (*solverScratchSpace.numContacts > contactWildcards[0]->size() / sizeof(float)) {
         for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
+            size_t element_size = getWildcardTypeSize(static_cast<WILDCARD_TYPE>(simParams->contactWildcardTypes[i]));
+            size_t new_size_bytes = (*solverScratchSpace.numContacts) * element_size;
             // Packing data pointer is not needed after binding
-            DEME_DUAL_ARRAY_RESIZE((*contactWildcards[i]), *solverScratchSpace.numContacts, 0);
+            DEME_DUAL_ARRAY_RESIZE((*contactWildcards[i]), new_size_bytes, 0);
         }
     }
     for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
+        size_t element_size = getWildcardTypeSize(static_cast<WILDCARD_TYPE>(simParams->contactWildcardTypes[i]));
+        size_t copy_size = (*solverScratchSpace.numContacts) * element_size;
         DEME_GPU_CALL(cudaMemcpy(granData->contactWildcards[i], newWildcards[i],
-                                 (*solverScratchSpace.numContacts) * sizeof(float), cudaMemcpyDeviceToDevice));
+                                 copy_size, cudaMemcpyDeviceToDevice));
     }
 
     solverScratchSpace.finishUsingTempVector("newWildcards");
