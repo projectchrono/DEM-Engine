@@ -596,11 +596,11 @@ inline __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
     return true;
 }
 
-/// Triangle-triangle contact detection with 3-stage approach:
-/// Case 1: Partial overlap - use SAT to find MTV and contact via clipping polygon
-/// Other cases are currently not handled:
+/// Triangle-triangle contact detection with 2-stage approach:
 /// Case 2: Complete submersion - all vertices of one triangle below the other's plane
-/// Case 3: Complete separation - both triangles above each other's planes
+///         Uses distance filtering to avoid false positives from far-away pairs
+/// Case 1: Partial overlap - use SAT to find MTV and contact via clipping polygon
+///         Handles all other cases including complete separation
 template <typename T1, typename T2>
 inline __device__ bool checkTriangleTriangleOverlap(
     const T1& A1,
