@@ -674,12 +674,12 @@ inline __device__ bool checkTriangleTriangleOverlap(
         T1 centB = (triB[0] + triB[1] + triB[2]) / T2(3.0);
         T1 centDiff = centA - centB;
         T2 centDist2 = dot(centDiff, centDiff);
-        
+
         // Estimate characteristic size of triangles
         // Use the maximum edge length of both triangles as a size metric
         T1 edges1[3] = {triA[1] - triA[0], triA[2] - triA[1], triA[0] - triA[2]};
         T1 edges2[3] = {triB[1] - triB[0], triB[2] - triB[1], triB[0] - triB[2]};
-        
+
         T2 maxEdgeLen2 = T2(0.0);
 #pragma unroll
         for (int i = 0; i < 3; ++i) {
@@ -690,12 +690,12 @@ inline __device__ bool checkTriangleTriangleOverlap(
             if (len2_B > maxEdgeLen2)
                 maxEdgeLen2 = len2_B;
         }
-        
+
         // Distance threshold: triangles must be within a reasonable range
         // Use 3x the maximum edge length as the threshold
         // This allows for true submersion while rejecting far-away pairs
         T2 distanceThreshold2 = T2(9.0) * maxEdgeLen2;  // (3 * maxEdgeLen)^2
-        
+
         // Only proceed with submersion case if triangles are close enough
         if (centDist2 <= distanceThreshold2) {
             // Determine which triangle is submerged
@@ -817,7 +817,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
                 normal = B_submerged ? nA : (nB * T2(-1.0));  // From B to A
                 T2 centroidDist = dot(centroid - refTri[0], refNormal);
                 point = centroid - refNormal * (centroidDist + depth * T2(0.5));
-                
+
                 // Successfully handled submersion case
                 return true;
             } else {
