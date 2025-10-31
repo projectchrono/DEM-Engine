@@ -919,7 +919,6 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                     float val = a_batch->contact_wildcards.at(w_name).at(jj);
                     // Cast to the appropriate type based on type information
                     WILDCARD_TYPE wc_type = m_contact_wildcard_types.at(w_name);
-                    size_t offset = cnt_arr_offset * getWildcardTypeSize(wc_type);
                     if (wc_type == WILDCARD_TYPE::FLOAT) {
                         ((float*)(contactWildcards[w_num]->host))[cnt_arr_offset] = val;
                     } else if (wc_type == WILDCARD_TYPE::UINT8) {
@@ -2202,12 +2201,16 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
     }
 
     // Copy new history back to history array (after resizing the `main' history array)
-    if (*solverScratchSpace.numContacts > contactWildcards[0]->size() / sizeof(float)) {
-        for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
-            size_t element_size = getWildcardTypeSize(static_cast<WILDCARD_TYPE>(simParams->contactWildcardTypes[i]));
-            size_t new_size_bytes = (*solverScratchSpace.numContacts) * element_size;
-            // Packing data pointer is not needed after binding
-            DEME_DUAL_ARRAY_RESIZE((*contactWildcards[i]), new_size_bytes, 0);
+    if (simParams->nContactWildcards > 0) {
+        size_t first_wc_element_size = getWildcardTypeSize(static_cast<WILDCARD_TYPE>(simParams->contactWildcardTypes[0]));
+        size_t current_capacity = contactWildcards[0]->size() / first_wc_element_size;
+        if (*solverScratchSpace.numContacts > current_capacity) {
+            for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
+                size_t element_size = getWildcardTypeSize(static_cast<WILDCARD_TYPE>(simParams->contactWildcardTypes[i]));
+                size_t new_size_bytes = (*solverScratchSpace.numContacts) * element_size;
+                // Packing data pointer is not needed after binding
+                DEME_DUAL_ARRAY_RESIZE((*contactWildcards[i]), new_size_bytes, 0);
+            }
         }
     }
     for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
