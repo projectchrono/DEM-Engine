@@ -796,7 +796,10 @@ inline __device__ bool checkTriangleTriangleOverlap(
             // Check if we have a valid contact (at least 3 vertices)
             if (numClipVerts >= 3) {
                 // Compute centroid of clipping polygon
-                T1 centroid = {T2(0.0), T2(0.0), T2(0.0)};
+                T1 centroid;
+                centroid.x = T2(0.0);
+                centroid.y = T2(0.0);
+                centroid.z = T2(0.0);
 
                 for (int i = 0; i < numClipVerts; ++i) {
                     centroid = centroid + clippingPoly[i];
