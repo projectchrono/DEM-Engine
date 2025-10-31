@@ -204,6 +204,65 @@ enum CNT_OUTPUT_CONTENT {
     NICKNAME = 256
 };
 
+// Wildcard data types
+enum class WILDCARD_TYPE : uint8_t {
+    FLOAT = 0,
+    UINT8 = 1,
+    BOOL = 2  // notStupidBool_t
+};
+
+// Helper function to get size of wildcard type
+inline __device__ __host__ constexpr size_t getWildcardTypeSize(WILDCARD_TYPE type) {
+    switch (type) {
+        case WILDCARD_TYPE::FLOAT:
+            return sizeof(float);
+        case WILDCARD_TYPE::UINT8:
+            return sizeof(uint8_t);
+        case WILDCARD_TYPE::BOOL:
+            return sizeof(notStupidBool_t);
+        default:
+            return sizeof(float);  // fallback
+    }
+}
+
+// Macros for type-safe wildcard access on the device
+// These macros cast the char* wildcard arrays to the appropriate type based on the type info
+#define DEME_CONTACT_WILDCARD_FLOAT(simParams, wildcardArray, wcNum, index) \
+    (((float*)(wildcardArray)[(wcNum)])[(index)])
+
+#define DEME_CONTACT_WILDCARD_UINT8(simParams, wildcardArray, wcNum, index) \
+    (((uint8_t*)(wildcardArray)[(wcNum)])[(index)])
+
+#define DEME_CONTACT_WILDCARD_BOOL(simParams, wildcardArray, wcNum, index) \
+    (((deme::notStupidBool_t*)(wildcardArray)[(wcNum)])[(index)])
+
+// Generic macro that uses the type info from simParams to access the correct type
+// Note: This is for use in JIT-compiled kernels where simParams is available
+#define DEME_CONTACT_WILDCARD(simParams, wildcardArray, wcNum, index) \
+    ((simParams)->contactWildcardTypes[(wcNum)] == static_cast<uint8_t>(deme::WILDCARD_TYPE::FLOAT) \
+         ? DEME_CONTACT_WILDCARD_FLOAT(simParams, wildcardArray, wcNum, index) \
+     : (simParams)->contactWildcardTypes[(wcNum)] == static_cast<uint8_t>(deme::WILDCARD_TYPE::UINT8) \
+         ? (float)DEME_CONTACT_WILDCARD_UINT8(simParams, wildcardArray, wcNum, index) \
+         : (float)DEME_CONTACT_WILDCARD_BOOL(simParams, wildcardArray, wcNum, index))
+
+#define DEME_OWNER_WILDCARD_FLOAT(simParams, wildcardArray, wcNum, index) \
+    (((float*)(wildcardArray)[(wcNum)])[(index)])
+
+#define DEME_OWNER_WILDCARD_UINT8(simParams, wildcardArray, wcNum, index) \
+    (((uint8_t*)(wildcardArray)[(wcNum)])[(index)])
+
+#define DEME_OWNER_WILDCARD_BOOL(simParams, wildcardArray, wcNum, index) \
+    (((deme::notStupidBool_t*)(wildcardArray)[(wcNum)])[(index)])
+
+#define DEME_GEO_WILDCARD_FLOAT(simParams, wildcardArray, wcNum, index) \
+    (((float*)(wildcardArray)[(wcNum)])[(index)])
+
+#define DEME_GEO_WILDCARD_UINT8(simParams, wildcardArray, wcNum, index) \
+    (((uint8_t*)(wildcardArray)[(wcNum)])[(index)])
+
+#define DEME_GEO_WILDCARD_BOOL(simParams, wildcardArray, wcNum, index) \
+    (((deme::notStupidBool_t*)(wildcardArray)[(wcNum)])[(index)])
+
 // =============================================================================
 // NOW DEFINING SOME GPU-SIDE DATA STRUCTURES
 // =============================================================================
@@ -277,6 +336,11 @@ struct DEMSimParams {
     unsigned int nContactWildcards;
     unsigned int nOwnerWildcards;
     unsigned int nGeoWildcards;
+
+    // Types of wildcard arrays (stored as uint8_t for easier JIT compilation)
+    uint8_t contactWildcardTypes[DEME_MAX_WILDCARD_NUM];
+    uint8_t ownerWildcardTypes[DEME_MAX_WILDCARD_NUM];
+    uint8_t geoWildcardTypes[DEME_MAX_WILDCARD_NUM];
 
     // The max vel at which the solver errors out
     float errOutVel = DEME_HUGE_FLOAT;
@@ -387,11 +451,13 @@ struct DEMDataDT {
     // Wildcards. These are some quantities that you can associate with contact pairs and objects. Very
     // typically, contact history info in Hertzian model in this DEM tool is a wildcard, and electric charges can be
     // registered on spheres (clump components) with wildcards.
-    float* contactWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
-    float* ownerWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
-    float* sphereWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
-    float* analWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
-    float* triWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
+    // Note: Wildcards are now stored as scratch_t* (char*) to support multiple data types.
+    // Use the type information in DEMSimParams to cast to the appropriate type when accessing.
+    scratch_t* contactWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
+    scratch_t* ownerWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
+    scratch_t* sphereWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
+    scratch_t* analWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
+    scratch_t* triWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
 };
 
 // A struct that holds pointers to data arrays that kT uses

@@ -534,26 +534,32 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
             DEME_DUAL_ARRAY_RESIZE(contactPointGeometryB, cnt_arr_size, make_float3(0));
         }
         // Allocate memory for each wildcard array
+        // Note: wildcards are now stored as scratch_t (char) arrays, sized according to their actual type
         contactWildcards.resize(simParams->nContactWildcards);
         ownerWildcards.resize(simParams->nOwnerWildcards);
         sphereWildcards.resize(simParams->nGeoWildcards);
         analWildcards.resize(simParams->nGeoWildcards);
         triWildcards.resize(simParams->nGeoWildcards);
         for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
+            size_t bytes = cnt_arr_size * getWildcardTypeSize(static_cast<WILDCARD_TYPE>(simParams->contactWildcardTypes[i]));
             contactWildcards[i] =
-                std::make_unique<DualArray<float>>(cnt_arr_size, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+                std::make_unique<DualArray<scratch_t>>(bytes, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
         }
         for (unsigned int i = 0; i < simParams->nOwnerWildcards; i++) {
+            size_t bytes = nOwnerBodies * getWildcardTypeSize(static_cast<WILDCARD_TYPE>(simParams->ownerWildcardTypes[i]));
             ownerWildcards[i] =
-                std::make_unique<DualArray<float>>(nOwnerBodies, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+                std::make_unique<DualArray<scratch_t>>(bytes, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
         }
         for (unsigned int i = 0; i < simParams->nGeoWildcards; i++) {
+            size_t sphere_bytes = nSpheresGM * getWildcardTypeSize(static_cast<WILDCARD_TYPE>(simParams->geoWildcardTypes[i]));
+            size_t anal_bytes = nAnalGM * getWildcardTypeSize(static_cast<WILDCARD_TYPE>(simParams->geoWildcardTypes[i]));
+            size_t tri_bytes = nTriGM * getWildcardTypeSize(static_cast<WILDCARD_TYPE>(simParams->geoWildcardTypes[i]));
             sphereWildcards[i] =
-                std::make_unique<DualArray<float>>(nSpheresGM, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+                std::make_unique<DualArray<scratch_t>>(sphere_bytes, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
             analWildcards[i] =
-                std::make_unique<DualArray<float>>(nAnalGM, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+                std::make_unique<DualArray<scratch_t>>(anal_bytes, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
             triWildcards[i] =
-                std::make_unique<DualArray<float>>(nTriGM, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+                std::make_unique<DualArray<scratch_t>>(tri_bytes, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
         }
     }
     // existingContactTypes has a fixed size depending on how many contact types are defined

@@ -806,6 +806,24 @@ void DEMForceModel::SetPerContactWildcards(const std::set<std::string>& wildcard
         }
     }
     m_contact_wildcards = wildcards;
+    // Default to FLOAT type for backward compatibility
+    for (const auto& name : wildcards) {
+        m_contact_wildcard_types[name] = WILDCARD_TYPE::FLOAT;
+    }
+}
+
+void DEMForceModel::SetPerContactWildcardsWithTypes(const std::unordered_map<std::string, WILDCARD_TYPE>& wildcards_with_types) {
+    m_contact_wildcards.clear();
+    m_contact_wildcard_types.clear();
+    for (const auto& [name, type] : wildcards_with_types) {
+        if (match_pattern(name, " ")) {
+            std::stringstream ss;
+            ss << "Contact wildcard " << name << " is not valid: no spaces allowed in its name." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        m_contact_wildcards.insert(name);
+        m_contact_wildcard_types[name] = type;
+    }
 }
 
 void DEMForceModel::SetPerOwnerWildcards(const std::set<std::string>& wildcards) {
@@ -817,6 +835,24 @@ void DEMForceModel::SetPerOwnerWildcards(const std::set<std::string>& wildcards)
         }
     }
     m_owner_wildcards = wildcards;
+    // Default to FLOAT type for backward compatibility
+    for (const auto& name : wildcards) {
+        m_owner_wildcard_types[name] = WILDCARD_TYPE::FLOAT;
+    }
+}
+
+void DEMForceModel::SetPerOwnerWildcardsWithTypes(const std::unordered_map<std::string, WILDCARD_TYPE>& wildcards_with_types) {
+    m_owner_wildcards.clear();
+    m_owner_wildcard_types.clear();
+    for (const auto& [name, type] : wildcards_with_types) {
+        if (match_pattern(name, " ")) {
+            std::stringstream ss;
+            ss << "Owner wildcard " << name << " is not valid: no spaces allowed in its name." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        m_owner_wildcards.insert(name);
+        m_owner_wildcard_types[name] = type;
+    }
 }
 
 void DEMForceModel::SetPerGeometryWildcards(const std::set<std::string>& wildcards) {
@@ -828,6 +864,25 @@ void DEMForceModel::SetPerGeometryWildcards(const std::set<std::string>& wildcar
         }
     }
     m_geo_wildcards = wildcards;
+    // Default to FLOAT type for backward compatibility
+    for (const auto& name : wildcards) {
+        m_geo_wildcard_types[name] = WILDCARD_TYPE::FLOAT;
+    }
+}
+
+void DEMForceModel::SetPerGeometryWildcardsWithTypes(const std::unordered_map<std::string, WILDCARD_TYPE>& wildcards_with_types) {
+    m_geo_wildcards.clear();
+    m_geo_wildcard_types.clear();
+    for (const auto& [name, type] : wildcards_with_types) {
+        if (match_pattern(name, " ")) {
+            std::stringstream ss;
+            ss << "Geometry wildcard " << name << " is not valid: no spaces allowed in its name." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        m_geo_wildcards.insert(name);
+        m_geo_wildcard_types[name] = type;
+    }
+}
 }
 
 }  // END namespace deme

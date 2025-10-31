@@ -439,6 +439,11 @@ class DEMForceModel {
     // Quatity names that we want to associate each owner with. An array will be allocated for storing this, and it
     // lives and die with its associated geometry representation (most typically a sphere).
     std::set<std::string> m_geo_wildcards;
+    
+    // Type information for wildcards (maps from name to WILDCARD_TYPE)
+    std::unordered_map<std::string, WILDCARD_TYPE> m_contact_wildcard_types;
+    std::unordered_map<std::string, WILDCARD_TYPE> m_owner_wildcard_types;
+    std::unordered_map<std::string, WILDCARD_TYPE> m_geo_wildcard_types;
 
   public:
     friend class DEMSolver;
@@ -473,13 +478,27 @@ class DEMForceModel {
     /// initial value of all contact wildcard arrays is automatically 0.
     //// TODO: Maybe allow non-0 initialization?
     void SetPerContactWildcards(const std::set<std::string>& wildcards);
+    
+    /// Set the names and types for the extra quantities that will be associated with each contact pair.
+    /// This version allows specifying different types (FLOAT, UINT8, BOOL) for each wildcard.
+    void SetPerContactWildcardsWithTypes(const std::unordered_map<std::string, WILDCARD_TYPE>& wildcards_with_types);
+    
     /// Set the names for the extra quantities that will be associated with each owner. For example, you can use this to
     /// associate a cohesion parameter to each particle. Only float is supported.
     void SetPerOwnerWildcards(const std::set<std::string>& wildcards);
+    
+    /// Set the names and types for the extra quantities that will be associated with each owner.
+    /// This version allows specifying different types (FLOAT, UINT8, BOOL) for each wildcard.
+    void SetPerOwnerWildcardsWithTypes(const std::unordered_map<std::string, WILDCARD_TYPE>& wildcards_with_types);
+    
     /// Set the names for the extra quantities that will be associated with each geometry. For example, you can use this
     /// to associate certain electric charges to each particle's each component which represents a distribution of the
     /// charges. Only float is supported.
     void SetPerGeometryWildcards(const std::set<std::string>& wildcards);
+    
+    /// Set the names and types for the extra quantities that will be associated with each geometry.
+    /// This version allows specifying different types (FLOAT, UINT8, BOOL) for each wildcard.
+    void SetPerGeometryWildcardsWithTypes(const std::unordered_map<std::string, WILDCARD_TYPE>& wildcards_with_types);
 };
 
 }  // END namespace deme

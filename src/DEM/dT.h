@@ -216,22 +216,28 @@ class DEMDynamicThread {
     DualArray<float3> contactPointGeometryA = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<float3> contactPointGeometryB = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // Wildcard (extra property) arrays associated with contacts and owners
-    std::vector<std::unique_ptr<DualArray<float>>> contactWildcards;
-    std::vector<std::unique_ptr<DualArray<float>>> ownerWildcards;
+    // Note: Now stored as scratch_t (char) to support multiple data types
+    std::vector<std::unique_ptr<DualArray<scratch_t>>> contactWildcards;
+    std::vector<std::unique_ptr<DualArray<scratch_t>>> ownerWildcards;
     // DualArray<float> contactWildcards[DEME_MAX_WILDCARD_NUM];
     // DualArray<float> ownerWildcards[DEME_MAX_WILDCARD_NUM];
     // An example of such wildcard arrays is contact history: how much did the contact point move on the geometry
     // surface compared to when the contact first emerged?
     // Geometric entities' wildcards
-    std::vector<std::unique_ptr<DualArray<float>>> sphereWildcards;
-    std::vector<std::unique_ptr<DualArray<float>>> analWildcards;
-    std::vector<std::unique_ptr<DualArray<float>>> triWildcards;
+    std::vector<std::unique_ptr<DualArray<scratch_t>>> sphereWildcards;
+    std::vector<std::unique_ptr<DualArray<scratch_t>>> analWildcards;
+    std::vector<std::unique_ptr<DualArray<scratch_t>>> triWildcards;
 
     // Storage for the names of the contact wildcards (whose order agrees with the impl-level wildcard numbering, from 1
     // to n)
     std::set<std::string> m_contact_wildcard_names;
     std::set<std::string> m_owner_wildcard_names;
     std::set<std::string> m_geo_wildcard_names;
+
+    // Storage for wildcard types (maps from wildcard name to type)
+    std::unordered_map<std::string, WILDCARD_TYPE> m_contact_wildcard_types;
+    std::unordered_map<std::string, WILDCARD_TYPE> m_owner_wildcard_types;
+    std::unordered_map<std::string, WILDCARD_TYPE> m_geo_wildcard_types;
 
     // DualArray<float3> contactHistory;
     // // Durations in time of persistent contact pairs
