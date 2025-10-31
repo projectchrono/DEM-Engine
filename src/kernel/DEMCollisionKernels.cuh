@@ -756,7 +756,8 @@ inline __device__ bool checkTriangleTriangleOverlap(
 
             depth = maxPenetration;
             normal = B_submerged ? nA : (nB * T2(-1.0));  // From B to A
-            point = centroid;
+            T2 centroidDist = dot(centroid - refTri[0], refNormal);
+            point = centroid - refNormal * (centroidDist + depth * T2(0.5));
             // printf("Got case 1 contact, depth: %f, centroid: (%f, %f, %f), area: %f\n", (double)depth,
             //        (double)centroid.x, (double)centroid.y, (double)centroid.z, (double)(projectedArea));
             // printf("Submerged tri: %s\n", B_submerged ? "B" : "A");

@@ -22,8 +22,8 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity("STEP_DEBUG");
-    DEMSim.UseFrictionlessHertzianModel();
+    DEMSim.SetVerbosity("INFO");
+    // DEMSim.UseFrictionlessHertzianModel();
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT", "NORMAL", "TORQUE", "CNT_WILDCARD"});
     DEMSim.InstructBoxDomainDimension(10, 10, 4);
@@ -55,9 +55,9 @@ int main() {
     particle2->SetMOI(make_float3(2000., 2000., 2000.));
     auto tracker2 = DEMSim.Track(particle2);
 
-    float step_time = 2e-5;
+    float step_time = 1e-6;
     DEMSim.SetInitTimeStep(step_time);
-    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.SetExpandSafetyType("auto");
     // DEMSim.DisableAdaptiveBinSize();
     // DEMSim.SetInitBinSize(10);
