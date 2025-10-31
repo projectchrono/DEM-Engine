@@ -55,7 +55,7 @@ int main() {
     particle2->SetMOI(make_float3(2000., 2000., 2000.));
     auto tracker2 = DEMSim.Track(particle2);
 
-    float step_time = 1e-6;
+    float step_time = 1e-5;
     DEMSim.SetInitTimeStep(step_time);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.SetExpandSafetyType("auto");

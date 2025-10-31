@@ -279,11 +279,36 @@ inline bool __device__ tri_plane_penetration(const T1** tri,
         if (in_i ^ in_j) {
             T2 t = d[i] / (d[i] - d[j]);  // between 0 and 1
             T1 inter = *tri[i] + (*tri[j] - *tri[i]) * t;
-            // Only register inside points once
-            if (in_i)
-                poly[nNode++] = *tri[i];
+            // Only register inside points once - project them onto the plane
+            if (in_i) {
+                // Project the submerging node onto the plane
+                T1 projectedNode = *tri[i] - d[i] * to_real3<float3, T1>(entityDir);
+                poly[nNode++] = projectedNode;
+            }
             poly[nNode++] = inter;
             hasIntersection = true;
+        }
+    }
+
+    // Handle the case where all three vertices are submerged (no edge crosses the plane)
+    if (!hasIntersection) {
+        // Check if all vertices are below the plane
+        bool allBelow = true;
+#pragma unroll
+        for (int i = 0; i < 3; ++i) {
+            if (d[i] >= 0.0) {
+                allBelow = false;
+                break;
+            }
+        }
+        if (allBelow) {
+            // All vertices are below the plane - project all three onto the plane
+#pragma unroll
+            for (int i = 0; i < 3; ++i) {
+                T1 projectedNode = *tri[i] - d[i] * to_real3<float3, T1>(entityDir);
+                poly[nNode++] = projectedNode;
+            }
+            hasIntersection = true;  // We now have a valid polygon
         }
     }
 
@@ -309,7 +334,19 @@ inline bool __device__ tri_plane_penetration(const T1** tri,
     // The centroid's projection to the plane
     T1 projection =
         centroid - planeSignedDistance<T2>(centroid, entityLoc, entityDir) * to_real3<float3, T1>(entityDir);
-    overlapArea = 0.5;
+
+    // Calculate the area of the clipping polygon using fan triangulation from centroid
+    overlapArea = 0.0;
+    if (hasIntersection && nNode >= 3) {
+        for (int i = 0; i < nNode; ++i) {
+            T1 v1 = poly[i] - centroid;
+            T1 v2 = poly[(i + 1) % nNode] - centroid;
+            T1 crossProd = cross(v1, v2);
+            overlapArea += sqrt(dot(crossProd, crossProd));
+        }
+        overlapArea *= 0.5;
+    }
+
     // cntPnt is from the projection point, go half penetration depth.
     // Note this penetration depth is signed, so if no contact, we go positive plane normal; if in contact, we go
     // negative plane normal. As such, cntPnt always exists and this is important for the cases with extraMargin.
