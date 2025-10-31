@@ -727,18 +727,19 @@ inline __device__ bool checkTriangleTriangleOverlap(
             // Now find the intersection of the projected triangle with the reference triangle
             // This forms the clipping polygon
             // We'll use Sutherland-Hodgman algorithm to clip the projected triangle against the reference triangle
-            T1 clippingPoly[9];  // Max 9 vertices for triangle-triangle intersection
+            const int MAX_CLIP_VERTS = 9;  // Max vertices for triangle-triangle intersection
+            T1 clippingPoly[MAX_CLIP_VERTS];
             int numClipVerts = 0;
 
             // Initialize with the projected triangle
-            T1 inputPoly[9];
+            T1 inputPoly[MAX_CLIP_VERTS];
             for (int i = 0; i < 3; ++i) {
                 inputPoly[i] = projectedOntoPlane[i];
             }
             int numInputVerts = 3;
 
             // Clip against each edge of the reference triangle
-            T1 outputPoly[9];
+            T1 outputPoly[MAX_CLIP_VERTS];
             for (int edge = 0; edge < 3; ++edge) {
                 int numOutputVerts = 0;
                 T1 edgeStart = refTri[edge];
@@ -760,14 +761,17 @@ inline __device__ bool checkTriangleTriangleOverlap(
                     bool in2 = (d2 >= -DEME_TINY_FLOAT);
 
                     // Inside point forms in the output polygon
-                    if (in1) {
+                    if (in1 && numOutputVerts < MAX_CLIP_VERTS) {
                         outputPoly[numOutputVerts++] = v1;
                     }
-                    if (in1 != in2) {
+                    if (in1 != in2 && numOutputVerts < MAX_CLIP_VERTS) {
                         // Edge crosses the clipping edge
-                        T2 t = d1 / (d1 - d2);
-                        T1 inter = v1 + (v2 - v1) * t;
-                        outputPoly[numOutputVerts++] = inter;
+                        T2 denom = d1 - d2;
+                        if (denom != T2(0.0)) {  // Safety check for division by zero
+                            T2 t = d1 / denom;
+                            T1 inter = v1 + (v2 - v1) * t;
+                            outputPoly[numOutputVerts++] = inter;
+                        }
                     }
                 }
 
