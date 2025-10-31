@@ -375,6 +375,22 @@ inline bool __device__ calcTriEntityOverlap(const T1& A,
 
 ////////////////////////////////////////////////////////////////////////////////
 // Prism contact detection using the Separating Axis Theorem (SAT)
+//
+// A prism is formed by two parallel triangular faces (bases) connected by three
+// rectangular side faces. For proper contact detection between two prisms, SAT
+// requires testing multiple potential separating axes:
+//
+// 1. Face normals of both triangular bases (2 axes)
+// 2. Face normals of all rectangular side faces (6 axes, 3 per prism)
+// 3. Cross products of edges from different prisms to detect edge-edge contacts
+//    - Base edges × Base edges (9 axes)
+//    - Height edges × Base edges (18 axes)
+//
+// This comprehensive approach ensures detection of:
+// - Face-face contacts (parallel prisms)
+// - Edge-face contacts (side intersecting base/side)
+// - Edge-edge contacts
+// - Complete containment (one prism inside another)
 ////////////////////////////////////////////////////////////////////////////////
 
 template <typename T1, typename T2>
@@ -402,6 +418,17 @@ inline __device__ bool projections_overlap(T minA, T maxA, T minB, T maxB) {
     return !(maxA < minB || maxB < minA);
 }
 
+/**
+ * @brief Detect contact between two triangular prisms using comprehensive SAT.
+ *
+ * Each prism is defined by two triangular faces (Face A and Face B) with 3 vertices each.
+ * Vertices are ordered: Face A nodes 1-3, then Face B nodes 1-3 (corresponding vertices).
+ * The function tests up to 35 potential separating axes to ensure complete coverage
+ * of all contact scenarios including parallel prisms, side-side intersections, and
+ * containment cases.
+ *
+ * @return true if prisms are in contact (no separating axis found), false otherwise
+ */
 template <typename T1>
 inline __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
                                           const T1& prismAFaceANode2,
@@ -415,38 +442,88 @@ inline __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
                                           const T1& prismBFaceBNode1,
                                           const T1& prismBFaceBNode2,
                                           const T1& prismBFaceBNode3) {
-    float3 axes[11];
+    // Increased axis count to accommodate additional side face normals and height edge tests
+    // Max axes: 2 base normals + 6 side face normals + 9 base edge-edge + 18 height edge cross products = 35
+    float3 axes[35];
     unsigned short int axisCount = 0;
+
     // Pack as stack arrays for easier looping
     T1 prismA[6] = {prismAFaceANode1, prismAFaceANode2, prismAFaceANode3,
                     prismAFaceBNode1, prismAFaceBNode2, prismAFaceBNode3};
     T1 prismB[6] = {prismBFaceANode1, prismBFaceANode2, prismBFaceANode3,
                     prismBFaceBNode1, prismBFaceBNode2, prismBFaceBNode3};
 
-    // Base triangle normals
+    // Base triangle normals (both top and bottom faces)
     T1 A_faceNormal = cross(prismA[1] - prismA[0], prismA[2] - prismA[0]);
     T1 B_faceNormal = cross(prismB[1] - prismB[0], prismB[2] - prismB[0]);
 
     axes[axisCount++] = normalize(A_faceNormal);
     axes[axisCount++] = normalize(B_faceNormal);
 
-    // Edges of each prism base
-    {
-        T1 A_edges[3] = {prismA[1] - prismA[0], prismA[2] - prismA[1], prismA[0] - prismA[2]};
-        T1 B_edges[3] = {prismB[1] - prismB[0], prismB[2] - prismB[1], prismB[0] - prismB[2]};
+    // Edges of each prism base and height edges (connecting corresponding vertices of the two bases)
+    T1 A_baseEdges[3] = {prismA[1] - prismA[0], prismA[2] - prismA[1], prismA[0] - prismA[2]};
+    T1 B_baseEdges[3] = {prismB[1] - prismB[0], prismB[2] - prismB[1], prismB[0] - prismB[2]};
 
-        // Edge–edge cross products
-        for (unsigned short int i = 0; i < 3; ++i) {
-            for (unsigned short int j = 0; j < 3; ++j) {
-                T1 cp = cross(A_edges[i], B_edges[j]);
-                float len2 = dot(cp, cp);
-                if (len2 > DEME_TINY_FLOAT)
-                    axes[axisCount++] = normalize(cp);
-            }
+    // Height edges connecting corresponding vertices of the two triangular bases
+    // Note: Due to winding order to maintain opposite normals, the vertex correspondence is:
+    // FaceA[0,1,2] corresponds to FaceB[0,2,1] (i.e., Node1->Node1, Node2->Node3, Node3->Node2)
+    T1 A_heightEdges[3] = {prismA[3] - prismA[0], prismA[5] - prismA[1], prismA[4] - prismA[2]};
+    T1 B_heightEdges[3] = {prismB[3] - prismB[0], prismB[5] - prismB[1], prismB[4] - prismB[2]};
+
+    // Side face normals for prism A (3 rectangular side faces)
+    // Each side face is formed by an edge of the base and the corresponding height edges
+    for (unsigned short int i = 0; i < 3; ++i) {
+        // For each base edge, compute the normal of the rectangular side face
+        // The side face is formed by base edge i and the two height edges at its endpoints
+        T1 sideNormal = cross(A_baseEdges[i], A_heightEdges[i]);
+        float len = length(sideNormal);
+        if (len > DEME_TINY_FLOAT)
+            axes[axisCount++] = sideNormal / len;
+    }
+
+    // Side face normals for prism B (3 rectangular side faces)
+    for (unsigned short int i = 0; i < 3; ++i) {
+        T1 sideNormal = cross(B_baseEdges[i], B_heightEdges[i]);
+        float len = length(sideNormal);
+        if (len > DEME_TINY_FLOAT)
+            axes[axisCount++] = sideNormal / len;
+    }
+
+    // Edge-edge cross products: base edges of A with base edges of B
+    for (unsigned short int i = 0; i < 3; ++i) {
+        for (unsigned short int j = 0; j < 3; ++j) {
+            T1 cp = cross(A_baseEdges[i], B_baseEdges[j]);
+            float len = length(cp);
+            if (len > DEME_TINY_FLOAT)
+                axes[axisCount++] = cp / len;
         }
     }
 
-    // SAT test
+    // Edge-edge cross products: height edges of A with base edges of B
+    for (unsigned short int i = 0; i < 3; ++i) {
+        for (unsigned short int j = 0; j < 3; ++j) {
+            T1 cp = cross(A_heightEdges[i], B_baseEdges[j]);
+            float len = length(cp);
+            if (len > DEME_TINY_FLOAT)
+                axes[axisCount++] = cp / len;
+        }
+    }
+
+    // Edge-edge cross products: base edges of A with height edges of B
+    for (unsigned short int i = 0; i < 3; ++i) {
+        for (unsigned short int j = 0; j < 3; ++j) {
+            T1 cp = cross(A_baseEdges[i], B_heightEdges[j]);
+            float len = length(cp);
+            if (len > DEME_TINY_FLOAT)
+                axes[axisCount++] = cp / len;
+        }
+    }
+
+    // SAT test: check all computed axes
+    // Note: This correctly handles the containment case (one prism completely inside another).
+    // When prism A is inside prism B, for any axis, the projection range of A [minA, maxA]
+    // will be contained within the projection range of B [minB, maxB], causing all overlap
+    // checks to pass. With no separating axis found, the function returns true (in contact).
     for (unsigned short int i = 0; i < axisCount; ++i) {
         float minA, maxA, minB, maxB;
         project_points_on_axis(prismA, axes[i], minA, maxA);
