@@ -767,7 +767,8 @@ inline __device__ bool checkTriangleTriangleOverlap(
                     if (in1 != in2 && numOutputVerts < MAX_CLIP_VERTS) {
                         // Edge crosses the clipping edge
                         T2 denom = d1 - d2;
-                        if (denom != T2(0.0)) {  // Safety check for division by zero
+                        // Safety check for division by zero (use epsilon for floating-point precision)
+                        if ((denom > DEME_TINY_FLOAT) || (denom < -DEME_TINY_FLOAT)) {
                             T2 t = d1 / denom;
                             T1 inter = v1 + (v2 - v1) * t;
                             outputPoly[numOutputVerts++] = inter;
@@ -795,10 +796,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
             // Check if we have a valid contact (at least 3 vertices)
             if (numClipVerts >= 3) {
                 // Compute centroid of clipping polygon
-                T1 centroid;
-                centroid.x = T2(0.0);
-                centroid.y = T2(0.0);
-                centroid.z = T2(0.0);
+                T1 centroid = {T2(0.0), T2(0.0), T2(0.0)};
 
                 for (int i = 0; i < numClipVerts; ++i) {
                     centroid = centroid + clippingPoly[i];
