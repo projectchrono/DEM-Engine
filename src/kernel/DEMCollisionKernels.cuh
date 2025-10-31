@@ -520,6 +520,10 @@ inline __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
     }
 
     // SAT test: check all computed axes
+    // Note: This correctly handles the containment case (one prism completely inside another).
+    // When prism A is inside prism B, for any axis, the projection range of A [minA, maxA]
+    // will be contained within the projection range of B [minB, maxB], causing all overlap
+    // checks to pass. With no separating axis found, the function returns true (in contact).
     for (unsigned short int i = 0; i < axisCount; ++i) {
         float minA, maxA, minB, maxB;
         project_points_on_axis(prismA, axes[i], minA, maxA);
