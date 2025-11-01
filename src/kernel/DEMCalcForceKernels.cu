@@ -50,7 +50,7 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
     deme::contact_t ContactType = CONTACT_TYPE;
     // The following quantities are always calculated, regardless of force model
     double3 contactPnt;
-    float3 B2A;  // Unit vector pointing from body B to body A (contact normal)
+    float3 B2A;  // contact normal felt by A, pointing from B to A, unit vector
     // Penetration depth
     // Positive number for overlapping cases, negative for non-overlapping cases
     double overlapDepth = 0.0;
@@ -267,14 +267,10 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
             bool shouldDropContact = false;
             bool in_contact = checkTriangleTriangleOverlap<double3, double>(
                 triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3, contact_normal, overlapDepth,
-                overlapArea, contactPnt, shouldDropContact, needsNonContactPenetrationCalc);
+                overlapArea, contactPnt, needsNonContactPenetrationCalc);
             B2A = to_float3(contact_normal);
             // Fix ContactType if needed
-            // If the solver thinks this contact is redundant, we drop it directly
-            if (shouldDropContact) {
-                ContactType = deme::NOT_A_CONTACT;
-            }
-            // Then, if the solver says in contact, we do not question it
+            // If the solver says in contact, we do not question it
             if (!in_contact) {
                 // Then, if we have extra margin, we check that if the distance is within the extra margin.
                 // Or, if the solver says no contact and we got overlapDepth > 0, that is by design a flag telling the
@@ -283,9 +279,9 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
                     ContactType = deme::NOT_A_CONTACT;
                 }
             }
-            // if (ContactType != deme::NOT_A_CONTACT) {
-            //     printf("Triangle-Triangle contact retained: overlapDepth = %f\n", overlapDepth);
-            // }
+            if (overlapDepth > 0.5) {
+                ContactType = deme::NOT_A_CONTACT;
+            }
         }
 
     } else if constexpr (BType == deme::GEO_T_ANALYTICAL) {
