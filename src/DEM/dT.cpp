@@ -16,7 +16,6 @@
 #include <DEM/dT.h>
 #include <DEM/kT.h>
 #include <DEM/utils/HostSideHelpers.hpp>
-#include <kernel/DEMHelperKernels.cuh>
 #include <DEM/Defines.h>
 
 #include <algorithms/DEMStaticDeviceSubroutines.h>

@@ -1,7 +1,7 @@
 // DEM force computation related custom kernels
 #include <DEM/Defines.h>
-#include <DEMHelperKernels.cuh>
-#include <DEMCollisionKernels.cuh>
+#include <DEMCollisionKernels_SphSph.cuh>
+#include <DEMCollisionKernels_SphTri_TriTri.cuh>
 _kernelIncludes_;
 
 // If clump templates are jitified, they will be below

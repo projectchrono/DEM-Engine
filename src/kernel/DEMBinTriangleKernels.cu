@@ -1,6 +1,6 @@
 // DEM bin--sphere relations-related custom kernels
 #include <DEM/Defines.h>
-#include <DEMHelperKernels.cuh>
+#include <DEMCollisionKernels_SphTri_TriTri.cuh>
 #include <DEMTriangleBoxIntersect.cu>
 _kernelIncludes_;
 

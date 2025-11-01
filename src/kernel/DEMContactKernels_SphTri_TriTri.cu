@@ -1,7 +1,6 @@
 // DEM contact detection-related custom kernels
 #include <DEM/Defines.h>
-#include <DEMHelperKernels.cuh>
-#include <DEMCollisionKernels.cuh>
+#include <DEMCollisionKernels_SphTri_TriTri.cuh>
 _kernelIncludes_;
 
 // #include <cub/block/block_load.cuh>

@@ -1,10 +1,219 @@
 // DEM collision-related kernel collection
 
-#ifndef DEME_COLLI_KERNELS_CUH
-#define DEME_COLLI_KERNELS_CUH
+#ifndef DEME_COLLI_KERNELS_ST_TT_CUH
+#define DEME_COLLI_KERNELS_ST_TT_CUH
 
 #include <DEM/Defines.h>
 #include <DEMHelperKernels.cuh>
+
+// ------------------------------------------------------------------
+// Triangle-analytical object collision detection utilities
+// ------------------------------------------------------------------
+
+template <typename T1, typename T2>
+inline bool __device__ tri_plane_penetration(const T1** tri,
+                                             const T1& entityLoc,
+                                             const float3& entityDir,
+                                             T2& overlapDepth,
+                                             T2& overlapArea,
+                                             T1& contactPnt) {
+    // signed distances
+    T2 d[3];
+    // penetration depth: deepest point in triangle
+    T2 dmin = DEME_HUGE_FLOAT;
+#pragma unroll
+    for (int i = 0; i < 3; ++i) {
+        d[i] = planeSignedDistance<T2>(*tri[i], entityLoc, entityDir);
+        if (d[i] < dmin)
+            dmin = d[i];
+    }
+    // build clipped polygon
+    T1 poly[4];
+    int nNode = 0;                 // max 4 poly nodes
+    bool hasIntersection = false;  // one edge intersecting the plane
+#pragma unroll
+    for (int i = 0; i < 3; ++i) {
+        int j = (i + 1) % 3;  // compare with next vertex
+        bool in_i = (d[i] < 0.0);
+        bool in_j = (d[j] < 0.0);
+
+        // ^ means one is in, the other is out
+        if (in_i ^ in_j) {
+            T2 t = d[i] / (d[i] - d[j]);  // between 0 and 1
+            T1 inter = *tri[i] + (*tri[j] - *tri[i]) * t;
+            // Only register inside points once - project them onto the plane
+            if (in_i) {
+                // Project the submerging node onto the plane
+                T1 projectedNode = *tri[i] - d[i] * to_real3<float3, T1>(entityDir);
+                poly[nNode++] = projectedNode;
+            }
+            poly[nNode++] = inter;
+            hasIntersection = true;
+        }
+    }
+
+    // Handle the case where all three vertices are submerged (no edge crosses the plane)
+    if (!hasIntersection) {
+        // Check if all vertices are below the plane
+        bool allBelow = true;
+#pragma unroll
+        for (int i = 0; i < 3; ++i) {
+            if (d[i] >= 0.0) {
+                allBelow = false;
+                break;
+            }
+        }
+        if (allBelow) {
+            // All vertices are below the plane - project all three onto the plane
+#pragma unroll
+            for (int i = 0; i < 3; ++i) {
+                T1 projectedNode = *tri[i] - d[i] * to_real3<float3, T1>(entityDir);
+                poly[nNode++] = projectedNode;
+            }
+            hasIntersection = true;  // We now have a valid polygon
+        }
+    }
+
+    // centroid of contact
+    T1 centroid;
+    centroid.x = 0.;
+    centroid.y = 0.;
+    centroid.z = 0.;
+    if (hasIntersection) {  // If has intersection, centroid of the (inside) polygon
+        for (int i = 0; i < nNode; i++)
+            centroid = centroid + poly[i];
+        centroid = centroid / T2(nNode);
+    } else {  // If no intersection, centroid is just average of all tri verts
+#pragma unroll
+        for (int i = 0; i < 3; i++)
+            centroid = centroid + *tri[i];
+        centroid = centroid / T2(3);
+    }
+
+    // We use the convention that if in contact, overlapDepth is positive
+    overlapDepth = -dmin;
+    bool in_contact = (overlapDepth >= 0.);
+    // The centroid's projection to the plane
+    T1 projection =
+        centroid - planeSignedDistance<T2>(centroid, entityLoc, entityDir) * to_real3<float3, T1>(entityDir);
+
+    // Calculate the area of the clipping polygon using fan triangulation from centroid
+    overlapArea = 0.0;
+    if (hasIntersection && nNode >= 3) {
+        for (int i = 0; i < nNode; ++i) {
+            T1 v1 = poly[i] - centroid;
+            T1 v2 = poly[(i + 1) % nNode] - centroid;
+            T1 crossProd = cross(v1, v2);
+            overlapArea += sqrt(dot(crossProd, crossProd));
+        }
+        overlapArea *= 0.5;
+    }
+
+    // cntPnt is from the projection point, go half penetration depth.
+    // Note this penetration depth is signed, so if no contact, we go positive plane normal; if in contact, we go
+    // negative plane normal. As such, cntPnt always exists and this is important for the cases with extraMargin.
+    contactPnt = projection - (overlapDepth * 0.5) * to_real3<float3, T1>(entityDir);
+    return in_contact;
+}
+
+template <typename T1, typename T2>
+inline bool __device__ tri_cyl_penetration(const T1** tri,
+                                           const T1& entityLoc,
+                                           const float3& entityDir,
+                                           const float& entitySize1,
+                                           const float& entitySize2,
+                                           const float& normal_sign,
+                                           float3& contact_normal,
+                                           T2& overlapDepth,
+                                           T2& overlapArea,
+                                           T1& contactPnt) {
+    return false;
+}
+
+// Check only, no contact point, depth, area output
+template <typename T1>
+inline __host__ __device__ deme::contact_t checkTriEntityOverlap(const T1& A,
+                                                                 const T1& B,
+                                                                 const T1& C,
+                                                                 const deme::objType_t& typeB,
+                                                                 const T1& entityLoc,
+                                                                 const float3& entityDir,
+                                                                 const float& entitySize1,
+                                                                 const float& entitySize2,
+                                                                 const float& entitySize3,
+                                                                 const float& normal_sign,
+                                                                 const float& beta4Entity) {
+    const T1* tri[] = {&A, &B, &C};
+    switch (typeB) {
+        case (deme::ANAL_OBJ_TYPE_PLANE): {
+            for (const T1*& v : tri) {
+                // Always cast to double
+                double d = planeSignedDistance<double>(*v, entityLoc, entityDir);
+                double overlapDepth = beta4Entity - d;
+                // printf("v point %f %f %f, entityLoc %f %f %f\n", v->x, v->y, v->z, entityLoc.x, entityLoc.y,
+                // entityLoc.z);
+                if (overlapDepth >= 0.0)
+                    return deme::TRIANGLE_ANALYTICAL_CONTACT;
+            }
+            return deme::NOT_A_CONTACT;
+        }
+        case (deme::ANAL_OBJ_TYPE_PLATE): {
+            return deme::NOT_A_CONTACT;
+        }
+        case (deme::ANAL_OBJ_TYPE_CYL_INF): {
+            for (const T1*& v : tri) {
+                // Radial distance vector is from cylinder axis to a point
+                double3 vec = cylRadialDistanceVec<double3>(*v, entityLoc, entityDir);
+                // Also, inward normal is 1, outward is -1, so it's the signed dist from point to cylinder wall
+                // (positive if same orientation, negative if opposite)
+                double signed_dist = (entitySize1 - length(vec)) * normal_sign;
+                if (signed_dist <= beta4Entity)
+                    return deme::TRIANGLE_ANALYTICAL_CONTACT;
+            }
+            return deme::NOT_A_CONTACT;
+        }
+        default:
+            return deme::NOT_A_CONTACT;
+    }
+}
+
+// NOTE: Due to our algorithm needs a overlapDepth even in the case of no contact (because of extraMargin; and with
+// extraMargin, negative overlapDepth can be considered in-contact), our tri-anal CD algorithm needs to always return a
+// overlapDepth, even in the case of no contact. This is different from the usual CD algorithms which only return a
+// overlapDepth. Also unlike tri-sph contact which has a unified util function, calcTriEntityOverlap is different from
+// checkTriEntityOverlap.
+template <typename T1, typename T2>
+inline bool __device__ calcTriEntityOverlap(const T1& A,
+                                            const T1& B,
+                                            const T1& C,
+                                            const deme::objType_t& entityType,
+                                            const T1& entityLoc,
+                                            const float3& entityDir,
+                                            const float& entitySize1,
+                                            const float& entitySize2,
+                                            const float& entitySize3,
+                                            const float& normal_sign,
+                                            T1& contactPnt,
+                                            float3& contact_normal,
+                                            T2& overlapDepth,
+                                            T2& overlapArea) {
+    const T1* tri[] = {&A, &B, &C};
+    bool in_contact;
+    switch (entityType) {
+        case deme::ANAL_OBJ_TYPE_PLANE:
+            in_contact =
+                tri_plane_penetration<T1, T2>(tri, entityLoc, entityDir, overlapDepth, overlapArea, contactPnt);
+            // Plane contact's normal is always the plane's normal
+            contact_normal = entityDir;
+            return in_contact;
+        case deme::ANAL_OBJ_TYPE_CYL_INF:
+            in_contact = tri_cyl_penetration<T1, T2>(tri, entityLoc, entityDir, entitySize1, entitySize2, normal_sign,
+                                                     contact_normal, overlapDepth, overlapArea, contactPnt);
+            return in_contact;
+        default:
+            return false;
+    }
+}
 
 // -----------------------------------------------------------------
 // Triangle-sphere collision detection utilities
@@ -248,168 +457,6 @@ __device__ bool checkTriSphereOverlap_directional(const T1& A,           ///< Fi
         }
     }
     return in_contact;
-}
-
-// ------------------------------------------------------------------
-// Triangle-analytical object collision detection utilities
-// ------------------------------------------------------------------
-
-template <typename T1, typename T2>
-inline bool __device__ tri_plane_penetration(const T1** tri,
-                                             const T1& entityLoc,
-                                             const float3& entityDir,
-                                             T2& overlapDepth,
-                                             T2& overlapArea,
-                                             T1& contactPnt) {
-    // signed distances
-    T2 d[3];
-    // penetration depth: deepest point in triangle
-    T2 dmin = DEME_HUGE_FLOAT;
-#pragma unroll
-    for (int i = 0; i < 3; ++i) {
-        d[i] = planeSignedDistance<T2>(*tri[i], entityLoc, entityDir);
-        if (d[i] < dmin)
-            dmin = d[i];
-    }
-    // build clipped polygon
-    T1 poly[4];
-    int nNode = 0;                 // max 4 poly nodes
-    bool hasIntersection = false;  // one edge intersecting the plane
-#pragma unroll
-    for (int i = 0; i < 3; ++i) {
-        int j = (i + 1) % 3;  // compare with next vertex
-        bool in_i = (d[i] < 0.0);
-        bool in_j = (d[j] < 0.0);
-
-        // ^ means one is in, the other is out
-        if (in_i ^ in_j) {
-            T2 t = d[i] / (d[i] - d[j]);  // between 0 and 1
-            T1 inter = *tri[i] + (*tri[j] - *tri[i]) * t;
-            // Only register inside points once - project them onto the plane
-            if (in_i) {
-                // Project the submerging node onto the plane
-                T1 projectedNode = *tri[i] - d[i] * to_real3<float3, T1>(entityDir);
-                poly[nNode++] = projectedNode;
-            }
-            poly[nNode++] = inter;
-            hasIntersection = true;
-        }
-    }
-
-    // Handle the case where all three vertices are submerged (no edge crosses the plane)
-    if (!hasIntersection) {
-        // Check if all vertices are below the plane
-        bool allBelow = true;
-#pragma unroll
-        for (int i = 0; i < 3; ++i) {
-            if (d[i] >= 0.0) {
-                allBelow = false;
-                break;
-            }
-        }
-        if (allBelow) {
-            // All vertices are below the plane - project all three onto the plane
-#pragma unroll
-            for (int i = 0; i < 3; ++i) {
-                T1 projectedNode = *tri[i] - d[i] * to_real3<float3, T1>(entityDir);
-                poly[nNode++] = projectedNode;
-            }
-            hasIntersection = true;  // We now have a valid polygon
-        }
-    }
-
-    // centroid of contact
-    T1 centroid;
-    centroid.x = 0.;
-    centroid.y = 0.;
-    centroid.z = 0.;
-    if (hasIntersection) {  // If has intersection, centroid of the (inside) polygon
-        for (int i = 0; i < nNode; i++)
-            centroid = centroid + poly[i];
-        centroid = centroid / T2(nNode);
-    } else {  // If no intersection, centroid is just average of all tri verts
-#pragma unroll
-        for (int i = 0; i < 3; i++)
-            centroid = centroid + *tri[i];
-        centroid = centroid / T2(3);
-    }
-
-    // We use the convention that if in contact, overlapDepth is positive
-    overlapDepth = -dmin;
-    bool in_contact = (overlapDepth >= 0.);
-    // The centroid's projection to the plane
-    T1 projection =
-        centroid - planeSignedDistance<T2>(centroid, entityLoc, entityDir) * to_real3<float3, T1>(entityDir);
-
-    // Calculate the area of the clipping polygon using fan triangulation from centroid
-    overlapArea = 0.0;
-    if (hasIntersection && nNode >= 3) {
-        for (int i = 0; i < nNode; ++i) {
-            T1 v1 = poly[i] - centroid;
-            T1 v2 = poly[(i + 1) % nNode] - centroid;
-            T1 crossProd = cross(v1, v2);
-            overlapArea += sqrt(dot(crossProd, crossProd));
-        }
-        overlapArea *= 0.5;
-    }
-
-    // cntPnt is from the projection point, go half penetration depth.
-    // Note this penetration depth is signed, so if no contact, we go positive plane normal; if in contact, we go
-    // negative plane normal. As such, cntPnt always exists and this is important for the cases with extraMargin.
-    contactPnt = projection - (overlapDepth * 0.5) * to_real3<float3, T1>(entityDir);
-    return in_contact;
-}
-
-template <typename T1, typename T2>
-inline bool __device__ tri_cyl_penetration(const T1** tri,
-                                           const T1& entityLoc,
-                                           const float3& entityDir,
-                                           const float& entitySize1,
-                                           const float& entitySize2,
-                                           const float& normal_sign,
-                                           float3& contact_normal,
-                                           T2& overlapDepth,
-                                           T2& overlapArea,
-                                           T1& contactPnt) {
-    return false;
-}
-
-// NOTE: Due to our algorithm needs a overlapDepth even in the case of no contact (because of extraMargin; and with
-// extraMargin, negative overlapDepth can be considered in-contact), our tri-anal CD algorithm needs to always return a
-// overlapDepth, even in the case of no contact. This is different from the usual CD algorithms which only return a
-// overlapDepth. Also unlike tri-sph contact which has a unified util function, calcTriEntityOverlap is different from
-// checkTriEntityOverlap.
-template <typename T1, typename T2>
-inline bool __device__ calcTriEntityOverlap(const T1& A,
-                                            const T1& B,
-                                            const T1& C,
-                                            const deme::objType_t& entityType,
-                                            const T1& entityLoc,
-                                            const float3& entityDir,
-                                            const float& entitySize1,
-                                            const float& entitySize2,
-                                            const float& entitySize3,
-                                            const float& normal_sign,
-                                            T1& contactPnt,
-                                            float3& contact_normal,
-                                            T2& overlapDepth,
-                                            T2& overlapArea) {
-    const T1* tri[] = {&A, &B, &C};
-    bool in_contact;
-    switch (entityType) {
-        case deme::ANAL_OBJ_TYPE_PLANE:
-            in_contact =
-                tri_plane_penetration<T1, T2>(tri, entityLoc, entityDir, overlapDepth, overlapArea, contactPnt);
-            // Plane contact's normal is always the plane's normal
-            contact_normal = entityDir;
-            return in_contact;
-        case deme::ANAL_OBJ_TYPE_CYL_INF:
-            in_contact = tri_cyl_penetration<T1, T2>(tri, entityLoc, entityDir, entitySize1, entitySize2, normal_sign,
-                                                     contact_normal, overlapDepth, overlapArea, contactPnt);
-            return in_contact;
-        default:
-            return false;
-    }
 }
 
 // -----------------------------------------------------------------------------
