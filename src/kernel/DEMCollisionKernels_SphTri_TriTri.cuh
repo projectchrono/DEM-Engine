@@ -567,12 +567,12 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
         bool in_j = (incDists[j] < 0.0);
 
         // Add submerged vertex (projected onto plane)
-        if (in_i) {
+        if (in_i && nPoly < MAX_CLIPPING_VERTICES) {
             projectedPoly[nPoly++] = incTri[i] - refNormal * incDists[i];
         }
 
         // Add edge-plane intersection if edge crosses the plane
-        if (in_i != in_j) {
+        if (in_i != in_j && nPoly < MAX_CLIPPING_VERTICES) {
             T2 denom = incDists[i] - incDists[j];
             if (denom != T2(0.0)) {  // Avoid division by zero
                 T2 t = incDists[i] / denom;
@@ -618,10 +618,10 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
             bool in1 = (d1 >= -DEME_TINY_FLOAT);
             bool in2 = (d2 >= -DEME_TINY_FLOAT);
 
-            if (in1) {
+            if (in1 && numOutputVerts < MAX_CLIPPING_VERTICES) {
                 outputPoly[numOutputVerts++] = v1;
             }
-            if (in1 != in2) {
+            if (in1 != in2 && numOutputVerts < MAX_CLIPPING_VERTICES) {
                 T2 denom = d1 - d2;
                 if (denom != T2(0.0)) {  // Avoid division by zero
                     T2 t = d1 / denom;
