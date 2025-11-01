@@ -7,7 +7,9 @@
 #include <DEMHelperKernels.cuh>
 
 // Maximum vertices in a triangle-triangle clipping polygon
-// (3 original vertices + 3 potential edge intersections from each triangle)
+// Sutherland-Hodgman clipping can produce up to (n+m) vertices where n and m are 
+// the number of vertices in the input polygons. For triangle-triangle clipping,
+// we conservatively use 9 (more than the theoretical max of 6) for safety.
 #define MAX_CLIPPING_VERTICES 9
 
 // ------------------------------------------------------------------
@@ -916,7 +918,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
             normal = nA;
         }
         
-        // Contact point: midpoint between the two centroids, adjusted by half depth
+        // Contact point: midpoint between the two centroids
         T1 midCentroid = (centroidBA + centroidAB) / T2(2.0);
         point = midCentroid;
     } else if (contactBA) {
