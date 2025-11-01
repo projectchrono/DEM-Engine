@@ -244,42 +244,6 @@ inline __host__ __device__ void HamiltonProduct(T1& A,
     D = a1 * d2 + b1 * c2 - c1 * b2 + d1 * a2;
 }
 
-/*
-// This version of checkSpheresOverlap is not used anymore for code clarity, and the fact that every use case now
-// requires overlapDepth.
-template <typename T1>
-inline __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
-                                                      const T1& YA,
-                                                      const T1& ZA,
-                                                      const T1& radA,
-                                                      const T1& XB,
-                                                      const T1& YB,
-                                                      const T1& ZB,
-                                                      const T1& radB,
-                                                      T1& CPX,
-                                                      T1& CPY,
-                                                      T1& CPZ) {
-    T1 centerDist2 = distSquared<T1>(XA, YA, ZA, XB, YB, ZB);
-    deme::contact_t contactType;
-    if (centerDist2 > (radA + radB) * (radA + radB)) {
-        contactType = deme::NOT_A_CONTACT;
-    } else {
-        contactType = deme::SPHERE_SPHERE_CONTACT;
-    }
-    // If getting this far, then 2 spheres have an intersection, let's calculate the intersection point
-    float B2AVecX = XA - XB;
-    float B2AVecY = YA - YB;
-    float B2AVecZ = ZA - ZB;
-    normalizeVector3<float>(B2AVecX, B2AVecY, B2AVecZ);
-    T1 halfOverlapDepth = (radA + radB - sqrt(centerDist2)) / (T1)2;
-    // From center of B, towards center of A, move a distance of radB, then backtrack a bit, for half the overlap depth
-    CPX = XB + (radB - halfOverlapDepth) * B2AVecX;
-    CPY = YB + (radB - halfOverlapDepth) * B2AVecY;
-    CPZ = ZB + (radB - halfOverlapDepth) * B2AVecZ;
-    return contactType;
-}
-*/
-
 /**
  * Template arguments:
  *   - T1: the floating point accuracy level for contact point location/penetration depth
@@ -304,7 +268,8 @@ inline __host__ __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
                                                                T2& normalX,
                                                                T2& normalY,
                                                                T2& normalZ,
-                                                               T1& overlapDepth) {
+                                                               T1& overlapDepth,
+                                                               T1& overlapArea) {
     T1 centerDist2 = distSquared<T1>(XA, YA, ZA, XB, YB, ZB);
     deme::contact_t contactType;
     if (centerDist2 > (radA + radB) * (radA + radB)) {
@@ -318,6 +283,10 @@ inline __host__ __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
     normalZ = ZA - ZB;
     normalizeVector3<T2>(normalX, normalY, normalZ);
     overlapDepth = radA + radB - sqrt(centerDist2);
+    // overlap area in the sph-sph case will involve only half the overlap depth
+    // overlapArea = deme::PI * (radA * radA - (radA - overlapDepth / (T1)2) * (radA - overlapDepth / (T1)2));
+    // Simplify it...
+    overlapArea = deme::PI * (radA * overlapDepth - overlapDepth * overlapDepth / (T1)4);
     // From center of B, towards center of A, move a distance of radB, then backtrack a bit, for half the overlap depth
     CPX = XB + (radB - overlapDepth / (T1)2) * normalX;
     CPY = YB + (radB - overlapDepth / (T1)2) * normalY;
@@ -488,7 +457,8 @@ inline __host__ __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
                                                                     const float& beta4Entity,
                                                                     T1& CP,
                                                                     float3& cntNormal,
-                                                                    T3& overlapDepth) {
+                                                                    T3& overlapDepth,
+                                                                    T3& overlapArea) {
     deme::contact_t contactType;
     switch (typeB) {
         case (deme::ANAL_OBJ_TYPE_PLANE): {
@@ -497,10 +467,13 @@ inline __host__ __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             overlapDepth = (radA + beta4Entity - dist);
             if (overlapDepth < 0.0) {
                 contactType = deme::NOT_A_CONTACT;
+                overlapArea = 0.0;
             } else {
                 contactType = deme::SPHERE_ANALYTICAL_CONTACT;
+                // Approximate overlap area as circle area
+                overlapArea = deme::PI * (radA * radA - (dist - beta4Entity) * (dist - beta4Entity));
             }
-            // From sphere center, go along negative plane normal for (dist + overlapDepth / 2)
+            // From sphere center, go along reverse plane normal for (dist + overlapDepth / 2)
             CP = A - to_real3<float3, T1>(dirB * (dist + overlapDepth / 2.0));
             // Contact normal (B to A) is the same as plane normal
             cntNormal = dirB;
@@ -515,8 +488,13 @@ inline __host__ __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             overlapDepth = radA - abs(size1B - dist_delta_r - beta4Entity);
             if (overlapDepth <= DEME_TINY_FLOAT) {
                 contactType = deme::NOT_A_CONTACT;
+                overlapArea = 0.0;
             } else {
                 contactType = deme::SPHERE_ANALYTICAL_CONTACT;
+                // Approximate overlap area as circle area
+                // overlapArea = deme::PI * (radA * radA - (radA - overlapDepth) * (radA - overlapDepth));
+                // Simplify it...
+                overlapArea = deme::PI * (2.0 * radA * overlapDepth - overlapDepth * overlapDepth);
             }
             // dist_delta_r is 0 only when cylinder is thinner than sphere rad...
             // Also, inward normal is 1, outward is -1, so flip normal_sign for B2A vector

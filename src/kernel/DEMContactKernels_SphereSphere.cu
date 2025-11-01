@@ -74,10 +74,11 @@ inline __device__ bool calcContactPoint(deme::DEMSimParams* simParams,
     float normY;
     float normZ;
     double overlapDepth;  // overlapDepth is needed for making artificial contacts not too loose.
+    double overlapArea;   // overlapArea is just a placeholder for calling the function
 
     //// TODO: I guess <float, float> is fine too.
     in_contact = checkSpheresOverlap<double, float>(XA, YA, ZA, rA, XB, YB, ZB, rB, contactPntX, contactPntY,
-                                                    contactPntZ, normX, normY, normZ, overlapDepth);
+                                                    contactPntZ, normX, normY, normZ, overlapDepth, overlapArea);
 
     // The contact needs to be larger than the smaller articifical margin so that we don't double count the artificially
     // added margin. This is a design choice, to avoid having too many contact pairs when adding artificial margins.

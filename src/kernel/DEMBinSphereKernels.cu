@@ -106,7 +106,7 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                                                     ownerOriQz);
             double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
 
-            double overlapDepth;
+            double overlapDepth, overlapArea;  // overlapArea matters not here
             deme::contact_t contact_type;
             {
                 double3 cntPnt;  // cntPnt here is a placeholder
@@ -114,7 +114,7 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                 contact_type = checkSphereEntityOverlap<double3, float, double>(
                     myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
                     objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner],
-                    cntPnt, cntNorm, overlapDepth);
+                    cntPnt, cntNorm, overlapDepth, overlapArea);
             }
             // overlapDepth (which has both entities' full margins) needs to be larger than the smaller one of the two
             // added margin to be considered in-contact.
@@ -243,7 +243,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                                                     ownerOriQz);
             double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
 
-            double overlapDepth;
+            double overlapDepth, overlapArea;  // overlapArea matters not here
             deme::contact_t contact_type;
             {
                 double3 cntPnt;  // cntPnt here is a placeholder
@@ -251,7 +251,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                 contact_type = checkSphereEntityOverlap<double3, float, double>(
                     myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
                     objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner],
-                    cntPnt, cntNorm, overlapDepth);
+                    cntPnt, cntNorm, overlapDepth, overlapArea);
             }
             // overlapDepth (which has both entities' full margins) needs to be larger than the smaller one of the two
             // added margin to be considered in-contact.

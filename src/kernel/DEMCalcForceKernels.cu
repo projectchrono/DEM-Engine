@@ -186,7 +186,7 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
         // If B is a sphere, then A can only be a sphere
         checkSpheresOverlap<double, float>(bodyAPos.x, bodyAPos.y, bodyAPos.z, ARadius, bodyBPos.x, bodyBPos.y,
                                            bodyBPos.z, BRadius, contactPnt.x, contactPnt.y, contactPnt.z, B2A.x, B2A.y,
-                                           B2A.z, overlapDepth);
+                                           B2A.z, overlapDepth, overlapArea);
         // If overlapDepth is negative then it might still be considered in contact, if the extra margins of A and B
         // combined is larger than abs(overlapDepth)
         if (overlapDepth < -extraMarginSize) {
@@ -240,9 +240,13 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
         // If B is a triangle, then A can be a sphere or a triangle.
         if constexpr (AType == deme::GEO_T_SPHERE) {
             double3 contact_normal;
-            // Note checkTriSphereOverlap gives positive number for overlapping cases
-            bool in_contact = checkTriSphereOverlap<double3, double>(triBNode1, triBNode2, triBNode3, bodyAPos, ARadius,
-                                                                     contact_normal, overlapDepth, contactPnt);
+            // Note checkTriSphereOverlap gives positive number for overlapping cases.
+            // Using checkTriSphereOverlap rather than the directional version is effectively saying if the overlap is
+            // more than 2R, we don't want it; this is useful in preventing contact being detection from the other side
+            // of a thin mesh.
+            bool in_contact =
+                checkTriSphereOverlap<double3, double>(triBNode1, triBNode2, triBNode3, bodyAPos, ARadius,
+                                                       contact_normal, overlapDepth, overlapArea, contactPnt);
             B2A = to_float3(contact_normal);
 
             // If the solver says in contact, we do not question it
@@ -319,9 +323,9 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
         // If B is an analytical entity, then A can be a sphere or a triangle.
         if constexpr (AType == deme::GEO_T_SPHERE) {
             // Note for this test on dT side we don't enlarge entities
-            checkSphereEntityOverlap<double3, float, double>(bodyAPos, ARadius, objType[sphereID], bodyBPos, bodyBRot,
-                                                             objSize1[sphereID], objSize2[sphereID], objSize3[sphereID],
-                                                             objNormal[sphereID], 0.0, contactPnt, B2A, overlapDepth);
+            checkSphereEntityOverlap<double3, float, double>(
+                bodyAPos, ARadius, objType[sphereID], bodyBPos, bodyBRot, objSize1[sphereID], objSize2[sphereID],
+                objSize3[sphereID], objNormal[sphereID], 0.0, contactPnt, B2A, overlapDepth, overlapArea);
             // Fix ContactType if needed
             if (overlapDepth < -extraMarginSize) {
                 ContactType = deme::NOT_A_CONTACT;

@@ -108,6 +108,7 @@ __device__ bool checkTriSphereOverlap(const T1& A,           ///< First vertex o
                                       const T2 radius,       ///< Sphere radius
                                       T1& normal,            ///< contact normal
                                       T2& depth,             ///< penetration (positive if in contact)
+                                      T2& overlapArea,       ///< overlap area
                                       T1& pt1                ///< contact point on triangle
 ) {
     // Calculate face normal using RHR
@@ -139,6 +140,8 @@ __device__ bool checkTriSphereOverlap(const T1& A,           ///< First vertex o
         } else {
             in_contact = true;
         }
+        // overlapArea = deme::PI * (radius * radius - (radius - depth) * (radius - depth));
+        // Simplify it and assign it at the end of this call
     } else {
         // printf("EDGE CONTACT\n");
         // Nearest point on the triangle is on an edge
@@ -159,7 +162,10 @@ __device__ bool checkTriSphereOverlap(const T1& A,           ///< First vertex o
         } else {
             in_contact = true;
         }
+        // In the edge case, overlapArea is a bit tricky to define accurately.
+        // Here we still just approximate it as a circle area.
     }
+    overlapArea = deme::PI * (2.0 * radius * depth - depth * depth);
     return in_contact;
 }
 
