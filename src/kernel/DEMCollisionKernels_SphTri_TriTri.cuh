@@ -6,12 +6,6 @@
 #include <DEM/Defines.h>
 #include <DEMHelperKernels.cuh>
 
-// Maximum vertices in a triangle-triangle clipping polygon
-// Sutherland-Hodgman clipping can produce up to (n+m) vertices where n and m are 
-// the number of vertices in the input polygons. For triangle-triangle clipping,
-// we conservatively use 9 (more than the theoretical max of 6) for safety.
-#define MAX_CLIPPING_VERTICES 9
-
 // ------------------------------------------------------------------
 // Triangle-analytical object collision detection utilities
 // ------------------------------------------------------------------
@@ -549,16 +543,22 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
 
     // If no vertices are submerged, no contact
     if (numSubmerged == 0) {
-        depth = T2(0.0);
-        area = T2(0.0);
-        centroid.x = T2(0.0);
-        centroid.y = T2(0.0);
-        centroid.z = T2(0.0);
+        // depth = T2(0.0);
+        // area = T2(0.0);
+        // centroid.x = T2(0.0);
+        // centroid.y = T2(0.0);
+        // centroid.z = T2(0.0);
         return false;
     }
 
+    // Maximum vertices in a triangle-triangle clipping polygon
+    // Sutherland-Hodgman clipping can produce up to (n+m) vertices where n and m are
+    // the number of vertices in the input polygons. For triangle-triangle clipping,
+    // we conservatively use 9 (more than the theoretical max of 6) for safety.
+    const unsigned short int SH_MAX_CLIPPING_VERTICES = 9;
+
     // Build polygon from projected submerged vertices and edge-plane intersections
-    T1 projectedPoly[MAX_CLIPPING_VERTICES];
+    T1 projectedPoly[SH_MAX_CLIPPING_VERTICES];
     int nPoly = 0;
 
     // Process each edge of the incident triangle
@@ -569,12 +569,12 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
         bool in_j = (incDists[j] < 0.0);
 
         // Add submerged vertex (projected onto plane)
-        if (in_i && nPoly < MAX_CLIPPING_VERTICES) {
+        if (in_i && nPoly < SH_MAX_CLIPPING_VERTICES) {
             projectedPoly[nPoly++] = incTri[i] - refNormal * incDists[i];
         }
 
         // Add edge-plane intersection if edge crosses the plane
-        if (in_i != in_j && nPoly < MAX_CLIPPING_VERTICES) {
+        if (in_i != in_j && nPoly < SH_MAX_CLIPPING_VERTICES) {
             T2 denom = incDists[i] - incDists[j];
             if (denom != T2(0.0)) {  // Avoid division by zero
                 T2 t = incDists[i] / denom;
@@ -586,20 +586,20 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
 
     // If we don't have at least 3 vertices, no valid polygon
     if (nPoly < 3) {
-        depth = maxPenetration;
-        area = T2(0.0);
-        centroid = (incTri[0] + incTri[1] + incTri[2]) / T2(3.0);
-        return true;
+        // depth = maxPenetration;
+        // area = T2(0.0);
+        // centroid = (incTri[0] + incTri[1] + incTri[2]) / T2(3.0);
+        return false;
     }
 
     // Now clip the projected polygon against the reference triangle using Sutherland-Hodgman
-    T1 inputPoly[MAX_CLIPPING_VERTICES];
+    T1 inputPoly[SH_MAX_CLIPPING_VERTICES];
     for (int i = 0; i < nPoly; ++i) {
         inputPoly[i] = projectedPoly[i];
     }
     int numInputVerts = nPoly;
 
-    T1 outputPoly[MAX_CLIPPING_VERTICES];
+    T1 outputPoly[SH_MAX_CLIPPING_VERTICES];
     for (int edge = 0; edge < 3; ++edge) {
         int numOutputVerts = 0;
         T1 edgeStart = refTri[edge];
@@ -620,10 +620,10 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
             bool in1 = (d1 >= -DEME_TINY_FLOAT);
             bool in2 = (d2 >= -DEME_TINY_FLOAT);
 
-            if (in1 && numOutputVerts < MAX_CLIPPING_VERTICES) {
+            if (in1 && numOutputVerts < SH_MAX_CLIPPING_VERTICES) {
                 outputPoly[numOutputVerts++] = v1;
             }
-            if (in1 != in2 && numOutputVerts < MAX_CLIPPING_VERTICES) {
+            if (in1 != in2 && numOutputVerts < SH_MAX_CLIPPING_VERTICES) {
                 T2 denom = d1 - d2;
                 if (denom != T2(0.0)) {  // Avoid division by zero
                     T2 t = d1 / denom;
@@ -650,6 +650,7 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
     centroid.z = T2(0.0);
 
     area = T2(0.0);
+    depth = maxPenetration;
     if (numInputVerts >= 3) {
         for (int i = 0; i < numInputVerts; ++i) {
             centroid = centroid + inputPoly[i];
@@ -664,13 +665,12 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
             area += sqrt(dot(crossProd, crossProd));
         }
         area *= T2(0.5);
+        return true;
     } else {
         // Degenerate clipping polygon
-        centroid = (incTri[0] + incTri[1] + incTri[2]) / T2(3.0);
+        // centroid = (incTri[0] + incTri[1] + incTri[2]) / T2(3.0);
+        return false;
     }
-
-    depth = maxPenetration;
-    return true;
 }
 
 /**
@@ -827,15 +827,11 @@ inline __device__ bool checkTriangleTriangleOverlap(
     const T1& A2,
     const T1& B2,
     const T1& C2,
-    T1& normal,                      ///< contact normal
+    T1& normal,                      ///< contact normal (B2A direction)
     T2& depth,                       ///< penetration (positive if in contact)
     T2& projectedArea,               ///< projected area of clipping polygon (optional output)
     T1& point,                       ///< contact point
-    bool& shouldDropContact,         ///< true if solver thinks this true contact is redundant
     bool outputNoContact = false) {  ///< output info even when no contact
-    // Default: don't drop contact
-    shouldDropContact = false;
-
     // Triangle A vertices (tri1)
     const T1 triA[3] = {A1, B1, C1};
     // Triangle B vertices (tri2)
@@ -903,21 +899,21 @@ inline __device__ bool checkTriangleTriangleOverlap(
         // Both directions have contact - average the results
         depth = (depthBA + depthAB) / T2(2.0);
         projectedArea = (areaBA + areaAB) / T2(2.0);
-        
+
         // Contact normal: average of the two normals (pointing from B to A)
-        // Note: nA points outward from A, so when B is submerged below A, nA is the contact normal
-        // Similarly, -nB is the contact normal when A is submerged below B
-        T1 normalBA = nA;
-        T1 normalAB = nB * T2(-1.0);
+        // Note: nA points outward from A, so when B is submerged below A, B2A is the inverse of nA
+        // Similarly, nB is the contact normal when A is submerged below B
+        T1 normalBA = -1.0 * nA;
+        T1 normalAB = nB;
         T1 normalSum = normalBA + normalAB;
         T2 normalSumLen2 = dot(normalSum, normalSum);
         if (normalSumLen2 > DEME_TINY_FLOAT) {
             normal = normalSum * rsqrt(normalSumLen2);
         } else {
             // Normals are nearly opposite - use one of them
-            normal = nA;
+            normal = nB;
         }
-        
+
         // Contact point: midpoint between the two centroids
         T1 midCentroid = (centroidBA + centroidAB) / T2(2.0);
         point = midCentroid;
@@ -925,20 +921,18 @@ inline __device__ bool checkTriangleTriangleOverlap(
         // Only B->A projection has contact
         depth = depthBA;
         projectedArea = areaBA;
-        normal = nA;
-        
+        normal = -1.0 * nA;  // Pay attention to direction
+
         // Contact point: centroid on A's plane, moved back by half depth
-        T2 centroidDist = dot(centroidBA - triA[0], nA);
-        point = centroidBA - nA * (centroidDist + depth * T2(0.5));
+        point = centroidBA - nA * (depth * T2(0.5));
     } else {
         // Only A->B projection has contact
         depth = depthAB;
         projectedArea = areaAB;
-        normal = nB * T2(-1.0);  // Normal points from B to A
-        
+        normal = nB;
+
         // Contact point: centroid on B's plane, moved back by half depth
-        T2 centroidDist = dot(centroidAB - triB[0], nB);
-        point = centroidAB - nB * (centroidDist + depth * T2(0.5));
+        point = centroidAB - nB * (depth * T2(0.5));
     }
 
     return true;
