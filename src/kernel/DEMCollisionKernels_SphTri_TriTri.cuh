@@ -6,6 +6,10 @@
 #include <DEM/Defines.h>
 #include <DEMHelperKernels.cuh>
 
+// Maximum vertices in a triangle-triangle clipping polygon
+// (3 original vertices + 3 potential edge intersections from each triangle)
+#define MAX_CLIPPING_VERTICES 9
+
 // ------------------------------------------------------------------
 // Triangle-analytical object collision detection utilities
 // ------------------------------------------------------------------
@@ -552,7 +556,7 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
     }
 
     // Build polygon from projected submerged vertices and edge-plane intersections
-    T1 projectedPoly[9];
+    T1 projectedPoly[MAX_CLIPPING_VERTICES];
     int nPoly = 0;
 
     // Process each edge of the incident triangle
@@ -569,9 +573,12 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
 
         // Add edge-plane intersection if edge crosses the plane
         if (in_i != in_j) {
-            T2 t = incDists[i] / (incDists[i] - incDists[j]);
-            T1 inter = incTri[i] + (incTri[j] - incTri[i]) * t;
-            projectedPoly[nPoly++] = inter;
+            T2 denom = incDists[i] - incDists[j];
+            if (denom != T2(0.0)) {  // Avoid division by zero
+                T2 t = incDists[i] / denom;
+                T1 inter = incTri[i] + (incTri[j] - incTri[i]) * t;
+                projectedPoly[nPoly++] = inter;
+            }
         }
     }
 
@@ -584,13 +591,13 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
     }
 
     // Now clip the projected polygon against the reference triangle using Sutherland-Hodgman
-    T1 inputPoly[9];
+    T1 inputPoly[MAX_CLIPPING_VERTICES];
     for (int i = 0; i < nPoly; ++i) {
         inputPoly[i] = projectedPoly[i];
     }
     int numInputVerts = nPoly;
 
-    T1 outputPoly[9];
+    T1 outputPoly[MAX_CLIPPING_VERTICES];
     for (int edge = 0; edge < 3; ++edge) {
         int numOutputVerts = 0;
         T1 edgeStart = refTri[edge];
@@ -615,9 +622,12 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
                 outputPoly[numOutputVerts++] = v1;
             }
             if (in1 != in2) {
-                T2 t = d1 / (d1 - d2);
-                T1 inter = v1 + (v2 - v1) * t;
-                outputPoly[numOutputVerts++] = inter;
+                T2 denom = d1 - d2;
+                if (denom != T2(0.0)) {  // Avoid division by zero
+                    T2 t = d1 / denom;
+                    T1 inter = v1 + (v2 - v1) * t;
+                    outputPoly[numOutputVerts++] = inter;
+                }
             }
         }
 
@@ -897,7 +907,14 @@ inline __device__ bool checkTriangleTriangleOverlap(
         // Similarly, -nB is the contact normal when A is submerged below B
         T1 normalBA = nA;
         T1 normalAB = nB * T2(-1.0);
-        normal = normalize(normalBA + normalAB);
+        T1 normalSum = normalBA + normalAB;
+        T2 normalSumLen2 = dot(normalSum, normalSum);
+        if (normalSumLen2 > DEME_TINY_FLOAT) {
+            normal = normalSum * rsqrt(normalSumLen2);
+        } else {
+            // Normals are nearly opposite - use one of them
+            normal = nA;
+        }
         
         // Contact point: midpoint between the two centroids, adjusted by half depth
         T1 midCentroid = (centroidBA + centroidAB) / T2(2.0);
