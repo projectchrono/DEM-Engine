@@ -854,6 +854,10 @@ inline __device__ bool checkTriangleTriangleOverlap(
     // and clip using Sutherland-Hodgman algorithm
     // ========================================================================
 
+    // Calculate reference triangle areas for axis hygiene check
+    T2 areaRefA = T2(0.5) * sqrt(lenA2);
+    T2 areaRefB = T2(0.5) * sqrt(lenB2);
+    
     // Project triangle B onto triangle A's plane and clip against A
     T2 depthBA, areaBA;
     T1 centroidBA;
@@ -863,6 +867,92 @@ inline __device__ bool checkTriangleTriangleOverlap(
     T2 depthAB, areaAB;
     T1 centroidAB;
     bool contactAB = projectTriangleOntoTriangle<T1, T2>(triA, triB, nB, depthAB, areaAB, centroidAB);
+    
+    // Axis hygiene check: if projected area is suspiciously small, verify stability with rotated trials
+    const T2 SUSPICIOUS_AREA_THRESHOLD = T2(0.05);  // 5% of reference area
+    const T2 ROTATION_ANGLE = T2(0.1);  // Small rotation angle in radians (~5.7 degrees)
+    
+    if (contactBA && areaBA < SUSPICIOUS_AREA_THRESHOLD * areaRefA) {
+        // Suspicious overlap - perform stability check with 4 trial rotations
+        T2 minArea = areaBA;
+        
+        // Find two orthogonal directions in the plane of triangle A
+        T1 edge0 = triA[1] - triA[0];
+        T2 edge0Len2 = dot(edge0, edge0);
+        if (edge0Len2 > DEME_TINY_FLOAT) {
+            T1 tangent1 = edge0 * rsqrt(edge0Len2);
+            T1 tangent2 = cross(nA, tangent1);
+            
+            // Try 4 rotations: +/- rotation around tangent1 and tangent2
+            for (int dir = 0; dir < 2; ++dir) {
+                T1 axis = (dir == 0) ? tangent1 : tangent2;
+                for (int sign = -1; sign <= 1; sign += 2) {
+                    T2 angle = T2(sign) * ROTATION_ANGLE;
+                    // Rodrigues rotation formula: v' = v*cos(θ) + (k×v)*sin(θ) + k*(k·v)*(1-cos(θ))
+                    T2 cosAngle = cos(angle);
+                    T2 sinAngle = sin(angle);
+                    T1 rotatedNormal = nA * cosAngle + cross(axis, nA) * sinAngle;
+                    
+                    T2 trialDepth, trialArea;
+                    T1 trialCentroid;
+                    bool trialContact = projectTriangleOntoTriangle<T1, T2>(triB, triA, rotatedNormal, trialDepth, trialArea, trialCentroid);
+                    
+                    if (trialContact && trialArea < minArea) {
+                        minArea = trialArea;
+                    } else if (!trialContact) {
+                        minArea = T2(0.0);
+                        break;
+                    }
+                }
+            }
+            
+            areaBA = minArea;
+            if (minArea <= DEME_TINY_FLOAT) {
+                contactBA = false;
+            }
+        }
+    }
+    
+    if (contactAB && areaAB < SUSPICIOUS_AREA_THRESHOLD * areaRefB) {
+        // Suspicious overlap - perform stability check with 4 trial rotations
+        T2 minArea = areaAB;
+        
+        // Find two orthogonal directions in the plane of triangle B
+        T1 edge0 = triB[1] - triB[0];
+        T2 edge0Len2 = dot(edge0, edge0);
+        if (edge0Len2 > DEME_TINY_FLOAT) {
+            T1 tangent1 = edge0 * rsqrt(edge0Len2);
+            T1 tangent2 = cross(nB, tangent1);
+            
+            // Try 4 rotations: +/- rotation around tangent1 and tangent2
+            for (int dir = 0; dir < 2; ++dir) {
+                T1 axis = (dir == 0) ? tangent1 : tangent2;
+                for (int sign = -1; sign <= 1; sign += 2) {
+                    T2 angle = T2(sign) * ROTATION_ANGLE;
+                    // Rodrigues rotation formula: v' = v*cos(θ) + (k×v)*sin(θ) + k*(k·v)*(1-cos(θ))
+                    T2 cosAngle = cos(angle);
+                    T2 sinAngle = sin(angle);
+                    T1 rotatedNormal = nB * cosAngle + cross(axis, nB) * sinAngle;
+                    
+                    T2 trialDepth, trialArea;
+                    T1 trialCentroid;
+                    bool trialContact = projectTriangleOntoTriangle<T1, T2>(triA, triB, rotatedNormal, trialDepth, trialArea, trialCentroid);
+                    
+                    if (trialContact && trialArea < minArea) {
+                        minArea = trialArea;
+                    } else if (!trialContact) {
+                        minArea = T2(0.0);
+                        break;
+                    }
+                }
+            }
+            
+            areaAB = minArea;
+            if (minArea <= DEME_TINY_FLOAT) {
+                contactAB = false;
+            }
+        }
+    }
 
     // Determine if there is contact
     bool inContact = contactBA || contactAB;
