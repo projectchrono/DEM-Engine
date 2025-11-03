@@ -606,10 +606,7 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
         T1 edgeEnd = refTri[(edge + 1) % 3];
         T1 edgeDir = edgeEnd - edgeStart;
         T1 edgeNormal = cross(refNormal, edgeDir);
-        T2 edgeNormalLen2 = dot(edgeNormal, edgeNormal);
-        if (edgeNormalLen2 > DEME_TINY_FLOAT) {
-            edgeNormal = edgeNormal * rsqrt(edgeNormalLen2);
-        }
+        edgeNormal = normalize(edgeNormal);
 
         // Clip input polygon against this edge
         for (int i = 0; i < numInputVerts; ++i) {
@@ -650,6 +647,7 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
     centroid.z = T2(0.0);
 
     area = T2(0.0);
+    depth = maxPenetration;
     if (numInputVerts >= 3) {
         for (int i = 0; i < numInputVerts; ++i) {
             centroid = centroid + inputPoly[i];
@@ -664,38 +662,6 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
             area += sqrt(dot(crossProd, crossProd));
         }
         area *= T2(0.5);
-
-        // Calculate 2D MTV: minimum distance to move the clipped polygon away from reference triangle
-        // This prevents artifacts from "side strips" where tiny edge penetrations create large forces
-        T2 minMTV = maxPenetration;  // Start with 3D penetration as upper bound
-        
-        // Test each edge of the reference triangle
-        for (int edge = 0; edge < 3; ++edge) {
-            T1 edgeStart = refTri[edge];
-            T1 edgeEnd = refTri[(edge + 1) % 3];
-            T1 edgeDir = edgeEnd - edgeStart;
-            T1 edgeNormal = cross(refNormal, edgeDir);
-            T2 edgeNormalLen2 = dot(edgeNormal, edgeNormal);
-            if (edgeNormalLen2 > DEME_TINY_FLOAT) {
-                T1 edgeNormalNormalized = edgeNormal * rsqrt(edgeNormalLen2);
-                
-                // Find maximum penetration of clipped polygon vertices beyond this edge
-                T2 maxDist = T2(0.0);
-                for (int i = 0; i < numInputVerts; ++i) {
-                    T2 dist = dot(inputPoly[i] - edgeStart, edgeNormalNormalized);
-                    if (dist > maxDist) {
-                        maxDist = dist;
-                    }
-                }
-                
-                // Update minimum MTV
-                if (maxDist > DEME_TINY_FLOAT && maxDist < minMTV) {
-                    minMTV = maxDist;
-                }
-            }
-        }
-        
-        depth = minMTV;
         return true;
     } else {
         // Degenerate clipping polygon
@@ -876,7 +842,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
     T2 lenB2 = dot(nB_unnorm, nB_unnorm);
 
     // Check for degenerate triangles
-    if (lenA2 <= DEME_TINY_FLOAT || lenB2 <= DEME_TINY_FLOAT) {
+    if (lenA2 <= DEME_TINY_FLOAT * DEME_TINY_FLOAT || lenB2 <= DEME_TINY_FLOAT * DEME_TINY_FLOAT) {
         return false;
     }
 
@@ -938,7 +904,7 @@ inline __device__ bool checkTriangleTriangleOverlap(
         T1 normalAB = nB;
         T1 normalSum = normalBA + normalAB;
         T2 normalSumLen2 = dot(normalSum, normalSum);
-        if (normalSumLen2 > DEME_TINY_FLOAT) {
+        if (normalSumLen2 > DEME_TINY_FLOAT * DEME_TINY_FLOAT) {
             normal = normalSum * rsqrt(normalSumLen2);
         } else {
             // Normals are nearly opposite - use one of them
