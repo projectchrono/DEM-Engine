@@ -650,7 +650,6 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
     centroid.z = T2(0.0);
 
     area = T2(0.0);
-    depth = maxPenetration;
     if (numInputVerts >= 3) {
         for (int i = 0; i < numInputVerts; ++i) {
             centroid = centroid + inputPoly[i];
@@ -665,6 +664,38 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
             area += sqrt(dot(crossProd, crossProd));
         }
         area *= T2(0.5);
+
+        // Calculate 2D MTV: minimum distance to move the clipped polygon away from reference triangle
+        // This prevents artifacts from "side strips" where tiny edge penetrations create large forces
+        T2 minMTV = maxPenetration;  // Start with 3D penetration as upper bound
+        
+        // Test each edge of the reference triangle
+        for (int edge = 0; edge < 3; ++edge) {
+            T1 edgeStart = refTri[edge];
+            T1 edgeEnd = refTri[(edge + 1) % 3];
+            T1 edgeDir = edgeEnd - edgeStart;
+            T1 edgeNormal = cross(refNormal, edgeDir);
+            T2 edgeNormalLen2 = dot(edgeNormal, edgeNormal);
+            if (edgeNormalLen2 > DEME_TINY_FLOAT) {
+                T1 edgeNormalNormalized = edgeNormal * rsqrt(edgeNormalLen2);
+                
+                // Find maximum penetration of clipped polygon vertices beyond this edge
+                T2 maxDist = T2(0.0);
+                for (int i = 0; i < numInputVerts; ++i) {
+                    T2 dist = dot(inputPoly[i] - edgeStart, edgeNormalNormalized);
+                    if (dist > maxDist) {
+                        maxDist = dist;
+                    }
+                }
+                
+                // Update minimum MTV
+                if (maxDist > DEME_TINY_FLOAT && maxDist < minMTV) {
+                    minMTV = maxDist;
+                }
+            }
+        }
+        
+        depth = minMTV;
         return true;
     } else {
         // Degenerate clipping polygon
