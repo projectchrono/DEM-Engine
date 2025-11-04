@@ -45,7 +45,7 @@ int main() {
     const float initial_height = 8.0;
     const float box_size = 0.5;  // Assume cube.obj is roughly 1x1x1, scale to 0.5
     
-    std::vector<std::shared_ptr<DEMTrackedObj>> trackers;
+    std::vector<std::shared_ptr<DEMTracker>> trackers;
     
     // Random number generator for small position variations
     std::random_device rd;
@@ -71,7 +71,7 @@ int main() {
             box->SetMOI(make_float3(moi, moi, moi));
             
             // Add small initial rotation for more interesting dynamics
-            box->SetInitOriQ(make_float4(rot_dist(gen), rot_dist(gen), rot_dist(gen), 1.0));
+            box->SetInitQuat(make_float4(rot_dist(gen), rot_dist(gen), rot_dist(gen), 1.0));
             
             auto tracker = DEMSim.Track(box);
             trackers.push_back(tracker);

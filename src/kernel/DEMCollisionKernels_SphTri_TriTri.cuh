@@ -886,103 +886,34 @@ inline __device__ bool checkTriangleTriangleOverlap(
             // Rotate around the overlap polygon centroid (centroidBA), not triangle centroid
             // This is the correct rotation center as it's already in-plane
             
-            // Trial 1: +rotation around tangent1
-            {
-                T2 angle = ROTATION_ANGLE;
-                T2 cosAngle = cos(angle);
-                T2 sinAngle = sin(angle);
-                T1 rotatedNormal = nA * cosAngle + cross(tangent1, nA) * sinAngle;
-                
-                T1 rotatedTriA[3];
-                for (int i = 0; i < 3; ++i) {
-                    T1 relPos = triA[i] - centroidBA;
-                    T1 rotatedRelPos = relPos * cosAngle + cross(tangent1, relPos) * sinAngle;
-                    rotatedTriA[i] = centroidBA + rotatedRelPos;
-                }
-                
-                T2 trialDepth, trialArea;
-                T1 trialCentroid;
-                bool trialContact = projectTriangleOntoTriangle<T1, T2>(triB, rotatedTriA, rotatedNormal, trialDepth, trialArea, trialCentroid);
-                
-                if (trialContact && trialArea < minArea) {
-                    minArea = trialArea;
-                } else if (!trialContact) {
-                    minArea = T2(0.0);
-                }
-            }
-            
-            // Trial 2: -rotation around tangent1
-            if (minArea > T2(0.0)) {
-                T2 angle = -ROTATION_ANGLE;
-                T2 cosAngle = cos(angle);
-                T2 sinAngle = sin(angle);
-                T1 rotatedNormal = nA * cosAngle + cross(tangent1, nA) * sinAngle;
-                
-                T1 rotatedTriA[3];
-                for (int i = 0; i < 3; ++i) {
-                    T1 relPos = triA[i] - centroidBA;
-                    T1 rotatedRelPos = relPos * cosAngle + cross(tangent1, relPos) * sinAngle;
-                    rotatedTriA[i] = centroidBA + rotatedRelPos;
-                }
-                
-                T2 trialDepth, trialArea;
-                T1 trialCentroid;
-                bool trialContact = projectTriangleOntoTriangle<T1, T2>(triB, rotatedTriA, rotatedNormal, trialDepth, trialArea, trialCentroid);
-                
-                if (trialContact && trialArea < minArea) {
-                    minArea = trialArea;
-                } else if (!trialContact) {
-                    minArea = T2(0.0);
-                }
-            }
-            
-            // Trial 3: +rotation around tangent2
-            if (minArea > T2(0.0)) {
-                T2 angle = ROTATION_ANGLE;
-                T2 cosAngle = cos(angle);
-                T2 sinAngle = sin(angle);
-                T1 rotatedNormal = nA * cosAngle + cross(tangent2, nA) * sinAngle;
-                
-                T1 rotatedTriA[3];
-                for (int i = 0; i < 3; ++i) {
-                    T1 relPos = triA[i] - centroidBA;
-                    T1 rotatedRelPos = relPos * cosAngle + cross(tangent2, relPos) * sinAngle;
-                    rotatedTriA[i] = centroidBA + rotatedRelPos;
-                }
-                
-                T2 trialDepth, trialArea;
-                T1 trialCentroid;
-                bool trialContact = projectTriangleOntoTriangle<T1, T2>(triB, rotatedTriA, rotatedNormal, trialDepth, trialArea, trialCentroid);
-                
-                if (trialContact && trialArea < minArea) {
-                    minArea = trialArea;
-                } else if (!trialContact) {
-                    minArea = T2(0.0);
-                }
-            }
-            
-            // Trial 4: -rotation around tangent2
-            if (minArea > T2(0.0)) {
-                T2 angle = -ROTATION_ANGLE;
-                T2 cosAngle = cos(angle);
-                T2 sinAngle = sin(angle);
-                T1 rotatedNormal = nA * cosAngle + cross(tangent2, nA) * sinAngle;
-                
-                T1 rotatedTriA[3];
-                for (int i = 0; i < 3; ++i) {
-                    T1 relPos = triA[i] - centroidBA;
-                    T1 rotatedRelPos = relPos * cosAngle + cross(tangent2, relPos) * sinAngle;
-                    rotatedTriA[i] = centroidBA + rotatedRelPos;
-                }
-                
-                T2 trialDepth, trialArea;
-                T1 trialCentroid;
-                bool trialContact = projectTriangleOntoTriangle<T1, T2>(triB, rotatedTriA, rotatedNormal, trialDepth, trialArea, trialCentroid);
-                
-                if (trialContact && trialArea < minArea) {
-                    minArea = trialArea;
-                } else if (!trialContact) {
-                    minArea = T2(0.0);
+            // Try 4 rotations: +/- rotation around tangent1 and tangent2
+#pragma unroll
+            for (int dir = 0; dir < 2; ++dir) {
+                T1 axis = (dir == 0) ? tangent1 : tangent2;
+#pragma unroll
+                for (int sign = -1; sign <= 1; sign += 2) {
+                    T2 angle = T2(sign) * ROTATION_ANGLE;
+                    T2 cosAngle = cos(angle);
+                    T2 sinAngle = sin(angle);
+                    T1 rotatedNormal = nA * cosAngle + cross(axis, nA) * sinAngle;
+                    
+                    T1 rotatedTriA[3];
+#pragma unroll
+                    for (int i = 0; i < 3; ++i) {
+                        T1 relPos = triA[i] - centroidBA;
+                        T1 rotatedRelPos = relPos * cosAngle + cross(axis, relPos) * sinAngle;
+                        rotatedTriA[i] = centroidBA + rotatedRelPos;
+                    }
+                    
+                    T2 trialDepth, trialArea;
+                    T1 trialCentroid;
+                    bool trialContact = projectTriangleOntoTriangle<T1, T2>(triB, rotatedTriA, rotatedNormal, trialDepth, trialArea, trialCentroid);
+                    
+                    if (trialContact && trialArea < minArea) {
+                        minArea = trialArea;
+                    } else if (!trialContact) {
+                        minArea = T2(0.0);
+                    }
                 }
             }
             
@@ -1007,103 +938,34 @@ inline __device__ bool checkTriangleTriangleOverlap(
             // Rotate around the overlap polygon centroid (centroidAB), not triangle centroid
             // This is the correct rotation center as it's already in-plane
             
-            // Trial 1: +rotation around tangent1
-            {
-                T2 angle = ROTATION_ANGLE;
-                T2 cosAngle = cos(angle);
-                T2 sinAngle = sin(angle);
-                T1 rotatedNormal = nB * cosAngle + cross(tangent1, nB) * sinAngle;
-                
-                T1 rotatedTriB[3];
-                for (int i = 0; i < 3; ++i) {
-                    T1 relPos = triB[i] - centroidAB;
-                    T1 rotatedRelPos = relPos * cosAngle + cross(tangent1, relPos) * sinAngle;
-                    rotatedTriB[i] = centroidAB + rotatedRelPos;
-                }
-                
-                T2 trialDepth, trialArea;
-                T1 trialCentroid;
-                bool trialContact = projectTriangleOntoTriangle<T1, T2>(triA, rotatedTriB, rotatedNormal, trialDepth, trialArea, trialCentroid);
-                
-                if (trialContact && trialArea < minArea) {
-                    minArea = trialArea;
-                } else if (!trialContact) {
-                    minArea = T2(0.0);
-                }
-            }
-            
-            // Trial 2: -rotation around tangent1
-            if (minArea > T2(0.0)) {
-                T2 angle = -ROTATION_ANGLE;
-                T2 cosAngle = cos(angle);
-                T2 sinAngle = sin(angle);
-                T1 rotatedNormal = nB * cosAngle + cross(tangent1, nB) * sinAngle;
-                
-                T1 rotatedTriB[3];
-                for (int i = 0; i < 3; ++i) {
-                    T1 relPos = triB[i] - centroidAB;
-                    T1 rotatedRelPos = relPos * cosAngle + cross(tangent1, relPos) * sinAngle;
-                    rotatedTriB[i] = centroidAB + rotatedRelPos;
-                }
-                
-                T2 trialDepth, trialArea;
-                T1 trialCentroid;
-                bool trialContact = projectTriangleOntoTriangle<T1, T2>(triA, rotatedTriB, rotatedNormal, trialDepth, trialArea, trialCentroid);
-                
-                if (trialContact && trialArea < minArea) {
-                    minArea = trialArea;
-                } else if (!trialContact) {
-                    minArea = T2(0.0);
-                }
-            }
-            
-            // Trial 3: +rotation around tangent2
-            if (minArea > T2(0.0)) {
-                T2 angle = ROTATION_ANGLE;
-                T2 cosAngle = cos(angle);
-                T2 sinAngle = sin(angle);
-                T1 rotatedNormal = nB * cosAngle + cross(tangent2, nB) * sinAngle;
-                
-                T1 rotatedTriB[3];
-                for (int i = 0; i < 3; ++i) {
-                    T1 relPos = triB[i] - centroidAB;
-                    T1 rotatedRelPos = relPos * cosAngle + cross(tangent2, relPos) * sinAngle;
-                    rotatedTriB[i] = centroidAB + rotatedRelPos;
-                }
-                
-                T2 trialDepth, trialArea;
-                T1 trialCentroid;
-                bool trialContact = projectTriangleOntoTriangle<T1, T2>(triA, rotatedTriB, rotatedNormal, trialDepth, trialArea, trialCentroid);
-                
-                if (trialContact && trialArea < minArea) {
-                    minArea = trialArea;
-                } else if (!trialContact) {
-                    minArea = T2(0.0);
-                }
-            }
-            
-            // Trial 4: -rotation around tangent2
-            if (minArea > T2(0.0)) {
-                T2 angle = -ROTATION_ANGLE;
-                T2 cosAngle = cos(angle);
-                T2 sinAngle = sin(angle);
-                T1 rotatedNormal = nB * cosAngle + cross(tangent2, nB) * sinAngle;
-                
-                T1 rotatedTriB[3];
-                for (int i = 0; i < 3; ++i) {
-                    T1 relPos = triB[i] - centroidAB;
-                    T1 rotatedRelPos = relPos * cosAngle + cross(tangent2, relPos) * sinAngle;
-                    rotatedTriB[i] = centroidAB + rotatedRelPos;
-                }
-                
-                T2 trialDepth, trialArea;
-                T1 trialCentroid;
-                bool trialContact = projectTriangleOntoTriangle<T1, T2>(triA, rotatedTriB, rotatedNormal, trialDepth, trialArea, trialCentroid);
-                
-                if (trialContact && trialArea < minArea) {
-                    minArea = trialArea;
-                } else if (!trialContact) {
-                    minArea = T2(0.0);
+            // Try 4 rotations: +/- rotation around tangent1 and tangent2
+#pragma unroll
+            for (int dir = 0; dir < 2; ++dir) {
+                T1 axis = (dir == 0) ? tangent1 : tangent2;
+#pragma unroll
+                for (int sign = -1; sign <= 1; sign += 2) {
+                    T2 angle = T2(sign) * ROTATION_ANGLE;
+                    T2 cosAngle = cos(angle);
+                    T2 sinAngle = sin(angle);
+                    T1 rotatedNormal = nB * cosAngle + cross(axis, nB) * sinAngle;
+                    
+                    T1 rotatedTriB[3];
+#pragma unroll
+                    for (int i = 0; i < 3; ++i) {
+                        T1 relPos = triB[i] - centroidAB;
+                        T1 rotatedRelPos = relPos * cosAngle + cross(axis, relPos) * sinAngle;
+                        rotatedTriB[i] = centroidAB + rotatedRelPos;
+                    }
+                    
+                    T2 trialDepth, trialArea;
+                    T1 trialCentroid;
+                    bool trialContact = projectTriangleOntoTriangle<T1, T2>(triA, rotatedTriB, rotatedNormal, trialDepth, trialArea, trialCentroid);
+                    
+                    if (trialContact && trialArea < minArea) {
+                        minArea = trialArea;
+                    } else if (!trialContact) {
+                        minArea = T2(0.0);
+                    }
                 }
             }
             
