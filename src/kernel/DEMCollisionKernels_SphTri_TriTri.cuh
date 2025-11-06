@@ -484,7 +484,7 @@ __device__ bool checkTriSphereOverlap_directional(const T1& A,           ///< Fi
 ////////////////////////////////////////////////////////////////////////////////
 
 template <typename T1, typename T2>
-inline __device__ void select_projection(const T1& pts, const T1& axis, T2& min_p, T2& max_p) {
+__device__ void select_projection(const T1& pts, const T1& axis, T2& min_p, T2& max_p) {
     T2 p = dot(pts, axis);
     if (p < min_p)
         min_p = p;
@@ -493,7 +493,7 @@ inline __device__ void select_projection(const T1& pts, const T1& axis, T2& min_
 }
 
 template <typename T1, typename T2>
-inline __device__ void project_points_on_axis(const T1* prism, const T1& axis, T2& out_min, T2& out_max) {
+__device__ void project_points_on_axis(const T1* prism, const T1& axis, T2& out_min, T2& out_max) {
     T2 min_p = dot(prism[0], axis);
     T2 max_p = min_p;
     for (int i = 1; i < 6; ++i) {
@@ -504,7 +504,7 @@ inline __device__ void project_points_on_axis(const T1* prism, const T1& axis, T
 }
 
 template <typename T>
-inline __device__ bool projections_overlap(T minA, T maxA, T minB, T maxB) {
+__device__ bool projections_overlap(T minA, T maxA, T minB, T maxB) {
     return !(maxA < minB || maxB < minA);
 }
 
@@ -520,7 +520,7 @@ inline __device__ bool projections_overlap(T minA, T maxA, T minB, T maxB) {
  * @return true if there is contact (at least one vertex submerged), false otherwise
  */
 template <typename T1, typename T2>
-inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
+__device__ bool projectTriangleOntoTriangle(const T1* incTri,
                                                    const T1* refTri,
                                                    const T1& refNormal,
                                                    T2& depth,
@@ -592,7 +592,10 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
         return false;
     }
 
-    // Now clip the projected polygon against the reference triangle using Sutherland-Hodgman
+    // Now compute the intersection polygon of the projected triangle and reference triangle
+    // We need bidirectional clipping: clip projectedPoly against refTri, then add refTri vertices inside projectedPoly
+    
+    // Step 1: Clip projected polygon against reference triangle (Sutherland-Hodgman)
     T1 inputPoly[SH_MAX_CLIPPING_VERTICES];
     for (int i = 0; i < nPoly; ++i) {
         inputPoly[i] = projectedPoly[i];
@@ -640,8 +643,82 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
             break;  // No intersection
         }
     }
+    
+    // Step 2: Check if any reference triangle vertices are inside the projected polygon
+    // and add them to the intersection polygon if they are
+    T1 finalPoly[SH_MAX_CLIPPING_VERTICES];
+    int numFinalVerts = numInputVerts;
+    for (int i = 0; i < numInputVerts; ++i) {
+        finalPoly[i] = inputPoly[i];
+    }
+    
+    // For each reference triangle vertex, check if it's inside the original projected polygon
+    for (int refIdx = 0; refIdx < 3; ++refIdx) {
+        T1 refVertex = refTri[refIdx];
+        
+        // Check if refVertex is inside the projected polygon using winding number
+        bool inside = true;
+        for (int i = 0; i < nPoly; ++i) {
+            T1 edgeStart = projectedPoly[i];
+            T1 edgeEnd = projectedPoly[(i + 1) % nPoly];
+            T1 edgeDir = edgeEnd - edgeStart;
+            T1 edgeNormal = cross(refNormal, edgeDir);
+            T2 dist = dot(refVertex - edgeStart, edgeNormal);
+            if (dist < -DEME_TINY_FLOAT) {
+                inside = false;
+                break;
+            }
+        }
+        
+        if (inside && numFinalVerts < SH_MAX_CLIPPING_VERTICES) {
+            // Check if this vertex is not already in the polygon (avoid duplicates)
+            bool isDuplicate = false;
+            for (int j = 0; j < numFinalVerts; ++j) {
+                T1 diff = finalPoly[j] - refVertex;
+                if (dot(diff, diff) < DEME_TINY_FLOAT * DEME_TINY_FLOAT) {
+                    isDuplicate = true;
+                    break;
+                }
+            }
+            if (!isDuplicate) {
+                finalPoly[numFinalVerts++] = refVertex;
+            }
+        }
+    }
+    
+    // If we added reference vertices, we need to reorder the polygon to maintain proper winding
+    if (numFinalVerts > numInputVerts && numFinalVerts >= 3) {
+        // Compute centroid of all vertices
+        T1 tempCentroid;
+        tempCentroid.x = T2(0.0);
+        tempCentroid.y = T2(0.0);
+        tempCentroid.z = T2(0.0);
+        for (int i = 0; i < numFinalVerts; ++i) {
+            tempCentroid = tempCentroid + finalPoly[i];
+        }
+        tempCentroid = tempCentroid / T2(numFinalVerts);
+        
+        // Sort vertices by angle around centroid to ensure proper winding order
+        // Use simple bubble sort for small number of vertices
+        for (int i = 0; i < numFinalVerts - 1; ++i) {
+            for (int j = i + 1; j < numFinalVerts; ++j) {
+                T1 vi = finalPoly[i] - tempCentroid;
+                T1 vj = finalPoly[j] - tempCentroid;
+                // Use reference normal to determine consistent orientation
+                T1 cross_ij = cross(vi, vj);
+                if (dot(cross_ij, refNormal) < T2(0.0)) {
+                    // Swap
+                    T1 temp = finalPoly[i];
+                    finalPoly[i] = finalPoly[j];
+                    finalPoly[j] = temp;
+                }
+            }
+        }
+    }
+    
+    numInputVerts = numFinalVerts;
 
-    // Compute centroid and area of the clipping polygon
+    // Compute centroid and area of the intersection polygon
     centroid.x = T2(0.0);
     centroid.y = T2(0.0);
     centroid.z = T2(0.0);
@@ -650,21 +727,21 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
     depth = maxPenetration;
     if (numInputVerts >= 3) {
         for (int i = 0; i < numInputVerts; ++i) {
-            centroid = centroid + inputPoly[i];
+            centroid = centroid + finalPoly[i];
         }
         centroid = centroid / T2(numInputVerts);
 
         // Calculate area using fan triangulation from centroid
         for (int i = 0; i < numInputVerts; ++i) {
-            T1 v1 = inputPoly[i] - centroid;
-            T1 v2 = inputPoly[(i + 1) % numInputVerts] - centroid;
+            T1 v1 = finalPoly[i] - centroid;
+            T1 v2 = finalPoly[(i + 1) % numInputVerts] - centroid;
             T1 crossProd = cross(v1, v2);
             area += sqrt(dot(crossProd, crossProd));
         }
         area *= T2(0.5);
         return true;
     } else {
-        // Degenerate clipping polygon
+        // Degenerate intersection polygon
         // centroid = (incTri[0] + incTri[1] + incTri[2]) / T2(3.0);
         return false;
     }
@@ -682,7 +759,7 @@ inline __device__ bool projectTriangleOntoTriangle(const T1* incTri,
  * @return true if prisms are in contact (no separating axis found), false otherwise
  */
 template <typename T1>
-inline __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
+__device__ bool calc_prism_contact(const T1& prismAFaceANode1,
                                           const T1& prismAFaceANode2,
                                           const T1& prismAFaceANode3,
                                           const T1& prismAFaceBNode1,
@@ -817,7 +894,7 @@ inline __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
 /// 3. Average the results for final contact info
 /// This approach uses Sutherland-Hodgman algorithm for clipping and does not require SAT
 template <typename T1, typename T2>
-inline __device__ bool checkTriangleTriangleOverlap(
+__device__ bool checkTriangleTriangleOverlap(
     const T1& A1,
     const T1& B1,
     const T1& C1,
