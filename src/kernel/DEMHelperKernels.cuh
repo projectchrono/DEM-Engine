@@ -12,7 +12,7 @@
     #include <DEM/Defines.h>
 #endif
 
-// inline __device__ voxelID_t position2VoxelID
+//   __device__ voxelID_t position2VoxelID
 
 ////////////////////////////////////////////////////////////////////////////////
 // A few helper functions specific to DEM module
@@ -20,18 +20,18 @@
 
 // Sign function
 template <typename T1>
-inline __host__ __device__ int sgn(const T1& val) {
+__host__ __device__ int sgn(const T1& val) {
     return (T1(0) < val) - (val < T1(0));
 }
 
 template <typename T1>
-inline __host__ __device__ T1 dot3(const T1& x1, const T1& x2, const T1& x3, const T1& y1, const T1& y2, const T1& y3) {
+__host__ __device__ T1 dot3(const T1& x1, const T1& x2, const T1& x3, const T1& y1, const T1& y2, const T1& y3) {
     return x1 * y1 + x2 * y2 + x3 * y3;
 }
 
 // Integer division that rounds towards -infty
 template <typename T1, typename T2>
-inline __host__ __device__ T1 div_floor(const T1& a, const T2& b) {
+__host__ __device__ T1 div_floor(const T1& a, const T2& b) {
     T1 res = a / b;
     T1 rem = a % b;
     // Correct division result downwards if up-rounding happened,
@@ -42,7 +42,7 @@ inline __host__ __device__ T1 div_floor(const T1& a, const T2& b) {
 
 // Modulus that rounds towards -infty
 template <typename T1, typename T2>
-inline __host__ __device__ T1 mod_floor(const T1& a, const T2& b) {
+__host__ __device__ T1 mod_floor(const T1& a, const T2& b) {
     if (b < 0)  // you can check for b == 0 separately and do what you want
         return -mod_floor(-a, -b);
     T1 ret = a % b;
@@ -55,7 +55,7 @@ inline __host__ __device__ T1 mod_floor(const T1& a, const T2& b) {
 // corresponding flatten-ed non-zero entries (col-major like in matlab). This function does not assume i <= j. It is
 // used in locating masks that maps the contact between families.
 template <typename T1>
-inline __host__ __device__ T1 locateMaskPair(const T1& i, const T1& j) {
+__host__ __device__ T1 locateMaskPair(const T1& i, const T1& j) {
     if (i > j)
         return locateMaskPair(j, i);
     return (1 + j) * j / 2 + i;
@@ -64,14 +64,14 @@ inline __host__ __device__ T1 locateMaskPair(const T1& i, const T1& j) {
 // Magic function that converts an index of a flatten-ed upper-triangular matrix (EXCLUDING the diagonal) to its
 // corresponding i and j. It is ROW-major. It is used to map contact pair numbers in a bin.
 template <typename T1>
-inline __host__ __device__ void recoverCntPair(T1& i, T1& j, const T1& ind, const T1& n) {
+__host__ __device__ void recoverCntPair(T1& i, T1& j, const T1& ind, const T1& n) {
     i = n - 2 - (T1)(sqrt((float)(4 * n * (n - 1) - 7 - 8 * ind)) / 2.0 - 0.5);
     j = ind + i + 1 + (n - i) * ((n - i) - 1) / 2 - n * (n - 1) / 2;
 }
 
 // Make sure a T1 type triplet falls in a range, then output as T2 type
 template <typename T1, typename T2>
-inline __host__ __device__ T2 clampBetween3Comp(const T1& data, const T2& low, const T2& high) {
+__host__ __device__ T2 clampBetween3Comp(const T1& data, const T2& low, const T2& high) {
     T2 res;
     res.x = DEME_MIN(DEME_MAX(data.x, low.x), high.x);
     res.y = DEME_MIN(DEME_MAX(data.y, low.y), high.y);
@@ -81,7 +81,7 @@ inline __host__ __device__ T2 clampBetween3Comp(const T1& data, const T2& low, c
 
 // Make sure a T1 type triplet falls in a range, then output as T2 type
 template <typename T1, typename T2>
-inline __host__ __device__ T2 clampBetween(const T1& data, const T2& low, const T2& high) {
+__host__ __device__ T2 clampBetween(const T1& data, const T2& low, const T2& high) {
     T2 res;
     res = DEME_MIN(DEME_MAX(data, low), high);
     return res;
@@ -89,12 +89,12 @@ inline __host__ __device__ T2 clampBetween(const T1& data, const T2& low, const 
 
 // Chops a long ID (typically voxelID) into XYZ components
 template <typename T1, typename T2>
-inline __host__ __device__ void IDChopper(T1& X,
-                                          T1& Y,
-                                          T1& Z,
-                                          const T2& ID,
-                                          const unsigned char& nvXp2,
-                                          const unsigned char& nvYp2) {
+__host__ __device__ void IDChopper(T1& X,
+                                   T1& Y,
+                                   T1& Z,
+                                   const T2& ID,
+                                   const unsigned char& nvXp2,
+                                   const unsigned char& nvYp2) {
     X = ID & (((T1)1 << nvXp2) - 1);  // & operation here equals modulo
     Y = (ID >> nvXp2) & (((T1)1 << nvYp2) - 1);
     Z = (ID) >> (nvXp2 + nvYp2);
@@ -102,12 +102,12 @@ inline __host__ __device__ void IDChopper(T1& X,
 
 // Packs XYZ components back to a long ID (typically voxelID)
 template <typename T1, typename T2>
-inline __host__ __device__ void IDPacker(T1& ID,
-                                         const T2& X,
-                                         const T2& Y,
-                                         const T2& Z,
-                                         const unsigned char& nvXp2,
-                                         const unsigned char& nvYp2) {
+__host__ __device__ void IDPacker(T1& ID,
+                                  const T2& X,
+                                  const T2& Y,
+                                  const T2& Z,
+                                  const unsigned char& nvXp2,
+                                  const unsigned char& nvYp2) {
     ID = X;
     ID += Y << nvXp2;
     ID += Z << (nvXp2 + nvYp2);
@@ -115,17 +115,17 @@ inline __host__ __device__ void IDPacker(T1& ID,
 
 // From a voxelID to (usually double-precision) xyz coordinate
 template <typename T1, typename T2, typename T3>
-inline __host__ __device__ void voxelIDToPosition(T1& X,
-                                                  T1& Y,
-                                                  T1& Z,
-                                                  const T2& ID,
-                                                  const T3& subPosX,
-                                                  const T3& subPosY,
-                                                  const T3& subPosZ,
-                                                  const unsigned char& nvXp2,
-                                                  const unsigned char& nvYp2,
-                                                  const T1& voxelSize,
-                                                  const T1& l) {
+__host__ __device__ void voxelIDToPosition(T1& X,
+                                           T1& Y,
+                                           T1& Z,
+                                           const T2& ID,
+                                           const T3& subPosX,
+                                           const T3& subPosY,
+                                           const T3& subPosZ,
+                                           const unsigned char& nvXp2,
+                                           const unsigned char& nvYp2,
+                                           const T1& voxelSize,
+                                           const T1& l) {
     T2 voxelIDX, voxelIDY, voxelIDZ;
     IDChopper<T2, T2>(voxelIDX, voxelIDY, voxelIDZ, ID, nvXp2, nvYp2);
     X = (T1)voxelIDX * voxelSize + (T1)subPosX * l;
@@ -135,17 +135,17 @@ inline __host__ __device__ void voxelIDToPosition(T1& X,
 
 // From xyz coordinate (usually double-precision) to voxelID
 template <typename T1, typename T2, typename T3>
-inline __host__ __device__ void positionToVoxelID(T1& ID,
-                                                  T2& subPosX,
-                                                  T2& subPosY,
-                                                  T2& subPosZ,
-                                                  const T3& X,
-                                                  const T3& Y,
-                                                  const T3& Z,
-                                                  const unsigned char& nvXp2,
-                                                  const unsigned char& nvYp2,
-                                                  const T3& voxelSize,
-                                                  const T3& l) {
+__host__ __device__ void positionToVoxelID(T1& ID,
+                                           T2& subPosX,
+                                           T2& subPosY,
+                                           T2& subPosZ,
+                                           const T3& X,
+                                           const T3& Y,
+                                           const T3& Z,
+                                           const unsigned char& nvXp2,
+                                           const unsigned char& nvYp2,
+                                           const T3& voxelSize,
+                                           const T3& l) {
     deme::voxelID_t voxelNumX = X / voxelSize;
     deme::voxelID_t voxelNumY = Y / voxelSize;
     deme::voxelID_t voxelNumZ = Z / voxelSize;
@@ -159,7 +159,7 @@ inline __host__ __device__ void positionToVoxelID(T1& ID,
 }
 
 template <typename T1, typename T2>
-inline __host__ __device__ void
+__host__ __device__ void
 applyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Qw, const T2& Qx, const T2& Qy, const T2& Qz) {
     T1 oldX = X;
     T1 oldY = Y;
@@ -173,7 +173,7 @@ applyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Qw, const T2& Qx, const T2& Qy
 }
 
 template <typename T1, typename T2, typename T3>
-inline __host__ __device__ void applyFrameTransformLocalToGlobal(T1& pos, const T2& vec, const T3& rot_Q) {
+__host__ __device__ void applyFrameTransformLocalToGlobal(T1& pos, const T2& vec, const T3& rot_Q) {
     applyOriQToVector3(pos.x, pos.y, pos.z, rot_Q.w, rot_Q.x, rot_Q.y, rot_Q.z);
     pos.x += vec.x;
     pos.y += vec.y;
@@ -181,20 +181,19 @@ inline __host__ __device__ void applyFrameTransformLocalToGlobal(T1& pos, const 
 }
 
 template <typename T1>
-inline __host__ __device__ T1
-distSquared(const T1& x1, const T1& y1, const T1& z1, const T1& x2, const T1& y2, const T1& z2) {
+__host__ __device__ T1 distSquared(const T1& x1, const T1& y1, const T1& z1, const T1& x2, const T1& y2, const T1& z2) {
     return (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2) + (z1 - z2) * (z1 - z2);
 }
 
 // Get the maginitude of a 3-component vector
 template <typename T1>
-inline __host__ __device__ T1 magVector3(T1& x, T1& y, T1& z) {
+__host__ __device__ T1 magVector3(T1& x, T1& y, T1& z) {
     return sqrt(x * x + y * y + z * z);
 }
 
 // Normalize a 3-component vector
 template <typename T1>
-inline __host__ __device__ void normalizeVector3(T1& x, T1& y, T1& z) {
+__host__ __device__ void normalizeVector3(T1& x, T1& y, T1& z) {
     T1 magnitude = sqrt(x * x + y * y + z * z);
     // TODO: Think about whether this is safe
     // if (magnitude < DEME_TINY_FLOAT) {
@@ -207,13 +206,13 @@ inline __host__ __device__ void normalizeVector3(T1& x, T1& y, T1& z) {
 
 // Calculate the centroid of a triangle
 template <typename T1>
-inline __host__ __device__ T1 triangleCentroid(const T1& p1, const T1& p2, const T1& p3) {
+__host__ __device__ T1 triangleCentroid(const T1& p1, const T1& p2, const T1& p3) {
     return (p1 + p2 + p3) / 3.;
 }
 
 // Calculate the incenter of a triangle
 template <typename T1>
-inline __host__ __device__ T1 triangleIncenter(const T1& p1, const T1& p2, const T1& p3) {
+__host__ __device__ T1 triangleIncenter(const T1& p1, const T1& p2, const T1& p3) {
     float a = length(p2 - p3);
     float b = length(p1 - p3);
     float c = length(p1 - p2);
@@ -226,18 +225,18 @@ inline __host__ __device__ T1 triangleIncenter(const T1& p1, const T1& p2, const
 
 // Hamilton product of 2 quaternions
 template <typename T1, typename T2, typename T3>
-inline __host__ __device__ void HamiltonProduct(T1& A,
-                                                T1& B,
-                                                T1& C,
-                                                T1& D,
-                                                const T2 a1,
-                                                const T2 b1,
-                                                const T2 c1,
-                                                const T2 d1,
-                                                const T3 a2,
-                                                const T3 b2,
-                                                const T3 c2,
-                                                const T3 d2) {
+__host__ __device__ void HamiltonProduct(T1& A,
+                                         T1& B,
+                                         T1& C,
+                                         T1& D,
+                                         const T2 a1,
+                                         const T2 b1,
+                                         const T2 c1,
+                                         const T2 d1,
+                                         const T3 a2,
+                                         const T3 b2,
+                                         const T3 c2,
+                                         const T3 d2) {
     A = a1 * a2 - b1 * b2 - c1 * c2 - d1 * d2;
     B = a1 * b2 + b1 * a2 + c1 * d2 - d1 * c2;
     C = a1 * c2 - b1 * d2 + c1 * a2 + d1 * b2;
@@ -246,7 +245,7 @@ inline __host__ __device__ void HamiltonProduct(T1& A,
 
 // Compute the binID for a point in space
 template <typename T1>
-inline __host__ __device__ T1
+__host__ __device__ T1
 getPointBinID(const double& X, const double& Y, const double& Z, const double& binSize, const T1& nbX, const T1& nbY) {
     T1 binIDX = X / binSize;
     T1 binIDY = Y / binSize;
@@ -256,7 +255,7 @@ getPointBinID(const double& X, const double& Y, const double& Z, const double& b
 
 // Compute the binID using its indices in X, Y and Z directions
 template <typename T1>
-inline __host__ __device__ T1
+__host__ __device__ T1
 binIDFrom3Indices(const T1& X, const T1& Y, const T1& Z, const T1& nbX, const T1& nbY, const T1& nbZ) {
     if ((X < nbX) && (Y < nbY) && (Z < nbZ)) {
         return X + Y * nbX + Z * nbX * nbY;
@@ -269,14 +268,14 @@ binIDFrom3Indices(const T1& X, const T1& Y, const T1& Z, const T1& nbX, const T1
 // the vertices A, B, and C. The face is assumed to be non-degenerate.
 // Note that order of vertices is important!
 template <typename T1>
-inline __host__ __device__ T1 face_normal(const T1& A, const T1& B, const T1& C) {
+__host__ __device__ T1 face_normal(const T1& A, const T1& B, const T1& C) {
     return normalize(cross(B - A, C - A));
 }
 
 // Binary search on GPU, which is probably quite divergent... use if absolutely needs to
 // T2 must be a singed type
 template <typename T1, typename T2>
-inline __host__ __device__ bool cuda_binary_search(T1* A, const T1& val, T2 imin, T2 imax, T2& res) {
+__host__ __device__ bool cuda_binary_search(T1* A, const T1& val, T2 imin, T2 imax, T2& res) {
     while (imax >= imin) {
         T2 imid = imin + (imax - imin) / 2;
         if (val == A[imid]) {
@@ -292,7 +291,7 @@ inline __host__ __device__ bool cuda_binary_search(T1* A, const T1& val, T2 imin
     return false;
 }
 template <typename T1, typename T2>
-inline __host__ __device__ bool cuda_binary_search(T1* A, const T1& val, T2 imin, T2 imax) {
+__host__ __device__ bool cuda_binary_search(T1* A, const T1& val, T2 imin, T2 imax) {
     while (imax >= imin) {
         T2 imid = imin + (imax - imin) / 2;
         if (val == A[imid]) {
@@ -315,7 +314,7 @@ inline __host__ __device__ bool cuda_binary_search(T1* A, const T1& val, T2 imin
  *
  */
 template <typename T1>
-inline __host__ __device__ float3
+__host__ __device__ float3
 vectorAB(const T1& AX, const T1& AY, const T1& AZ, const T1& BX, const T1& BY, const T1& BZ) {
     return make_float3(AX - BX, AY - BY, AZ - BZ);
 }
@@ -329,16 +328,16 @@ vectorAB(const T1& AX, const T1& AY, const T1& AZ, const T1& BX, const T1& BY, c
  *
  */
 template <typename T1>
-inline __host__ __device__ float3 findLocalCoord(const T1& X,
-                                                 const T1& Y,
-                                                 const T1& Z,
-                                                 const T1& Ox,
-                                                 const T1& Oy,
-                                                 const T1& Oz,
-                                                 const deme::oriQ_t& oriQw,
-                                                 const deme::oriQ_t& oriQx,
-                                                 const deme::oriQ_t& oriQy,
-                                                 const deme::oriQ_t& oriQz) {
+__host__ __device__ float3 findLocalCoord(const T1& X,
+                                          const T1& Y,
+                                          const T1& Z,
+                                          const T1& Ox,
+                                          const T1& Oy,
+                                          const T1& Oz,
+                                          const deme::oriQ_t& oriQw,
+                                          const deme::oriQ_t& oriQx,
+                                          const deme::oriQ_t& oriQy,
+                                          const deme::oriQ_t& oriQz) {
     float locX, locY, locZ;
     locX = X - Ox;
     locY = Y - Oy;
@@ -350,12 +349,12 @@ inline __host__ __device__ float3 findLocalCoord(const T1& X,
 
 /// Calculate the contact params based on the 2 contact material types given
 template <typename T1>
-inline __host__ __device__ void matProxy2ContactParam(T1& E_eff,
-                                                      T1& G_eff,
-                                                      const T1& Y1,
-                                                      const T1& nu1,
-                                                      const T1& Y2,
-                                                      const T1& nu2) {
+__host__ __device__ void matProxy2ContactParam(T1& E_eff,
+                                               T1& G_eff,
+                                               const T1& Y1,
+                                               const T1& nu1,
+                                               const T1& Y2,
+                                               const T1& nu2) {
     T1 invE = ((T1)1 - nu1 * nu1) / Y1 + ((T1)1 - nu2 * nu2) / Y2;
     E_eff = (T1)1 / invE;
     T1 invG = (T1)2 * ((T1)2 - nu1) * ((T1)1 + nu1) / Y1 + (T1)2 * ((T1)2 - nu2) * ((T1)1 + nu2) / Y2;
@@ -364,18 +363,14 @@ inline __host__ __device__ void matProxy2ContactParam(T1& E_eff,
 
 /// Calculate the contact params based on the 2 contact material types given (no-tangent version)
 template <typename T1>
-inline __host__ __device__ void matProxy2ContactParam(T1& E_eff,
-                                                      const T1& Y1,
-                                                      const T1& nu1,
-                                                      const T1& Y2,
-                                                      const T1& nu2) {
+__host__ __device__ void matProxy2ContactParam(T1& E_eff, const T1& Y1, const T1& nu1, const T1& Y2, const T1& nu2) {
     T1 invE = ((T1)1 - nu1 * nu1) / Y1 + ((T1)1 - nu2 * nu2) / Y2;
     E_eff = (T1)1 / invE;
 }
 
 // Singed distance from a point to a plane defined by a point and a normal vector
 template <typename T1, typename T2>
-inline __host__ __device__ T1 planeSignedDistance(const T2& point, const T2& planePoint, const float3& planeNormal) {
+__host__ __device__ T1 planeSignedDistance(const T2& point, const T2& planePoint, const float3& planeNormal) {
     // The distance is positive if the point is above the plane, and negative if below
     // The distance is 0 if the point is on the plane
     return (T1)(dot(point - planePoint, planeNormal));
@@ -383,7 +378,7 @@ inline __host__ __device__ T1 planeSignedDistance(const T2& point, const T2& pla
 
 // Radial distance vector from cylinder axis to a point
 template <typename T1>
-inline __host__ __device__ T1 cylRadialDistanceVec(const T1& point, const T1& cylPoint, const float3& cylDir) {
+__host__ __device__ T1 cylRadialDistanceVec(const T1& point, const T1& cylPoint, const float3& cylDir) {
     // Projection of the point onto the cylinder axis
     float proj_dist = dot(point - cylPoint, cylDir);
     // Radial vector from cylinder center to point
