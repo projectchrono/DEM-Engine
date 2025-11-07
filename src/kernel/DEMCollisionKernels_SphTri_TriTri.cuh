@@ -87,7 +87,7 @@ inline bool __device__ tri_plane_penetration(const T1** tri,
 #pragma unroll
         for (int i = 0; i < 3; i++)
             centroid = centroid + *tri[i];
-        centroid = centroid / T2(3);
+        centroid = centroid / 3.0;
     }
 
     // We use the convention that if in contact, overlapDepth is positive
@@ -521,17 +521,17 @@ __device__ bool projections_overlap(T minA, T maxA, T minB, T maxB) {
  */
 template <typename T1, typename T2>
 __device__ bool projectTriangleOntoTriangle(const T1* incTri,
-                                                   const T1* refTri,
-                                                   const T1& refNormal,
-                                                   T2& depth,
-                                                   T2& area,
-                                                   T1& centroid) {
+                                            const T1* refTri,
+                                            const T1& refNormal,
+                                            T2& depth,
+                                            T2& area,
+                                            T1& centroid) {
     // Compute signed distances of incident triangle vertices to reference plane
     T2 incDists[3];
-    T2 maxPenetration = T2(0.0);
-    int numSubmerged = 0;
+    T2 maxPenetration = 0.0;
+    int8_t numSubmerged = 0;
 #pragma unroll
-    for (int i = 0; i < 3; ++i) {
+    for (int8_t i = 0; i < 3; ++i) {
         incDists[i] = dot(incTri[i] - refTri[0], refNormal);
         if (incDists[i] < 0.0) {
             numSubmerged++;
@@ -555,28 +555,28 @@ __device__ bool projectTriangleOntoTriangle(const T1* incTri,
     // Sutherland-Hodgman clipping can produce up to (n+m) vertices where n and m are
     // the number of vertices in the input polygons. For triangle-triangle clipping,
     // we conservatively use 9 (more than the theoretical max of 6) for safety.
-    const unsigned short int SH_MAX_CLIPPING_VERTICES = 9;
+    const int8_t SH_MAX_CLIPPING_VERTICES = 9;
 
     // Build polygon from projected submerged vertices and edge-plane intersections
     T1 projectedPoly[SH_MAX_CLIPPING_VERTICES];
-    int nPoly = 0;
+    int8_t nPoly = 0;
 
     // Process each edge of the incident triangle
 #pragma unroll
-    for (int i = 0; i < 3; ++i) {
-        int j = (i + 1) % 3;
+    for (int8_t i = 0; i < 3; ++i) {
+        int8_t j = (i + 1) % 3;
         bool in_i = (incDists[i] < 0.0);
         bool in_j = (incDists[j] < 0.0);
 
         // Add submerged vertex (projected onto plane)
-        if (in_i && nPoly < SH_MAX_CLIPPING_VERTICES) {
+        if (in_i) {
             projectedPoly[nPoly++] = incTri[i] - refNormal * incDists[i];
         }
 
         // Add edge-plane intersection if edge crosses the plane
-        if (in_i != in_j && nPoly < SH_MAX_CLIPPING_VERTICES) {
+        if (in_i != in_j) {
             T2 denom = incDists[i] - incDists[j];
-            if (denom != T2(0.0)) {  // Avoid division by zero
+            if (denom != 0.0) {  // Avoid division by zero
                 T2 t = incDists[i] / denom;
                 T1 inter = incTri[i] + (incTri[j] - incTri[i]) * t;
                 projectedPoly[nPoly++] = inter;
@@ -594,17 +594,17 @@ __device__ bool projectTriangleOntoTriangle(const T1* incTri,
 
     // Now compute the intersection polygon of the projected triangle and reference triangle
     // We need bidirectional clipping: clip projectedPoly against refTri, then add refTri vertices inside projectedPoly
-    
-    // Step 1: Clip projected polygon against reference triangle (Sutherland-Hodgman)
-    T1 inputPoly[SH_MAX_CLIPPING_VERTICES];
-    for (int i = 0; i < nPoly; ++i) {
-        inputPoly[i] = projectedPoly[i];
-    }
-    int numInputVerts = nPoly;
 
-    T1 outputPoly[SH_MAX_CLIPPING_VERTICES];
-    for (int edge = 0; edge < 3; ++edge) {
-        int numOutputVerts = 0;
+    // Step 1: Clip projected polygon against reference triangle (Sutherland-Hodgman)
+    T1 resultPoly[SH_MAX_CLIPPING_VERTICES];
+    for (int8_t i = 0; i < nPoly; ++i) {
+        resultPoly[i] = projectedPoly[i];
+    }
+    int8_t numInputVerts = nPoly;
+
+    T1 intermediatePoly[SH_MAX_CLIPPING_VERTICES];
+    for (int8_t edge = 0; edge < 3; ++edge) {
+        int8_t numOutputVerts = 0;
         T1 edgeStart = refTri[edge];
         T1 edgeEnd = refTri[(edge + 1) % 3];
         T1 edgeDir = edgeEnd - edgeStart;
@@ -612,30 +612,30 @@ __device__ bool projectTriangleOntoTriangle(const T1* incTri,
         edgeNormal = normalize(edgeNormal);
 
         // Clip input polygon against this edge
-        for (int i = 0; i < numInputVerts; ++i) {
-            T1 v1 = inputPoly[i];
-            T1 v2 = inputPoly[(i + 1) % numInputVerts];
+        for (int8_t i = 0; i < numInputVerts; ++i) {
+            T1 v1 = resultPoly[i];
+            T1 v2 = resultPoly[(i + 1) % numInputVerts];
             T2 d1 = dot(v1 - edgeStart, edgeNormal);
             T2 d2 = dot(v2 - edgeStart, edgeNormal);
             bool in1 = (d1 >= -DEME_TINY_FLOAT);
             bool in2 = (d2 >= -DEME_TINY_FLOAT);
 
-            if (in1 && numOutputVerts < SH_MAX_CLIPPING_VERTICES) {
-                outputPoly[numOutputVerts++] = v1;
+            if (in1) {
+                intermediatePoly[numOutputVerts++] = v1;
             }
-            if (in1 != in2 && numOutputVerts < SH_MAX_CLIPPING_VERTICES) {
+            if (in1 != in2) {
                 T2 denom = d1 - d2;
-                if (denom != T2(0.0)) {  // Avoid division by zero
+                if (denom != 0.0) {  // Avoid division by zero
                     T2 t = d1 / denom;
                     T1 inter = v1 + (v2 - v1) * t;
-                    outputPoly[numOutputVerts++] = inter;
+                    intermediatePoly[numOutputVerts++] = inter;
                 }
             }
         }
 
         // Copy output to input for next iteration
-        for (int i = 0; i < numOutputVerts; ++i) {
-            inputPoly[i] = outputPoly[i];
+        for (int8_t i = 0; i < numOutputVerts; ++i) {
+            resultPoly[i] = intermediatePoly[i];
         }
         numInputVerts = numOutputVerts;
 
@@ -643,22 +643,18 @@ __device__ bool projectTriangleOntoTriangle(const T1* incTri,
             break;  // No intersection
         }
     }
-    
+
     // Step 2: Check if any reference triangle vertices are inside the projected polygon
     // and add them to the intersection polygon if they are
-    T1 finalPoly[SH_MAX_CLIPPING_VERTICES];
-    int numFinalVerts = numInputVerts;
-    for (int i = 0; i < numInputVerts; ++i) {
-        finalPoly[i] = inputPoly[i];
-    }
-    
+    int8_t numFinalVerts = numInputVerts;
+
     // For each reference triangle vertex, check if it's inside the original projected polygon
-    for (int refIdx = 0; refIdx < 3; ++refIdx) {
+    for (int8_t refIdx = 0; refIdx < 3; ++refIdx) {
         T1 refVertex = refTri[refIdx];
-        
+
         // Check if refVertex is inside the projected polygon using winding number
         bool inside = true;
-        for (int i = 0; i < nPoly; ++i) {
+        for (int8_t i = 0; i < nPoly; ++i) {
             T1 edgeStart = projectedPoly[i];
             T1 edgeEnd = projectedPoly[(i + 1) % nPoly];
             T1 edgeDir = edgeEnd - edgeStart;
@@ -669,76 +665,76 @@ __device__ bool projectTriangleOntoTriangle(const T1* incTri,
                 break;
             }
         }
-        
-        if (inside && numFinalVerts < SH_MAX_CLIPPING_VERTICES) {
+
+        if (inside) {
             // Check if this vertex is not already in the polygon (avoid duplicates)
             bool isDuplicate = false;
-            for (int j = 0; j < numFinalVerts; ++j) {
-                T1 diff = finalPoly[j] - refVertex;
+            for (int8_t j = 0; j < numFinalVerts; ++j) {
+                T1 diff = resultPoly[j] - refVertex;
                 if (dot(diff, diff) < DEME_TINY_FLOAT * DEME_TINY_FLOAT) {
                     isDuplicate = true;
                     break;
                 }
             }
             if (!isDuplicate) {
-                finalPoly[numFinalVerts++] = refVertex;
+                resultPoly[numFinalVerts++] = refVertex;
             }
         }
     }
-    
+
     // If we added reference vertices, we need to reorder the polygon to maintain proper winding
     if (numFinalVerts > numInputVerts && numFinalVerts >= 3) {
         // Compute centroid of all vertices
         T1 tempCentroid;
-        tempCentroid.x = T2(0.0);
-        tempCentroid.y = T2(0.0);
-        tempCentroid.z = T2(0.0);
-        for (int i = 0; i < numFinalVerts; ++i) {
-            tempCentroid = tempCentroid + finalPoly[i];
+        tempCentroid.x = 0.0;
+        tempCentroid.y = 0.0;
+        tempCentroid.z = 0.0;
+        for (int8_t i = 0; i < numFinalVerts; ++i) {
+            tempCentroid = tempCentroid + resultPoly[i];
         }
         tempCentroid = tempCentroid / T2(numFinalVerts);
-        
+
         // Sort vertices by angle around centroid to ensure proper winding order
         // Use simple bubble sort for small number of vertices
-        for (int i = 0; i < numFinalVerts - 1; ++i) {
-            for (int j = i + 1; j < numFinalVerts; ++j) {
-                T1 vi = finalPoly[i] - tempCentroid;
-                T1 vj = finalPoly[j] - tempCentroid;
+        for (int8_t i = 0; i < numFinalVerts - 1; ++i) {
+            for (int8_t j = i + 1; j < numFinalVerts; ++j) {
+                T1 vi = resultPoly[i] - tempCentroid;
+                T1 vj = resultPoly[j] - tempCentroid;
                 // Use reference normal to determine consistent orientation
                 T1 cross_ij = cross(vi, vj);
-                if (dot(cross_ij, refNormal) < T2(0.0)) {
+                if (dot(cross_ij, refNormal) < 0.0) {
                     // Swap
-                    T1 temp = finalPoly[i];
-                    finalPoly[i] = finalPoly[j];
-                    finalPoly[j] = temp;
+                    T1 temp = resultPoly[i];
+                    resultPoly[i] = resultPoly[j];
+                    resultPoly[j] = temp;
                 }
             }
         }
     }
-    
+
     numInputVerts = numFinalVerts;
 
     // Compute centroid and area of the intersection polygon
-    centroid.x = T2(0.0);
-    centroid.y = T2(0.0);
-    centroid.z = T2(0.0);
+    centroid.x = 0.0;
+    centroid.y = 0.0;
+    centroid.z = 0.0;
 
-    area = T2(0.0);
+    area = 0.0;
     depth = maxPenetration;
     if (numInputVerts >= 3) {
-        for (int i = 0; i < numInputVerts; ++i) {
-            centroid = centroid + finalPoly[i];
+        for (int8_t i = 0; i < numInputVerts; ++i) {
+            centroid = centroid + resultPoly[i];
         }
         centroid = centroid / T2(numInputVerts);
 
         // Calculate area using fan triangulation from centroid
-        for (int i = 0; i < numInputVerts; ++i) {
-            T1 v1 = finalPoly[i] - centroid;
-            T1 v2 = finalPoly[(i + 1) % numInputVerts] - centroid;
+        for (int8_t i = 0; i < numInputVerts; ++i) {
+            T1 v1 = resultPoly[i] - centroid;
+            T1 v2 = resultPoly[(i + 1) % numInputVerts] - centroid;
             T1 crossProd = cross(v1, v2);
             area += sqrt(dot(crossProd, crossProd));
         }
-        area *= T2(0.5);
+        area *= 0.5;
         return true;
     } else {
         // Degenerate intersection polygon
@@ -760,21 +756,21 @@ __device__ bool projectTriangleOntoTriangle(const T1* incTri,
  */
 template <typename T1>
 __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
-                                          const T1& prismAFaceANode2,
-                                          const T1& prismAFaceANode3,
-                                          const T1& prismAFaceBNode1,
-                                          const T1& prismAFaceBNode2,
-                                          const T1& prismAFaceBNode3,
-                                          const T1& prismBFaceANode1,
-                                          const T1& prismBFaceANode2,
-                                          const T1& prismBFaceANode3,
-                                          const T1& prismBFaceBNode1,
-                                          const T1& prismBFaceBNode2,
-                                          const T1& prismBFaceBNode3) {
+                                   const T1& prismAFaceANode2,
+                                   const T1& prismAFaceANode3,
+                                   const T1& prismAFaceBNode1,
+                                   const T1& prismAFaceBNode2,
+                                   const T1& prismAFaceBNode3,
+                                   const T1& prismBFaceANode1,
+                                   const T1& prismBFaceANode2,
+                                   const T1& prismBFaceANode3,
+                                   const T1& prismBFaceBNode1,
+                                   const T1& prismBFaceBNode2,
+                                   const T1& prismBFaceBNode3) {
     // Increased axis count to accommodate additional side face normals and height edge tests
     // Max axes: 2 base normals + 6 side face normals + 9 base edge-edge + 18 height edge cross products = 35
     float3 axes[35];
-    unsigned short int axisCount = 0;
+    int8_t axisCount = 0;
 
     // Pack as stack arrays for easier looping
     T1 prismA[6] = {prismAFaceANode1, prismAFaceANode2, prismAFaceANode3,
@@ -801,7 +797,7 @@ __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
 
     // Side face normals for prism A (3 rectangular side faces)
     // Each side face is formed by an edge of the base and the corresponding height edges
-    for (unsigned short int i = 0; i < 3; ++i) {
+    for (int8_t i = 0; i < 3; ++i) {
         // For each base edge, compute the normal of the rectangular side face
         // The side face is formed by base edge i and the two height edges at its endpoints
         T1 sideNormal = cross(A_baseEdges[i], A_heightEdges[i]);
@@ -811,7 +807,7 @@ __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
     }
 
     // Side face normals for prism B (3 rectangular side faces)
-    for (unsigned short int i = 0; i < 3; ++i) {
+    for (int8_t i = 0; i < 3; ++i) {
         T1 sideNormal = cross(B_baseEdges[i], B_heightEdges[i]);
         float len = length(sideNormal);
         if (len > DEME_TINY_FLOAT)
@@ -819,8 +815,8 @@ __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
     }
 
     // Edge-edge cross products: base edges of A with base edges of B
-    for (unsigned short int i = 0; i < 3; ++i) {
-        for (unsigned short int j = 0; j < 3; ++j) {
+    for (int8_t i = 0; i < 3; ++i) {
+        for (int8_t j = 0; j < 3; ++j) {
             T1 cp = cross(A_baseEdges[i], B_baseEdges[j]);
             float len = length(cp);
             if (len > DEME_TINY_FLOAT)
@@ -829,8 +825,8 @@ __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
     }
 
     // Edge-edge cross products: height edges of A with base edges of B
-    for (unsigned short int i = 0; i < 3; ++i) {
-        for (unsigned short int j = 0; j < 3; ++j) {
+    for (int8_t i = 0; i < 3; ++i) {
+        for (int8_t j = 0; j < 3; ++j) {
             T1 cp = cross(A_heightEdges[i], B_baseEdges[j]);
             float len = length(cp);
             if (len > DEME_TINY_FLOAT)
@@ -839,8 +835,8 @@ __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
     }
 
     // Edge-edge cross products: base edges of A with height edges of B
-    for (unsigned short int i = 0; i < 3; ++i) {
-        for (unsigned short int j = 0; j < 3; ++j) {
+    for (int8_t i = 0; i < 3; ++i) {
+        for (int8_t j = 0; j < 3; ++j) {
             T1 cp = cross(A_baseEdges[i], B_heightEdges[j]);
             float len = length(cp);
             if (len > DEME_TINY_FLOAT)
@@ -853,7 +849,7 @@ __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
     // When prism A is inside prism B, for any axis, the projection range of A [minA, maxA]
     // will be contained within the projection range of B [minB, maxB], causing all overlap
     // checks to pass. With no separating axis found, the function returns true (in contact).
-    for (unsigned short int i = 0; i < axisCount; ++i) {
+    for (int8_t i = 0; i < axisCount; ++i) {
         float minA, maxA, minB, maxB;
         project_points_on_axis(prismA, axes[i], minA, maxA);
         project_points_on_axis(prismB, axes[i], minB, maxB);
@@ -932,9 +928,9 @@ __device__ bool checkTriangleTriangleOverlap(
     // ========================================================================
 
     // Calculate reference triangle areas for axis hygiene check
-    T2 areaRefA = T2(0.5) * sqrt(lenA2);
-    T2 areaRefB = T2(0.5) * sqrt(lenB2);
-    
+    T2 areaRefA = 0.5 * sqrt(lenA2);
+    T2 areaRefB = 0.5 * sqrt(lenB2);
+
     // Project triangle B onto triangle A's plane and clip against A
     T2 depthBA, areaBA;
     T1 centroidBA;
@@ -944,108 +940,106 @@ __device__ bool checkTriangleTriangleOverlap(
     T2 depthAB, areaAB;
     T1 centroidAB;
     bool contactAB = projectTriangleOntoTriangle<T1, T2>(triA, triB, nB, depthAB, areaAB, centroidAB);
-    
+
     // Axis hygiene check: if projected area is suspiciously small, verify stability with rotated trials
-    const T2 SUSPICIOUS_AREA_THRESHOLD = T2(0.05);  // 5% of reference area
-    const T2 ROTATION_ANGLE = T2(0.1);  // Small rotation angle in radians (~5.7 degrees)
-    
+    const T2 SUSPICIOUS_AREA_THRESHOLD = 0.05;  // 5% of reference area
+    const T2 ROTATION_ANGLE = 0.1;              // Small rotation angle in radians (~5.7 degrees)
+
     if (contactBA && areaBA < SUSPICIOUS_AREA_THRESHOLD * areaRefA) {
         // Suspicious overlap - perform stability check with 4 trial rotations
         T2 minArea = areaBA;
-        
+
         // Find two orthogonal directions in the plane of triangle A
         T1 edge0 = triA[1] - triA[0];
         T2 edge0Len2 = dot(edge0, edge0);
-        if (edge0Len2 > DEME_TINY_FLOAT) {
+        if (edge0Len2 > DEME_TINY_FLOAT * DEME_TINY_FLOAT) {
             T1 tangent1 = edge0 * rsqrt(edge0Len2);
             T1 tangent2 = cross(nA, tangent1);
-            
+
             // Rotate around the overlap polygon centroid (centroidBA), not triangle centroid
             // This is the correct rotation center as it's already in-plane
-            
+
             // Try 4 rotations: +/- rotation around tangent1 and tangent2
 #pragma unroll
-            for (int dir = 0; dir < 2; ++dir) {
+            for (int8_t dir = 0; dir < 2; ++dir) {
                 T1 axis = (dir == 0) ? tangent1 : tangent2;
 #pragma unroll
-                for (int sign = -1; sign <= 1; sign += 2) {
+                for (int8_t sign = -1; sign <= 1; sign += 2) {
                     T2 angle = T2(sign) * ROTATION_ANGLE;
                     T2 cosAngle = cos(angle);
                     T2 sinAngle = sin(angle);
                     T1 rotatedNormal = nA * cosAngle + cross(axis, nA) * sinAngle;
-                    
+
                     T1 rotatedTriA[3];
 #pragma unroll
-                    for (int i = 0; i < 3; ++i) {
+                    for (int8_t i = 0; i < 3; ++i) {
                         T1 relPos = triA[i] - centroidBA;
                         T1 rotatedRelPos = relPos * cosAngle + cross(axis, relPos) * sinAngle;
                         rotatedTriA[i] = centroidBA + rotatedRelPos;
                     }
-                    
+
                     T2 trialDepth, trialArea;
                     T1 trialCentroid;
-                    bool trialContact = projectTriangleOntoTriangle<T1, T2>(triB, rotatedTriA, rotatedNormal, trialDepth, trialArea, trialCentroid);
-                    
-                    if (trialContact && trialArea < minArea) {
-                        minArea = trialArea;
-                    } else if (!trialContact) {
-                        minArea = T2(0.0);
+                    bool trialContact = projectTriangleOntoTriangle<T1, T2>(triB, rotatedTriA, rotatedNormal,
+                                                                            trialDepth, trialArea, trialCentroid);
+
+                    if (!trialContact) {
+                        minArea = 0.0;
                     }
                 }
             }
-            
+
             areaBA = minArea;
             if (minArea <= DEME_TINY_FLOAT) {
                 contactBA = false;
             }
         }
     }
-    
+
     if (contactAB && areaAB < SUSPICIOUS_AREA_THRESHOLD * areaRefB) {
         // Suspicious overlap - perform stability check with 4 trial rotations
         T2 minArea = areaAB;
-        
+
         // Find two orthogonal directions in the plane of triangle B
         T1 edge0 = triB[1] - triB[0];
         T2 edge0Len2 = dot(edge0, edge0);
-        if (edge0Len2 > DEME_TINY_FLOAT) {
+        if (edge0Len2 > DEME_TINY_FLOAT * DEME_TINY_FLOAT) {
             T1 tangent1 = edge0 * rsqrt(edge0Len2);
             T1 tangent2 = cross(nB, tangent1);
-            
+
             // Rotate around the overlap polygon centroid (centroidAB), not triangle centroid
             // This is the correct rotation center as it's already in-plane
-            
+
             // Try 4 rotations: +/- rotation around tangent1 and tangent2
 #pragma unroll
-            for (int dir = 0; dir < 2; ++dir) {
+            for (int8_t dir = 0; dir < 2; ++dir) {
                 T1 axis = (dir == 0) ? tangent1 : tangent2;
 #pragma unroll
-                for (int sign = -1; sign <= 1; sign += 2) {
+                for (int8_t sign = -1; sign <= 1; sign += 2) {
                     T2 angle = T2(sign) * ROTATION_ANGLE;
                     T2 cosAngle = cos(angle);
                     T2 sinAngle = sin(angle);
                     T1 rotatedNormal = nB * cosAngle + cross(axis, nB) * sinAngle;
-                    
+
                     T1 rotatedTriB[3];
 #pragma unroll
-                    for (int i = 0; i < 3; ++i) {
+                    for (int8_t i = 0; i < 3; ++i) {
                         T1 relPos = triB[i] - centroidAB;
                         T1 rotatedRelPos = relPos * cosAngle + cross(axis, relPos) * sinAngle;
                         rotatedTriB[i] = centroidAB + rotatedRelPos;
                     }
-                    
+
                     T2 trialDepth, trialArea;
                     T1 trialCentroid;
-                    bool trialContact = projectTriangleOntoTriangle<T1, T2>(triA, rotatedTriB, rotatedNormal, trialDepth, trialArea, trialCentroid);
-                    
-                    if (trialContact && trialArea < minArea) {
-                        minArea = trialArea;
-                    } else if (!trialContact) {
-                        minArea = T2(0.0);
+                    bool trialContact = projectTriangleOntoTriangle<T1, T2>(triA, rotatedTriB, rotatedNormal,
+                                                                            trialDepth, trialArea, trialCentroid);
+
+                    if (!trialContact) {
+                        minArea = 0.0;
                     }
                 }
             }
-            
+
             areaAB = minArea;
             if (minArea <= DEME_TINY_FLOAT) {
                 contactAB = false;
@@ -1060,8 +1054,8 @@ __device__ bool checkTriangleTriangleOverlap(
         // No contact detected
         if (outputNoContact) {
             // Provide separation info
-            T1 centA = (triA[0] + triA[1] + triA[2]) / T2(3.0);
-            T1 centB = (triB[0] + triB[1] + triB[2]) / T2(3.0);
+            T1 centA = (triA[0] + triA[1] + triA[2]) / 3.0;
+            T1 centB = (triB[0] + triB[1] + triB[2]) / 3.0;
             T1 sep = centA - centB;
             T2 sepLen2 = dot(sep, sep);
 
@@ -1069,13 +1063,13 @@ __device__ bool checkTriangleTriangleOverlap(
                 T2 sepLen = sqrt(sepLen2);
                 normal = sep / sepLen;
                 depth = -sepLen;  // Negative for separation
-                point = (centA + centB) * T2(0.5);
+                point = (centA + centB) * 0.5;
             } else {
                 normal = nA;
                 depth = -DEME_HUGE_FLOAT;
                 point = centA;
             }
-            projectedArea = T2(0.0);
+            projectedArea = 0.0;
         }
         return false;
     }
@@ -1083,8 +1077,8 @@ __device__ bool checkTriangleTriangleOverlap(
     // Average the results from both projections
     if (contactBA && contactAB) {
         // Both directions have contact - average the results
-        depth = (depthBA + depthAB) / T2(2.0);
-        projectedArea = (areaBA + areaAB) / T2(2.0);
+        depth = (depthBA + depthAB) / 2.0;
+        projectedArea = (areaBA + areaAB) / 2.0;
 
         // Contact normal: average of the two normals (pointing from B to A)
         // Note: nA points outward from A, so when B is submerged below A, B2A is the inverse of nA
@@ -1101,7 +1095,7 @@ __device__ bool checkTriangleTriangleOverlap(
         }
 
         // Contact point: midpoint between the two centroids
-        T1 midCentroid = (centroidBA + centroidAB) / T2(2.0);
+        T1 midCentroid = (centroidBA + centroidAB) / 2.0;
         point = midCentroid;
     } else if (contactBA) {
         // Only B->A projection has contact
@@ -1110,7 +1104,7 @@ __device__ bool checkTriangleTriangleOverlap(
         normal = -1.0 * nA;  // Pay attention to direction
 
         // Contact point: centroid on A's plane, moved back by half depth
-        point = centroidBA - nA * (depth * T2(0.5));
+        point = centroidBA - nA * (depth * 0.5);
     } else {
         // Only A->B projection has contact
         depth = depthAB;
@@ -1118,7 +1112,7 @@ __device__ bool checkTriangleTriangleOverlap(
         normal = nB;
 
         // Contact point: centroid on B's plane, moved back by half depth
-        point = centroidAB - nB * (depth * T2(0.5));
+        point = centroidAB - nB * (depth * 0.5);
     }
 
     return true;

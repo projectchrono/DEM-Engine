@@ -58,6 +58,8 @@ __global__ void computeMarginFromAbsv(deme::DEMSimParams* simParams,
         // stricter.
         granData->marginSize[ownerID] =
             (double)(absv * simParams->expSafetyMulti + simParams->expSafetyAdder) * (*ts) * (*maxDrift) +
+            // Temp addition
+            0.25 + 
             granData->familyExtraMarginSize[my_family];
     }
 }
