@@ -16,22 +16,22 @@
  *
  */
 template <typename T1, typename T2>
-inline __host__ __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
-                                                               const T1& YA,
-                                                               const T1& ZA,
-                                                               const T1& radA,
-                                                               const T1& XB,
-                                                               const T1& YB,
-                                                               const T1& ZB,
-                                                               const T1& radB,
-                                                               T1& CPX,
-                                                               T1& CPY,
-                                                               T1& CPZ,
-                                                               T2& normalX,
-                                                               T2& normalY,
-                                                               T2& normalZ,
-                                                               T1& overlapDepth,
-                                                               T1& overlapArea) {
+__host__ __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
+                                                        const T1& YA,
+                                                        const T1& ZA,
+                                                        const T1& radA,
+                                                        const T1& XB,
+                                                        const T1& YB,
+                                                        const T1& ZB,
+                                                        const T1& radB,
+                                                        T1& CPX,
+                                                        T1& CPY,
+                                                        T1& CPZ,
+                                                        T2& normalX,
+                                                        T2& normalY,
+                                                        T2& normalZ,
+                                                        T1& overlapDepth,
+                                                        T1& overlapArea) {
     T1 centerDist2 = distSquared<T1>(XA, YA, ZA, XB, YB, ZB);
     deme::contact_t contactType;
     if (centerDist2 > (radA + radB) * (radA + radB)) {
@@ -60,20 +60,20 @@ inline __host__ __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
 // normal. Returned contact type is only useful for kT to sort contact types, as for dT's force calculation, the flavor
 // used is determined by type B's actual objType.
 template <typename T1, typename T2, typename T3>
-inline __host__ __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
-                                                                    const T2& radA,
-                                                                    const deme::objType_t& typeB,
-                                                                    const T1& B,
-                                                                    const float3& dirB,
-                                                                    const float& size1B,
-                                                                    const float& size2B,
-                                                                    const float& size3B,
-                                                                    const float& normal_sign,
-                                                                    const float& beta4Entity,
-                                                                    T1& CP,
-                                                                    float3& cntNormal,
-                                                                    T3& overlapDepth,
-                                                                    T3& overlapArea) {
+__host__ __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
+                                                             const T2& radA,
+                                                             const deme::objType_t& typeB,
+                                                             const T1& B,
+                                                             const float3& dirB,
+                                                             const float& size1B,
+                                                             const float& size2B,
+                                                             const float& size3B,
+                                                             const float& normal_sign,
+                                                             const float& beta4Entity,
+                                                             T1& CP,
+                                                             float3& cntNormal,
+                                                             T3& overlapDepth,
+                                                             T3& overlapArea) {
     deme::contact_t contactType;
     switch (typeB) {
         case (deme::ANAL_OBJ_TYPE_PLANE): {
