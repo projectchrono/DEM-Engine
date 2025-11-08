@@ -35,6 +35,7 @@
 #include <cmath>
 #include <queue>
 #include <vector>
+#include <sstream>
 
 #include "../kernel/DEMHelperKernels.cuh"
 #include "BdrsAndObjs.h"
@@ -132,6 +133,12 @@ bool DEMMeshConnected::LoadWavefrontMesh(std::string input_file, bool load_norma
     }
 
     this->nTri = m_face_v_indices.size();
+
+    // Initialize default patch info: all triangles in patch 0 (assuming convex mesh)
+    this->m_patch_ids.clear();
+    this->m_patch_ids.resize(this->nTri, 0);
+    this->num_patches = 1;
+    this->patches_explicitly_set = false;
 
     return true;
 }
@@ -258,8 +265,8 @@ static std::vector<std::vector<size_t>> buildAdjacencyMap(const std::vector<int3
 // face normals is below the threshold. Each patch represents a locally convex region.
 size_t DEMMeshConnected::SplitIntoConvexPatches(float angle_threshold_deg) {
     if (nTri == 0) {
-        patches_computed = false;
-        num_patches = 0;
+        patches_explicitly_set = false;
+        num_patches = 1;
         return 0;
     }
 
@@ -323,9 +330,42 @@ size_t DEMMeshConnected::SplitIntoConvexPatches(float angle_threshold_deg) {
     }
 
     num_patches = current_patch_id;
-    patches_computed = true;
+    patches_explicitly_set = true;
 
     return num_patches;
+}
+
+// Manually set patch IDs for each triangle
+void DEMMeshConnected::SetPatchIDs(const std::vector<int>& patch_ids) {
+    if (patch_ids.size() != nTri) {
+        std::stringstream ss;
+        ss << "SetPatchIDs: Input vector size (" << patch_ids.size() 
+           << ") must match the number of triangles (" << nTri << ") in the mesh." << std::endl;
+        throw std::runtime_error(ss.str());
+    }
+
+    // Validate that all patch IDs are non-negative
+    for (size_t i = 0; i < patch_ids.size(); ++i) {
+        if (patch_ids[i] < 0) {
+            std::stringstream ss;
+            ss << "SetPatchIDs: Patch ID at index " << i << " is negative (" << patch_ids[i] 
+               << "). All patch IDs must be non-negative integers." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+    }
+
+    // Copy the patch IDs
+    m_patch_ids = patch_ids;
+
+    // Calculate the number of patches (maximum patch ID + 1)
+    if (!patch_ids.empty()) {
+        int max_patch_id = *std::max_element(patch_ids.begin(), patch_ids.end());
+        num_patches = max_patch_id + 1;
+    } else {
+        num_patches = 1;
+    }
+
+    patches_explicitly_set = true;
 }
 
 }  // end namespace deme

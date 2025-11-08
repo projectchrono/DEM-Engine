@@ -364,8 +364,8 @@ class DEMMeshConnected : public DEMInitializer {
         this->m_face_uv_indices.clear();
         this->m_face_col_indices.clear();
         this->m_patch_ids.clear();
-        this->num_patches = 0;
-        this->patches_computed = false;
+        this->num_patches = 1;
+        this->patches_explicitly_set = false;
         this->owner = NULL_BODYID;
     }
 
@@ -529,12 +529,12 @@ class DEMMeshConnected : public DEMInitializer {
     ////////////////////////////////////////////////////////
     // Mesh patch information for convex patch splitting
     ////////////////////////////////////////////////////////
-    // Patch ID for each triangle facet (-1 means unassigned)
+    // Patch ID for each triangle facet (defaults to 0 for all triangles, assuming convex mesh)
     std::vector<int> m_patch_ids;
     // Number of patches in this mesh
-    size_t num_patches = 0;
-    // Whether patch information has been computed
-    bool patches_computed = false;
+    size_t num_patches = 1;
+    // Whether patch information has been explicitly set (either computed or manually supplied)
+    bool patches_explicitly_set = false;
 
     /// @brief Split the mesh into convex patches based on angle threshold.
     /// @details Uses a region-growing algorithm to group adjacent triangles whose face normals differ by less than
@@ -546,17 +546,24 @@ class DEMMeshConnected : public DEMInitializer {
     /// @return Number of patches created.
     size_t SplitIntoConvexPatches(float angle_threshold_deg = 30.0f);
 
+    /// @brief Manually set the patch IDs for each triangle.
+    /// @details Allows user to manually specify which patch each triangle belongs to. This is useful when
+    /// the user has pre-computed patch information or wants to define patches based on custom criteria.
+    /// @param patch_ids Vector of patch IDs, one for each triangle. Must have the same length as the number
+    /// of triangles in the mesh. Patch IDs should be non-negative integers starting from 0.
+    void SetPatchIDs(const std::vector<int>& patch_ids);
+
     /// @brief Get the patch ID for each triangle.
-    /// @return Vector of patch IDs (one per triangle). Returns empty vector if patches not computed.
+    /// @return Vector of patch IDs (one per triangle). By default, all triangles are in patch 0 (assuming convex mesh).
     const std::vector<int>& GetPatchIDs() const { return m_patch_ids; }
 
     /// @brief Get the number of patches in the mesh.
-    /// @return Number of patches, or 0 if patches not computed.
+    /// @return Number of patches. Default is 1 (assuming convex mesh).
     size_t GetNumPatches() const { return num_patches; }
 
-    /// @brief Check if patch information has been computed.
-    /// @return True if patches have been computed, false otherwise.
-    bool ArePatchesComputed() const { return patches_computed; }
+    /// @brief Check if patch information has been explicitly set.
+    /// @return True if patches have been computed via SplitIntoConvexPatches() or set via SetPatchIDs(), false if using default (single patch).
+    bool ArePatchesExplicitlySet() const { return patches_explicitly_set; }
 
     ////////////////////////////////////////////////////////
     // Some geo wildcard-related stuff
