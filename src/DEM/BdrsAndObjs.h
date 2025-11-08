@@ -524,6 +524,33 @@ class DEMMeshConnected : public DEMInitializer {
     }
 
     ////////////////////////////////////////////////////////
+    // Mesh patch information for convex patch splitting
+    ////////////////////////////////////////////////////////
+    // Patch ID for each triangle facet (-1 means unassigned)
+    std::vector<int> m_patch_ids;
+    // Number of patches in this mesh
+    size_t num_patches = 0;
+    // Whether patch information has been computed
+    bool patches_computed = false;
+
+    /// @brief Split the mesh into convex patches based on angle threshold.
+    /// @param angle_threshold_deg Maximum angle (in degrees) between adjacent face normals to be in same patch.
+    /// @return Number of patches created.
+    size_t SplitIntoConvexPatches(float angle_threshold_deg = 30.0f);
+
+    /// @brief Get the patch ID for each triangle.
+    /// @return Vector of patch IDs (one per triangle). Returns empty vector if patches not computed.
+    const std::vector<int>& GetPatchIDs() const { return m_patch_ids; }
+
+    /// @brief Get the number of patches in the mesh.
+    /// @return Number of patches, or 0 if patches not computed.
+    size_t GetNumPatches() const { return num_patches; }
+
+    /// @brief Check if patch information has been computed.
+    /// @return True if patches have been computed, false otherwise.
+    bool ArePatchesComputed() const { return patches_computed; }
+
+    ////////////////////////////////////////////////////////
     // Some geo wildcard-related stuff
     ////////////////////////////////////////////////////////
     // Initial geometry wildcard that all triangles should have
