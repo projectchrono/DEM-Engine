@@ -258,6 +258,9 @@ static std::vector<std::vector<size_t>> buildAdjacencyMap(const std::vector<int3
     return adjacency;
 }
 
+// Split mesh into convex patches using region-growing algorithm.
+// The algorithm groups adjacent triangles (sharing an edge) if the angle between their
+// face normals is below the threshold. Each patch represents a locally convex region.
 size_t DEMMeshConnected::SplitIntoConvexPatches(float angle_threshold_deg) {
     if (nTri == 0) {
         patches_computed = false;

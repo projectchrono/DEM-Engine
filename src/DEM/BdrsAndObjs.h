@@ -537,7 +537,12 @@ class DEMMeshConnected : public DEMInitializer {
     bool patches_computed = false;
 
     /// @brief Split the mesh into convex patches based on angle threshold.
+    /// @details Uses a region-growing algorithm to group adjacent triangles whose face normals differ by less than
+    /// the specified angle threshold. Each patch represents a locally convex region of the mesh. Patches are
+    /// non-overlapping and cover the entire mesh. This is useful for contact force calculations.
     /// @param angle_threshold_deg Maximum angle (in degrees) between adjacent face normals to be in same patch.
+    /// Default is 30.0 degrees. Lower values create more patches (stricter convexity), higher values create fewer
+    /// patches (relaxed convexity).
     /// @return Number of patches created.
     size_t SplitIntoConvexPatches(float angle_threshold_deg = 30.0f);
 
