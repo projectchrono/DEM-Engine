@@ -363,6 +363,9 @@ class DEMMeshConnected : public DEMInitializer {
         this->m_face_n_indices.clear();
         this->m_face_uv_indices.clear();
         this->m_face_col_indices.clear();
+        this->m_patch_ids.clear();
+        this->num_patches = 0;
+        this->patches_computed = false;
         this->owner = NULL_BODYID;
     }
 

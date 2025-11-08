@@ -32,6 +32,9 @@
 #include <fstream>
 #include <map>
 #include <unordered_map>
+#include <cmath>
+#include <queue>
+#include <vector>
 
 #include "../kernel/DEMHelperKernels.cuh"
 #include "BdrsAndObjs.h"
