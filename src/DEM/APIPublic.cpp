@@ -1845,7 +1845,7 @@ void DEMSolver::ClearCache() {
 std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(DEMClumpBatch& input_batch) {
     // load_order should be its position in the cache array, not nBatchClumpsLoad
     input_batch.load_order = cached_input_clump_batches.size();
-    // But we still need to record a batch loaded
+    // But we still need to record a batch load operation
     nBatchClumpsLoad++;
     cached_input_clump_batches.push_back(std::make_shared<DEMClumpBatch>(std::move(input_batch)));
 
@@ -1879,7 +1879,7 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(DEMMeshConne
     // load_order should be its position in the cache array, not nTriObjLoad
     mesh.load_order = cached_mesh_objs.size();
 
-    // But we still need to record a tri-mesh loaded
+    // But we still need to record a tri-mesh load operation
     nTriObjLoad++;
 
     cached_mesh_objs.push_back(std::make_shared<DEMMeshConnected>(std::move(mesh)));
