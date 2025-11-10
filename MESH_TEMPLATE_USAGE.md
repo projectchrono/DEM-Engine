@@ -130,11 +130,12 @@ int main() {
 
 ## Notes
 
-- Mesh templates are stored separately from simulation meshes
-- Template storage is never cleared during `ClearCache()` calls
+- Mesh templates are stored separately from simulation meshes in the `m_mesh_templates` vector
+- Template storage is never cleared during `ClearCache()` calls (similar to `m_templates`)
 - One-by-one instantiation (no batch creation like clumps)
-- Each instance is independent and can have different properties
-- Compatible with all existing mesh features (tracking, modification, etc.)
+- Each instance is independent and can have different properties (mass, MOI, position, etc.)
+- Compatible with all existing mesh features (tracking, modification, collision detection, etc.)
+- Templates can be reused any number of times throughout the simulation lifecycle
 
 ## Demo
 
