@@ -415,6 +415,10 @@ class DEMSolver {
     /// @param ptr Shared pointer for the object to duplicate.
     /// @return A duplicate of the object (with effectively a deep copy).
     std::shared_ptr<DEMClumpBatch> Duplicate(const std::shared_ptr<DEMClumpBatch>& ptr);
+    /// @brief Duplicate a mesh object that is loaded into the system.
+    /// @param ptr Shared pointer for the mesh object to duplicate.
+    /// @return A duplicate of the mesh object (with effectively a deep copy).
+    std::shared_ptr<DEMMeshConnected> Duplicate(const std::shared_ptr<DEMMeshConnected>& ptr);
 
     /// @brief Set the value for a material property that by nature involves a pair of a materials (e.g. friction
     /// coefficient).
@@ -650,6 +654,43 @@ class DEMSolver {
                                                              bool load_normals = true,
                                                              bool load_uv = false);
     std::shared_ptr<DEMMeshConnected> AddWavefrontMeshObject(DEMMeshConnected& mesh);
+
+    /// @brief Load a mesh type into the API-level cache as a template.
+    /// @details The mesh is not immediately added to the simulation, but stored as a template
+    /// that can be instantiated multiple times at different locations.
+    /// @param filename Path to the wavefront .obj file.
+    /// @param mat Material to assign to the mesh.
+    /// @param load_normals Whether to load normals from the file.
+    /// @param load_uv Whether to load UV coordinates from the file.
+    /// @return A shared pointer to the loaded mesh template.
+    std::shared_ptr<DEMMeshConnected> LoadMeshType(const std::string& filename,
+                                                   const std::shared_ptr<DEMMaterial>& mat,
+                                                   bool load_normals = true,
+                                                   bool load_uv = false);
+    /// @brief Load a mesh type into the API-level cache as a template.
+    /// @param filename Path to the wavefront .obj file.
+    /// @param load_normals Whether to load normals from the file.
+    /// @param load_uv Whether to load UV coordinates from the file.
+    /// @return A shared pointer to the loaded mesh template.
+    std::shared_ptr<DEMMeshConnected> LoadMeshType(const std::string& filename,
+                                                   bool load_normals = true,
+                                                   bool load_uv = false);
+    /// @brief Load a mesh type into the API-level cache as a template.
+    /// @param mesh A DEMMeshConnected object.
+    /// @return A shared pointer to the loaded mesh template.
+    std::shared_ptr<DEMMeshConnected> LoadMeshType(DEMMeshConnected& mesh);
+
+    /// @brief Instantiate a mesh from a template and add it to the simulation.
+    /// @param mesh_template The mesh template (shared pointer returned from LoadMeshType).
+    /// @param init_pos Initial position of the mesh instance.
+    /// @return A shared pointer to the instantiated mesh.
+    std::shared_ptr<DEMMeshConnected> AddMeshFromTemplate(const std::shared_ptr<DEMMeshConnected>& mesh_template,
+                                                          const float3& init_pos);
+    std::shared_ptr<DEMMeshConnected> AddMeshFromTemplate(const std::shared_ptr<DEMMeshConnected>& mesh_template,
+                                                          const std::vector<float>& init_pos) {
+        assertThreeElements(init_pos, "AddMeshFromTemplate", "init_pos");
+        return AddMeshFromTemplate(mesh_template, make_float3(init_pos[0], init_pos[1], init_pos[2]));
+    }
 
     /// @brief Create a DEMTracker to allow direct control/modification/query to this external object/batch of
     /// clumps/triangle mesh object.
@@ -1612,11 +1653,14 @@ class DEMSolver {
     size_t nTriObjLoad = 0;
     // Number of clump templates loaded. Never decreases.
     size_t nClumpTemplateLoad = 0;
+    // Number of mesh templates loaded. Never decreases.
+    size_t nMeshTemplateLoad = 0;
     // Number of materials loaded. Never decreases.
     size_t nMaterialsLoad = 0;
 
     // The above quantities, when they were last time initialized. Used for sanity checks at user re-initialization.
     size_t nLastTimeClumpTemplateLoad = 0;
+    size_t nLastTimeMeshTemplateLoad = 0;
     unsigned int nLastTimeExtObjLoad = 0;
     size_t nLastTimeBatchClumpsLoad = 0;
     size_t nLastTimeTriObjLoad = 0;
@@ -1692,6 +1736,9 @@ class DEMSolver {
     // This is the cached clump structure information. Note although not stated explicitly, those are only `clump'
     // templates, not including triangles, analytical geometries etc.
     std::vector<std::shared_ptr<DEMClumpTemplate>> m_templates;
+
+    // Cached mesh templates (not yet instantiated in simulation)
+    std::vector<std::shared_ptr<DEMMeshConnected>> m_mesh_templates;
 
     // Shared pointers to a batch of clumps loaded into the system. Through this returned handle, the user can further
     // specify the vel, ori etc. of this batch of clumps.
