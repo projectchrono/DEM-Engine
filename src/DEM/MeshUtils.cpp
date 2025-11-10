@@ -339,8 +339,8 @@ size_t DEMMeshConnected::SplitIntoConvexPatches(float angle_threshold_deg) {
 void DEMMeshConnected::SetPatchIDs(const std::vector<int>& patch_ids) {
     if (patch_ids.size() != nTri) {
         std::stringstream ss;
-        ss << "SetPatchIDs: Input vector size (" << patch_ids.size() 
-           << ") must match the number of triangles (" << nTri << ") in the mesh." << std::endl;
+        ss << "SetPatchIDs: Input vector size (" << patch_ids.size() << ") must match the number of triangles (" << nTri
+           << ") in the mesh." << std::endl;
         throw std::runtime_error(ss.str());
     }
 
@@ -348,7 +348,7 @@ void DEMMeshConnected::SetPatchIDs(const std::vector<int>& patch_ids) {
     for (size_t i = 0; i < patch_ids.size(); ++i) {
         if (patch_ids[i] < 0) {
             std::stringstream ss;
-            ss << "SetPatchIDs: Patch ID at index " << i << " is negative (" << patch_ids[i] 
+            ss << "SetPatchIDs: Patch ID at index " << i << " is negative (" << patch_ids[i]
                << "). All patch IDs must be non-negative integers." << std::endl;
             throw std::runtime_error(ss.str());
         }

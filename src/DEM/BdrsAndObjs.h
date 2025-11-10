@@ -562,7 +562,8 @@ class DEMMeshConnected : public DEMInitializer {
     size_t GetNumPatches() const { return num_patches; }
 
     /// @brief Check if patch information has been explicitly set.
-    /// @return True if patches have been computed via SplitIntoConvexPatches() or set via SetPatchIDs(), false if using default (single patch).
+    /// @return True if patches have been computed via SplitIntoConvexPatches() or set via SetPatchIDs(), false if using
+    /// default (single patch).
     bool ArePatchesExplicitlySet() const { return patches_explicitly_set; }
 
     ////////////////////////////////////////////////////////

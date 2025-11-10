@@ -36,14 +36,17 @@ int main() {
         std::cout << "Loaded cube mesh successfully" << std::endl;
         std::cout << "Number of triangles: " << cube_mesh->GetNumTriangles() << std::endl;
         std::cout << "Number of vertices: " << cube_mesh->GetNumNodes() << std::endl;
-        
+
         // Test default patch info (should be all in patch 0)
         std::cout << "\nDefault patch info (assuming convex mesh):" << std::endl;
         std::cout << "Number of patches: " << cube_mesh->GetNumPatches() << std::endl;
         std::cout << "Patches explicitly set: " << (cube_mesh->ArePatchesExplicitlySet() ? "yes" : "no") << std::endl;
         const auto& default_patch_ids = cube_mesh->GetPatchIDs();
-        std::cout << "All triangles in patch 0: " << (std::all_of(default_patch_ids.begin(), default_patch_ids.end(), 
-                                                                    [](int id) { return id == 0; }) ? "yes" : "no") << std::endl;
+        std::cout << "All triangles in patch 0: "
+                  << (std::all_of(default_patch_ids.begin(), default_patch_ids.end(), [](int id) { return id == 0; })
+                          ? "yes"
+                          : "no")
+                  << std::endl;
 
         // Test different angle thresholds
         std::cout << "\n--- Test 2: Automatic Patch Splitting ---" << std::endl;
@@ -54,7 +57,8 @@ int main() {
             std::cout << "\nAngle threshold: " << std::fixed << std::setprecision(1) << threshold << " degrees"
                       << std::endl;
             std::cout << "Number of patches: " << num_patches << std::endl;
-            std::cout << "Patches explicitly set: " << (cube_mesh->ArePatchesExplicitlySet() ? "yes" : "no") << std::endl;
+            std::cout << "Patches explicitly set: " << (cube_mesh->ArePatchesExplicitlySet() ? "yes" : "no")
+                      << std::endl;
 
             // Show patch distribution
             const auto& patch_ids = cube_mesh->GetPatchIDs();
@@ -70,7 +74,7 @@ int main() {
                 std::cout << "  Patch " << entry.first << ": " << entry.second << " triangles" << std::endl;
             }
         }
-        
+
         // Test manual patch ID setting
         std::cout << "\n--- Test 3: Manual Patch ID Setting ---" << std::endl;
         size_t num_tris = cube_mesh->GetNumTriangles();
@@ -79,12 +83,12 @@ int main() {
         for (size_t i = 0; i < num_tris; ++i) {
             manual_patches[i] = i % 3;  // Assign patches 0, 1, 2 cyclically
         }
-        
+
         cube_mesh->SetPatchIDs(manual_patches);
         std::cout << "Manually set patch IDs (cycling 0, 1, 2)" << std::endl;
         std::cout << "Number of patches: " << cube_mesh->GetNumPatches() << std::endl;
         std::cout << "Patches explicitly set: " << (cube_mesh->ArePatchesExplicitlySet() ? "yes" : "no") << std::endl;
-        
+
         // Count triangles per patch
         const auto& manual_patch_ids = cube_mesh->GetPatchIDs();
         std::map<int, int> manual_patch_counts;
@@ -139,8 +143,8 @@ int main() {
     std::cout << "\n--- Test 5: Empty Mesh ---" << std::endl;
     auto empty_mesh = std::make_shared<DEMMeshConnected>();
     std::cout << "Empty mesh default patches: " << empty_mesh->GetNumPatches() << " (expected: 1)" << std::endl;
-    std::cout << "Patches explicitly set: " << (empty_mesh->ArePatchesExplicitlySet() ? "yes" : "no") << " (expected: no)"
-              << std::endl;
+    std::cout << "Patches explicitly set: " << (empty_mesh->ArePatchesExplicitlySet() ? "yes" : "no")
+              << " (expected: no)" << std::endl;
 
     std::cout << "\n========================================" << std::endl;
     std::cout << "Demo completed successfully!" << std::endl;

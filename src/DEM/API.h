@@ -1749,7 +1749,7 @@ class DEMSolver {
 
     // Flattened (analytical) object component definition arrays, potentially jitifiable
     // These extra analytical entities' owners' ID will be appended to those added thru normal AddClump
-    std::vector<unsigned int> m_anal_owner;
+    std::vector<bodyID_t> m_anal_owner;
     // Material types of these analytical geometries
     std::vector<materialsOffset_t> m_anal_materials;
     // Initial locations of this obj's components relative to obj's CoM
@@ -1769,12 +1769,17 @@ class DEMSolver {
     // topologically a plane then this param is meaningless, since its normal is determined by its rotation.
     std::vector<float> m_anal_normals;
 
-    // These extra mesh facets' owners' ID will be appended to analytical entities'
-    std::vector<unsigned int> m_mesh_facet_owner;
+    // These mesh facets' owners' ID, flattened
+    std::vector<bodyID_t> m_mesh_facet_owner;
     // Material types of these mesh facets
     std::vector<materialsOffset_t> m_mesh_facet_materials;
-    // Material types of these mesh facets
+    // Three nodes of each triangle, flattened
     std::vector<DEMTriangle> m_mesh_facets;
+
+    // These mesh patches' owners' ID, flattened
+    std::vector<bodyID_t> m_mesh_patch_owner;
+    // Material types of these mesh patches
+    std::vector<materialsOffset_t> m_mesh_patch_materials;
 
     // Clump templates will be flatten and transferred into kernels upon Initialize()
     std::vector<float> m_template_clump_mass;

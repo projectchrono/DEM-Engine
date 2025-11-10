@@ -757,7 +757,7 @@ void DEMSolver::preprocessClumps() {
 
 void DEMSolver::preprocessTriangleObjs() {
     nTriMeshes += cached_mesh_objs.size();
-    unsigned int thisMeshObj = 0;
+    bodyID_t thisMeshObj = 0;
     for (const auto& mesh_obj : cached_mesh_objs) {
         if (!(mesh_obj->isMaterialSet)) {
             DEME_ERROR(
