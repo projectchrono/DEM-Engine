@@ -657,7 +657,8 @@ class DEMSolver {
 
     /// @brief Load a mesh type into the API-level cache as a template.
     /// @details The mesh is not immediately added to the simulation, but stored as a template
-    /// that can be instantiated multiple times at different locations.
+    /// that can be instantiated multiple times at different locations. This is similar to LoadClumpType()
+    /// for clump templates.
     /// @param filename Path to the wavefront .obj file.
     /// @param mat Material to assign to the mesh.
     /// @param load_normals Whether to load normals from the file.
