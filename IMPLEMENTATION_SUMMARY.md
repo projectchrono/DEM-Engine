@@ -17,7 +17,7 @@ Add mesh template functionality similar to clump templates, allowing users to:
 **Overloads**:
 ```cpp
 // From file with material
-std::shared_ptr<DEMMeshConnected> LoadMeshType(
+std::shared_ptr<DEMMesh> LoadMeshType(
     const std::string& filename,
     const std::shared_ptr<DEMMaterial>& mat,
     bool load_normals = true,
@@ -25,14 +25,14 @@ std::shared_ptr<DEMMeshConnected> LoadMeshType(
 );
 
 // From file without material
-std::shared_ptr<DEMMeshConnected> LoadMeshType(
+std::shared_ptr<DEMMesh> LoadMeshType(
     const std::string& filename,
     bool load_normals = true,
     bool load_uv = false
 );
 
-// From DEMMeshConnected object
-std::shared_ptr<DEMMeshConnected> LoadMeshType(DEMMeshConnected& mesh);
+// From DEMMesh object
+std::shared_ptr<DEMMesh> LoadMeshType(DEMMesh& mesh);
 ```
 
 **Implementation Details**:
@@ -47,20 +47,20 @@ std::shared_ptr<DEMMeshConnected> LoadMeshType(DEMMeshConnected& mesh);
 **Overloads**:
 ```cpp
 // Using float3 position
-std::shared_ptr<DEMMeshConnected> AddMeshFromTemplate(
-    const std::shared_ptr<DEMMeshConnected>& mesh_template,
+std::shared_ptr<DEMMesh> AddMeshFromTemplate(
+    const std::shared_ptr<DEMMesh>& mesh_template,
     const float3& init_pos
 );
 
 // Using vector position
-std::shared_ptr<DEMMeshConnected> AddMeshFromTemplate(
-    const std::shared_ptr<DEMMeshConnected>& mesh_template,
+std::shared_ptr<DEMMesh> AddMeshFromTemplate(
+    const std::shared_ptr<DEMMesh>& mesh_template,
     const std::vector<float>& init_pos
 );
 ```
 
 **Implementation Details**:
-- Creates a copy of the template: `DEMMeshConnected mesh = *mesh_template`
+- Creates a copy of the template: `DEMMesh mesh = *mesh_template`
 - Sets initial position: `mesh.SetInitPos(init_pos)`
 - Adds to simulation via existing `AddWavefrontMeshObject(mesh)`
 - Returns shared_ptr to the created instance
@@ -70,13 +70,13 @@ std::shared_ptr<DEMMeshConnected> AddMeshFromTemplate(
 
 **Signature**:
 ```cpp
-std::shared_ptr<DEMMeshConnected> Duplicate(
-    const std::shared_ptr<DEMMeshConnected>& ptr
+std::shared_ptr<DEMMesh> Duplicate(
+    const std::shared_ptr<DEMMesh>& ptr
 );
 ```
 
 **Implementation Details**:
-- Creates a copy: `DEMMeshConnected obj = *ptr`
+- Creates a copy: `DEMMesh obj = *ptr`
 - Adds via existing `AddWavefrontMeshObject(obj)`
 - Returns shared_ptr to the new copy
 - User can modify properties (position, mass, etc.) after duplication
@@ -86,7 +86,7 @@ std::shared_ptr<DEMMeshConnected> Duplicate(
 #### New Data Members (API.h):
 ```cpp
 // Cached mesh templates (not yet instantiated in simulation)
-std::vector<std::shared_ptr<DEMMeshConnected>> m_mesh_templates;
+std::vector<std::shared_ptr<DEMMesh>> m_mesh_templates;
 
 // Number of mesh templates loaded. Never decreases.
 size_t nMeshTemplateLoad = 0;
@@ -123,7 +123,7 @@ size_t nLastTimeMeshTemplateLoad = 0;
 **Changes**: ~60 lines added
 - Method declarations (3 LoadMeshType overloads)
 - Method declarations (2 AddMeshFromTemplate overloads)
-- Duplicate() overload for DEMMeshConnected
+- Duplicate() overload for DEMMesh
 - Storage vector and counters
 
 ### 2. src/DEM/APIPublic.cpp

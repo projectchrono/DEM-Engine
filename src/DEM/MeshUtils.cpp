@@ -45,7 +45,7 @@ namespace deme {
 
 using namespace WAVEFRONT;
 
-std::vector<std::vector<float>> DEMMeshConnected::GetCoordsVerticesAsVectorOfVectors() {
+std::vector<std::vector<float>> DEMMesh::GetCoordsVerticesAsVectorOfVectors() {
     auto vec = GetCoordsVertices();
     std::vector<std::vector<float>> res(vec.size());
     for (size_t i = 0; i < vec.size(); i++) {
@@ -54,7 +54,7 @@ std::vector<std::vector<float>> DEMMeshConnected::GetCoordsVerticesAsVectorOfVec
     return res;
 }
 
-std::vector<std::vector<int>> DEMMeshConnected::GetIndicesVertexesAsVectorOfVectors() {
+std::vector<std::vector<int>> DEMMesh::GetIndicesVertexesAsVectorOfVectors() {
     auto vec = GetIndicesVertexes();
     std::vector<std::vector<int>> res(vec.size());
     for (size_t i = 0; i < vec.size(); i++) {
@@ -63,7 +63,7 @@ std::vector<std::vector<int>> DEMMeshConnected::GetIndicesVertexesAsVectorOfVect
     return res;
 }
 
-bool DEMMeshConnected::LoadWavefrontMesh(std::string input_file, bool load_normals, bool load_uv) {
+bool DEMMesh::LoadWavefrontMesh(std::string input_file, bool load_normals, bool load_uv) {
     this->m_vertices.clear();
     this->m_normals.clear();
     this->m_UV.clear();
@@ -144,7 +144,7 @@ bool DEMMeshConnected::LoadWavefrontMesh(std::string input_file, bool load_norma
 }
 
 // Write the specified meshes in a Wavefront .obj file
-void DEMMeshConnected::WriteWavefront(const std::string& filename, std::vector<DEMMeshConnected>& meshes) {
+void DEMMesh::WriteWavefront(const std::string& filename, std::vector<DEMMesh>& meshes) {
     std::ofstream mf(filename);
 
     //// TODO: include normal information if available
@@ -263,7 +263,7 @@ static std::vector<std::vector<size_t>> buildAdjacencyMap(const std::vector<int3
 // Split mesh into convex patches using region-growing algorithm.
 // The algorithm groups adjacent triangles (sharing an edge) if the angle between their
 // face normals is below the threshold. Each patch represents a locally convex region.
-size_t DEMMeshConnected::SplitIntoConvexPatches(float angle_threshold_deg) {
+size_t DEMMesh::SplitIntoConvexPatches(float angle_threshold_deg) {
     if (nTri == 0) {
         patches_explicitly_set = false;
         num_patches = 1;
@@ -336,7 +336,7 @@ size_t DEMMeshConnected::SplitIntoConvexPatches(float angle_threshold_deg) {
 }
 
 // Manually set patch IDs for each triangle
-void DEMMeshConnected::SetPatchIDs(const std::vector<int>& patch_ids) {
+void DEMMesh::SetPatchIDs(const std::vector<int>& patch_ids) {
     if (patch_ids.size() != nTri) {
         std::stringstream ss;
         ss << "SetPatchIDs: Input vector size (" << patch_ids.size() << ") must match the number of triangles (" << nTri

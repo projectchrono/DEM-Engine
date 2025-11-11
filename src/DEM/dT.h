@@ -489,7 +489,7 @@ class DEMDynamicThread {
     // Components of initGPUArrays
     void buildTrackedObjs(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                           const std::vector<unsigned int>& ext_obj_comp_num,
-                          const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
+                          const std::vector<std::shared_ptr<DEMMesh>>& input_mesh_objs,
                           std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs,
                           size_t nExistOwners,
                           size_t nExistSpheres,
@@ -499,7 +499,7 @@ class DEMDynamicThread {
                               const std::vector<float3>& input_ext_obj_xyz,
                               const std::vector<float4>& input_ext_obj_rot,
                               const std::vector<unsigned int>& input_ext_obj_family,
-                              const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
+                              const std::vector<std::shared_ptr<DEMMesh>>& input_mesh_objs,
                               const std::vector<float3>& input_mesh_obj_xyz,
                               const std::vector<float4>& input_mesh_obj_rot,
                               const std::vector<unsigned int>& input_mesh_obj_family,
@@ -530,7 +530,7 @@ class DEMDynamicThread {
                        const std::vector<float3>& input_ext_obj_xyz,
                        const std::vector<float4>& input_ext_obj_rot,
                        const std::vector<unsigned int>& input_ext_obj_family,
-                       const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
+                       const std::vector<std::shared_ptr<DEMMesh>>& input_mesh_objs,
                        const std::vector<float3>& input_mesh_obj_xyz,
                        const std::vector<float4>& input_mesh_obj_rot,
                        const std::vector<unsigned int>& input_mesh_obj_family,
@@ -555,7 +555,7 @@ class DEMDynamicThread {
                                const std::vector<float3>& input_ext_obj_xyz,
                                const std::vector<float4>& input_ext_obj_rot,
                                const std::vector<unsigned int>& input_ext_obj_family,
-                               const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
+                               const std::vector<std::shared_ptr<DEMMesh>>& input_mesh_objs,
                                const std::vector<float3>& input_mesh_obj_xyz,
                                const std::vector<float4>& input_mesh_obj_rot,
                                const std::vector<unsigned int>& input_mesh_obj_family,
@@ -657,7 +657,7 @@ class DEMDynamicThread {
     bool new_contacts_loaded = false;
 
     // Meshes cached on dT side that has corresponding owner number associated. Useful for outputting meshes.
-    std::vector<std::shared_ptr<DEMMeshConnected>> m_meshes;
+    std::vector<std::shared_ptr<DEMMesh>> m_meshes;
 
     // Number of trackers I already processed before (if I see a tracked_obj array longer than this in initialization, I
     // know I have to process the new-comers)

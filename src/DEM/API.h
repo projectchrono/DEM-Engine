@@ -418,7 +418,7 @@ class DEMSolver {
     /// @brief Duplicate a mesh object that is loaded into the system.
     /// @param ptr Shared pointer for the mesh object to duplicate.
     /// @return A duplicate of the mesh object (with effectively a deep copy).
-    std::shared_ptr<DEMMeshConnected> Duplicate(const std::shared_ptr<DEMMeshConnected>& ptr);
+    std::shared_ptr<DEMMesh> Duplicate(const std::shared_ptr<DEMMesh>& ptr);
 
     /// @brief Set the value for a material property that by nature involves a pair of a materials (e.g. friction
     /// coefficient).
@@ -502,7 +502,7 @@ class DEMSolver {
     void UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& updates);
     /// @brief Get a handle for the mesh this tracker is tracking.
     /// @return Pointer to the mesh.
-    std::shared_ptr<DEMMeshConnected>& GetCachedMesh(bodyID_t ownerID);
+    std::shared_ptr<DEMMesh>& GetCachedMesh(bodyID_t ownerID);
     /// @brief Get the current locations of all the nodes in the mesh being tracked.
     /// @param ownerID The ownerID of the mesh.
     /// @return A vector of float3 representing the global coordinates of the mesh nodes.
@@ -646,7 +646,7 @@ class DEMSolver {
     }
 
     /// @brief Load a mesh-represented object into the simulation, using the internal mesh format.
-    std::shared_ptr<DEMMeshConnected> AddMesh(DEMMeshConnected& mesh);
+    std::shared_ptr<DEMMesh> AddMesh(DEMMesh& mesh);
 
     /// @brief Load a mesh-represented object from a wavefront .obj file.
     /// @param filename Path to the wavefront .obj file.
@@ -654,7 +654,7 @@ class DEMSolver {
     /// @param load_normals Whether to load normals from the file.
     /// @param load_uv Whether to load UV coordinates from the file.
     /// @return A shared pointer to the loaded mesh object.
-    std::shared_ptr<DEMMeshConnected> AddWavefrontMeshObject(const std::string& filename,
+    std::shared_ptr<DEMMesh> AddWavefrontMeshObject(const std::string& filename,
                                                              const std::shared_ptr<DEMMaterial>& mat,
                                                              bool load_normals = true,
                                                              bool load_uv = false);
@@ -663,11 +663,11 @@ class DEMSolver {
     /// @param load_normals Whether to load normals from the file.
     /// @param load_uv Whether to load UV coordinates from the file.
     /// @return A shared pointer to the loaded mesh object.
-    std::shared_ptr<DEMMeshConnected> AddWavefrontMeshObject(const std::string& filename,
+    std::shared_ptr<DEMMesh> AddWavefrontMeshObject(const std::string& filename,
                                                              bool load_normals = true,
                                                              bool load_uv = false);
     /// A legacy method. Use AddMesh instead.
-    std::shared_ptr<DEMMeshConnected> AddWavefrontMeshObject(DEMMeshConnected& mesh) { return AddMesh(mesh); }
+    std::shared_ptr<DEMMesh> AddWavefrontMeshObject(DEMMesh& mesh) { return AddMesh(mesh); }
 
     /// @brief Load a mesh type into the API-level cache as a template.
     /// @details The mesh is not immediately added to the simulation, but stored as a template
@@ -678,7 +678,7 @@ class DEMSolver {
     /// @param load_normals Whether to load normals from the file.
     /// @param load_uv Whether to load UV coordinates from the file.
     /// @return A shared pointer to the loaded mesh template.
-    std::shared_ptr<DEMMeshConnected> LoadMeshType(const std::string& filename,
+    std::shared_ptr<DEMMesh> LoadMeshType(const std::string& filename,
                                                    const std::shared_ptr<DEMMaterial>& mat,
                                                    bool load_normals = true,
                                                    bool load_uv = false);
@@ -687,19 +687,19 @@ class DEMSolver {
     /// @param load_normals Whether to load normals from the file.
     /// @param load_uv Whether to load UV coordinates from the file.
     /// @return A shared pointer to the loaded mesh template.
-    std::shared_ptr<DEMMeshConnected> LoadMeshType(const std::string& filename,
+    std::shared_ptr<DEMMesh> LoadMeshType(const std::string& filename,
                                                    bool load_normals = true,
                                                    bool load_uv = false);
     /// @brief Load a mesh type into the API-level cache as a template.
-    /// @param mesh A DEMMeshConnected object.
+    /// @param mesh A DEMMesh object.
     /// @return A shared pointer to the loaded mesh template.
-    std::shared_ptr<DEMMeshConnected> LoadMeshType(DEMMeshConnected& mesh);
+    std::shared_ptr<DEMMesh> LoadMeshType(DEMMesh& mesh);
 
     /// @brief Instantiate a mesh from a template and add it to the simulation.
     /// @param mesh_template The mesh template (shared pointer returned from LoadMeshType).
     /// @param init_pos Initial position of the mesh instance.
     /// @return A shared pointer to the instantiated mesh.
-    std::shared_ptr<DEMMeshConnected> AddMeshFromTemplate(const std::shared_ptr<DEMMeshConnected>& mesh_template,
+    std::shared_ptr<DEMMesh> AddMeshFromTemplate(const std::shared_ptr<DEMMesh>& mesh_template,
                                                           const float3& init_pos = make_float3(0));
 
     /// @brief Create a DEMTracker to allow direct control/modification/query to this external object/batch of
@@ -1723,7 +1723,7 @@ class DEMSolver {
     std::unordered_map<std::string, unsigned int> m_cnt_wc_num;
 
     // Meshes cached on dT side that has corresponding owner number associated. Useful for modifying meshes.
-    std::vector<std::shared_ptr<DEMMeshConnected>> m_meshes;
+    std::vector<std::shared_ptr<DEMMesh>> m_meshes;
     // A map between the owner of mesh, and the offset this mesh lives in m_meshes array.
     std::unordered_map<bodyID_t, unsigned int> m_owner_mesh_map;
 
@@ -1748,7 +1748,7 @@ class DEMSolver {
     std::vector<std::shared_ptr<DEMClumpTemplate>> m_templates;
 
     // Cached mesh templates (not yet instantiated in simulation)
-    std::vector<std::shared_ptr<DEMMeshConnected>> m_mesh_templates;
+    std::vector<std::shared_ptr<DEMMesh>> m_mesh_templates;
 
     // Shared pointers to a batch of clumps loaded into the system. Through this returned handle, the user can further
     // specify the vel, ori etc. of this batch of clumps.
@@ -1758,7 +1758,7 @@ class DEMSolver {
     std::vector<std::shared_ptr<DEMExternObj>> cached_extern_objs;
 
     // Shared pointers to meshed objects cached at the API system
-    std::vector<std::shared_ptr<DEMMeshConnected>> cached_mesh_objs;
+    std::vector<std::shared_ptr<DEMMesh>> cached_mesh_objs;
 
     // User-input prescribed motion
     std::vector<familyPrescription_t> m_input_family_prescription;

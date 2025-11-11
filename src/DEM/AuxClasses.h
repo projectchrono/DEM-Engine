@@ -304,7 +304,7 @@ class DEMTracker {
 
     /// @brief Get a handle for the mesh this tracker is tracking.
     /// @return Pointer to the mesh.
-    std::shared_ptr<DEMMeshConnected>& GetMesh();
+    std::shared_ptr<DEMMesh>& GetMesh();
     /// @brief Get the current locations of all the nodes in the mesh being tracked.
     /// @return A vector of float3 representing the global coordinates of the mesh nodes.
     std::vector<float3> GetMeshNodesGlobal();

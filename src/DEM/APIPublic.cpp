@@ -337,9 +337,9 @@ std::shared_ptr<DEMClumpBatch> DEMSolver::Duplicate(const std::shared_ptr<DEMClu
     DEMClumpBatch obj = *ptr;
     return this->AddClumps(obj);
 }
-std::shared_ptr<DEMMeshConnected> DEMSolver::Duplicate(const std::shared_ptr<DEMMeshConnected>& ptr) {
+std::shared_ptr<DEMMesh> DEMSolver::Duplicate(const std::shared_ptr<DEMMesh>& ptr) {
     // Make a copy
-    DEMMeshConnected obj = *ptr;
+    DEMMesh obj = *ptr;
     return this->AddWavefrontMeshObject(obj);
 }
 
@@ -685,7 +685,7 @@ void DEMSolver::UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vecto
     // kT just receives update from dT, to avoid mem hazards
     // kT->setTriNodeRelPos(triID, new_triangles);
 }
-std::shared_ptr<DEMMeshConnected>& DEMSolver::GetCachedMesh(bodyID_t ownerID) {
+std::shared_ptr<DEMMesh>& DEMSolver::GetCachedMesh(bodyID_t ownerID) {
     if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
         DEME_ERROR("Owner %zu is not a mesh, you therefore cannot retrive a handle to mesh using it.", (size_t)ownerID);
     }
@@ -1878,7 +1878,7 @@ std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(const std::vector<std::share
     return AddClumps(a_batch);
 }
 
-std::shared_ptr<DEMMeshConnected> DEMSolver::AddMesh(DEMMeshConnected& mesh) {
+std::shared_ptr<DEMMesh> DEMSolver::AddMesh(DEMMesh& mesh) {
     if (mesh.GetNumTriangles() == 0) {
         DEME_WARNING("It seems that a mesh contains 0 triangle facet at the time it is loaded.");
     }
@@ -1888,15 +1888,15 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::AddMesh(DEMMeshConnected& mesh) {
     // But we still need to record a tri-mesh load operation
     nTriObjLoad++;
 
-    cached_mesh_objs.push_back(std::make_shared<DEMMeshConnected>(std::move(mesh)));
+    cached_mesh_objs.push_back(std::make_shared<DEMMesh>(std::move(mesh)));
     return cached_mesh_objs.back();
 }
 
-std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
+std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
                                                                     const std::shared_ptr<DEMMaterial>& mat,
                                                                     bool load_normals,
                                                                     bool load_uv) {
-    DEMMeshConnected mesh;
+    DEMMesh mesh;
     bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
     if (!flag) {
         DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
@@ -1905,10 +1905,10 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::s
     return AddWavefrontMeshObject(mesh);
 }
 
-std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
+std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
                                                                     bool load_normals,
                                                                     bool load_uv) {
-    DEMMeshConnected mesh;
+    DEMMesh mesh;
     bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
     if (!flag) {
         DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
@@ -1916,23 +1916,23 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::s
     return AddWavefrontMeshObject(mesh);
 }
 
-std::shared_ptr<DEMMeshConnected> DEMSolver::LoadMeshType(DEMMeshConnected& mesh) {
+std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(DEMMesh& mesh) {
     if (mesh.GetNumTriangles() == 0) {
         DEME_WARNING("It seems that a mesh template contains 0 triangle facet at the time it is loaded.");
     }
 
     // Store as a template (not in cached_mesh_objs)
-    std::shared_ptr<DEMMeshConnected> ptr = std::make_shared<DEMMeshConnected>(std::move(mesh));
+    std::shared_ptr<DEMMesh> ptr = std::make_shared<DEMMesh>(std::move(mesh));
     m_mesh_templates.push_back(ptr);
     nMeshTemplateLoad++;
     return m_mesh_templates.back();
 }
 
-std::shared_ptr<DEMMeshConnected> DEMSolver::LoadMeshType(const std::string& filename,
+std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(const std::string& filename,
                                                           const std::shared_ptr<DEMMaterial>& mat,
                                                           bool load_normals,
                                                           bool load_uv) {
-    DEMMeshConnected mesh;
+    DEMMesh mesh;
     bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
     if (!flag) {
         DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
@@ -1941,10 +1941,10 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::LoadMeshType(const std::string& fil
     return LoadMeshType(mesh);
 }
 
-std::shared_ptr<DEMMeshConnected> DEMSolver::LoadMeshType(const std::string& filename,
+std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(const std::string& filename,
                                                           bool load_normals,
                                                           bool load_uv) {
-    DEMMeshConnected mesh;
+    DEMMesh mesh;
     bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
     if (!flag) {
         DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
@@ -1952,10 +1952,10 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::LoadMeshType(const std::string& fil
     return LoadMeshType(mesh);
 }
 
-std::shared_ptr<DEMMeshConnected> DEMSolver::AddMeshFromTemplate(const std::shared_ptr<DEMMeshConnected>& mesh_template,
+std::shared_ptr<DEMMesh> DEMSolver::AddMeshFromTemplate(const std::shared_ptr<DEMMesh>& mesh_template,
                                                                  const float3& init_pos) {
     // Create a copy of the template
-    DEMMeshConnected mesh = *mesh_template;
+    DEMMesh mesh = *mesh_template;
 
     // Set the initial position
     mesh.SetInitPos(init_pos);

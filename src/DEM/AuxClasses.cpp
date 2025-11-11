@@ -686,7 +686,7 @@ void DEMTracker::UpdateMeshByIncrement(const std::vector<float3>& deformation) {
     sys->UpdateTriNodeRelPos(obj->ownerID, obj->geoID, deformation);
 }
 
-std::shared_ptr<DEMMeshConnected>& DEMTracker::GetMesh() {
+std::shared_ptr<DEMMesh>& DEMTracker::GetMesh() {
     assertMesh("GetMesh");
     return sys->GetCachedMesh(obj->ownerID);
 }

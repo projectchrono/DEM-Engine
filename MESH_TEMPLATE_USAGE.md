@@ -32,8 +32,8 @@ auto mesh_template = DEMSim.LoadMeshType(
     false  // load_uv
 );
 
-// Load from DEMMeshConnected object
-DEMMeshConnected mesh;
+// Load from DEMMesh object
+DEMMesh mesh;
 mesh.LoadWavefrontMesh("path/to/mesh.obj");
 mesh.SetMaterial(mat_type);
 auto mesh_template = DEMSim.LoadMeshType(mesh);
