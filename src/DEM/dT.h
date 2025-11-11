@@ -275,11 +275,12 @@ class DEMDynamicThread {
     DualArray<materialsOffset_t> triMaterialOffset =
         DualArray<materialsOffset_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     
-    // Patch ID for each triangle facet
+    // Mesh patch information: each facet belongs to a patch, and each patch has material properties
+    // Patch ID for each triangle facet (maps facet to patch)
     DualArray<patchID_t> triPatchID = DualArray<patchID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    // Mesh patch owner IDs (one per patch)
+    // Mesh patch owner IDs (one per patch, flattened across all meshes)
     DualArray<bodyID_t> ownerMeshPatch = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    // Material offset for each mesh patch
+    // Material offset for each mesh patch (indexed by patch, can be looked up via triPatchID)
     DualArray<materialsOffset_t> patchMaterialOffset =
         DualArray<materialsOffset_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
