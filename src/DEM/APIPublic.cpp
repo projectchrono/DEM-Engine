@@ -1878,7 +1878,7 @@ std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(const std::vector<std::share
     return AddClumps(a_batch);
 }
 
-std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(DEMMeshConnected& mesh) {
+std::shared_ptr<DEMMeshConnected> DEMSolver::AddMesh(DEMMeshConnected& mesh) {
     if (mesh.GetNumTriangles() == 0) {
         DEME_WARNING("It seems that a mesh contains 0 triangle facet at the time it is loaded.");
     }
@@ -1920,7 +1920,7 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::LoadMeshType(DEMMeshConnected& mesh
     if (mesh.GetNumTriangles() == 0) {
         DEME_WARNING("It seems that a mesh template contains 0 triangle facet at the time it is loaded.");
     }
-    
+
     // Store as a template (not in cached_mesh_objs)
     std::shared_ptr<DEMMeshConnected> ptr = std::make_shared<DEMMeshConnected>(std::move(mesh));
     m_mesh_templates.push_back(ptr);
@@ -1956,12 +1956,12 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::AddMeshFromTemplate(const std::shar
                                                                  const float3& init_pos) {
     // Create a copy of the template
     DEMMeshConnected mesh = *mesh_template;
-    
+
     // Set the initial position
     mesh.SetInitPos(init_pos);
-    
+
     // Add the mesh instance to the simulation
-    return AddWavefrontMeshObject(mesh);
+    return AddMesh(mesh);
 }
 
 std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity) {
