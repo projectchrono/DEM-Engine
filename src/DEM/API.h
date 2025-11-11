@@ -655,17 +655,17 @@ class DEMSolver {
     /// @param load_uv Whether to load UV coordinates from the file.
     /// @return A shared pointer to the loaded mesh object.
     std::shared_ptr<DEMMesh> AddWavefrontMeshObject(const std::string& filename,
-                                                             const std::shared_ptr<DEMMaterial>& mat,
-                                                             bool load_normals = true,
-                                                             bool load_uv = false);
+                                                    const std::shared_ptr<DEMMaterial>& mat,
+                                                    bool load_normals = true,
+                                                    bool load_uv = false);
     /// @brief Load a mesh-represented object from a wavefront .obj file.
     /// @param filename Path to the wavefront .obj file.
     /// @param load_normals Whether to load normals from the file.
     /// @param load_uv Whether to load UV coordinates from the file.
     /// @return A shared pointer to the loaded mesh object.
     std::shared_ptr<DEMMesh> AddWavefrontMeshObject(const std::string& filename,
-                                                             bool load_normals = true,
-                                                             bool load_uv = false);
+                                                    bool load_normals = true,
+                                                    bool load_uv = false);
     /// A legacy method. Use AddMesh instead.
     std::shared_ptr<DEMMesh> AddWavefrontMeshObject(DEMMesh& mesh) { return AddMesh(mesh); }
 
@@ -679,17 +679,15 @@ class DEMSolver {
     /// @param load_uv Whether to load UV coordinates from the file.
     /// @return A shared pointer to the loaded mesh template.
     std::shared_ptr<DEMMesh> LoadMeshType(const std::string& filename,
-                                                   const std::shared_ptr<DEMMaterial>& mat,
-                                                   bool load_normals = true,
-                                                   bool load_uv = false);
+                                          const std::shared_ptr<DEMMaterial>& mat,
+                                          bool load_normals = true,
+                                          bool load_uv = false);
     /// @brief Load a mesh type into the API-level cache as a template.
     /// @param filename Path to the wavefront .obj file.
     /// @param load_normals Whether to load normals from the file.
     /// @param load_uv Whether to load UV coordinates from the file.
     /// @return A shared pointer to the loaded mesh template.
-    std::shared_ptr<DEMMesh> LoadMeshType(const std::string& filename,
-                                                   bool load_normals = true,
-                                                   bool load_uv = false);
+    std::shared_ptr<DEMMesh> LoadMeshType(const std::string& filename, bool load_normals = true, bool load_uv = false);
     /// @brief Load a mesh type into the API-level cache as a template.
     /// @param mesh A DEMMesh object.
     /// @return A shared pointer to the loaded mesh template.
@@ -700,7 +698,7 @@ class DEMSolver {
     /// @param init_pos Initial position of the mesh instance.
     /// @return A shared pointer to the instantiated mesh.
     std::shared_ptr<DEMMesh> AddMeshFromTemplate(const std::shared_ptr<DEMMesh>& mesh_template,
-                                                          const float3& init_pos = make_float3(0));
+                                                 const float3& init_pos = make_float3(0));
 
     /// @brief Create a DEMTracker to allow direct control/modification/query to this external object/batch of
     /// clumps/triangle mesh object.

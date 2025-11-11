@@ -340,7 +340,7 @@ std::shared_ptr<DEMClumpBatch> DEMSolver::Duplicate(const std::shared_ptr<DEMClu
 std::shared_ptr<DEMMesh> DEMSolver::Duplicate(const std::shared_ptr<DEMMesh>& ptr) {
     // Make a copy
     DEMMesh obj = *ptr;
-    return this->AddWavefrontMeshObject(obj);
+    return this->AddMesh(obj);
 }
 
 std::vector<std::pair<bodyID_t, bodyID_t>> DEMSolver::GetClumpContacts() const {
@@ -1893,9 +1893,9 @@ std::shared_ptr<DEMMesh> DEMSolver::AddMesh(DEMMesh& mesh) {
 }
 
 std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
-                                                                    const std::shared_ptr<DEMMaterial>& mat,
-                                                                    bool load_normals,
-                                                                    bool load_uv) {
+                                                           const std::shared_ptr<DEMMaterial>& mat,
+                                                           bool load_normals,
+                                                           bool load_uv) {
     DEMMesh mesh;
     bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
     if (!flag) {
@@ -1906,8 +1906,8 @@ std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontMeshObject(const std::string& fi
 }
 
 std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
-                                                                    bool load_normals,
-                                                                    bool load_uv) {
+                                                           bool load_normals,
+                                                           bool load_uv) {
     DEMMesh mesh;
     bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
     if (!flag) {
@@ -1929,9 +1929,9 @@ std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(DEMMesh& mesh) {
 }
 
 std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(const std::string& filename,
-                                                          const std::shared_ptr<DEMMaterial>& mat,
-                                                          bool load_normals,
-                                                          bool load_uv) {
+                                                 const std::shared_ptr<DEMMaterial>& mat,
+                                                 bool load_normals,
+                                                 bool load_uv) {
     DEMMesh mesh;
     bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
     if (!flag) {
@@ -1941,9 +1941,7 @@ std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(const std::string& filename,
     return LoadMeshType(mesh);
 }
 
-std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(const std::string& filename,
-                                                          bool load_normals,
-                                                          bool load_uv) {
+std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(const std::string& filename, bool load_normals, bool load_uv) {
     DEMMesh mesh;
     bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
     if (!flag) {
@@ -1953,7 +1951,7 @@ std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(const std::string& filename,
 }
 
 std::shared_ptr<DEMMesh> DEMSolver::AddMeshFromTemplate(const std::shared_ptr<DEMMesh>& mesh_template,
-                                                                 const float3& init_pos) {
+                                                        const float3& init_pos) {
     // Create a copy of the template
     DEMMesh mesh = *mesh_template;
 
