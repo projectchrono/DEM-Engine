@@ -411,6 +411,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
                                          size_t nTriMeshes,
                                          size_t nSpheresGM,
                                          size_t nTriGM,
+                                         size_t nMeshPatches,
                                          unsigned int nAnalGM,
                                          size_t nExtraContacts,
                                          unsigned int nMassProperties,
@@ -424,6 +425,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     // Sizes of these arrays
     simParams->nSpheresGM = nSpheresGM;
     simParams->nTriGM = nTriGM;
+    simParams->nMeshPatches = nMeshPatches;
     simParams->nAnalGM = nAnalGM;
     simParams->nOwnerBodies = nOwnerBodies;
     simParams->nOwnerClumps = nOwnerClumps;
@@ -490,6 +492,11 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(relPosNode2, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(relPosNode3, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(triMaterialOffset, nTriGM, 0);
+    DEME_DUAL_ARRAY_RESIZE(triPatchID, nTriGM, 0);
+
+    // Resize to the number of mesh patches
+    DEME_DUAL_ARRAY_RESIZE(ownerMeshPatch, nMeshPatches, 0);
+    DEME_DUAL_ARRAY_RESIZE(patchMaterialOffset, nMeshPatches, 0);
 
     // Resize to the number of analytical geometries
     DEME_DUAL_ARRAY_RESIZE(ownerAnalBody, nAnalGM, 0);

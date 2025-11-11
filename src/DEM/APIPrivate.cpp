@@ -790,12 +790,19 @@ void DEMSolver::preprocessTriangleObjs() {
         }
         
         // Populate patch owner and material arrays (one entry per patch in this mesh)
+        // Build a map to find the material for each patch by looking at the first facet in that patch
+        std::vector<materialsOffset_t> patch_materials(mesh_obj->num_patches);
+        for (size_t facet_idx = 0; facet_idx < mesh_obj->GetNumTriangles(); facet_idx++) {
+            patchID_t patch_id = mesh_obj->m_patch_ids.at(facet_idx);
+            // Assign this facet's material to its patch (will overwrite for each facet, but they should be consistent per patch)
+            patch_materials[patch_id] = mesh_obj->materials.at(facet_idx)->load_order;
+        }
+        
         for (size_t patch_idx = 0; patch_idx < mesh_obj->num_patches; patch_idx++) {
             m_mesh_patch_owner.push_back(thisMeshObj);
-            // For now, we assume all patches have the same material as the first facet's material
-            // This is consistent with current behavior where SetMaterial assigns the same material to all facets
-            m_mesh_patch_materials.push_back(mesh_obj->materials.at(0)->load_order);
+            m_mesh_patch_materials.push_back(patch_materials[patch_idx]);
         }
+        nMeshPatches += mesh_obj->num_patches;
         
         for (unsigned int i = 0; i < mesh_obj->GetNumTriangles(); i++) {
             m_mesh_facet_materials.push_back(mesh_obj->materials.at(i)->load_order);
@@ -1187,7 +1194,7 @@ void DEMSolver::allocateGPUArrays() {
     // Resize arrays based on the statistical data we have
     std::thread dThread = std::move(std::thread([this]() {
         this->dT->allocateGPUArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
-                                    this->nSpheresGM, this->nTriGM, this->nAnalGM, this->nExtraContacts,
+                                    this->nSpheresGM, this->nTriGM, this->nMeshPatches, this->nAnalGM, this->nExtraContacts,
                                     this->nDistinctMassProperties, this->nDistinctClumpBodyTopologies,
                                     this->nDistinctClumpComponents, this->nJitifiableClumpComponents, this->nMatTuples);
     }));

@@ -1640,6 +1640,8 @@ class DEMSolver {
     size_t nSpheresGM = 0;
     // Total number of triangle facets
     size_t nTriGM = 0;
+    // Total number of mesh patches
+    size_t nMeshPatches = 0;
     // Number of analytical entites (as components of some external objects)
     unsigned int nAnalGM = 0;
     // Total number of owner bodies

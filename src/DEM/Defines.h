@@ -235,6 +235,7 @@ struct DEMSimParams {
     // Number of clumps, spheres, triangles, mesh-represented objects, analytical components, external objs...
     bodyID_t nSpheresGM;
     bodyID_t nTriGM;
+    bodyID_t nMeshPatches;
     objID_t nAnalGM;
     bodyID_t nOwnerBodies;
     bodyID_t nOwnerClumps;
