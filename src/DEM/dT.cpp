@@ -654,7 +654,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                                             const std::vector<unsigned int>& input_mesh_obj_family,
                                             const std::vector<unsigned int>& mesh_facet_owner,
                                             const std::vector<materialsOffset_t>& mesh_facet_materials,
-                                            const std::vector<patchID_t>& mesh_facet_patch,
+                                            const std::vector<bodyID_t>& mesh_facet_patch,
                                             const std::vector<DEMTriangle>& mesh_facets,
                                             const std::vector<bodyID_t>& mesh_patch_owner,
                                             const std::vector<materialsOffset_t>& mesh_patch_materials,
@@ -1125,8 +1125,7 @@ void DEMDynamicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpB
                                      const std::vector<float4>& input_mesh_obj_rot,
                                      const std::vector<unsigned int>& input_mesh_obj_family,
                                      const std::vector<unsigned int>& mesh_facet_owner,
-                                     const std::vector<materialsOffset_t>& mesh_facet_materials,
-                                     const std::vector<patchID_t>& mesh_facet_patch,
+                                     const std::vector<bodyID_t>& mesh_facet_patch,
                                      const std::vector<DEMTriangle>& mesh_facets,
                                      const std::vector<bodyID_t>& mesh_patch_owner,
                                      const std::vector<materialsOffset_t>& mesh_patch_materials,
@@ -1150,7 +1149,7 @@ void DEMDynamicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpB
     // For initialization, owner array offset is 0
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_rot, input_ext_obj_family,
                          input_mesh_objs, input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family,
-                         mesh_facet_owner, mesh_facet_materials, mesh_facet_patch, mesh_facets, mesh_patch_owner,
+                         mesh_facet_owner, mesh_patch_materials, mesh_facet_patch, mesh_facets, mesh_patch_owner,
                          mesh_patch_materials, clump_templates, ext_obj_mass_types, ext_obj_moi_types, ext_obj_comp_num,
                          mesh_obj_mass_types, mesh_obj_moi_types, 0, 0, 0);
 
@@ -1166,8 +1165,7 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                                              const std::vector<float4>& input_mesh_obj_rot,
                                              const std::vector<unsigned int>& input_mesh_obj_family,
                                              const std::vector<unsigned int>& mesh_facet_owner,
-                                             const std::vector<materialsOffset_t>& mesh_facet_materials,
-                                             const std::vector<patchID_t>& mesh_facet_patch,
+                                             const std::vector<bodyID_t>& mesh_facet_patch,
                                              const std::vector<DEMTriangle>& mesh_facets,
                                              const std::vector<bodyID_t>& mesh_patch_owner,
                                              const std::vector<materialsOffset_t>& mesh_patch_materials,
@@ -1186,6 +1184,7 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                                              size_t nExistingSpheres,
                                              size_t nExistingTriMesh,
                                              size_t nExistingFacets,
+                                             size_t nExistingPatches,
                                              unsigned int nExistingObj,
                                              unsigned int nExistingAnalGM) {
     // No policy changes here
@@ -1193,7 +1192,7 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
     // Analytical objects-related arrays should be empty
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_rot, input_ext_obj_family,
                          input_mesh_objs, input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family,
-                         mesh_facet_owner, mesh_facet_materials, mesh_facet_patch, mesh_facets, mesh_patch_owner,
+                         mesh_facet_owner, mesh_patch_materials, mesh_facet_patch, mesh_facets, mesh_patch_owner,
                          mesh_patch_materials, clump_templates, ext_obj_mass_types, ext_obj_moi_types, ext_obj_comp_num,
                          mesh_obj_mass_types, mesh_obj_moi_types, nExistingOwners, nExistingSpheres, nExistingFacets);
 

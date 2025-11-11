@@ -2250,7 +2250,6 @@ void DEMSolver::ReleaseFlattenedArrays() {
     deallocate_array(m_anal_normals);
 
     deallocate_array(m_mesh_facet_owner);
-    deallocate_array(m_mesh_facet_materials);
     deallocate_array(m_mesh_facet_patch);
     deallocate_array(m_mesh_facets);
     deallocate_array(m_mesh_patch_owner);
@@ -2327,33 +2326,33 @@ void DEMSolver::UpdateStepSize(double ts) {
     kT->simParams.toDevice();
 }
 
-void DEMSolver::UpdateClumps() {
+void DEMSolver::Update() {
     if (!sys_initialized) {
         DEME_ERROR(
-            "Please call UpdateClumps only after the system is initialized, because it is for adding additional clumps "
+            "Please call Update only after the system is initialized, because it is for adding additional clumps "
             "to an initialized DEM system.");
     }
     if (nLastTimeExtObjLoad != nExtObjLoad) {
         DEME_ERROR(
-            "UpdateClumps cannot be used after loading new analytical objects. Consider re-initializing at this "
+            "Update cannot be used after loading new analytical objects. Consider re-initializing at this "
             "point.\nNumber of analytical objects at last initialization: %u\nNumber of analytical objects now: %u",
             nLastTimeExtObjLoad, nExtObjLoad);
     }
     if (nLastTimeClumpTemplateLoad != nClumpTemplateLoad) {
         DEME_ERROR(
-            "UpdateClumps cannot be used after loading new clump templates. Consider re-initializing at this "
+            "Update cannot be used after loading new clump templates. Consider re-initializing at this "
             "point.\nNumber of clump templates at last initialization: %zu\nNumber of clump templates now: %zu",
             nLastTimeClumpTemplateLoad, nClumpTemplateLoad);
     }
     // DEME_WARNING(
-    //     "UpdateClumps will add all currently cached clumps to the simulation.\nYou may want to ClearCache first,"
+    //     "Update will add all currently cached clumps to the simulation.\nYou may want to ClearCache first,"
     //     "then AddClumps, then call this method, so the clumps cached earlier are forgotten before this method takes"
     //     "place.");
 
     // This method requires kT and dT are sync-ed
     // resetWorkerThreads();
 
-    // NOTE!!! This step in UpdateClumps is extremely important, as we'll soon modify device-major arrays on host!
+    // NOTE!!! This step in Update is extremely important, as we'll soon modify device-major arrays on host!
     migrateArrayDataToHost();
 
     // Record the number of entities, before adding to the system
@@ -2362,6 +2361,7 @@ void DEMSolver::UpdateClumps() {
     size_t nSpheres_old = nSpheresGM;
     size_t nTriMesh_old = nTriMeshes;
     size_t nFacets_old = nTriGM;
+    size_t nPatch_old = nMeshPatches;
     unsigned int nAnalGM_old = nAnalGM;
     unsigned int nExtObj_old = nExtObj;
 
@@ -2371,7 +2371,8 @@ void DEMSolver::UpdateClumps() {
     updateTotalEntityNum();
     allocateGPUArrays();
     // `Update' method needs to know the number of existing clumps and spheres (before this addition)
-    updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old, nExtObj_old, nAnalGM_old);
+    updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old, nPatch_old, nExtObj_old,
+                          nAnalGM_old);
     packDataPointers();
 
     // Now that all params prepared, and all data pointers packed on host side, we need to migrate that imformation to
@@ -2386,13 +2387,13 @@ void DEMSolver::UpdateClumps() {
     // This method should not introduce new material or clump template or family prescription, let's check that
     if (nLastTimeMatNum != m_loaded_materials.size() || nLastTimeFamilyPreNum != m_input_family_prescription.size()) {
         DEME_ERROR(
-            "UpdateClumps should not be used if you introduce new material types or family prescription (which will "
+            "Update should not be used if you introduce new material types or family prescription (which will "
             "need re-jitification).\nWe used to have %u materials, now we have %zu.\nWe used to have %u family "
             "prescription, now we have %zu.",
             nLastTimeMatNum, m_loaded_materials.size(), nLastTimeFamilyPreNum, m_input_family_prescription.size());
     }
 
-    // After Initialize or UpdateClumps, we should clear host-side initialization object cache
+    // After Initialize or Update, we should clear host-side initialization object cache
     ClearCache();
 }
 

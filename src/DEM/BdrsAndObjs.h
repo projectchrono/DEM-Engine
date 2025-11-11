@@ -229,7 +229,16 @@ class DEMExternObj : public DEMInitializer {
 // DEM mesh object
 class DEMMesh : public DEMInitializer {
   private:
-    void assertLength(size_t len, const std::string name) {
+    void assertPatchLength(size_t len, const std::string name) {
+        if (len != nPatches) {
+            std::stringstream ss;
+            ss << name << " input argument must have length " << nPatches << " (not " << len
+               << "), same as the number of convex patches in the mesh." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+    }
+
+    void assertTriLength(size_t len, const std::string name) {
         if (nTri == 0) {
             std::cerr << "The settings at the " << name << " call were applied to 0 mesh facet.\nPlease consider using "
                       << name
@@ -240,7 +249,7 @@ class DEMMesh : public DEMInitializer {
         if (len != nTri) {
             std::stringstream ss;
             ss << name << " input argument must have length " << nTri << " (not " << len
-               << "), same as the number of triangle facets in the mesh." << std::endl;
+               << "), same as the number of triangles in the mesh." << std::endl;
             throw std::runtime_error(ss.str());
         }
     }
@@ -364,7 +373,7 @@ class DEMMesh : public DEMInitializer {
         this->m_face_uv_indices.clear();
         this->m_face_col_indices.clear();
         this->m_patch_ids.clear();
-        this->num_patches = 1;
+        this->nPatches = 1;
         this->patches_explicitly_set = false;
         this->owner = NULL_BODYID;
     }
@@ -381,15 +390,18 @@ class DEMMesh : public DEMInitializer {
     /// Set mesh family number.
     void SetFamily(unsigned int num) { this->family_code = num; }
 
-    /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
+    /// @brief Set material types for the mesh. The input vector should have the same length as the number of patches in
+    /// the mesh, and each element is the material for that patch.
+    /// @details This allows you to set different materials for different patches of the mesh, which can be useful if
+    /// your mesh has multiple convex patches with different material properties.
     void SetMaterial(const std::vector<std::shared_ptr<DEMMaterial>>& input) {
-        assertLength(input.size(), "SetMaterial");
+        assertPatchLength(input.size(), "SetMaterial");
         materials = input;
         isMaterialSet = true;
     }
-    /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
+    /// @brief Set material types for the mesh. Using this method makes a uniform-materialed mesh.
     void SetMaterial(const std::shared_ptr<DEMMaterial>& input) {
-        SetMaterial(std::vector<std::shared_ptr<DEMMaterial>>(nTri, input));
+        SetMaterial(std::vector<std::shared_ptr<DEMMaterial>>(nPatches, input));
     }
 
     /*
@@ -530,9 +542,9 @@ class DEMMesh : public DEMInitializer {
     // Mesh patch information for convex patch splitting
     ////////////////////////////////////////////////////////
     // Patch ID for each triangle facet (defaults to 0 for all triangles, assuming convex mesh)
-    std::vector<int> m_patch_ids;
+    std::vector<patchID_t> m_patch_ids;
     // Number of patches in this mesh
-    size_t num_patches = 1;
+    unsigned int nPatches = 1;
     // Whether patch information has been explicitly set (either computed or manually supplied)
     bool patches_explicitly_set = false;
 
@@ -544,22 +556,22 @@ class DEMMesh : public DEMInitializer {
     /// Default is 30.0 degrees. Lower values create more patches (stricter convexity), higher values create fewer
     /// patches (relaxed convexity).
     /// @return Number of patches created.
-    size_t SplitIntoConvexPatches(float angle_threshold_deg = 30.0f);
+    unsigned int SplitIntoConvexPatches(float angle_threshold_deg = 30.0f);
 
     /// @brief Manually set the patch IDs for each triangle.
     /// @details Allows user to manually specify which patch each triangle belongs to. This is useful when
     /// the user has pre-computed patch information or wants to define patches based on custom criteria.
     /// @param patch_ids Vector of patch IDs, one for each triangle. Must have the same length as the number
     /// of triangles in the mesh. Patch IDs should be non-negative integers starting from 0.
-    void SetPatchIDs(const std::vector<int>& patch_ids);
+    void SetPatchIDs(const std::vector<patchID_t>& patch_ids);
 
     /// @brief Get the patch ID for each triangle.
     /// @return Vector of patch IDs (one per triangle). By default, all triangles are in patch 0 (assuming convex mesh).
-    const std::vector<int>& GetPatchIDs() const { return m_patch_ids; }
+    const std::vector<patchID_t>& GetPatchIDs() const { return m_patch_ids; }
 
     /// @brief Get the number of patches in the mesh.
     /// @return Number of patches. Default is 1 (assuming convex mesh).
-    size_t GetNumPatches() const { return num_patches; }
+    unsigned int GetNumPatches() const { return nPatches; }
 
     /// @brief Check if patch information has been explicitly set.
     /// @return True if patches have been computed via SplitIntoConvexPatches() or set via SetPatchIDs(), false if using

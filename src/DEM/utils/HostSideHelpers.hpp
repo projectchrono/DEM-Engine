@@ -668,6 +668,31 @@ inline std::string read_file_to_string(const std::filesystem::path& sourcefile) 
     return buffer.str();
 }
 
+// Rank transform a vector, i.e. replace each element with its rank in the vector. The smallest element will be replaced
+// by 0, the second smallest by 1, and so on. This is useful for mapping non-contiguous IDs to contiguous ones.
+template <typename T>
+inline std::pair<std::vector<T>, bool> rank_transform(const std::vector<T>& a) {
+    std::vector<T> vals = a;
+    std::sort(vals.begin(), vals.end());
+    vals.erase(unique(vals.begin(), vals.end()), vals.end());
+
+    std::unordered_map<T, T> rank;
+    for (T i = 0; i < (T)vals.size(); ++i)
+        rank[vals[i]] = i;
+
+    std::vector<T> out;
+    out.reserve(a.size());
+    bool changed = false;
+
+    for (T x : a) {
+        T new_x = rank[x];
+        if (new_x != x)
+            changed = true;
+        out.push_back(new_x);
+    }
+    return {out, changed};
+}
+
 // Asserters (for the convenience of Python wrapper)
 template <typename T>
 inline void assertPositive(const T& var, const std::string& func_name, const std::string& var_name) {

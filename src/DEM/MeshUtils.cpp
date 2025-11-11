@@ -40,6 +40,7 @@
 #include "../kernel/DEMHelperKernels.cuh"
 #include "BdrsAndObjs.h"
 #include "../core/utils/WavefrontMeshLoader.hpp"
+#include "utils/HostSideHelpers.hpp"
 
 namespace deme {
 
@@ -137,7 +138,7 @@ bool DEMMesh::LoadWavefrontMesh(std::string input_file, bool load_normals, bool 
     // Initialize default patch info: all triangles in patch 0 (assuming convex mesh)
     this->m_patch_ids.clear();
     this->m_patch_ids.resize(this->nTri, 0);
-    this->num_patches = 1;
+    this->nPatches = 1;
     this->patches_explicitly_set = false;
 
     return true;
@@ -263,10 +264,10 @@ static std::vector<std::vector<size_t>> buildAdjacencyMap(const std::vector<int3
 // Split mesh into convex patches using region-growing algorithm.
 // The algorithm groups adjacent triangles (sharing an edge) if the angle between their
 // face normals is below the threshold. Each patch represents a locally convex region.
-size_t DEMMesh::SplitIntoConvexPatches(float angle_threshold_deg) {
+unsigned int DEMMesh::SplitIntoConvexPatches(float angle_threshold_deg) {
     if (nTri == 0) {
         patches_explicitly_set = false;
-        num_patches = 1;
+        nPatches = 1;
         return 0;
     }
 
@@ -329,43 +330,63 @@ size_t DEMMesh::SplitIntoConvexPatches(float angle_threshold_deg) {
         current_patch_id++;
     }
 
-    num_patches = current_patch_id;
+    nPatches = current_patch_id;
     patches_explicitly_set = true;
 
-    return num_patches;
+    // If material is set and we cannot broadcast it to all patches, we raise error
+    if (isMaterialSet && materials.size() != nPatches) {
+        std::stringstream ss;
+        ss << "The number of materials set (" << materials.size() << ") does not match the number of patches ("
+           << nPatches << "). Please set the material for each patch or use a single material for all patches."
+           << std::endl;
+        throw std::runtime_error(ss.str());
+    }
+    // If material is set and we can broadcast it to all patches, we do so
+    if (isMaterialSet && materials.size() == 1) {
+        materials = std::vector<std::shared_ptr<DEMMaterial>>(nPatches, materials[0]);
+    }
+
+    return nPatches;
 }
 
 // Manually set patch IDs for each triangle
-void DEMMesh::SetPatchIDs(const std::vector<int>& patch_ids) {
-    if (patch_ids.size() != nTri) {
-        std::stringstream ss;
-        ss << "SetPatchIDs: Input vector size (" << patch_ids.size() << ") must match the number of triangles (" << nTri
-           << ") in the mesh." << std::endl;
-        throw std::runtime_error(ss.str());
-    }
+void DEMMesh::SetPatchIDs(const std::vector<patchID_t>& patch_ids) {
+    assertTriLength(patch_ids.size(), "SetPatchIDs");
 
-    // Validate that all patch IDs are non-negative
-    for (size_t i = 0; i < patch_ids.size(); ++i) {
-        if (patch_ids[i] < 0) {
-            std::stringstream ss;
-            ss << "SetPatchIDs: Patch ID at index " << i << " is negative (" << patch_ids[i]
-               << "). All patch IDs must be non-negative integers." << std::endl;
-            throw std::runtime_error(ss.str());
-        }
+    // Use rank-transformed patch IDs to ensure they are contiguous and start from 0
+    auto [compressed_ids, changed] = rank_transform<patchID_t>(patch_ids);
+
+    if (changed) {
+        std::cerr << "Warning: Patch IDs you supplied for a mesh were not contiguous or did not start from 0.\nThey "
+                     "have been transformed to be contiguous and start from 0."
+                  << std::endl;
     }
 
     // Copy the patch IDs
-    m_patch_ids = patch_ids;
+    m_patch_ids = compressed_ids;
 
     // Calculate the number of patches (maximum patch ID + 1)
-    if (!patch_ids.empty()) {
-        int max_patch_id = *std::max_element(patch_ids.begin(), patch_ids.end());
-        num_patches = max_patch_id + 1;
+    if (!compressed_ids.empty()) {
+        int max_patch_id = *std::max_element(compressed_ids.begin(), compressed_ids.end());
+        nPatches = max_patch_id + 1;
     } else {
-        num_patches = 1;
+        nPatches = 1;
     }
 
     patches_explicitly_set = true;
+
+    // If material is set and we cannot broadcast it to all patches, we raise error
+    if (isMaterialSet && materials.size() != nPatches) {
+        std::stringstream ss;
+        ss << "The number of materials set (" << materials.size() << ") does not match the number of patches ("
+           << nPatches << "). Please set the material for each patch or use a single material for all patches."
+           << std::endl;
+        throw std::runtime_error(ss.str());
+    }
+    // If material is set and we can broadcast it to all patches, we do so
+    if (isMaterialSet && materials.size() == 1) {
+        materials = std::vector<std::shared_ptr<DEMMaterial>>(nPatches, materials[0]);
+    }
 }
 
 }  // end namespace deme

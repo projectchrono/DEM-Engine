@@ -78,7 +78,7 @@ int main() {
         // Test manual patch ID setting
         std::cout << "\n--- Test 3: Manual Patch ID Setting ---" << std::endl;
         size_t num_tris = cube_mesh->GetNumTriangles();
-        std::vector<int> manual_patches(num_tris);
+        std::vector<patchID_t> manual_patches(num_tris);
         // Split triangles into 3 patches based on index
         for (size_t i = 0; i < num_tris; ++i) {
             manual_patches[i] = i % 3;  // Assign patches 0, 1, 2 cyclically

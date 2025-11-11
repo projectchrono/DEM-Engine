@@ -1322,8 +1322,11 @@ class DEMSolver {
     /// initialization.
     void UpdateSimParams();
 
-    /// @brief TTransfer newly loaded clumps to the GPU-side in mid-simulation.
-    void UpdateClumps();
+    /// @brief Transfer newly loaded clumps and meshes to the GPU-side in mid-simulation.
+    void Update();
+
+    /// @brief Legacy method name for Update.
+    void UpdateClumps() { Update(); }
 
     /// @brief Update the time step size. Used after system initialization.
     /// @param ts Time step size.
@@ -1828,10 +1831,8 @@ class DEMSolver {
 
     // These mesh facets' owners' ID, flattened
     std::vector<bodyID_t> m_mesh_facet_owner;
-    // Material types of these mesh facets (DEPRECATED: use patch materials instead)
-    std::vector<materialsOffset_t> m_mesh_facet_materials;
     // Patch ID for each mesh facet, flattened
-    std::vector<patchID_t> m_mesh_facet_patch;
+    std::vector<bodyID_t> m_mesh_facet_patch;
     // Three nodes of each triangle, flattened
     std::vector<DEMTriangle> m_mesh_facets;
 
@@ -1962,6 +1963,7 @@ class DEMSolver {
                                size_t nSpheres,
                                size_t nTriMesh,
                                size_t nFacets,
+                               size_t nMeshPatches,
                                unsigned int nExtObj_old,
                                unsigned int nAnalGM_old);
     /// Add content to the flattened analytical component array.

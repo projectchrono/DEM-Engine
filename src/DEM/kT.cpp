@@ -860,6 +860,7 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
                                                size_t nExistingSpheres,
                                                size_t nExistingTriMesh,
                                                size_t nExistingFacets,
+                                               size_t nExistingPatches,
                                                unsigned int nExistingObj,
                                                unsigned int nExistingAnalGM) {
     populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, input_mesh_facet_owner,
@@ -868,7 +869,7 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
 
 void DEMKinematicThread::updatePrevContactArrays(DualStruct<DEMDataDT>& dT_data, size_t nContacts) {
     // Store the incoming info in kT's arrays
-    // Note kT never had the responsibility to migrate contact info to host, even at UpdateClumps, as even in this case
+    // Note kT never had the responsibility to migrate contact info to host, even at Update, as even in this case
     // its host-side update comes from dT
     overwritePrevContactArrays(granData, dT_data, previous_idGeometryA, previous_idGeometryB, previous_contactType,
                                simParams, contactPersistency, solverScratchSpace, streamInfo.stream, nContacts);

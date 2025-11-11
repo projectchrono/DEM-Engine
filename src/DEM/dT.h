@@ -274,10 +274,10 @@ class DEMDynamicThread {
         DualArray<materialsOffset_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<materialsOffset_t> triMaterialOffset =
         DualArray<materialsOffset_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    
+
     // Mesh patch information: each facet belongs to a patch, and each patch has material properties
     // Patch ID for each triangle facet (maps facet to patch)
-    DualArray<patchID_t> triPatchID = DualArray<patchID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> triPatchID = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // Mesh patch owner IDs (one per patch, flattened across all meshes)
     DualArray<bodyID_t> ownerMeshPatch = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // Material offset for each mesh patch (indexed by patch, can be looked up via triPatchID)
@@ -515,7 +515,7 @@ class DEMDynamicThread {
                               const std::vector<unsigned int>& input_mesh_obj_family,
                               const std::vector<unsigned int>& mesh_facet_owner,
                               const std::vector<materialsOffset_t>& mesh_facet_materials,
-                              const std::vector<patchID_t>& mesh_facet_patch,
+                              const std::vector<bodyID_t>& mesh_facet_patch,
                               const std::vector<DEMTriangle>& mesh_facets,
                               const std::vector<bodyID_t>& mesh_patch_owner,
                               const std::vector<materialsOffset_t>& mesh_patch_materials,
@@ -548,8 +548,7 @@ class DEMDynamicThread {
                        const std::vector<float4>& input_mesh_obj_rot,
                        const std::vector<unsigned int>& input_mesh_obj_family,
                        const std::vector<unsigned int>& mesh_facet_owner,
-                       const std::vector<materialsOffset_t>& mesh_facet_materials,
-                       const std::vector<patchID_t>& mesh_facet_patch,
+                       const std::vector<bodyID_t>& mesh_facet_patch,
                        const std::vector<DEMTriangle>& mesh_facets,
                        const std::vector<bodyID_t>& mesh_patch_owner,
                        const std::vector<materialsOffset_t>& mesh_patch_materials,
@@ -576,8 +575,7 @@ class DEMDynamicThread {
                                const std::vector<float4>& input_mesh_obj_rot,
                                const std::vector<unsigned int>& input_mesh_obj_family,
                                const std::vector<unsigned int>& mesh_facet_owner,
-                               const std::vector<materialsOffset_t>& mesh_facet_materials,
-                               const std::vector<patchID_t>& mesh_facet_patch,
+                               const std::vector<bodyID_t>& mesh_facet_patch,
                                const std::vector<DEMTriangle>& mesh_facets,
                                const std::vector<bodyID_t>& mesh_patch_owner,
                                const std::vector<materialsOffset_t>& mesh_patch_materials,
@@ -596,6 +594,7 @@ class DEMDynamicThread {
                                size_t nExistingSpheres,
                                size_t nExistingTriMesh,
                                size_t nExistingFacets,
+                               size_t nExistingPatches,
                                unsigned int nExistingObj,
                                unsigned int nExistingAnalGM);
 

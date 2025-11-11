@@ -314,6 +314,7 @@ class DEMKinematicThread {
                                size_t nExistingSpheres,
                                size_t nExistingTriMesh,
                                size_t nExistingFacets,
+                               size_t nExistingPatches,
                                unsigned int nExistingObj,
                                unsigned int nExistingAnalGM);
 
