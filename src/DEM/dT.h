@@ -274,6 +274,14 @@ class DEMDynamicThread {
         DualArray<materialsOffset_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<materialsOffset_t> triMaterialOffset =
         DualArray<materialsOffset_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    
+    // Patch ID for each triangle facet
+    DualArray<patchID_t> triPatchID = DualArray<patchID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // Mesh patch owner IDs (one per patch)
+    DualArray<bodyID_t> ownerMeshPatch = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // Material offset for each mesh patch
+    DualArray<materialsOffset_t> patchMaterialOffset =
+        DualArray<materialsOffset_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // dT's copy of family map
     // std::unordered_map<unsigned int, family_t> familyUserImplMap;
@@ -505,7 +513,10 @@ class DEMDynamicThread {
                               const std::vector<unsigned int>& input_mesh_obj_family,
                               const std::vector<unsigned int>& mesh_facet_owner,
                               const std::vector<materialsOffset_t>& mesh_facet_materials,
+                              const std::vector<patchID_t>& mesh_facet_patch,
                               const std::vector<DEMTriangle>& mesh_facets,
+                              const std::vector<bodyID_t>& mesh_patch_owner,
+                              const std::vector<materialsOffset_t>& mesh_patch_materials,
                               const ClumpTemplateFlatten& clump_templates,
                               const std::vector<float>& ext_obj_mass_types,
                               const std::vector<float3>& ext_obj_moi_types,
@@ -536,7 +547,10 @@ class DEMDynamicThread {
                        const std::vector<unsigned int>& input_mesh_obj_family,
                        const std::vector<unsigned int>& mesh_facet_owner,
                        const std::vector<materialsOffset_t>& mesh_facet_materials,
+                       const std::vector<patchID_t>& mesh_facet_patch,
                        const std::vector<DEMTriangle>& mesh_facets,
+                       const std::vector<bodyID_t>& mesh_patch_owner,
+                       const std::vector<materialsOffset_t>& mesh_patch_materials,
                        const std::unordered_map<unsigned int, std::string>& template_number_name_map,
                        const ClumpTemplateFlatten& clump_templates,
                        const std::vector<float>& ext_obj_mass_types,
@@ -561,7 +575,10 @@ class DEMDynamicThread {
                                const std::vector<unsigned int>& input_mesh_obj_family,
                                const std::vector<unsigned int>& mesh_facet_owner,
                                const std::vector<materialsOffset_t>& mesh_facet_materials,
+                               const std::vector<patchID_t>& mesh_facet_patch,
                                const std::vector<DEMTriangle>& mesh_facets,
+                               const std::vector<bodyID_t>& mesh_patch_owner,
+                               const std::vector<materialsOffset_t>& mesh_patch_materials,
                                const ClumpTemplateFlatten& clump_templates,
                                const std::vector<float>& ext_obj_mass_types,
                                const std::vector<float3>& ext_obj_moi_types,

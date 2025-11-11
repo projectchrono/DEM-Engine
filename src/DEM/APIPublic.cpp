@@ -2251,7 +2251,10 @@ void DEMSolver::ReleaseFlattenedArrays() {
 
     deallocate_array(m_mesh_facet_owner);
     deallocate_array(m_mesh_facet_materials);
+    deallocate_array(m_mesh_facet_patch);
     deallocate_array(m_mesh_facets);
+    deallocate_array(m_mesh_patch_owner);
+    deallocate_array(m_mesh_patch_materials);
 
     deallocate_array(m_template_clump_mass);
     deallocate_array(m_template_clump_moi);

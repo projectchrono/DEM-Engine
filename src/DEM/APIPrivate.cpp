@@ -782,8 +782,26 @@ void DEMSolver::preprocessTriangleObjs() {
         m_input_mesh_obj_rot.push_back(mesh_obj->init_oriQ);
         m_input_mesh_obj_family.push_back(mesh_obj->family_code);
         m_mesh_facet_owner.insert(m_mesh_facet_owner.end(), mesh_obj->GetNumTriangles(), thisMeshObj);
+        
+        // Initialize patch IDs if not already set (default: all facets in patch 0)
+        if (!mesh_obj->patches_explicitly_set && mesh_obj->m_patch_ids.empty()) {
+            mesh_obj->m_patch_ids.resize(mesh_obj->GetNumTriangles(), 0);
+            mesh_obj->num_patches = 1;
+        }
+        
+        // Populate patch owner and material arrays (one entry per patch in this mesh)
+        for (size_t patch_idx = 0; patch_idx < mesh_obj->num_patches; patch_idx++) {
+            m_mesh_patch_owner.push_back(thisMeshObj);
+            // For now, we assume all patches have the same material as the first facet's material
+            // This is consistent with current behavior where SetMaterial assigns the same material to all facets
+            m_mesh_patch_materials.push_back(mesh_obj->materials.at(0)->load_order);
+        }
+        
         for (unsigned int i = 0; i < mesh_obj->GetNumTriangles(); i++) {
             m_mesh_facet_materials.push_back(mesh_obj->materials.at(i)->load_order);
+            // Store which patch this facet belongs to
+            m_mesh_facet_patch.push_back(mesh_obj->m_patch_ids.at(i));
+            
             DEMTriangle tri = mesh_obj->GetTriangle(i);
             // If we wish to correct surface orientation based on given vertex normals, rather than using RHR...
             if (mesh_obj->use_mesh_normals) {
@@ -1196,7 +1214,7 @@ void DEMSolver::initializeGPUArrays() {
         m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
         // Meshed objects' initial stats
         cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner,
-        m_mesh_facet_materials, m_mesh_facets,
+        m_mesh_facet_materials, m_mesh_facet_patch, m_mesh_facets, m_mesh_patch_owner, m_mesh_patch_materials,
         // Clump template name mapping
         m_template_number_name_map,
         // Clump template info (mass, sphere components, materials etc.)
@@ -1246,7 +1264,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
         // Meshed objects' initial stats
         cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner,
-        m_mesh_facet_materials, m_mesh_facets,
+        m_mesh_facet_materials, m_mesh_facet_patch, m_mesh_facets, m_mesh_patch_owner, m_mesh_patch_materials,
         // Clump template info (mass, sphere components, materials etc.)
         flattened_clump_templates,
         // Analytical obj `template' properties

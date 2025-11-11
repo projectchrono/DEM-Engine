@@ -1826,8 +1826,10 @@ class DEMSolver {
 
     // These mesh facets' owners' ID, flattened
     std::vector<bodyID_t> m_mesh_facet_owner;
-    // Material types of these mesh facets
+    // Material types of these mesh facets (DEPRECATED: use patch materials instead)
     std::vector<materialsOffset_t> m_mesh_facet_materials;
+    // Patch ID for each mesh facet, flattened
+    std::vector<patchID_t> m_mesh_facet_patch;
     // Three nodes of each triangle, flattened
     std::vector<DEMTriangle> m_mesh_facets;
 
