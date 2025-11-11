@@ -227,7 +227,7 @@ class DEMExternObj : public DEMInitializer {
 };
 
 // DEM mesh object
-class DEMMeshConnected : public DEMInitializer {
+class DEMMesh : public DEMInitializer {
   private:
     void assertLength(size_t len, const std::string name) {
         if (nTri == 0) {
@@ -316,26 +316,26 @@ class DEMMeshConnected : public DEMInitializer {
     // normals derived from right-hand-rule are the same as the normals in the mesh file
     bool use_mesh_normals = false;
 
-    DEMMeshConnected() { obj_type = OWNER_TYPE::MESH; }
-    DEMMeshConnected(std::string input_file) {
+    DEMMesh() { obj_type = OWNER_TYPE::MESH; }
+    DEMMesh(std::string input_file) {
         LoadWavefrontMesh(input_file);
         obj_type = OWNER_TYPE::MESH;
     }
-    DEMMeshConnected(std::string input_file, const std::shared_ptr<DEMMaterial>& mat) {
+    DEMMesh(std::string input_file, const std::shared_ptr<DEMMaterial>& mat) {
         LoadWavefrontMesh(input_file);
         SetMaterial(mat);
         obj_type = OWNER_TYPE::MESH;
     }
-    ~DEMMeshConnected() {}
+    ~DEMMesh() {}
 
     /// Load a triangle mesh saved as a Wavefront .obj file
     bool LoadWavefrontMesh(std::string input_file, bool load_normals = true, bool load_uv = false);
 
     /// Write the specified meshes in a Wavefront .obj file
-    static void WriteWavefront(const std::string& filename, std::vector<DEMMeshConnected>& meshes);
+    static void WriteWavefront(const std::string& filename, std::vector<DEMMesh>& meshes);
 
     /// Utility function for merging multiple meshes.
-    static DEMMeshConnected Merge(std::vector<DEMMeshConnected>& meshes);
+    static DEMMesh Merge(std::vector<DEMMesh>& meshes);
 
     /// Get the number of triangles already added to this mesh
     size_t GetNumTriangles() const { return nTri; }
@@ -597,6 +597,9 @@ class DEMMeshConnected : public DEMInitializer {
         AddGeometryWildcard(name, std::vector<float>(nTri, val));
     }
 };
+
+// Backward compatibility alias
+using DEMMeshConnected = DEMMesh;
 
 /*
 /// GPU-side struct that holds external object component info. Only component, not their parents, so this is the

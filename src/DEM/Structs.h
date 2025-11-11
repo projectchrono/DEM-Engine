@@ -935,7 +935,7 @@ class DEMTrackedObj : public DEMInitializer {
     // If this tracked object is broken b/c the owner it points to has been removed from the simulation system
     bool isBroken = false;
     // The offset for its first geometric compoent in the tracked objects. For example, if it is mesh, then this is the
-    // first triangle ID.
+    // first convex patch's ID.
     size_t geoID;
     // The number of geometric entities (sphere components, triangles or analytical components) the tracked objects
     // have.

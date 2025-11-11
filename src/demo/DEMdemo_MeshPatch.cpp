@@ -29,7 +29,7 @@ int main() {
 
     // Test with a simple cube mesh
     std::cout << "\n--- Test 1: Cube Mesh with Default Patch Info ---" << std::endl;
-    auto cube_mesh = std::make_shared<DEMMeshConnected>();
+    auto cube_mesh = std::make_shared<DEMMesh>();
     bool loaded = cube_mesh->LoadWavefrontMesh((GET_DATA_PATH() / "mesh/cube.obj").string());
 
     if (loaded) {
@@ -105,7 +105,7 @@ int main() {
 
     // Test with sphere mesh if available
     std::cout << "\n--- Test 4: Sphere Mesh ---" << std::endl;
-    auto sphere_mesh = std::make_shared<DEMMeshConnected>();
+    auto sphere_mesh = std::make_shared<DEMMesh>();
     loaded = sphere_mesh->LoadWavefrontMesh((GET_DATA_PATH() / "mesh/sphere.obj").string());
 
     if (loaded) {
@@ -141,7 +141,7 @@ int main() {
 
     // Test edge case: empty mesh
     std::cout << "\n--- Test 5: Empty Mesh ---" << std::endl;
-    auto empty_mesh = std::make_shared<DEMMeshConnected>();
+    auto empty_mesh = std::make_shared<DEMMesh>();
     std::cout << "Empty mesh default patches: " << empty_mesh->GetNumPatches() << " (expected: 1)" << std::endl;
     std::cout << "Patches explicitly set: " << (empty_mesh->ArePatchesExplicitlySet() ? "yes" : "no")
               << " (expected: no)" << std::endl;
