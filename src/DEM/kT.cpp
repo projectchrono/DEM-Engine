@@ -456,7 +456,7 @@ void DEMKinematicThread::packDataPointers() {
     clumpComponentOffsetExt.bindDevicePointer(&(granData->clumpComponentOffsetExt));
 
     // Mesh-related
-    ownerMesh.bindDevicePointer(&(granData->ownerMesh));
+    triOwnerMesh.bindDevicePointer(&(granData->triOwnerMesh));
     relPosNode1.bindDevicePointer(&(granData->relPosNode1));
     relPosNode2.bindDevicePointer(&(granData->relPosNode2));
     relPosNode3.bindDevicePointer(&(granData->relPosNode3));
@@ -494,7 +494,7 @@ void DEMKinematicThread::migrateDataToDevice() {
     clumpComponentOffset.toDeviceAsync(streamInfo.stream);
     clumpComponentOffsetExt.toDeviceAsync(streamInfo.stream);
 
-    ownerMesh.toDeviceAsync(streamInfo.stream);
+    triOwnerMesh.toDeviceAsync(streamInfo.stream);
     relPosNode1.toDeviceAsync(streamInfo.stream);
     relPosNode2.toDeviceAsync(streamInfo.stream);
     relPosNode3.toDeviceAsync(streamInfo.stream);
@@ -660,7 +660,7 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(ownerClumpBody, nSpheresGM, 0);
 
     // Resize to the number of triangle facets
-    DEME_DUAL_ARRAY_RESIZE(ownerMesh, nTriGM, 0);
+    DEME_DUAL_ARRAY_RESIZE(triOwnerMesh, nTriGM, 0);
     DEME_DUAL_ARRAY_RESIZE(relPosNode1, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(relPosNode2, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(relPosNode3, nTriGM, make_float3(0));
@@ -818,7 +818,7 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
             // input_mesh_facet_owner run length is the num of facets in this mesh entity
             if (input_mesh_facet_owner.at(k) != this_facet_owner)
                 break;
-            ownerMesh[nExistingFacets + k] = owner_offset_for_mesh_obj + this_facet_owner;
+            triOwnerMesh[nExistingFacets + k] = owner_offset_for_mesh_obj + this_facet_owner;
             DEMTriangle this_tri = input_mesh_facets.at(k);
             relPosNode1[nExistingFacets + k] = this_tri.p1;
             relPosNode2[nExistingFacets + k] = this_tri.p2;
@@ -860,6 +860,7 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
                                                size_t nExistingSpheres,
                                                size_t nExistingTriMesh,
                                                size_t nExistingFacets,
+                                               size_t nExistingPatches,
                                                unsigned int nExistingObj,
                                                unsigned int nExistingAnalGM) {
     populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, input_mesh_facet_owner,
@@ -868,7 +869,7 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
 
 void DEMKinematicThread::updatePrevContactArrays(DualStruct<DEMDataDT>& dT_data, size_t nContacts) {
     // Store the incoming info in kT's arrays
-    // Note kT never had the responsibility to migrate contact info to host, even at UpdateClumps, as even in this case
+    // Note kT never had the responsibility to migrate contact info to host, even at Update, as even in this case
     // its host-side update comes from dT
     overwritePrevContactArrays(granData, dT_data, previous_idGeometryA, previous_idGeometryB, previous_contactType,
                                simParams, contactPersistency, solverScratchSpace, streamInfo.stream, nContacts);

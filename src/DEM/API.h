@@ -985,11 +985,11 @@ class DEMSolver {
                                  std::vector<float3>& torques,
                                  bool torque_in_local = false);
 
-    /// @brief Set the wildcard values of some triangles.
-    /// @param geoID The ID of the starting (first) triangle that needs to be modified.
+    /// @brief Set the wildcard values of some mesh patches.
+    /// @param geoID The ID of the starting (first) patch that needs to be modified.
     /// @param name The name of the wildcard.
-    /// @param vals A vector of values that will be assigned to the triangles starting from geoID.
-    void SetTriWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals);
+    /// @param vals A vector of values that will be assigned to the patchs starting from geoID.
+    void SetPatchWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals);
     /// @brief Set the wildcard values of some spheres.
     /// @param geoID The ID of the starting (first) sphere that needs to be modified.
     /// @param name The name of the wildcard.
@@ -1322,8 +1322,11 @@ class DEMSolver {
     /// initialization.
     void UpdateSimParams();
 
-    /// @brief TTransfer newly loaded clumps to the GPU-side in mid-simulation.
-    void UpdateClumps();
+    /// @brief Transfer newly loaded clumps and meshes to the GPU-side in mid-simulation.
+    void Update();
+
+    /// @brief Legacy method name for Update.
+    void UpdateClumps() { Update(); }
 
     /// @brief Update the time step size. Used after system initialization.
     /// @param ts Time step size.
@@ -1640,6 +1643,8 @@ class DEMSolver {
     size_t nSpheresGM = 0;
     // Total number of triangle facets
     size_t nTriGM = 0;
+    // Total number of mesh patches
+    size_t nMeshPatches = 0;
     // Number of analytical entites (as components of some external objects)
     unsigned int nAnalGM = 0;
     // Total number of owner bodies
@@ -1826,8 +1831,8 @@ class DEMSolver {
 
     // These mesh facets' owners' ID, flattened
     std::vector<bodyID_t> m_mesh_facet_owner;
-    // Material types of these mesh facets
-    std::vector<materialsOffset_t> m_mesh_facet_materials;
+    // Patch ID for each mesh facet, flattened
+    std::vector<bodyID_t> m_mesh_facet_patch;
     // Three nodes of each triangle, flattened
     std::vector<DEMTriangle> m_mesh_facets;
 
@@ -1958,6 +1963,7 @@ class DEMSolver {
                                size_t nSpheres,
                                size_t nTriMesh,
                                size_t nFacets,
+                               size_t nMeshPatches,
                                unsigned int nExtObj_old,
                                unsigned int nAnalGM_old);
     /// Add content to the flattened analytical component array.

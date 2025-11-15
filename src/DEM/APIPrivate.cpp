@@ -656,7 +656,9 @@ void DEMSolver::reportInitStats() const {
 void DEMSolver::preprocessAnalyticalObjs() {
     // nExtObj can increase in mid-simulation if the user re-initialize using an `Add' flavor
     nExtObj += cached_extern_objs.size();
-    unsigned int thisExtObj = 0;
+    unsigned int thisExtObj =
+        0;  // In preprocessing, this starts from 0 since if this is an update, the previous ext objs are already loaded
+            // and processed. This is the offset for the new ones being added in this update.
     for (const auto& ext_obj : cached_extern_objs) {
         // Load mass and MOI properties into arrays waiting to be transfered to kTdT
         m_ext_obj_mass.push_back(ext_obj->mass);
@@ -757,7 +759,12 @@ void DEMSolver::preprocessClumps() {
 
 void DEMSolver::preprocessTriangleObjs() {
     nTriMeshes += cached_mesh_objs.size();
-    bodyID_t thisMeshObj = 0;
+    bodyID_t thisMeshObj =
+        0;  // In preprocessing, this starts from 0 since if this is an update, the previous mesh objects are already
+            // loaded and processed. This is the offset for the new ones being added in this update.
+    bodyID_t thisPatchCount =
+        0;  // In preprocessing, this starts from 0 since if this is an update, the previous patches are already loaded
+            // and processed. This is the offset for the new ones being added in this update.
     for (const auto& mesh_obj : cached_mesh_objs) {
         if (!(mesh_obj->isMaterialSet)) {
             DEME_ERROR(
@@ -782,8 +789,32 @@ void DEMSolver::preprocessTriangleObjs() {
         m_input_mesh_obj_rot.push_back(mesh_obj->init_oriQ);
         m_input_mesh_obj_family.push_back(mesh_obj->family_code);
         m_mesh_facet_owner.insert(m_mesh_facet_owner.end(), mesh_obj->GetNumTriangles(), thisMeshObj);
+
+        // Initialize patch IDs if not already set (default: all facets in patch 0)
+        if (!mesh_obj->patches_explicitly_set && mesh_obj->m_patch_ids.empty()) {
+            mesh_obj->SetPatchIDs({0});
+        }
+
+        // Populate patch owner and material arrays (one entry per patch in this mesh)
+        // Note patch_id in a mesh is always 0-based, and contiguous
+        std::vector<materialsOffset_t> patch_materials(mesh_obj->GetNumPatches());
+        for (size_t facet_idx = 0; facet_idx < mesh_obj->GetNumPatches(); facet_idx++) {
+            // patch_id is per-triangle
+            bodyID_t patch_id = mesh_obj->m_patch_ids.at(facet_idx);
+            // Assign this facet's material to its patch (will overwrite for each facet, but they should be consistent
+            // per patch)
+            patch_materials[patch_id] = mesh_obj->materials.at(patch_id)->load_order;
+        }
+
+        for (size_t patch_idx = 0; patch_idx < mesh_obj->GetNumPatches(); patch_idx++) {
+            m_mesh_patch_owner.push_back(thisMeshObj);
+            m_mesh_patch_materials.push_back(patch_materials[patch_idx]);
+        }
+
         for (unsigned int i = 0; i < mesh_obj->GetNumTriangles(); i++) {
-            m_mesh_facet_materials.push_back(mesh_obj->materials.at(i)->load_order);
+            // Store which patch this facet belongs to
+            m_mesh_facet_patch.push_back(mesh_obj->m_patch_ids.at(i) + thisPatchCount);
+
             DEMTriangle tri = mesh_obj->GetTriangle(i);
             // If we wish to correct surface orientation based on given vertex normals, rather than using RHR...
             if (mesh_obj->use_mesh_normals) {
@@ -804,8 +835,11 @@ void DEMSolver::preprocessTriangleObjs() {
             }
             m_mesh_facets.push_back(tri);
         }
+        thisPatchCount += mesh_obj->GetNumPatches();
 
         nTriGM += mesh_obj->GetNumTriangles();
+        nMeshPatches +=
+            mesh_obj->GetNumPatches();  // This is used to keep track of the total number of patches across all meshes
         thisMeshObj++;
     }
 }
@@ -1169,9 +1203,10 @@ void DEMSolver::allocateGPUArrays() {
     // Resize arrays based on the statistical data we have
     std::thread dThread = std::move(std::thread([this]() {
         this->dT->allocateGPUArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
-                                    this->nSpheresGM, this->nTriGM, this->nAnalGM, this->nExtraContacts,
-                                    this->nDistinctMassProperties, this->nDistinctClumpBodyTopologies,
-                                    this->nDistinctClumpComponents, this->nJitifiableClumpComponents, this->nMatTuples);
+                                    this->nSpheresGM, this->nTriGM, this->nMeshPatches, this->nAnalGM,
+                                    this->nExtraContacts, this->nDistinctMassProperties,
+                                    this->nDistinctClumpBodyTopologies, this->nDistinctClumpComponents,
+                                    this->nJitifiableClumpComponents, this->nMatTuples);
     }));
     std::thread kThread = std::move(std::thread([this]() {
         this->kT->allocateGPUArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
@@ -1196,14 +1231,14 @@ void DEMSolver::initializeGPUArrays() {
         m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
         // Meshed objects' initial stats
         cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner,
-        m_mesh_facet_materials, m_mesh_facets,
+        m_mesh_facet_patch, m_mesh_facets, m_mesh_patch_owner, m_mesh_patch_materials,
         // Clump template name mapping
         m_template_number_name_map,
         // Clump template info (mass, sphere components, materials etc.)
         flattened_clump_templates,
-        // Analytical obj `template' properties
+        // Analytical obj physics properties
         m_ext_obj_mass, m_ext_obj_moi, m_ext_obj_comp_num,
-        // Meshed obj `template' properties
+        // Meshed obj physics properties
         m_mesh_obj_mass, m_mesh_obj_moi,
         // Universal template info
         m_loaded_materials,
@@ -1233,6 +1268,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
                                       size_t nSpheres,
                                       size_t nTriMesh,
                                       size_t nFacets,
+                                      size_t nMeshPatches,
                                       unsigned int nExtObj,
                                       unsigned int nAnalGM) {
     // Pack clump templates together... that's easier to pass to dT kT
@@ -1246,12 +1282,12 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
         // Meshed objects' initial stats
         cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner,
-        m_mesh_facet_materials, m_mesh_facets,
+        m_mesh_facet_patch, m_mesh_facets, m_mesh_patch_owner, m_mesh_patch_materials,
         // Clump template info (mass, sphere components, materials etc.)
         flattened_clump_templates,
-        // Analytical obj `template' properties
+        // Analytical obj physics properties
         m_ext_obj_mass, m_ext_obj_moi, m_ext_obj_comp_num,
-        // Meshed obj `template' properties
+        // Meshed obj physics properties
         m_mesh_obj_mass, m_mesh_obj_moi,
         // Universal template info
         m_loaded_materials,
@@ -1260,7 +1296,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // I/O and misc.
         m_no_output_families, m_tracked_objs,
         // Number of entities, old
-        nOwners, nClumps, nSpheres, nTriMesh, nFacets, nExtObj, nAnalGM);
+        nOwners, nClumps, nSpheres, nTriMesh, nFacets, nMeshPatches, nExtObj, nAnalGM);
     kT->updateClumpMeshArrays(
         // Clump batchs' initial stats
         cached_input_clump_batches,
@@ -1273,7 +1309,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // Templates and misc.
         flattened_clump_templates,
         // Number of entities, old
-        nOwners, nClumps, nSpheres, nTriMesh, nFacets, nExtObj, nAnalGM);
+        nOwners, nClumps, nSpheres, nTriMesh, nFacets, nMeshPatches, nExtObj, nAnalGM);
 }
 
 void DEMSolver::packDataPointers() {
@@ -1405,8 +1441,8 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     // acquisition module
     std::string ingredient_definition = " ", cnt_wildcard_acquisition = " ", ingredient_acquisition_A = " ",
                 ingredient_acquisition_B = " ", owner_geo_wildcard_write_back = " ", cnt_wildcard_write_back = " ",
-                cnt_wildcard_destroy_record = " ", geo_wc_acquisition_A_sph = " ", geo_wc_acquisition_A_tri = " ",
-                geo_wc_acquisition_B_sph = " ", geo_wc_acquisition_B_tri = " ", geo_wc_acquisition_B_anal = " ";
+                cnt_wildcard_destroy_record = " ", geo_wc_acquisition_A_sph = " ", geo_wc_acquisition_A_patch = " ",
+                geo_wc_acquisition_B_sph = " ", geo_wc_acquisition_B_patch = " ", geo_wc_acquisition_B_anal = " ";
     scan_force_model_ingr(added_ingredients, model);
     // As our numerical method stands now, AOwnerFamily and BOwnerFamily are always needed.
     add_force_model_ingr(added_ingredients, "AOwnerFamily");
@@ -1481,10 +1517,10 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     equip_owner_wildcards(ingredient_definition, ingredient_acquisition_A, ingredient_acquisition_B,
                           owner_geo_wildcard_write_back, added_owner_wildcards);
     // Then equip acquisition strategies for geo wildcards.
-    // geo_wc_acquisition_B_sph, geo_wc_acquisition_B_tri, geo_wc_acquisition_B_anal cannot be incorporated into
+    // geo_wc_acquisition_B_sph, geo_wc_acquisition_B_patch, geo_wc_acquisition_B_anal cannot be incorporated into
     // ingredient_acquisition_B, since they are different for the 3 cases...
-    equip_geo_wildcards(ingredient_definition, geo_wc_acquisition_A_sph, geo_wc_acquisition_A_tri,
-                        geo_wc_acquisition_B_sph, geo_wc_acquisition_B_tri, geo_wc_acquisition_B_anal,
+    equip_geo_wildcards(ingredient_definition, geo_wc_acquisition_A_sph, geo_wc_acquisition_A_patch,
+                        geo_wc_acquisition_B_sph, geo_wc_acquisition_B_patch, geo_wc_acquisition_B_anal,
                         added_geo_wildcards);
     // Currently, owner_wildcard_write_back and geo_wildcard_write_back might be blank, since give the write-back
     // control to the user, and they may need to use atomic operations (atomicExch or atomicAdd) to update the
@@ -1552,9 +1588,9 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     strMap["_forceModelIngredientAcqForB_"] = ingredient_acquisition_B;
     // Geo wildcard acquisition is contact type-dependent.
     strMap["_forceModelGeoWildcardAcqForASph_"] = geo_wc_acquisition_A_sph;
-    strMap["_forceModelGeoWildcardAcqForATri_"] = geo_wc_acquisition_A_tri;
+    strMap["_forceModelGeoWildcardAcqForATri_"] = geo_wc_acquisition_A_patch;
     strMap["_forceModelGeoWildcardAcqForBSph_"] = geo_wc_acquisition_B_sph;
-    strMap["_forceModelGeoWildcardAcqForBTri_"] = geo_wc_acquisition_B_tri;
+    strMap["_forceModelGeoWildcardAcqForBMeshPatch_"] = geo_wc_acquisition_B_patch;
     strMap["_forceModelGeoWildcardAcqForBAnal_"] = geo_wc_acquisition_B_anal;
 
     // This should be empty as of now...

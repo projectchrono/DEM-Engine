@@ -72,7 +72,7 @@ void DEMDynamicThread::packDataPointers() {
     for (unsigned int i = 0; i < simParams->nGeoWildcards; i++) {
         sphereWildcards[i]->bindDevicePointer(&(granData->sphereWildcards[i]));
         analWildcards[i]->bindDevicePointer(&(granData->analWildcards[i]));
-        triWildcards[i]->bindDevicePointer(&(granData->triWildcards[i]));
+        patchWildcards[i]->bindDevicePointer(&(granData->patchWildcards[i]));
     }
 
     // The offset info that indexes into the template arrays
@@ -82,13 +82,15 @@ void DEMDynamicThread::packDataPointers() {
     sphereMaterialOffset.bindDevicePointer(&(granData->sphereMaterialOffset));
     volumeOwnerBody.bindDevicePointer(&(granData->volumeOwnerBody));
 
-    // Mesh-related
-    ownerMesh.bindDevicePointer(&(granData->ownerMesh));
+    // Mesh and analytical-related
+    triOwnerMesh.bindDevicePointer(&(granData->triOwnerMesh));
+    ;
+    triPatchID.bindDevicePointer(&(granData->triPatchID));
     ownerAnalBody.bindDevicePointer(&(granData->ownerAnalBody));
     relPosNode1.bindDevicePointer(&(granData->relPosNode1));
     relPosNode2.bindDevicePointer(&(granData->relPosNode2));
     relPosNode3.bindDevicePointer(&(granData->relPosNode3));
-    triMaterialOffset.bindDevicePointer(&(granData->triMaterialOffset));
+    patchMaterialOffset.bindDevicePointer(&(granData->patchMaterialOffset));
 
     // Template array pointers
     radiiSphere.bindDevicePointer(&(granData->radiiSphere));
@@ -147,7 +149,7 @@ void DEMDynamicThread::migrateDataToDevice() {
     for (unsigned int i = 0; i < simParams->nGeoWildcards; i++) {
         sphereWildcards[i]->toDeviceAsync(streamInfo.stream);
         analWildcards[i]->toDeviceAsync(streamInfo.stream);
-        triWildcards[i]->toDeviceAsync(streamInfo.stream);
+        patchWildcards[i]->toDeviceAsync(streamInfo.stream);
     }
 
     ownerClumpBody.toDeviceAsync(streamInfo.stream);
@@ -156,12 +158,13 @@ void DEMDynamicThread::migrateDataToDevice() {
     sphereMaterialOffset.toDeviceAsync(streamInfo.stream);
     volumeOwnerBody.toDeviceAsync(streamInfo.stream);
 
-    ownerMesh.toDeviceAsync(streamInfo.stream);
+    triOwnerMesh.toDeviceAsync(streamInfo.stream);
+    triPatchID.toDeviceAsync(streamInfo.stream);
     ownerAnalBody.toDeviceAsync(streamInfo.stream);
     relPosNode1.toDeviceAsync(streamInfo.stream);
     relPosNode2.toDeviceAsync(streamInfo.stream);
     relPosNode3.toDeviceAsync(streamInfo.stream);
-    triMaterialOffset.toDeviceAsync(streamInfo.stream);
+    patchMaterialOffset.toDeviceAsync(streamInfo.stream);
 
     radiiSphere.toDeviceAsync(streamInfo.stream);
     relPosSphereX.toDeviceAsync(streamInfo.stream);
@@ -183,7 +186,7 @@ void DEMDynamicThread::migrateDeviceModifiableInfoToHost() {
     migrateContactInfoToHost();
     migrateOwnerWildcardToHost();
     migrateSphGeoWildcardToHost();
-    migrateTriGeoWildcardToHost();
+    migratePatchGeoWildcardToHost();
     migrateAnalGeoWildcardToHost();
 }
 
@@ -242,9 +245,9 @@ void DEMDynamicThread::migrateSphGeoWildcardToHost() {
         sphereWildcards[i]->toHost();
     }
 }
-void DEMDynamicThread::migrateTriGeoWildcardToHost() {
+void DEMDynamicThread::migratePatchGeoWildcardToHost() {
     for (unsigned int i = 0; i < simParams->nGeoWildcards; i++) {
-        triWildcards[i]->toHost();
+        patchWildcards[i]->toHost();
     }
 }
 void DEMDynamicThread::migrateAnalGeoWildcardToHost() {
@@ -259,7 +262,7 @@ bodyID_t DEMDynamicThread::getGeoOwnerID(const bodyID_t& geo, const geoType_t& t
         case (GEO_T_SPHERE):
             return ownerClumpBody[geo];
         case (GEO_T_TRIANGLE):
-            return ownerMesh[geo];
+            return triOwnerMesh[geo];
         case (GEO_T_ANALYTICAL):
             return ownerAnalBody[geo];
         default:
@@ -411,6 +414,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
                                          size_t nTriMeshes,
                                          size_t nSpheresGM,
                                          size_t nTriGM,
+                                         size_t nMeshPatches,
                                          unsigned int nAnalGM,
                                          size_t nExtraContacts,
                                          unsigned int nMassProperties,
@@ -424,6 +428,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     // Sizes of these arrays
     simParams->nSpheresGM = nSpheresGM;
     simParams->nTriGM = nTriGM;
+    simParams->nMeshPatches = nMeshPatches;
     simParams->nAnalGM = nAnalGM;
     simParams->nOwnerBodies = nOwnerBodies;
     simParams->nOwnerClumps = nOwnerClumps;
@@ -485,11 +490,15 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     }
 
     // Resize to the number of triangle facets
-    DEME_DUAL_ARRAY_RESIZE(ownerMesh, nTriGM, 0);
+    DEME_DUAL_ARRAY_RESIZE(triOwnerMesh, nTriGM, 0);
     DEME_DUAL_ARRAY_RESIZE(relPosNode1, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(relPosNode2, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(relPosNode3, nTriGM, make_float3(0));
-    DEME_DUAL_ARRAY_RESIZE(triMaterialOffset, nTriGM, 0);
+    DEME_DUAL_ARRAY_RESIZE(triPatchID, nTriGM, 0);
+
+    // Resize to the number of mesh patches
+    DEME_DUAL_ARRAY_RESIZE(patchOwnerMesh, nMeshPatches, 0);
+    DEME_DUAL_ARRAY_RESIZE(patchMaterialOffset, nMeshPatches, 0);
 
     // Resize to the number of analytical geometries
     DEME_DUAL_ARRAY_RESIZE(ownerAnalBody, nAnalGM, 0);
@@ -537,7 +546,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
         ownerWildcards.resize(simParams->nOwnerWildcards);
         sphereWildcards.resize(simParams->nGeoWildcards);
         analWildcards.resize(simParams->nGeoWildcards);
-        triWildcards.resize(simParams->nGeoWildcards);
+        patchWildcards.resize(simParams->nGeoWildcards);
         for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
             contactWildcards[i] =
                 std::make_unique<DualArray<float>>(cnt_arr_size, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
@@ -551,8 +560,8 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
                 std::make_unique<DualArray<float>>(nSpheresGM, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
             analWildcards[i] =
                 std::make_unique<DualArray<float>>(nAnalGM, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-            triWildcards[i] =
-                std::make_unique<DualArray<float>>(nTriGM, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+            patchWildcards[i] =
+                std::make_unique<DualArray<float>>(nMeshPatches, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
         }
     }
     // existingContactTypes has a fixed size depending on how many contact types are defined
@@ -646,8 +655,10 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                                             const std::vector<float4>& input_mesh_obj_rot,
                                             const std::vector<unsigned int>& input_mesh_obj_family,
                                             const std::vector<unsigned int>& mesh_facet_owner,
-                                            const std::vector<materialsOffset_t>& mesh_facet_materials,
+                                            const std::vector<bodyID_t>& mesh_facet_patch,
                                             const std::vector<DEMTriangle>& mesh_facets,
+                                            const std::vector<bodyID_t>& mesh_patch_owner,
+                                            const std::vector<materialsOffset_t>& mesh_patch_materials,
                                             const ClumpTemplateFlatten& clump_templates,
                                             const std::vector<float>& ext_obj_mass_types,
                                             const std::vector<float3>& ext_obj_moi_types,
@@ -656,7 +667,8 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                                             const std::vector<float3>& mesh_obj_moi_types,
                                             size_t nExistOwners,
                                             size_t nExistSpheres,
-                                            size_t nExistingFacets) {
+                                            size_t nExistingFacets,
+                                            size_t nExistingMeshPatches) {
     // Load in clump components info (but only if instructed to use jitified clump templates). This step will be
     // repeated even if we are just adding some more clumps to system, not a complete re-initialization.
     size_t k = 0;
@@ -933,7 +945,8 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         oriQy[i + owner_offset_for_ext_obj] = oriQ_of_this.y;
         oriQz[i + owner_offset_for_ext_obj] = oriQ_of_this.z;
 
-        //// TODO: and initial vel?
+        //// For setting initial vel ang angvel, DEME's expected usage is now setting them using trackers after
+        ///initialization. / For clumps, their init vel can be set via initializers because of historical reasons.
 
         family_t this_family_num = input_ext_obj_family.at(i);
         familyID[i + owner_offset_for_ext_obj] = this_family_num;
@@ -945,6 +958,8 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
     unsigned int offset_for_mesh_obj_mass_template = offset_for_ext_obj_mass_template + input_ext_obj_xyz.size();
     // k for indexing the triangle facets
     k = 0;
+    // p for indexing patches (flattened across all meshes)
+    size_t p = 0;
     for (size_t i = 0; i < input_mesh_objs.size(); i++) {
         // If got here, it is a mesh
         ownerTypes[i + owner_offset_for_mesh_obj] = OWNER_T_MESH;
@@ -960,8 +975,8 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                         "initial values are defauled to 0.",
                         w_name.c_str());
                 } else {
-                    for (size_t jj = 0; jj < input_mesh_objs.at(i)->GetNumTriangles(); jj++) {
-                        (*triWildcards[w_num])[nExistingFacets + k + jj] =
+                    for (size_t jj = 0; jj < input_mesh_objs.at(i)->GetNumPatches(); jj++) {
+                        (*patchWildcards[w_num])[nExistingMeshPatches + p + jj] =
                             input_mesh_objs.at(i)->geo_wildcards[w_name].at(jj);
                     }
                 }
@@ -996,7 +1011,19 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         oriQy[i + owner_offset_for_mesh_obj] = oriQ_of_this.y;
         oriQz[i + owner_offset_for_mesh_obj] = oriQ_of_this.z;
 
-        //// TODO: and initial vel?
+        //// For setting initial vel ang angvel, DEME's expected usage is now setting them using trackers after
+        ///initialization. / For clumps, their init vel can be set via initializers because of historical reasons.
+
+        // Populate patch info for this mesh
+        // mesh_patch_owner run length is the num of patches in this mesh entity
+        //// TODO: This flatten-then-init approach is historical and too ugly.
+        size_t this_patch_owner = mesh_patch_owner.at(p);
+        for (; p < mesh_patch_owner.size(); p++) {
+            if (mesh_patch_owner.at(p) != this_patch_owner)
+                break;
+            patchOwnerMesh[nExistingMeshPatches + p] = owner_offset_for_mesh_obj + this_patch_owner;
+            patchMaterialOffset[nExistingMeshPatches + p] = mesh_patch_materials.at(p);
+        }
 
         // Per-facet info
         //// TODO: This flatten-then-init approach is historical and too ugly.
@@ -1005,8 +1032,9 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
             // mesh_facet_owner run length is the num of facets in this mesh entity
             if (mesh_facet_owner.at(k) != this_facet_owner)
                 break;
-            ownerMesh[nExistingFacets + k] = owner_offset_for_mesh_obj + this_facet_owner;
-            triMaterialOffset[nExistingFacets + k] = mesh_facet_materials.at(k);
+            triOwnerMesh[nExistingFacets + k] = owner_offset_for_mesh_obj + this_facet_owner;
+            // Tri's patch belonging needs to take into account those patches that are previously added
+            triPatchID[nExistingFacets + k] = nExistingMeshPatches + mesh_facet_patch.at(k);
             DEMTriangle this_tri = mesh_facets.at(k);
             relPosNode1[nExistingFacets + k] = this_tri.p1;
             relPosNode2[nExistingFacets + k] = this_tri.p2;
@@ -1016,7 +1044,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         family_t this_family_num = input_mesh_obj_family.at(i);
         familyID[i + owner_offset_for_mesh_obj] = this_family_num;
 
-        // To save some mem
+        // Cached initial values for wildcards of this mesh is not needed anymore
         m_meshes.back()->ClearWildcards();
 
         DEME_DEBUG_PRINTF("dT just loaded a mesh in family %u", +(this_family_num));
@@ -1031,7 +1059,7 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
                                         std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs,
                                         size_t nExistOwners,
                                         size_t nExistSpheres,
-                                        size_t nExistingFacets,
+                                        size_t nExistingPatches,
                                         unsigned int nExistingAnalGM) {
     // We take notes on how many clumps each batch has, it will be useful when we assemble the tracker information
     std::vector<size_t> prescans_batch_size, prescans_batch_sphere_size;
@@ -1047,11 +1075,11 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
     for (const auto& geo_num : ext_obj_comp_num) {
         prescans_ext_obj_size.push_back(prescans_ext_obj_size.back() + geo_num);
     }
-    // Also take notes of num of facets of each mesh obj
+    // Also take notes of num of patches of each mesh obj
     std::vector<size_t> prescans_mesh_size;
     prescans_mesh_size.push_back(0);
     for (const auto& a_mesh : input_mesh_objs) {
-        prescans_mesh_size.push_back(prescans_mesh_size.back() + a_mesh->GetNumTriangles());
+        prescans_mesh_size.push_back(prescans_mesh_size.back() + a_mesh->GetNumPatches());
     }
 
     // Provide feedback to the tracked objects, tell them the owner numbers they are looking for
@@ -1081,7 +1109,8 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
                 tracked_obj->ownerID =
                     nExistOwners + ext_obj_comp_num.size() + prescans_batch_size.back() + tracked_obj->load_order;
                 tracked_obj->nSpanOwners = 1;
-                tracked_obj->geoID = nExistingFacets + prescans_mesh_size.at(tracked_obj->load_order);
+                tracked_obj->geoID = nExistingPatches + prescans_mesh_size.at(tracked_obj->load_order);
+                // For mesh, nGeos is the number of patches
                 tracked_obj->nGeos =
                     prescans_mesh_size.at(tracked_obj->load_order + 1) - prescans_mesh_size.at(tracked_obj->load_order);
                 break;
@@ -1102,8 +1131,10 @@ void DEMDynamicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpB
                                      const std::vector<float4>& input_mesh_obj_rot,
                                      const std::vector<unsigned int>& input_mesh_obj_family,
                                      const std::vector<unsigned int>& mesh_facet_owner,
-                                     const std::vector<materialsOffset_t>& mesh_facet_materials,
+                                     const std::vector<bodyID_t>& mesh_facet_patch,
                                      const std::vector<DEMTriangle>& mesh_facets,
+                                     const std::vector<bodyID_t>& mesh_patch_owner,
+                                     const std::vector<materialsOffset_t>& mesh_patch_materials,
                                      const std::unordered_map<unsigned int, std::string>& template_number_name_map,
                                      const ClumpTemplateFlatten& clump_templates,
                                      const std::vector<float>& ext_obj_mass_types,
@@ -1124,8 +1155,9 @@ void DEMDynamicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpB
     // For initialization, owner array offset is 0
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_rot, input_ext_obj_family,
                          input_mesh_objs, input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family,
-                         mesh_facet_owner, mesh_facet_materials, mesh_facets, clump_templates, ext_obj_mass_types,
-                         ext_obj_moi_types, ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, 0, 0, 0);
+                         mesh_facet_owner, mesh_facet_patch, mesh_facets, mesh_patch_owner, mesh_patch_materials,
+                         clump_templates, ext_obj_mass_types, ext_obj_moi_types, ext_obj_comp_num, mesh_obj_mass_types,
+                         mesh_obj_moi_types, 0, 0, 0, 0);
 
     buildTrackedObjs(input_clump_batches, ext_obj_comp_num, input_mesh_objs, tracked_objs, 0, 0, 0, 0);
 }
@@ -1139,8 +1171,10 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                                              const std::vector<float4>& input_mesh_obj_rot,
                                              const std::vector<unsigned int>& input_mesh_obj_family,
                                              const std::vector<unsigned int>& mesh_facet_owner,
-                                             const std::vector<materialsOffset_t>& mesh_facet_materials,
+                                             const std::vector<bodyID_t>& mesh_facet_patch,
                                              const std::vector<DEMTriangle>& mesh_facets,
+                                             const std::vector<bodyID_t>& mesh_patch_owner,
+                                             const std::vector<materialsOffset_t>& mesh_patch_materials,
                                              const ClumpTemplateFlatten& clump_templates,
                                              const std::vector<float>& ext_obj_mass_types,
                                              const std::vector<float3>& ext_obj_moi_types,
@@ -1156,6 +1190,7 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                                              size_t nExistingSpheres,
                                              size_t nExistingTriMesh,
                                              size_t nExistingFacets,
+                                             size_t nExistingPatches,
                                              unsigned int nExistingObj,
                                              unsigned int nExistingAnalGM) {
     // No policy changes here
@@ -1163,13 +1198,13 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
     // Analytical objects-related arrays should be empty
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_rot, input_ext_obj_family,
                          input_mesh_objs, input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family,
-                         mesh_facet_owner, mesh_facet_materials, mesh_facets, clump_templates, ext_obj_mass_types,
-                         ext_obj_moi_types, ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, nExistingOwners,
-                         nExistingSpheres, nExistingFacets);
+                         mesh_facet_owner, mesh_facet_patch, mesh_facets, mesh_patch_owner, mesh_patch_materials,
+                         clump_templates, ext_obj_mass_types, ext_obj_moi_types, ext_obj_comp_num, mesh_obj_mass_types,
+                         mesh_obj_moi_types, nExistingOwners, nExistingSpheres, nExistingFacets, nExistingPatches);
 
     // Make changes to tracked objects (potentially add more)
     buildTrackedObjs(input_clump_batches, ext_obj_comp_num, input_mesh_objs, tracked_objs, nExistingOwners,
-                     nExistingSpheres, nExistingFacets, nExistingAnalGM);
+                     nExistingSpheres, nExistingPatches, nExistingAnalGM);
 }
 
 #ifdef DEME_USE_CHPF
@@ -2752,8 +2787,8 @@ void DEMDynamicThread::deallocateEverything() {
     for (unsigned int i = 0; i < analWildcards.size(); i++) {
         analWildcards[i].reset();
     }
-    for (unsigned int i = 0; i < triWildcards.size(); i++) {
-        triWildcards[i].reset();
+    for (unsigned int i = 0; i < patchWildcards.size(); i++) {
+        patchWildcards[i].reset();
     }
 }
 
@@ -2787,13 +2822,13 @@ void DEMDynamicThread::setFamilyClumpMaterial(unsigned int N, unsigned int mat_i
 }
 void DEMDynamicThread::setFamilyMeshMaterial(unsigned int N, unsigned int mat_id) {
     migrateFamilyToHost();
-    for (size_t i = 0; i < simParams->nTriGM; i++) {
-        bodyID_t owner_id = ownerMesh[i];  // No device-side change
+    for (size_t i = 0; i < simParams->nMeshPatches; i++) {
+        bodyID_t owner_id = patchOwnerMesh[i];  // No device-side change
         if (+(familyID[owner_id]) == N) {
-            triMaterialOffset[i] = (materialsOffset_t)mat_id;
+            patchMaterialOffset[i] = (materialsOffset_t)mat_id;
         }
     }
-    triMaterialOffset.toDevice();
+    patchMaterialOffset.toDevice();
 }
 
 size_t DEMDynamicThread::getOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
@@ -2983,12 +3018,12 @@ void DEMDynamicThread::setOwnerWildcardValue(bodyID_t ownerID, unsigned int wc_n
     ownerWildcards[wc_num]->toDevice(ownerID, vals.size());
 }
 
-void DEMDynamicThread::setTriWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals) {
+void DEMDynamicThread::setPatchWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals) {
     for (size_t i = 0; i < vals.size(); i++) {
-        (*triWildcards[wc_num])[geoID + i] = vals.at(i);
+        (*patchWildcards[wc_num])[geoID + i] = vals.at(i);
     }
     // Partial send to device
-    triWildcards[wc_num]->toDevice(geoID, vals.size());
+    patchWildcards[wc_num]->toDevice(geoID, vals.size());
 }
 
 void DEMDynamicThread::setSphWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals) {
@@ -3030,7 +3065,7 @@ void DEMDynamicThread::getSphereWildcardValue(std::vector<float>& res, bodyID_t 
 }
 
 void DEMDynamicThread::getTriWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n) {
-    res = std::move(triWildcards[wc_num]->getVal(ID, n));
+    res = std::move(patchWildcards[wc_num]->getVal(ID, n));
 }
 
 void DEMDynamicThread::getAnalWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n) {

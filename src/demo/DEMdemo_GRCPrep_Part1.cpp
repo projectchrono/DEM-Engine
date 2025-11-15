@@ -149,7 +149,7 @@ int main() {
         // Give ground particles a small initial velocity so they `collapse' at the start of the simulation
         heap_particles->SetVel(make_float3(0.00, 0, -0.05));
         heap_particles->SetFamilies(heap_family);
-        DEMSim.UpdateClumps();
+        DEMSim.Update();
         std::cout << "Current number of clumps: " << DEMSim.GetNumClumps() << std::endl;
 
         // Allow for some settling

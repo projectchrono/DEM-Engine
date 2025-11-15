@@ -133,7 +133,7 @@ int main() {
     particles2->SetVel(input_vel2);
     particles2->SetFamily(1);
     auto tracker2 = DEMSim.Track(particles2);
-    DEMSim.UpdateClumps();
+    DEMSim.Update();
 
     // Ready simulation
     path out_dir = current_path();

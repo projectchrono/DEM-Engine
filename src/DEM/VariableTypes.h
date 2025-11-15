@@ -60,6 +60,7 @@ typedef uint8_t family_t;         ///< Data type for clump presecription type
 typedef uint8_t ownerType_t;      ///< The type of a owner entity (clump, analytical, mesh...)
 typedef uint8_t geoType_t;        ///< The type of a geometry entity (sphere, triangles, analytical component...)
 typedef uint8_t contact_t;        ///< Contact type as concatenation of geoType_t
+typedef int16_t patchID_t;        ///< Patch ID type for mesh patches
 
 typedef uint8_t objType_t;  ///< Analytical object type, such as plane, plate, cylinder, cone... Can be seen as even
                             ///< finer grain of geoType_t's analytical case

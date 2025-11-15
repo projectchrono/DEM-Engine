@@ -265,7 +265,7 @@ int main() {
                 the_pile->SetVel(make_float3(-0.00, 0.0, -0.80));
                 the_pile->SetFamily(100);
 
-                DEMSim.UpdateClumps();
+                DEMSim.Update();
 
                 std::cout << "Total num of particles: " << (int)DEMSim.GetNumClumps() << std::endl;
                 actualTotalSpheres = (int)DEMSim.GetNumClumps();
@@ -353,7 +353,7 @@ int main() {
                 the_pile->SetVel(make_float3(-0.00, 0.0, -0.80));
                 the_pile->SetFamily(99);
 
-                DEMSim.UpdateClumps();
+                DEMSim.Update();
 
                 std::cout << "Total num of particles: " << (int)DEMSim.GetNumClumps() << std::endl;
                 actualTotalSpheres = (int)DEMSim.GetNumClumps();

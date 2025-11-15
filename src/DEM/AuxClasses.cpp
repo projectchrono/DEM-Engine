@@ -521,7 +521,7 @@ float DEMTracker::GetGeometryWildcardValue(const std::string& name, size_t offse
             res = sys->GetAnalWildcardValue(obj->geoID + offset, name, 1);
             break;
         case (OWNER_TYPE::MESH):
-            assertGeoOffsetValid(offset, "GetGeometryWildcardValue", "triangles");
+            assertGeoOffsetValid(offset, "GetGeometryWildcardValue", "mesh patches");
             res = sys->GetTriWildcardValue(obj->geoID + offset, name, 1);
             break;
     }
@@ -674,7 +674,6 @@ void DEMTracker::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::v
 
 void DEMTracker::UpdateMesh(const std::vector<float3>& new_nodes) {
     assertMesh("UpdateMesh");
-    // assertGeoSize(new_mesh->GetNumTriangles(), "UpdateMesh", "triangles");
     // Outsource to API system to handle...
     sys->SetTriNodeRelPos(obj->ownerID, obj->geoID, new_nodes);
 }
@@ -717,8 +716,8 @@ void DEMTracker::SetGeometryWildcardValue(const std::string& name, float wc, siz
             sys->SetAnalWildcardValue(obj->geoID + offset, name, std::vector<float>(1, wc));
             break;
         case (OWNER_TYPE::MESH):
-            assertGeoOffsetValid(offset, "SetGeometryWildcardValue", "triangles");
-            sys->SetTriWildcardValue(obj->geoID + offset, name, std::vector<float>(1, wc));
+            assertGeoOffsetValid(offset, "SetGeometryWildcardValue", "mesh patches");
+            sys->SetPatchWildcardValue(obj->geoID + offset, name, std::vector<float>(1, wc));
             break;
     }
 }
@@ -734,8 +733,8 @@ void DEMTracker::SetGeometryWildcardValues(const std::string& name, const std::v
             sys->SetAnalWildcardValue(obj->geoID, name, wc);
             break;
         case (OWNER_TYPE::MESH):
-            assertGeoSize(wc.size(), "SetGeometryWildcardValues", "triangles");
-            sys->SetTriWildcardValue(obj->geoID, name, wc);
+            assertGeoSize(wc.size(), "SetGeometryWildcardValues", "mesh patches");
+            sys->SetPatchWildcardValue(obj->geoID, name, wc);
             break;
     }
 }

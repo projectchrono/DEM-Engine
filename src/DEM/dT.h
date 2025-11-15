@@ -225,7 +225,7 @@ class DEMDynamicThread {
     // Geometric entities' wildcards
     std::vector<std::unique_ptr<DualArray<float>>> sphereWildcards;
     std::vector<std::unique_ptr<DualArray<float>>> analWildcards;
-    std::vector<std::unique_ptr<DualArray<float>>> triWildcards;
+    std::vector<std::unique_ptr<DualArray<float>>> patchWildcards;
 
     // Storage for the names of the contact wildcards (whose order agrees with the impl-level wildcard numbering, from 1
     // to n)
@@ -251,13 +251,18 @@ class DEMDynamicThread {
     bool pendingCriticalUpdate = true;
 
     // Number of threads per block for dT force calculation kernels
-    unsigned int DT_FORCE_CALC_NTHREADS_PER_BLOCK = 256;
+    unsigned int DT_FORCE_CALC_NTHREADS_PER_BLOCK = 128;
 
     // Template-related arrays
     // Belonged-body ID
     DualArray<bodyID_t> ownerClumpBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<bodyID_t> ownerMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> triOwnerMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> ownerAnalBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // Mesh patch information: each facet belongs to a patch, and each patch has material properties
+    // Patch ID for each triangle facet (maps facet to patch)
+    DualArray<bodyID_t> triPatchID = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // Mesh patch owner IDs (one per patch, flattened across all meshes)
+    DualArray<bodyID_t> patchOwnerMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The ID that maps this sphere component's geometry-defining parameters, when this component is jitified
     DualArray<clumpComponentOffset_t> clumpComponentOffset =
@@ -272,7 +277,8 @@ class DEMDynamicThread {
     // The ID that maps this entity's material
     DualArray<materialsOffset_t> sphereMaterialOffset =
         DualArray<materialsOffset_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<materialsOffset_t> triMaterialOffset =
+    // Material offset for each mesh patch (indexed by patch, can be looked up via triPatchID)
+    DualArray<materialsOffset_t> patchMaterialOffset =
         DualArray<materialsOffset_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // dT's copy of family map
@@ -418,8 +424,8 @@ class DEMDynamicThread {
     /// @brief Set all meshes in this family to have this material.
     void setFamilyMeshMaterial(unsigned int N, unsigned int mat_id);
 
-    /// @brief Set the geometry wildcards of triangles, starting from geoID, for the length of vals.
-    void setTriWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
+    /// @brief Set the geometry wildcards of mesh patches, starting from geoID, for the length of vals.
+    void setPatchWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
     /// @brief Set the geometry wildcards of spheres, starting from geoID, for the length of vals.
     void setSphWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
     /// @brief Set the geometry wildcards of analytical components, starting from geoID, for the length of vals.
@@ -478,6 +484,7 @@ class DEMDynamicThread {
                            size_t nTriMeshes,
                            size_t nSpheresGM,
                            size_t nTriGM,
+                           size_t nMeshPatches,
                            unsigned int nAnalGM,
                            size_t nExtraContacts,
                            unsigned int nMassProperties,
@@ -493,7 +500,7 @@ class DEMDynamicThread {
                           std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs,
                           size_t nExistOwners,
                           size_t nExistSpheres,
-                          size_t nExistingFacets,
+                          size_t nExistingPatches,
                           unsigned int nExistingAnalGM);
     void populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                               const std::vector<float3>& input_ext_obj_xyz,
@@ -504,8 +511,10 @@ class DEMDynamicThread {
                               const std::vector<float4>& input_mesh_obj_rot,
                               const std::vector<unsigned int>& input_mesh_obj_family,
                               const std::vector<unsigned int>& mesh_facet_owner,
-                              const std::vector<materialsOffset_t>& mesh_facet_materials,
+                              const std::vector<bodyID_t>& mesh_facet_patch,
                               const std::vector<DEMTriangle>& mesh_facets,
+                              const std::vector<bodyID_t>& mesh_patch_owner,
+                              const std::vector<materialsOffset_t>& mesh_patch_materials,
                               const ClumpTemplateFlatten& clump_templates,
                               const std::vector<float>& ext_obj_mass_types,
                               const std::vector<float3>& ext_obj_moi_types,
@@ -514,7 +523,8 @@ class DEMDynamicThread {
                               const std::vector<float3>& mesh_obj_moi_types,
                               size_t nExistOwners,
                               size_t nExistSpheres,
-                              size_t nExistingFacets);
+                              size_t nExistingFacets,
+                              size_t nExistingPatches);
     void registerPolicies(const std::unordered_map<unsigned int, std::string>& template_number_name_map,
                           const ClumpTemplateFlatten& clump_templates,
                           const std::vector<float>& ext_obj_mass_types,
@@ -535,8 +545,10 @@ class DEMDynamicThread {
                        const std::vector<float4>& input_mesh_obj_rot,
                        const std::vector<unsigned int>& input_mesh_obj_family,
                        const std::vector<unsigned int>& mesh_facet_owner,
-                       const std::vector<materialsOffset_t>& mesh_facet_materials,
+                       const std::vector<bodyID_t>& mesh_facet_patch,
                        const std::vector<DEMTriangle>& mesh_facets,
+                       const std::vector<bodyID_t>& mesh_patch_owner,
+                       const std::vector<materialsOffset_t>& mesh_patch_materials,
                        const std::unordered_map<unsigned int, std::string>& template_number_name_map,
                        const ClumpTemplateFlatten& clump_templates,
                        const std::vector<float>& ext_obj_mass_types,
@@ -560,8 +572,10 @@ class DEMDynamicThread {
                                const std::vector<float4>& input_mesh_obj_rot,
                                const std::vector<unsigned int>& input_mesh_obj_family,
                                const std::vector<unsigned int>& mesh_facet_owner,
-                               const std::vector<materialsOffset_t>& mesh_facet_materials,
+                               const std::vector<bodyID_t>& mesh_facet_patch,
                                const std::vector<DEMTriangle>& mesh_facets,
+                               const std::vector<bodyID_t>& mesh_patch_owner,
+                               const std::vector<materialsOffset_t>& mesh_patch_materials,
                                const ClumpTemplateFlatten& clump_templates,
                                const std::vector<float>& ext_obj_mass_types,
                                const std::vector<float3>& ext_obj_moi_types,
@@ -577,6 +591,7 @@ class DEMDynamicThread {
                                size_t nExistingSpheres,
                                size_t nExistingTriMesh,
                                size_t nExistingFacets,
+                               size_t nExistingPatches,
                                unsigned int nExistingObj,
                                unsigned int nExistingAnalGM);
 
@@ -772,7 +787,7 @@ class DEMDynamicThread {
     void migrateClumpHighOrderInfoToHost();
     void migrateOwnerWildcardToHost();
     void migrateSphGeoWildcardToHost();
-    void migrateTriGeoWildcardToHost();
+    void migratePatchGeoWildcardToHost();
     void migrateAnalGeoWildcardToHost();
     void migrateContactInfoToHost();
     void migrateDeviceModifiableInfoToHost();
