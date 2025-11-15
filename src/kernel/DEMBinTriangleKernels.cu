@@ -36,7 +36,7 @@ __global__ void makeTriangleSandwich(deme::DEMSimParams* simParams,
         const float3 p1 = granData->relPosNode1[triID];
         const float3 p2 = granData->relPosNode2[triID];
         const float3 p3 = granData->relPosNode3[triID];
-        const deme::bodyID_t myOwnerID = granData->ownerMesh[triID];
+        const deme::bodyID_t myOwnerID = granData->triOwnerMesh[triID];
 
         // Get the incenter of this triangle.
         // This is because we use the incenter to enalrge a triangle. See for example, this
@@ -67,7 +67,7 @@ inline __device__ void figureOutNodeAndBoundingBox(deme::DEMSimParams* simParams
                                                    float3 loc_vB,
                                                    float3 loc_vC) {
     // My sphere voxel ID and my relPos
-    deme::bodyID_t myOwnerID = granData->ownerMesh[triID];
+    deme::bodyID_t myOwnerID = granData->triOwnerMesh[triID];
 
     double3 ownerXYZ;
     voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
@@ -150,7 +150,7 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
                 deme::bodyID_t objBOwner = objOwner[objB];
                 // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
                 unsigned int objFamilyNum = granData->familyID[objBOwner];
-                deme::bodyID_t triOwnerID = granData->ownerMesh[triID];
+                deme::bodyID_t triOwnerID = granData->triOwnerMesh[triID];
                 unsigned int triFamilyNum = granData->familyID[triOwnerID];
                 unsigned int maskMatID = locateMaskPair<unsigned int>(triFamilyNum, objFamilyNum);
                 // If marked no contact, skip ths iteration
@@ -281,7 +281,7 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                 deme::bodyID_t objBOwner = objOwner[objB];
                 // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
                 unsigned int objFamilyNum = granData->familyID[objBOwner];
-                deme::bodyID_t triOwnerID = granData->ownerMesh[triID];
+                deme::bodyID_t triOwnerID = granData->triOwnerMesh[triID];
                 unsigned int triFamilyNum = granData->familyID[triOwnerID];
                 unsigned int maskMatID = locateMaskPair<unsigned int>(triFamilyNum, objFamilyNum);
                 // If marked no contact, skip ths iteration

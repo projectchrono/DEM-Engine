@@ -985,11 +985,11 @@ class DEMSolver {
                                  std::vector<float3>& torques,
                                  bool torque_in_local = false);
 
-    /// @brief Set the wildcard values of some triangles.
-    /// @param geoID The ID of the starting (first) triangle that needs to be modified.
+    /// @brief Set the wildcard values of some mesh patches.
+    /// @param geoID The ID of the starting (first) patch that needs to be modified.
     /// @param name The name of the wildcard.
-    /// @param vals A vector of values that will be assigned to the triangles starting from geoID.
-    void SetTriWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals);
+    /// @param vals A vector of values that will be assigned to the patchs starting from geoID.
+    void SetPatchWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals);
     /// @brief Set the wildcard values of some spheres.
     /// @param geoID The ID of the starting (first) sphere that needs to be modified.
     /// @param name The name of the wildcard.

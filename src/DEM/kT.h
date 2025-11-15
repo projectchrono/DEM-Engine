@@ -184,7 +184,7 @@ class DEMKinematicThread {
     // Sphere-related arrays
     // Owner body ID of this component
     DualArray<bodyID_t> ownerClumpBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<bodyID_t> ownerMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> triOwnerMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The ID that maps this sphere component's geometry-defining parameters, when this component is jitified
     DualArray<clumpComponentOffset_t> clumpComponentOffset =

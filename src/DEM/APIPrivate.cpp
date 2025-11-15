@@ -1236,9 +1236,9 @@ void DEMSolver::initializeGPUArrays() {
         m_template_number_name_map,
         // Clump template info (mass, sphere components, materials etc.)
         flattened_clump_templates,
-        // Analytical obj `template' properties
+        // Analytical obj physics properties
         m_ext_obj_mass, m_ext_obj_moi, m_ext_obj_comp_num,
-        // Meshed obj `template' properties
+        // Meshed obj physics properties
         m_mesh_obj_mass, m_mesh_obj_moi,
         // Universal template info
         m_loaded_materials,
@@ -1285,9 +1285,9 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         m_mesh_facet_patch, m_mesh_facets, m_mesh_patch_owner, m_mesh_patch_materials,
         // Clump template info (mass, sphere components, materials etc.)
         flattened_clump_templates,
-        // Analytical obj `template' properties
+        // Analytical obj physics properties
         m_ext_obj_mass, m_ext_obj_moi, m_ext_obj_comp_num,
-        // Meshed obj `template' properties
+        // Meshed obj physics properties
         m_mesh_obj_mass, m_mesh_obj_moi,
         // Universal template info
         m_loaded_materials,
@@ -1441,8 +1441,8 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     // acquisition module
     std::string ingredient_definition = " ", cnt_wildcard_acquisition = " ", ingredient_acquisition_A = " ",
                 ingredient_acquisition_B = " ", owner_geo_wildcard_write_back = " ", cnt_wildcard_write_back = " ",
-                cnt_wildcard_destroy_record = " ", geo_wc_acquisition_A_sph = " ", geo_wc_acquisition_A_tri = " ",
-                geo_wc_acquisition_B_sph = " ", geo_wc_acquisition_B_tri = " ", geo_wc_acquisition_B_anal = " ";
+                cnt_wildcard_destroy_record = " ", geo_wc_acquisition_A_sph = " ", geo_wc_acquisition_A_patch = " ",
+                geo_wc_acquisition_B_sph = " ", geo_wc_acquisition_B_patch = " ", geo_wc_acquisition_B_anal = " ";
     scan_force_model_ingr(added_ingredients, model);
     // As our numerical method stands now, AOwnerFamily and BOwnerFamily are always needed.
     add_force_model_ingr(added_ingredients, "AOwnerFamily");
@@ -1517,10 +1517,10 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     equip_owner_wildcards(ingredient_definition, ingredient_acquisition_A, ingredient_acquisition_B,
                           owner_geo_wildcard_write_back, added_owner_wildcards);
     // Then equip acquisition strategies for geo wildcards.
-    // geo_wc_acquisition_B_sph, geo_wc_acquisition_B_tri, geo_wc_acquisition_B_anal cannot be incorporated into
+    // geo_wc_acquisition_B_sph, geo_wc_acquisition_B_patch, geo_wc_acquisition_B_anal cannot be incorporated into
     // ingredient_acquisition_B, since they are different for the 3 cases...
-    equip_geo_wildcards(ingredient_definition, geo_wc_acquisition_A_sph, geo_wc_acquisition_A_tri,
-                        geo_wc_acquisition_B_sph, geo_wc_acquisition_B_tri, geo_wc_acquisition_B_anal,
+    equip_geo_wildcards(ingredient_definition, geo_wc_acquisition_A_sph, geo_wc_acquisition_A_patch,
+                        geo_wc_acquisition_B_sph, geo_wc_acquisition_B_patch, geo_wc_acquisition_B_anal,
                         added_geo_wildcards);
     // Currently, owner_wildcard_write_back and geo_wildcard_write_back might be blank, since give the write-back
     // control to the user, and they may need to use atomic operations (atomicExch or atomicAdd) to update the
@@ -1588,9 +1588,9 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     strMap["_forceModelIngredientAcqForB_"] = ingredient_acquisition_B;
     // Geo wildcard acquisition is contact type-dependent.
     strMap["_forceModelGeoWildcardAcqForASph_"] = geo_wc_acquisition_A_sph;
-    strMap["_forceModelGeoWildcardAcqForATri_"] = geo_wc_acquisition_A_tri;
+    strMap["_forceModelGeoWildcardAcqForATri_"] = geo_wc_acquisition_A_patch;
     strMap["_forceModelGeoWildcardAcqForBSph_"] = geo_wc_acquisition_B_sph;
-    strMap["_forceModelGeoWildcardAcqForBTri_"] = geo_wc_acquisition_B_tri;
+    strMap["_forceModelGeoWildcardAcqForBMeshPatch_"] = geo_wc_acquisition_B_patch;
     strMap["_forceModelGeoWildcardAcqForBAnal_"] = geo_wc_acquisition_B_anal;
 
     // This should be empty as of now...

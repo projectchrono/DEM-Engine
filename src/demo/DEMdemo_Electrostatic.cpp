@@ -190,9 +190,13 @@ int main() {
 
     DEMSim.EnableContactBetweenFamilies(0, 1);
 
-    // We demonstrate using trackers to set a geometry wildcard. Q is now set for each triangle facet, and it's
-    // the opposite charge to the particles. So the rod should attract the particles.
-    rod_tracker->SetGeometryWildcardValues("Q", std::vector<float>(num_tri, -10. * init_charge));
+    // We demonstrate using trackers to set a geometry wildcard. Q is now set for each mesh patch.
+    // A patch is a collection of the triangle facets of the mesh that can be considered to form a convex region. When
+    // mesh-mesh contact is enabled, a patch can only have one contact with another patch (from another mesh). And
+    // geometry wildcards about mesh are associated with patches. The rod has the opposite charge to the particles. So
+    // the rod should attract the particles. This mesh we loaded we did not split it into patches, so itself is one
+    // patch. This patch now has this amount of charges.
+    rod_tracker->SetGeometryWildcardValues("Q", {-100.f * init_charge});
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_end; t += step_size, step_count++) {

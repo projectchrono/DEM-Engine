@@ -299,7 +299,7 @@ inline void equip_force_model_ingr_acq(std::string& definition,
     if (added_ingredients["AGeo"] || added_ingredients["BGeo"]) {
         definition += "deme::bodyID_t AGeo, BGeo;\n";
         acquisition_A += "AGeo = sphereID;";
-        // BGeo can be sphere, tri or analytical, but they are all named sphereID in the force kernel.
+        // BGeo can be sphere, mesh patch or analytical, but they are all named sphereID in the force kernel.
         acquisition_B += "BGeo = sphereID;";
     }
     if (added_ingredients["AOwnerMOI"] || added_ingredients["BOwnerMOI"]) {
@@ -344,18 +344,18 @@ inline void equip_owner_wildcards(std::string& definition,
 // Sweep through all ingredients...
 inline void equip_geo_wildcards(std::string& definition,
                                 std::string& acquisition_A_sph,
-                                std::string& acquisition_A_tri,
+                                std::string& acquisition_A_patch,
                                 std::string& acquisition_B_sph,
-                                std::string& acquisition_B_tri,
+                                std::string& acquisition_B_patch,
                                 std::string& acquisition_B_anal,
                                 const std::set<std::string>& added_ingredients) {
     unsigned int i = 0;
     for (const auto& name : added_ingredients) {
         definition += "float* " + name + "_A, *" + name + "_B;\n";
         acquisition_A_sph += name + "_A = granData->sphereWildcards[" + std::to_string(i) + "];\n";
-        acquisition_A_tri += name + "_A = granData->triWildcards[" + std::to_string(i) + "];\n";
+        acquisition_A_patch += name + "_A = granData->patchWildcards[" + std::to_string(i) + "];\n";
         acquisition_B_sph += name + "_B = granData->sphereWildcards[" + std::to_string(i) + "];\n";
-        acquisition_B_tri += name + "_B = granData->triWildcards[" + std::to_string(i) + "];\n";
+        acquisition_B_patch += name + "_B = granData->patchWildcards[" + std::to_string(i) + "];\n";
         acquisition_B_anal += name + "_B = granData->analWildcards[" + std::to_string(i) + "];\n";
         i++;
     }

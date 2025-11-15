@@ -104,7 +104,7 @@ const contact_t NUM_SUPPORTED_CONTACT_TYPES = 5;
 // Device version of getting geo owner ID
 #define DEME_GET_GEO_OWNER_ID(geo, type)                                  \
     ((type) == deme::GEO_T_SPHERE       ? granData->ownerClumpBody[(geo)] \
-     : (type) == deme::GEO_T_TRIANGLE   ? granData->ownerMesh[(geo)]      \
+     : (type) == deme::GEO_T_TRIANGLE   ? granData->triOwnerMesh[(geo)]   \
      : (type) == deme::GEO_T_ANALYTICAL ? granData->ownerAnalBody[(geo)]  \
                                         : deme::NULL_BODYID)
 
@@ -349,12 +349,13 @@ struct DEMDataDT {
     clumpComponentOffset_t* clumpComponentOffset;
     clumpComponentOffsetExt_t* clumpComponentOffsetExt;
     materialsOffset_t* sphereMaterialOffset;
-    bodyID_t* ownerMesh;
+    bodyID_t* triOwnerMesh;
     bodyID_t* ownerAnalBody;
+    bodyID_t* triPatchID;
     float3* relPosNode1;
     float3* relPosNode2;
     float3* relPosNode3;
-    materialsOffset_t* triMaterialOffset;
+    materialsOffset_t* patchMaterialOffset;
 
     // pointer to remote buffer where kinematic thread stores work-order data provided by the dynamic thread
     unsigned int* pKTOwnedBuffer_maxDrift = nullptr;
@@ -392,7 +393,7 @@ struct DEMDataDT {
     float* ownerWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
     float* sphereWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
     float* analWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
-    float* triWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
+    float* patchWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
 };
 
 // A struct that holds pointers to data arrays that kT uses
@@ -419,7 +420,7 @@ struct DEMDataKT {
     bodyID_t* ownerClumpBody;
     clumpComponentOffset_t* clumpComponentOffset;
     clumpComponentOffsetExt_t* clumpComponentOffsetExt;
-    bodyID_t* ownerMesh;
+    bodyID_t* triOwnerMesh;
     bodyID_t* ownerAnalBody;
     float3* relPosNode1;
     float3* relPosNode2;

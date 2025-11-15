@@ -31,7 +31,7 @@ inline __device__ void fillSharedMemTriangles(deme::DEMSimParams* simParams,
                                               float3* triBNode1,
                                               float3* triBNode2,
                                               float3* triBNode3) {
-    deme::bodyID_t ownerID = granData->ownerMesh[triID];
+    deme::bodyID_t ownerID = granData->triOwnerMesh[triID];
     triIDs[myThreadID] = triID;
     triOwnerIDs[myThreadID] = ownerID;
     triOwnerFamilies[myThreadID] = granData->familyID[ownerID];

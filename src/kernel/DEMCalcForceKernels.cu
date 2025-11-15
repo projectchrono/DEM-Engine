@@ -108,10 +108,12 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
         // Geometry ID here is called sphereID, although it is not a sphere, it's more like triID. But naming it
         // sphereID makes the acquisition process cleaner.
         deme::bodyID_t sphereID = granData->idGeometryA[myContactID];
-        deme::bodyID_t myOwner = granData->ownerMesh[sphereID];
+        deme::bodyID_t myOwner = granData->triOwnerMesh[sphereID];
         //// TODO: Is this OK?
         ARadius = DEME_HUGE_FLOAT;
-        bodyAMatType = granData->triMaterialOffset[sphereID];
+        // If this is a triangle then it has a patch ID
+        deme::bodyID_t myPatchID = granData->triPatchID[sphereID];
+        bodyAMatType = granData->patchMaterialOffset[myPatchID];
 
         // As the grace margin, the distance (negative overlap) just needs to be within the grace margin. So we pick
         // the larger of the 2 familyExtraMarginSize.
@@ -197,10 +199,12 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
         // Geometry ID here is called sphereID, although it is not a sphere, it's more like triID. But naming it
         // sphereID makes the acquisition process cleaner.
         deme::bodyID_t sphereID = granData->idGeometryB[myContactID];
-        deme::bodyID_t myOwner = granData->ownerMesh[sphereID];
+        deme::bodyID_t myOwner = granData->triOwnerMesh[sphereID];
         //// TODO: Is this OK?
         BRadius = DEME_HUGE_FLOAT;
-        bodyBMatType = granData->triMaterialOffset[sphereID];
+        // If this is a triangle then it has a patch ID
+        deme::bodyID_t myPatchID = granData->triPatchID[sphereID];
+        bodyBMatType = granData->patchMaterialOffset[myPatchID];
 
         // As the grace margin, the distance (negative overlap) just needs to be within the grace margin. So we pick
         // the larger of the 2 familyExtraMarginSize.
@@ -224,7 +228,7 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
             BOwnerMass = myMass;
         }
         _forceModelIngredientAcqForB_;
-        _forceModelGeoWildcardAcqForBTri_;
+        _forceModelGeoWildcardAcqForBMeshPatch_;
 
         // bodyBPos is for a place holder for the outcome triBNode1 position
         equipOwnerPosRot(simParams, granData, myOwner, triBNode1, BOwnerPos, bodyBPos, BOriQ);
@@ -278,9 +282,6 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
                 if ((overlapDepth < -extraMarginSize) || (overlapDepth > 0.)) {
                     ContactType = deme::NOT_A_CONTACT;
                 }
-            }
-            if (overlapDepth > 0.5) {
-                ContactType = deme::NOT_A_CONTACT;
             }
         }
 

@@ -273,7 +273,7 @@ std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
             break;
         case OWNER_T_MESH:
             for (bodyID_t i = 0; i < nTriGM; i++) {
-                if (ownerID == dT->ownerMesh[i])
+                if (ownerID == dT->triOwnerMesh[i])
                     geo_to_watch.push_back(i);
             }
             break;
@@ -1442,15 +1442,15 @@ void DEMSolver::CorrectFamilyQuaternion(unsigned int ID, const std::string& q_fo
     m_input_family_prescription.push_back(preInfo);
 }
 
-void DEMSolver::SetTriWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals) {
-    assertSysInit("SetTriWildcardValue");
+void DEMSolver::SetPatchWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals) {
+    assertSysInit("SetPatchWildcardValue");
     if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
         DEME_ERROR(
             "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
             "SetPerGeometryWildcards in the force model first.",
             name.c_str());
     }
-    dT->setTriWildcardValue(geoID, m_geo_wc_num.at(name), vals);
+    dT->setPatchWildcardValue(geoID, m_geo_wc_num.at(name), vals);
 }
 
 void DEMSolver::SetSphereWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals) {
