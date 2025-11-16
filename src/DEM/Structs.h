@@ -629,10 +629,9 @@ class DEMClumpBatch : public DEMInitializer {
     size_t nExistContacts = 0;
     void assertLength(size_t len, const std::string name) {
         if (len != nClumps) {
-            std::stringstream ss;
-            ss << name << " input argument must have length " << nClumps << " (not " << len
-               << "), same as the number of clumps you originally added via AddClumps." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("%s input argument must have length %zu (not %zu), same as the number of clumps you originally "
+                       "added via AddClumps.",
+                       name.c_str(), nClumps, len);
         }
     }
 
@@ -760,10 +759,8 @@ class DEMClumpBatch : public DEMInitializer {
         assertLength(input.size(), "SetFamilies");
         if (any_of(input.begin(), input.end(),
                    [](unsigned int i) { return i > std::numeric_limits<family_t>::max(); })) {
-            std::stringstream ss;
-            ss << "Some clumps are instructed to have a family number larger than the max allowance "
-               << std::numeric_limits<family_t>::max() << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("Some clumps are instructed to have a family number larger than the max allowance %u",
+                       std::numeric_limits<family_t>::max());
         }
         families = input;
         family_isSpecified = true;
@@ -776,44 +773,35 @@ class DEMClumpBatch : public DEMInitializer {
     }
     void SetExistingContactWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
         if (wildcards.begin()->second.size() != nExistContacts) {
-            std::stringstream ss;
-            ss << "SetExistingContactWildcards needs to be called after SetExistingContacts, with each wildcard array "
-                  "having the same length as the number of contact pairs.\nThis way, each wildcard will have an "
-                  "associated contact pair."
-               << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("SetExistingContactWildcards needs to be called after SetExistingContacts, with each wildcard "
+                       "array having the same length as the number of contact pairs.\nThis way, each wildcard will have "
+                       "an associated contact pair.");
         }
         contact_wildcards = wildcards;
     }
     void AddExistingContactWildcard(const std::string& name, const std::vector<float>& vals) {
         if (vals.size() != nClumps) {
-            std::stringstream ss;
-            ss << "AddExistingContactWildcard needs to be called after SetExistingContacts, with the input wildcard "
-                  "array having the same length as the number of contact pairs.\nThis way, each wildcard will have an "
-                  "associated contact pair."
-               << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("AddExistingContactWildcard needs to be called after SetExistingContacts, with the input "
+                       "wildcard array having the same length as the number of contact pairs.\nThis way, each wildcard "
+                       "will have an associated contact pair.");
         }
         contact_wildcards[name] = vals;
     }
 
     void SetOwnerWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
         if (wildcards.begin()->second.size() != nClumps) {
-            std::stringstream ss;
-            ss << "Input owner wildcard arrays in a SetOwnerWildcards call must all have the same size as the number "
-                  "of clumps in this batch.\nHere, the input array has length "
-               << wildcards.begin()->second.size() << " but this batch has " << nClumps << " clumps." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("Input owner wildcard arrays in a SetOwnerWildcards call must all have the same size as the "
+                       "number of clumps in this batch.\nHere, the input array has length %zu but this batch has %zu "
+                       "clumps.",
+                       wildcards.begin()->second.size(), nClumps);
         }
         owner_wildcards = wildcards;
     }
     void AddOwnerWildcard(const std::string& name, const std::vector<float>& vals) {
         if (vals.size() != nClumps) {
-            std::stringstream ss;
-            ss << "Input owner wildcard array in a AddOwnerWildcard call must have the same size as the number of "
-                  "clumps in this batch.\nHere, the input array has length "
-               << vals.size() << " but this batch has " << nClumps << " clumps." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("Input owner wildcard array in a AddOwnerWildcard call must have the same size as the number of "
+                       "clumps in this batch.\nHere, the input array has length %zu but this batch has %zu clumps.",
+                       vals.size(), nClumps);
         }
         owner_wildcards[name] = vals;
     }
@@ -823,21 +811,19 @@ class DEMClumpBatch : public DEMInitializer {
 
     void SetGeometryWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
         if (wildcards.begin()->second.size() != nSpheres) {
-            std::stringstream ss;
-            ss << "Input gemometry wildcard arrays in a SetGeometryWildcards call must all have the same size as the "
-                  "number of spheres in this batch.\nHere, the input array has length "
-               << wildcards.begin()->second.size() << " but this batch has " << nSpheres << " spheres." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("Input gemometry wildcard arrays in a SetGeometryWildcards call must all have the same size as "
+                       "the number of spheres in this batch.\nHere, the input array has length %zu but this batch has "
+                       "%zu spheres.",
+                       wildcards.begin()->second.size(), nSpheres);
         }
         geo_wildcards = wildcards;
     }
     void AddGeometryWildcard(const std::string& name, const std::vector<float>& vals) {
         if (vals.size() != nSpheres) {
-            std::stringstream ss;
-            ss << "Input gemometry wildcard array in a AddGeometryWildcard call must have the same size as the number "
-                  "of spheres in this batch.\nHere, the input array has length "
-               << vals.size() << " but this batch has " << nSpheres << " spheres." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("Input gemometry wildcard array in a AddGeometryWildcard call must have the same size as the "
+                       "number of spheres in this batch.\nHere, the input array has length %zu but this batch has %zu "
+                       "spheres.",
+                       vals.size(), nSpheres);
         }
         geo_wildcards[name] = vals;
     }
@@ -877,7 +863,7 @@ class DataContainer {
     template <typename T>
     void Insert(const std::string& key, std::vector<T> vec) {
         if (data_.count(key))
-            throw std::runtime_error("Key already exists: " + key);
+            DEME_ERROR("Key already exists: %s", key.c_str());
         data_[key] = std::make_shared<Holder<T>>(std::move(vec));
         types_[key] = &typeid(T);
     }
@@ -898,7 +884,7 @@ class DataContainer {
 
     const std::type_info& type_of(const std::string& key) const {
         if (!Contains(key))
-            throw std::runtime_error("Key not found: " + key);
+            DEME_ERROR("Key not found: %s", key.c_str());
         return *types_.at(key);  // dereference the pointer
     }
 
@@ -923,7 +909,7 @@ class DataContainer {
     }
     size_t Size() const {
         if (data_.empty()) {
-            throw std::runtime_error("DataContainer is empty.");
+            DEME_ERROR("DataContainer is empty.");
         }
         return data_.begin()->second->Size();
     }
@@ -945,7 +931,7 @@ class DataContainer {
     };
 
     virtual void on_missing_key(const std::string& key) const {
-        throw std::runtime_error("Key not found: '" + key + "'");
+        DEME_ERROR("Key not found: '%s'", key.c_str());
     }
 
     template <typename T>
@@ -954,7 +940,7 @@ class DataContainer {
             on_missing_key(key);
         }
         if (*types_.at(key) != typeid(T)) {
-            throw std::runtime_error("Type mismatch for key: " + key);
+            DEME_ERROR("Type mismatch for key: %s", key.c_str());
         }
     }
 
@@ -1013,9 +999,9 @@ class ContactInfoContainer : public DataContainer {
 
   protected:
     void on_missing_key(const std::string& key) const override {
-        throw std::runtime_error("ContactInfoContainer does not have field: '" + key +
-                                 "', you may need to turn on the output of this field by correctly calling "
-                                 "SetContactOutputContent before Initialize().");
+        DEME_ERROR("ContactInfoContainer does not have field: '%s', you may need to turn on the output of this field "
+                   "by correctly calling SetContactOutputContent before Initialize().",
+                   key.c_str());
     }
 
   private:

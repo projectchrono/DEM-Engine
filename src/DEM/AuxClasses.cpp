@@ -157,9 +157,7 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
             all_domain = false;  // Only clumps, so not all domain owners
             break;
         default:
-            std::stringstream ss;
-            ss << quantity << " is not a known query type." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("%s is not a known query type.", quantity.c_str());
     }
 }
 
@@ -194,11 +192,8 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
                               const std::vector<std::string>& options,
                               bool force) {
     if (!(sys->GetInitStatus()) && !force) {
-        std::stringstream ss;
-        ss << "Inspector should only be initialized or used after the simulation system is initialized (because it "
-              "uses device-side data)!"
-           << std::endl;
-        throw std::runtime_error(ss.str());
+        DEME_ERROR("Inspector should only be initialized or used after the simulation system is initialized (because "
+                   "it uses device-side data)!");
     }
     // We want to make sure if the in_region_code is legit, if it is not an all_domain query
     std::string in_region_specifier = in_region_code, placeholder;
@@ -206,12 +201,10 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
     if ((!all_domain) && (!is_all_spaces(in_region_code))) {
         if (!any_whole_word_match(in_region_code, {"X", "Y", "Z"}) ||
             !all_whole_word_match(in_region_code, {"return"}, placeholder)) {
-            std::stringstream ss;
-            ss << "One of your insepctors is set to query a specific region, but the domian is not properly "
-                  "defined.\nIt needs to return a bool variable that is a result of logical operations involving X, Y "
-                  "and Z.\nYou can remove the region argument if all simulation entities should be considered."
-               << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("One of your insepctors is set to query a specific region, but the domian is not properly "
+                       "defined.\nIt needs to return a bool variable that is a result of logical operations involving "
+                       "X, Y and Z.\nYou can remove the region argument if all simulation entities should be "
+                       "considered.");
         }
         // Replace the return with our own variable
         in_region_specifier = replace_pattern(in_region_specifier, "return", "bool isInRegion = ");
@@ -229,11 +222,8 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
         inspection_kernel = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMOwnerQueryKernels", JitHelper::KERNEL_DIR / "DEMOwnerQueryKernels.cu", my_subs, options)));
     } else {
-        std::stringstream ss;
-        ss << "Sorry, an inspector object you are using is not implemented yet.\nConsider letting the developers know "
-              "this and they may help you."
-           << std::endl;
-        throw std::runtime_error(ss.str());
+        DEME_ERROR("Sorry, an inspector object you are using is not implemented yet.\nConsider letting the developers "
+                   "know this and they may help you.");
     }
     initialized = true;
 }
@@ -244,56 +234,43 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
 
 void DEMTracker::assertThereIsForcePairs(const std::string& name) {
     if (sys->GetWhetherForceCollectInKernel()) {
-        std::stringstream ss;
-        ss << "The solver is currently set to not record force pair info, so you cannot query force pairs using "
-           << name
-           << ".\nYou can call SetCollectAccRightAfterForceCalc(false) before system initialization and try "
-              "again."
-           << std::endl;
-        throw std::runtime_error(ss.str());
+        DEME_ERROR("The solver is currently set to not record force pair info, so you cannot query force pairs using "
+                   "%s.\nYou can call SetCollectAccRightAfterForceCalc(false) before system initialization and try "
+                   "again.",
+                   name.c_str());
     }
 }
 void DEMTracker::assertMesh(const std::string& name) {
     if (obj->obj_type != OWNER_TYPE::MESH) {
-        std::stringstream ss;
-        ss << name << " is only callable for trackers tracking a mesh!" << std::endl;
-        throw std::runtime_error(ss.str());
+        DEME_ERROR("%s is only callable for trackers tracking a mesh!", name.c_str());
     }
 }
 void DEMTracker::assertGeoSize(size_t input_length, const std::string& name, const std::string& geo_type) {
     if (input_length != obj->nGeos) {
-        std::stringstream ss;
-        ss << name << " is called with an input not the same size (number of " << geo_type
-           << ") as the original tracked object!\nThe input has " << input_length << " " << geo_type
-           << " while the tracked object has " << obj->nGeos << "." << std::endl;
-        throw std::runtime_error(ss.str());
+        DEME_ERROR("%s is called with an input not the same size (number of %s) as the original tracked object!\nThe "
+                   "input has %zu %s while the tracked object has %zu.",
+                   name.c_str(), geo_type.c_str(), input_length, geo_type.c_str(), obj->nGeos);
     }
 }
 void DEMTracker::assertOwnerSize(size_t input_length, const std::string& name) {
     if (input_length != obj->nSpanOwners) {
-        std::stringstream ss;
-        ss << name << " is called with an input not the same size of the number of owners it tracks!\nThe input has "
-           << input_length << " elements while the tracker tracks " << obj->nSpanOwners << " entities." << std::endl;
-        throw std::runtime_error(ss.str());
+        DEME_ERROR("%s is called with an input not the same size of the number of owners it tracks!\nThe input has "
+                   "%zu elements while the tracker tracks %zu entities.",
+                   name.c_str(), input_length, obj->nSpanOwners);
     }
 }
 void DEMTracker::assertOwnerOffsetValid(size_t offset, const std::string& name) {
     if (offset >= obj->nSpanOwners) {
-        std::stringstream ss;
-        ss << name
-           << " is called with an offset larger than the number of owners (minus 1, to be precise) it tracks!\nThe "
-              "offset is "
-           << offset << " while the tracker tracks " << obj->nSpanOwners << " entities." << std::endl;
-        throw std::runtime_error(ss.str());
+        DEME_ERROR("%s is called with an offset larger than the number of owners (minus 1, to be precise) it "
+                   "tracks!\nThe offset is %zu while the tracker tracks %zu entities.",
+                   name.c_str(), offset, obj->nSpanOwners);
     }
 }
 void DEMTracker::assertGeoOffsetValid(size_t offset, const std::string& name, const std::string& geo_type) {
     if (offset >= obj->nGeos) {
-        std::stringstream ss;
-        ss << name << " is called with an offset larger than the number of " << geo_type
-           << " (minus 1, to be precise) it tracks!\nThe offset is " << offset << " " << geo_type
-           << " while the tracked object has " << obj->nGeos << "." << std::endl;
-        throw std::runtime_error(ss.str());
+        DEME_ERROR("%s is called with an offset larger than the number of %s (minus 1, to be precise) it tracks!\nThe "
+                   "offset is %zu %s while the tracked object has %zu.",
+                   name.c_str(), geo_type.c_str(), offset, geo_type.c_str(), obj->nGeos);
     }
 }
 
@@ -799,9 +776,7 @@ void DEMForceModel::SetPerContactWildcards(const std::set<std::string>& wildcard
     for (const auto& a_str : wildcards) {
         if (match_pattern(a_str, " ")) {
             // Wildcard array names cannot have spaces in them
-            std::stringstream ss;
-            ss << "Contact wildcard " << a_str << " is not valid: no spaces allowed in its name." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("Contact wildcard %s is not valid: no spaces allowed in its name.", a_str.c_str());
         }
     }
     m_contact_wildcards = wildcards;
@@ -810,9 +785,7 @@ void DEMForceModel::SetPerContactWildcards(const std::set<std::string>& wildcard
 void DEMForceModel::SetPerOwnerWildcards(const std::set<std::string>& wildcards) {
     for (const auto& a_str : wildcards) {
         if (match_pattern(a_str, " ")) {
-            std::stringstream ss;
-            ss << "Owner wildcard " << a_str << " is not valid: no spaces allowed in its name." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("Owner wildcard %s is not valid: no spaces allowed in its name.", a_str.c_str());
         }
     }
     m_owner_wildcards = wildcards;
@@ -821,9 +794,7 @@ void DEMForceModel::SetPerOwnerWildcards(const std::set<std::string>& wildcards)
 void DEMForceModel::SetPerGeometryWildcards(const std::set<std::string>& wildcards) {
     for (const auto& a_str : wildcards) {
         if (match_pattern(a_str, " ")) {
-            std::stringstream ss;
-            ss << "Geometry wildcard " << a_str << " is not valid: no spaces allowed in its name." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("Geometry wildcard %s is not valid: no spaces allowed in its name.", a_str.c_str());
         }
     }
     m_geo_wildcards = wildcards;
