@@ -95,7 +95,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       DualStruct<DEMDataKT>& granData,
                       DualStruct<DEMSimParams>& simParams,
                       SolverFlags& solverFlags,
-                      VERBOSITY& verbosity,
+                      verbosity_t& verbosity,
                       // The following arrays may need to change sizes, so we can't pass pointers
                       DualArray<bodyID_t>& idGeometryA,
                       DualArray<bodyID_t>& idGeometryB,

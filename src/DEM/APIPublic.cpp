@@ -64,37 +64,51 @@ DEMSolver::~DEMSolver() {
     delete dTkT_GpuManager;
 }
 
+void DEMSolver::SetVerbosity(verbosity_t verbose) {
+    switch (verbose) {
+        case VERBOSITY_ERROR:
+            Logger::GetInstance().SetVerbosity(VERBOSITY_ERROR);
+            break;
+        case VERBOSITY_WARNING:
+            Logger::GetInstance().SetVerbosity(VERBOSITY_WARNING);
+            break;
+        case VERBOSITY_INFO:
+            Logger::GetInstance().SetVerbosity(VERBOSITY_INFO);
+            break;
+        case VERBOSITY_METRIC:
+            Logger::GetInstance().SetVerbosity(VERBOSITY_METRIC);
+            break;
+        case VERBOSITY_DEBUG:
+            Logger::GetInstance().SetVerbosity(VERBOSITY_DEBUG);
+            break;
+        default:
+            DEME_ERROR("Verbosity-level %d is unknown in SetVerbosity call.", verbose);
+    }
+    verbosity = verbose;
+}
+
 void DEMSolver::SetVerbosity(const std::string& verbose) {
-    std::string u_verbose = str_to_upper(verbose);
-    switch (hash_charr(u_verbose.c_str())) {
-        case ("QUIET"_):
-            verbosity = VERBOSITY::QUIET;
+    switch (hash_charr(str_to_upper(verbose).c_str())) {
+        case "ERROR"_:
+            SetVerbosity(VERBOSITY_ERROR);
             break;
-        case ("ERROR"_):
-            verbosity = VERBOSITY::ERROR;
+        case "WARNING"_:
+            SetVerbosity(VERBOSITY_WARNING);
             break;
-        case ("WARNING"_):
-            verbosity = VERBOSITY::WARNING;
+        case "INFO"_:
+            SetVerbosity(VERBOSITY_INFO);
             break;
-        case ("INFO"_):
-            verbosity = VERBOSITY::INFO;
+        case "METRIC"_:
+            SetVerbosity(VERBOSITY_METRIC);
             break;
-        case ("STEP_ANOMALY"_):
-            verbosity = VERBOSITY::STEP_ANOMALY;
-            break;
-        case ("STEP_METRIC"_):
-            verbosity = VERBOSITY::STEP_METRIC;
-            break;
-        case ("DEBUG"_):
-            verbosity = VERBOSITY::DEBUG;
-            break;
-        case ("STEP_DEBUG"_):
-            verbosity = VERBOSITY::STEP_DEBUG;
+        case "DEBUG"_:
+            SetVerbosity(VERBOSITY_DEBUG);
             break;
         default:
             DEME_ERROR("Instruction %s is unknown in SetVerbosity call.", verbose.c_str());
     }
 }
+
 void DEMSolver::SetOutputFormat(const std::string& format) {
     std::string u_format = str_to_upper(format);
     switch (hash_charr(u_format.c_str())) {
@@ -109,7 +123,7 @@ void DEMSolver::SetOutputFormat(const std::string& format) {
             m_out_format = OUTPUT_FORMAT::CHPF;
             break;
 #else
-            DEME_ERROR("ChPF is not enabled when the code was compiled.");
+            DEME_ERROR(std::string("ChPF is not enabled when the code was compiled."));
 #endif
         default:
             DEME_ERROR("Instruction %s is unknown in SetOutputFormat call.", format.c_str());
@@ -129,7 +143,7 @@ void DEMSolver::SetContactOutputFormat(const std::string& format) {
             m_cnt_out_format = OUTPUT_FORMAT::CHPF;
             break;
 #else
-            DEME_ERROR("ChPF is not enabled when the code was compiled.");
+            DEME_ERROR(std::string("ChPF is not enabled when the code was compiled."));
 #endif
         default:
             DEME_ERROR("Instruction %s is unknown in SetContactOutputFormat call.", format.c_str());
@@ -734,8 +748,8 @@ void DEMSolver::SetIntegrator(const std::string& intg) {
 }
 
 void DEMSolver::SetAdaptiveTimeStepType(const std::string& type) {
-    DEME_WARNING(
-        "SetAdaptiveTimeStepType is currently not implemented and has no effect, time step size is still fixed.");
+    DEME_WARNING(std::string(
+        "SetAdaptiveTimeStepType is currently not implemented and has no effect, time step size is still fixed."));
     switch (hash_charr(type.c_str())) {
         case ("none"_):
             adapt_ts_type = ADAPT_TS_TYPE::NONE;
@@ -1267,8 +1281,8 @@ void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string
     // Make sure there is return
     if (!match_whole_word(q_formula, "return")) {
         DEME_ERROR(
-            "CorrectFamilyQuaternion call must supply a code string that returns a float4, like 'return "
-            "make_float4(0,0,0,1)'.");
+            std::string("CorrectFamilyQuaternion call must supply a code string that returns a float4, like 'return "
+                        "make_float4(0,0,0,1)'."));
     }
 
     preInfo.oriQ = q_formula;
@@ -1430,8 +1444,8 @@ void DEMSolver::CorrectFamilyQuaternion(unsigned int ID, const std::string& q_fo
     // Make sure there is return
     if (!match_whole_word(q_formula, "return")) {
         DEME_ERROR(
-            "CorrectFamilyQuaternion call must supply a code string that returns a float4, like 'return "
-            "make_float4(0,0,0,1)'.");
+            std::string("CorrectFamilyQuaternion call must supply a code string that returns a float4, like 'return "
+                        "make_float4(0,0,0,1)'."));
     }
 
     preInfo.oriQ = q_formula;
@@ -1802,9 +1816,9 @@ void DEMSolver::EnableContactBetweenFamilies(unsigned int ID1, unsigned int ID2)
             ID1, ID2, std::numeric_limits<family_t>::max());
     }
     if (!sys_initialized) {
-        DEME_ERROR(
+        DEME_ERROR(std::string(
             "There is no need to call EnableContactBetweenFamilies before system initialization.\nAll families have "
-            "contacts with each other by default. Just do not disable them if you need that contact.");
+            "contacts with each other by default. Just do not disable them if you need that contact."));
     } else {
         // If initialized, directly pass this info to workers
         unsigned int posInMat = locateMaskPair<unsigned int>(ID1, ID2);
@@ -1866,7 +1880,7 @@ std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(DEMClumpBatch& input_batch) 
 std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& input_types,
                                                     const std::vector<float3>& input_xyz) {
     if (input_types.size() != input_xyz.size()) {
-        DEME_ERROR("Arrays in the call AddClumps must all have the same length.");
+        DEME_ERROR(std::string("Arrays in the call AddClumps must all have the same length."));
     }
     size_t nClumps = input_types.size();
     // We did not create defaults for families, and if the user did not specify families then they will be added at
@@ -1880,7 +1894,7 @@ std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(const std::vector<std::share
 
 std::shared_ptr<DEMMesh> DEMSolver::AddMesh(DEMMesh& mesh) {
     if (mesh.GetNumTriangles() == 0) {
-        DEME_WARNING("It seems that a mesh contains 0 triangle facet at the time it is loaded.");
+        DEME_WARNING(std::string("It seems that a mesh contains 0 triangle facet at the time it is loaded."));
     }
     // load_order should be its position in the cache array, not nTriObjLoad
     mesh.load_order = cached_mesh_objs.size();
@@ -1918,7 +1932,7 @@ std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontMeshObject(const std::string& fi
 
 std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(DEMMesh& mesh) {
     if (mesh.GetNumTriangles() == 0) {
-        DEME_WARNING("It seems that a mesh template contains 0 triangle facet at the time it is loaded.");
+        DEME_WARNING(std::string("It seems that a mesh template contains 0 triangle facet at the time it is loaded."));
     }
 
     // Store as a template (not in cached_mesh_objs)
@@ -1994,13 +2008,13 @@ void DEMSolver::WriteSphereFile(const std::string& outfilename) const {
             // std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
             //// TODO: Implement it
             std::ofstream ptFile(outfilename, std::ios::out);
-            DEME_WARNING("Binary sphere output is not implemented yet, using CSV...");
+            DEME_WARNING(std::string("Binary sphere output is not implemented yet, using CSV..."));
             dT->writeSpheresAsCsv(ptFile);
             ptFile.close();
             break;
         }
         default:
-            DEME_ERROR("Sphere output file format is unknown. Please set it via SetOutputFormat.");
+            DEME_ERROR(std::string("Sphere output file format is unknown. Please set it via SetOutputFormat."));
     }
 }
 
@@ -2024,21 +2038,21 @@ void DEMSolver::WriteClumpFile(const std::string& outfilename, unsigned int accu
             // std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
             //// TODO: Implement it
             std::ofstream ptFile(outfilename, std::ios::out);
-            DEME_WARNING("Binary clump output is not implemented yet, using CSV...");
+            DEME_WARNING(std::string("Binary clump output is not implemented yet, using CSV..."));
             dT->writeClumpsAsCsv(ptFile, accuracy);
             ptFile.close();
             break;
         }
         default:
-            DEME_ERROR("Clump output file format is unknown. Please set it via SetOutputFormat.");
+            DEME_ERROR(std::string("Clump output file format is unknown. Please set it via SetOutputFormat."));
     }
 }
 
 void DEMSolver::WriteContactFile(const std::string& outfilename, float force_thres) const {
     if (no_recording_contact_forces) {
-        DEME_WARNING(
+        DEME_WARNING(std::string(
             "The solver is instructed to not record contact force info, so no work is done in a WriteContactFile "
-            "call.");
+            "call."));
         return;
     }
     switch (m_cnt_out_format) {
@@ -2051,7 +2065,7 @@ void DEMSolver::WriteContactFile(const std::string& outfilename, float force_thr
         case (OUTPUT_FORMAT::BINARY): {
             // std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
             //// TODO: Implement it
-            DEME_WARNING("Binary contact pair output is not implemented yet, using CSV...");
+            DEME_WARNING(std::string("Binary contact pair output is not implemented yet, using CSV..."));
             std::ofstream ptFile(outfilename, std::ios::out);
             dT->writeContactsAsCsv(ptFile, force_thres);
             ptFile.close();
@@ -2059,7 +2073,8 @@ void DEMSolver::WriteContactFile(const std::string& outfilename, float force_thr
         }
         default:
             DEME_ERROR(
-                "Contact pair output file format is unknown or not implemented. Please re-set it via SetOutputFormat.");
+                std::string("Contact pair output file format is unknown or not implemented. Please re-set it via "
+                            "SetOutputFormat."));
     }
 }
 
@@ -2072,8 +2087,8 @@ void DEMSolver::WriteMeshFile(const std::string& outfilename) const {
             break;
         }
         default:
-            DEME_ERROR(
-                "Mesh output file format is unknown or not implemented. Please re-set it via SetMeshOutputFormat.");
+            DEME_ERROR(std::string(
+                "Mesh output file format is unknown or not implemented. Please re-set it via SetMeshOutputFormat."));
     }
 }
 
@@ -2328,9 +2343,9 @@ void DEMSolver::UpdateStepSize(double ts) {
 
 void DEMSolver::Update() {
     if (!sys_initialized) {
-        DEME_ERROR(
+        DEME_ERROR(std::string(
             "Please call Update only after the system is initialized, because it is for adding additional clumps "
-            "to an initialized DEM system.");
+            "to an initialized DEM system."));
     }
     if (nLastTimeExtObjLoad != nExtObjLoad) {
         DEME_ERROR(
@@ -2399,14 +2414,14 @@ void DEMSolver::Update() {
 
 void DEMSolver::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {
     if (!sys_initialized) {
-        DEME_ERROR(
+        DEME_ERROR(std::string(
             "ChangeClumpSizes operates on device-side arrays directly, so it requires the system to be initialized "
-            "first.");
+            "first."));
     }
     if (jitify_clump_templates || jitify_mass_moi) {
-        DEME_ERROR(
+        DEME_ERROR(std::string(
             "ChangeClumpSizes only works when the clump components are flattened (not jitified).\nConsider calling "
-            "SetJitifyClumpTemplates(false) and SetJitifyMassProperties(false).");
+            "SetJitifyClumpTemplates(false) and SetJitifyMassProperties(false)."));
     }
 
     // This method requires kT and dT are sync-ed
@@ -2490,13 +2505,14 @@ void DEMSolver::ShowThreadCollaborationStats() {
 
 void DEMSolver::ShowAnomalies() {
     DEME_PRINTF("\n~~ Simulation anomaly report ~~\n");
-    bool there_is_anomaly = goThroughWorkerAnomalies();
-    if (!there_is_anomaly) {
-        DEME_PRINTF("There is no simulation anomalies on record.\n");
-    }
+    Logger::GetInstance().PrintStatusMessages(std::cerr);
     DEME_PRINTF("-----------------------------\n");
-    kT->anomalies.Clear();
-    dT->anomalies.Clear();
+}
+
+void DEMSolver::ShowWarnings() {
+    DEME_PRINTF("\n~~ Simulation warning report ~~\n");
+    Logger::GetInstance().PrintWarningsAndErrors(std::cerr);
+    DEME_PRINTF("-----------------------------\n");
 }
 
 void DEMSolver::ClearThreadCollaborationStats() {

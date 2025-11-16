@@ -140,78 +140,33 @@ enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
 // NOW DEFINING MACRO COMMANDS USED BY THE DEM MODULE
 // =============================================================================
 
-#define DEME_PRINTF(...)                    \
-    {                                       \
-        if (verbosity > VERBOSITY::QUIET) { \
-            printf(__VA_ARGS__);            \
-        }                                   \
+#define DEME_PRINTF(...)                   \
+    {                                      \
+        if (verbosity > VERBOSITY_QUIET) { \
+            printf(__VA_ARGS__);           \
+        }                                  \
     }
 
 // DEME_ERROR, DEME_WARNING, and DEME_INFO are now defined in Logger.hpp
 
-#define DEME_STEP_ANOMALY(...)                                        \
-    {                                                                 \
-        if (verbosity >= VERBOSITY::STEP_ANOMALY) {                   \
-            char warn_message[1024];                                  \
-            sprintf(warn_message, __VA_ARGS__);                       \
-            std::string out = "\n-------- SIM ANOMALY!!! --------\n"; \
-            out += warn_message;                                      \
-            out += "\n\n";                                            \
-            DEME_WARNING("%s", out.c_str());                          \
-        }                                                             \
+#define DEME_DEBUG_PRINTF(...)              \
+    {                                       \
+        if (verbosity >= VERBOSITY_DEBUG) { \
+            printf(__VA_ARGS__);            \
+            printf("\n");                   \
+        }                                   \
     }
 
-#define DEME_STEP_METRIC(...)                      \
-    {                                              \
-        if (verbosity >= VERBOSITY::STEP_METRIC) { \
-            printf(__VA_ARGS__);                   \
-            printf("\n");                          \
-        }                                          \
-    }
-
-#define DEME_DEBUG_PRINTF(...)               \
-    {                                        \
-        if (verbosity >= VERBOSITY::DEBUG) { \
-            printf(__VA_ARGS__);             \
-            printf("\n");                    \
-        }                                    \
-    }
-
-#define DEME_DEBUG_EXEC(...)                 \
-    {                                        \
-        if (verbosity >= VERBOSITY::DEBUG) { \
-            __VA_ARGS__;                     \
-        }                                    \
-    }
-
-#define DEME_STEP_DEBUG_PRINTF(...)               \
-    {                                             \
-        if (verbosity >= VERBOSITY::STEP_DEBUG) { \
-            printf(__VA_ARGS__);                  \
-            printf("\n");                         \
-        }                                         \
-    }
-
-#define DEME_STEP_DEBUG_EXEC(...)                 \
-    {                                             \
-        if (verbosity >= VERBOSITY::STEP_DEBUG) { \
-            __VA_ARGS__;                          \
-        }                                         \
+#define DEME_DEBUG_EXEC(...)                \
+    {                                       \
+        if (verbosity >= VERBOSITY_DEBUG) { \
+            __VA_ARGS__;                    \
+        }                                   \
     }
 
 // =============================================================================
 // NOW SOME HOST-SIDE SIMPLE STRUCTS USED BY THE DEM MODULE
 // =============================================================================
-
-// Anomalies log
-class WorkerAnomalies {
-  public:
-    WorkerAnomalies() {}
-
-    bool over_max_vel = false;
-
-    void Clear() { over_max_vel = false; }
-};
 
 // Timers used by kT and dT
 class SolverTimers {
@@ -523,14 +478,16 @@ class DEMClumpTemplate {
   private:
     void assertLength(size_t len, const std::string name) {
         if (nComp == 0) {
-            DEME_WARNING("The settings at the %s call were applied to 0 sphere components.\nPlease consider using %s "
-                         "only after loading the clump template.",
-                         name.c_str(), name.c_str());
+            DEME_WARNING(
+                "The settings at the %s call were applied to 0 sphere components.\nPlease consider using %s "
+                "only after loading the clump template.",
+                name.c_str(), name.c_str());
         }
         if (len != nComp) {
-            DEME_ERROR("%s input argument must have length %zu (not %zu), same as the number of sphere components in "
-                       "the clump template.",
-                       name.c_str(), nComp, len);
+            DEME_ERROR(
+                "%s input argument must have length %zu (not %zu), same as the number of sphere components in "
+                "the clump template.",
+                name.c_str(), nComp, len);
         }
     }
 

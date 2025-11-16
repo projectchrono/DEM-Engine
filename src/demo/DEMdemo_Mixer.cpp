@@ -22,9 +22,9 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(STEP_METRIC);
-    // For general use cases, you want to set the verbosity to INFO: It's also a bit faster than STEP_METRIC.
-    // DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("METRIC");
+    // For general use cases, you want to set the verbosity to INFO: It's also a bit faster than "METRIC".
+    // DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);

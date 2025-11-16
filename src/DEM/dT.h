@@ -43,7 +43,7 @@ class DEMDynamicThread {
     // GpuManager* pGpuDistributor;
 
     // dT verbosity
-    VERBOSITY verbosity = INFO;
+    verbosity_t verbosity = VERBOSITY_INFO;
 
     // Some behavior-related flags
     SolverFlags solverFlags;
@@ -92,9 +92,6 @@ class DEMDynamicThread {
 
     // Pointers to those data arrays defined below, stored in a struct
     DualStruct<DEMDataDT> granData = DualStruct<DEMDataDT>();
-
-    // Log for anomalies in the simulation
-    WorkerAnomalies anomalies = WorkerAnomalies();
 
     // Body-related arrays, for dT's personal use (not transfer buffer)
 

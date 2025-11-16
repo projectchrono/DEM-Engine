@@ -26,8 +26,8 @@ const verbosity_t VERBOSITY_QUIET = 0;
 const verbosity_t VERBOSITY_ERROR = 1;
 const verbosity_t VERBOSITY_WARNING = 2;
 const verbosity_t VERBOSITY_INFO = 3;
-const verbosity_t VERBOSITY_DEBUG = 4;
-const verbosity_t VERBOSITY_STEP_DEBUG = 5;
+const verbosity_t VERBOSITY_METRIC = 4;
+const verbosity_t VERBOSITY_DEBUG = 5;
 
 // -----------------------------
 // Logging types and structure
@@ -149,6 +149,8 @@ class Logger : private NonCopyable, public Singleton<Logger> {
         status_messages.clear();
     }
 
+    verbosity_t GetVerbosity() const { return verbosity; }
+
   private:
     friend class Singleton<Logger>;  // Allows Singleton base to construct it
 
@@ -163,9 +165,8 @@ class Logger : private NonCopyable, public Singleton<Logger> {
                 return verbosity >= VERBOSITY_WARNING;
             case MessageType::Info:
                 return verbosity >= VERBOSITY_INFO;
-            // Debug level will just immediately output the previous three
             case MessageType::Status:
-                return verbosity >= VERBOSITY_STEP_DEBUG;
+                return verbosity >= VERBOSITY_METRIC;
             default:
                 return false;
         }
@@ -187,7 +188,9 @@ class Logger : private NonCopyable, public Singleton<Logger> {
                 oss << "[STATUS]  ";
                 break;
         }
-        oss << Log.source << ": " << Log.message << " (" << Log.file << ":" << Log.line << ")";
+        oss << Log.source << ": " << Log.message;
+        if (Log.type != MessageType::Info)
+            oss << " (" << Log.file << ":" << Log.line << ")";
         if (!Log.identifier.empty() && Log.type == MessageType::Status)
             oss << " [id: " << Log.identifier << "]";
         return oss.str();
@@ -202,6 +205,8 @@ class Logger : private NonCopyable, public Singleton<Logger> {
 // -----------------------------
 // Logging utils for easy usage
 // -----------------------------
+
+#define DEME_GET_VERBOSITY() Logger::GetInstance().GetVerbosity()
 
 #define DEME_ERROR(...) \
     throw SolverException(Logger::GetInstance().Logf(MessageType::Error, __func__, __FILE__, __LINE__, __VA_ARGS__))

@@ -27,7 +27,6 @@ int main() {
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     // Output family numbers (used to identify the centrifuging effect)
     DEMSim.SetOutputContent(OUTPUT_CONTENT::FAMILY);
-    // DEMSim.SetVerbosity(STEP_METRIC);
 
     // If you don't need individual force information, then this option makes the solver run a bit faster.
     DEMSim.SetNoForceRecord();

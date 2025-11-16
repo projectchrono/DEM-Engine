@@ -47,7 +47,7 @@ void AdvanceSimulation(DEMSolver& DEMSim,
 int main() {
     DEMSolver DEMSim;
     DEMSim.UseFrictionalHertzianModel();
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
 
     // Scale-defining numbers of this simulation.

@@ -358,8 +358,9 @@ void DEMMesh::SetPatchIDs(const std::vector<patchID_t>& patch_ids) {
     auto [compressed_ids, changed] = rank_transform<patchID_t>(patch_ids);
 
     if (changed) {
-        DEME_WARNING("Patch IDs you supplied for a mesh were not contiguous or did not start from 0.\nThey "
-                     "have been transformed to be contiguous and start from 0.");
+        DEME_WARNING(
+            std::string("Patch IDs you supplied for a mesh were not contiguous or did not start from 0.\nThey have "
+                        "been transformed to be contiguous and start from 0."));
     }
 
     // Copy the patch IDs

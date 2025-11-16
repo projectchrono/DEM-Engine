@@ -99,7 +99,7 @@ inline void removeDuplicateContacts(DualStruct<DEMDataKT>& granData,
                                        this_stream, scratchPad);
     scratchPad.syncDualStructDeviceToHost("numRetainedCnts");
     size_t* pNumRetainedCnts = scratchPad.getDualStructHost("numRetainedCnts");
-    // DEME_STEP_DEBUG_PRINTF("Found %zu contacts, including user-specified persistent contacts.",
+    // DEME_DEBUG_PRINTF("Found %zu contacts, including user-specified persistent contacts.",
     //                        *pNumRetainedCnts);
     // Potentially need to resize the contact arrays
     if (*pNumRetainedCnts > idGeometryA.size()) {
@@ -123,7 +123,7 @@ inline void removeDuplicateContacts(DualStruct<DEMDataKT>& granData,
     }
     scratchPad.syncDualStructDeviceToHost(
         "numRetainedCnts");  // In theory no need, but when CONTACT_IS_PERSISTENT is not 1...
-    // DEME_STEP_DEBUG_PRINTF("CUB confirms there are %zu contacts, including user-specified persistent
+    // DEME_DEBUG_PRINTF("CUB confirms there are %zu contacts, including user-specified persistent
     // contacts.", *pNumRetainedCnts);
     // std::cout << "Contacts after duplication check: " << std::endl;
     // displayDeviceArray<bodyID_t>(granData->idGeometryA, *pNumRetainedCnts);
@@ -149,7 +149,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       DualStruct<DEMDataKT>& granData,
                       DualStruct<DEMSimParams>& simParams,
                       SolverFlags& solverFlags,
-                      VERBOSITY& verbosity,
+                      verbosity_t& verbosity,
                       DualArray<bodyID_t>& idGeometryA,
                       DualArray<bodyID_t>& idGeometryB,
                       DualArray<contact_t>& contactType,
@@ -1077,7 +1077,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             stateParams.avgCntsPerSphere =
                 (*pNumUniqueNewA > 0) ? (float)(*scratchPad.numContacts) / (float)(*pNumUniqueNewA) : 0.0;
 
-            DEME_STEP_DEBUG_PRINTF("Average number of contacts for each geometry: %.7g", stateParams.avgCntsPerSphere);
+            DEME_DEBUG_PRINTF("Average number of contacts for each geometry: %.7g", stateParams.avgCntsPerSphere);
             if (stateParams.avgCntsPerSphere > solverFlags.errOutAvgSphCnts) {
                 DEME_ERROR(
                     "On average a sphere has %.7g contacts, more than the max allowance (%.7g).\nIf you believe "

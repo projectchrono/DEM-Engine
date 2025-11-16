@@ -10,7 +10,7 @@
 #include <optional>
 #include <unordered_map>
 
-#include "GpuError.h"
+#include "Logger.hpp"
 #include "BaseClasses.hpp"
 #include "../../DEM/VariableTypes.h"
 

@@ -1115,7 +1115,7 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
                     prescans_mesh_size.at(tracked_obj->load_order + 1) - prescans_mesh_size.at(tracked_obj->load_order);
                 break;
             default:
-                DEME_ERROR("A DEM tracked object has an unknown type.");
+                DEME_ERROR(std::string("A DEM tracked object has an unknown type."));
         }
     }
     nTrackersProcessed = tracked_objs.size();
@@ -2091,7 +2091,7 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
     // history array. This is just a quick and rough check: we only look at the last contact wildcard to see if it is
     // non-0, whatever it represents.
     size_t blocks_needed_for_rearrange;
-    if (verbosity >= VERBOSITY::STEP_METRIC) {
+    if (DEME_GET_VERBOSITY() >= VERBOSITY_METRIC) {
         if (*solverScratchSpace.numPrevContacts > 0) {
             // DEME_GPU_CALL(cudaMemset(contactSentry, 0, sentry_bytes));
             blocks_needed_for_rearrange =
@@ -2121,7 +2121,7 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
     }
 
     // Take a look, does the sentry indicate that there is an `alive' contact got lost?
-    if (verbosity >= VERBOSITY::STEP_METRIC) {
+    if (DEME_GET_VERBOSITY() >= VERBOSITY_METRIC) {
         if (*solverScratchSpace.numPrevContacts > 0 && simParams->nContactWildcards > 0) {
             // Temp DualStruct defaults to size_t type
             solverScratchSpace.allocateDualStruct("lostContact");
@@ -2131,26 +2131,26 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
             solverScratchSpace.syncDualStructDeviceToHost("lostContact");
             lostContact = solverScratchSpace.getDualStructHost("lostContact");
             if (*lostContact && solverFlags.isAsync) {
-                DEME_STEP_METRIC(
+                // This prints when verbosity higher than METRIC
+                DEME_STATUS(
+                    "ALIVE_CONTACT_NOT_DETECTED",
                     "%zu contacts were active at time %.9g on dT, but they are not detected on kT, therefore being "
                     "removed unexpectedly!",
                     *lostContact, simParams->timeElapsed);
-                DEME_STEP_DEBUG_PRINTF("New number of contacts: %zu", *solverScratchSpace.numContacts);
-                DEME_STEP_DEBUG_PRINTF("Old number of contacts: %zu", *solverScratchSpace.numPrevContacts);
-                DEME_STEP_DEBUG_PRINTF("New contact A:");
-                DEME_STEP_DEBUG_EXEC(
-                    displayDeviceArray<bodyID_t>(granData->idGeometryA, *solverScratchSpace.numContacts));
-                DEME_STEP_DEBUG_PRINTF("New contact B:");
-                DEME_STEP_DEBUG_EXEC(
-                    displayDeviceArray<bodyID_t>(granData->idGeometryB, *solverScratchSpace.numContacts));
-                DEME_STEP_DEBUG_PRINTF("Old version of the last contact wildcard:");
-                DEME_STEP_DEBUG_EXEC(displayDeviceArray<float>(
-                    granData->contactWildcards[simParams->nContactWildcards - 1], *solverScratchSpace.numPrevContacts));
-                DEME_STEP_DEBUG_PRINTF("Old--new mapping:");
-                DEME_STEP_DEBUG_EXEC(
+                DEME_DEBUG_PRINTF("New number of contacts: %zu", *solverScratchSpace.numContacts);
+                DEME_DEBUG_PRINTF("Old number of contacts: %zu", *solverScratchSpace.numPrevContacts);
+                DEME_DEBUG_PRINTF("New contact A:");
+                DEME_DEBUG_EXEC(displayDeviceArray<bodyID_t>(granData->idGeometryA, *solverScratchSpace.numContacts));
+                DEME_DEBUG_PRINTF("New contact B:");
+                DEME_DEBUG_EXEC(displayDeviceArray<bodyID_t>(granData->idGeometryB, *solverScratchSpace.numContacts));
+                DEME_DEBUG_PRINTF("Old version of the last contact wildcard:");
+                DEME_DEBUG_EXEC(displayDeviceArray<float>(granData->contactWildcards[simParams->nContactWildcards - 1],
+                                                          *solverScratchSpace.numPrevContacts));
+                DEME_DEBUG_PRINTF("Old--new mapping:");
+                DEME_DEBUG_EXEC(
                     displayDeviceArray<contactPairs_t>(granData->contactMapping, *solverScratchSpace.numContacts));
-                DEME_STEP_DEBUG_PRINTF("Sentry:");
-                DEME_STEP_DEBUG_EXEC(
+                DEME_DEBUG_PRINTF("Sentry:");
+                DEME_DEBUG_EXEC(
                     displayDeviceArray<notStupidBool_t>(contactSentry, *solverScratchSpace.numPrevContacts));
             }
             solverScratchSpace.finishUsingDualStruct("lostContact");
@@ -2558,7 +2558,7 @@ void DEMDynamicThread::workerThread() {
             // simParams.syncMemberToDevice<double>(offsetof(DEMSimParams, timeElapsed));
             simParams.toDevice();
 
-            DEME_STEP_DEBUG_PRINTF("Completed step %zu, time %.9g", nTotalSteps, simParams->timeElapsed);
+            DEME_DEBUG_PRINTF("Completed step %zu, time %.9g", nTotalSteps, simParams->timeElapsed);
         }
 
         // Unless the user did something critical, must we wait for a kT update before next step

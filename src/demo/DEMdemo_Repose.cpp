@@ -23,7 +23,7 @@ using namespace std::filesystem;
 int main() {
     DEMSolver DEMSim;
     DEMSim.UseFrictionalHertzianModel();
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
 
     // If you don't need individual force information, then this option makes the solver run a bit faster.

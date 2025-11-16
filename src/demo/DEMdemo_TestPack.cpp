@@ -27,7 +27,7 @@ inline bool is_near(float a, float b, float t = 1e-6) {
 }
 
 void SetSolverProp(DEMSolver& DEMSim) {
-    DEMSim.SetVerbosity(DEBUG);
+    DEMSim.SetVerbosity("DEBUG");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
 
     DEMSim.InstructBoxDomainDimension(25, 25, 10);
@@ -152,7 +152,7 @@ void SphereRollUpIncline() {
         for (float Crr = 0.0; Crr <= 0.3; Crr += 0.01) {
             DEMSolver DEMSim;
             SetSolverProp(DEMSim);
-            DEMSim.SetVerbosity(QUIET);
+            DEMSim.SetVerbosity("QUIET");
 
             auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu}, {"Crr", Crr}});
             // A ball

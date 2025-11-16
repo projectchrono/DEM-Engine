@@ -24,7 +24,7 @@ using namespace std::filesystem;
 int main() {
     DEMSolver DEMSim;
     DEMSim.UseFrictionalHertzianModel();
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ | OUTPUT_CONTENT::VEL | OUTPUT_CONTENT::FAMILY);
     DEMSim.EnsureKernelErrMsgLineNum();
