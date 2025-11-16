@@ -946,7 +946,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         oriQz[i + owner_offset_for_ext_obj] = oriQ_of_this.z;
 
         //// For setting initial vel ang angvel, DEME's expected usage is now setting them using trackers after
-        ///initialization. / For clumps, their init vel can be set via initializers because of historical reasons.
+        /// initialization. / For clumps, their init vel can be set via initializers because of historical reasons.
 
         family_t this_family_num = input_ext_obj_family.at(i);
         familyID[i + owner_offset_for_ext_obj] = this_family_num;
@@ -1012,7 +1012,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         oriQz[i + owner_offset_for_mesh_obj] = oriQ_of_this.z;
 
         //// For setting initial vel ang angvel, DEME's expected usage is now setting them using trackers after
-        ///initialization. / For clumps, their init vel can be set via initializers because of historical reasons.
+        /// initialization. / For clumps, their init vel can be set via initializers because of historical reasons.
 
         // Populate patch info for this mesh
         // mesh_patch_owner run length is the num of patches in this mesh entity

@@ -47,11 +47,13 @@ endif()
 
 set(core_headers
 	${CMAKE_BINARY_DIR}/src/core/ApiVersion.h
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/BaseClasses.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/CudaAllocator.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ManagedMemory.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/JitHelper.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ThreadManager.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuError.h
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/Logger.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuManager.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/WavefrontMeshLoader.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/csv.hpp

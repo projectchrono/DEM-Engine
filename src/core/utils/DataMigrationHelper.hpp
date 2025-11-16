@@ -11,6 +11,7 @@
 #include <unordered_map>
 
 #include "GpuError.h"
+#include "BaseClasses.hpp"
 #include "../../DEM/VariableTypes.h"
 
 namespace deme {
@@ -89,21 +90,12 @@ inline void HostPtrAlloc(T*& ptr, size_t size) {
 // Use (void) to silence unused warnings.
 // #define assertm(exp, msg) assert(((void)msg, exp))
 
+// Used for wrapping data structures so they become usable on GPU.
 // We protect GPU-related data types with NonCopyable, because the device pointers inside these data types are too
 // fragile for copying. If say a shallow copy is enforced to our array types in a vector-of-arrays resizing, then if you
 // check the copied array's pointer from host, CUDA might not recognize it properly. The best practice is just using
 // unique_ptr to manage these array classes if you expect to put them in places where some under-the-hood copying could
 // happen.
-class NonCopyable {
-  protected:
-    NonCopyable() = default;
-    ~NonCopyable() = default;
-
-    NonCopyable(const NonCopyable&) = delete;
-    NonCopyable& operator=(const NonCopyable&) = delete;
-};
-
-// Used for wrapping data structures so they become usable on GPU
 template <typename T>
 class DualStruct : private NonCopyable {
   private:
