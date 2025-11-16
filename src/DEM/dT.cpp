@@ -84,7 +84,6 @@ void DEMDynamicThread::packDataPointers() {
 
     // Mesh and analytical-related
     triOwnerMesh.bindDevicePointer(&(granData->triOwnerMesh));
-    ;
     triPatchID.bindDevicePointer(&(granData->triPatchID));
     ownerAnalBody.bindDevicePointer(&(granData->ownerAnalBody));
     relPosNode1.bindDevicePointer(&(granData->relPosNode1));

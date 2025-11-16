@@ -839,6 +839,8 @@ void DEMSolver::preprocessTriangleObjs() {
             mesh_obj->GetNumPatches();  // This is used to keep track of the total number of patches across all meshes
         thisMeshObj++;
     }
+    DEME_DEBUG_PRINTF("Total number of mesh patches after this update: %zu", nMeshPatches);
+    DEME_DEBUG_PRINTF("Total number of mesh triangles after this update: %zu", nTriGM);
 }
 
 void DEMSolver::figureOutMaterialProxies() {

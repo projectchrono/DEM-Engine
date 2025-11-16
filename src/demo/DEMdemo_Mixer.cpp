@@ -93,7 +93,6 @@ int main() {
     // DEMSim.SetInitBinSize(25 * granular_rad);
     DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1.2);
     DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(6);
-    DEMSim.SetSortContactPairs(true);
     // DEMSim.DisableAdaptiveBinSize();
     DEMSim.SetErrorOutVelocity(20.);
     // Force the solver to error out if something went crazy. A good practice to add them, but not necessary.
