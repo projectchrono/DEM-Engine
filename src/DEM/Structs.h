@@ -10,6 +10,7 @@
 #include "../core/utils/CudaAllocator.hpp"
 #include "../core/utils/ManagedMemory.hpp"
 #include "../core/utils/csv.hpp"
+#include "../core/utils/Logger.hpp"
 #include "../core/utils/GpuError.h"
 #include "../core/utils/DataMigrationHelper.hpp"
 #include "../core/utils/Timer.hpp"
@@ -146,37 +147,7 @@ enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
         }                                   \
     }
 
-#define DEME_ERROR(...)                      \
-    {                                        \
-        char error_message[1024];            \
-        sprintf(error_message, __VA_ARGS__); \
-        std::string out = error_message;     \
-        out += "\n";                         \
-        out += "This happened in ";          \
-        out += __func__;                     \
-        out += ".\n";                        \
-        throw std::runtime_error(out);       \
-    }
-
-#define DEME_WARNING(...)                       \
-    {                                           \
-        if (verbosity >= VERBOSITY::WARNING) {  \
-            char warn_message[1024];            \
-            sprintf(warn_message, __VA_ARGS__); \
-            std::string out = "\nWARNING! ";    \
-            out += warn_message;                \
-            out += "\n\n";                      \
-            std::cerr << out;                   \
-        }                                       \
-    }
-
-#define DEME_INFO(...)                      \
-    {                                       \
-        if (verbosity >= VERBOSITY::INFO) { \
-            printf(__VA_ARGS__);            \
-            printf("\n");                   \
-        }                                   \
-    }
+// DEME_ERROR, DEME_WARNING, and DEME_INFO are now defined in Logger.hpp
 
 #define DEME_STEP_ANOMALY(...)                                        \
     {                                                                 \
@@ -186,7 +157,7 @@ enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
             std::string out = "\n-------- SIM ANOMALY!!! --------\n"; \
             out += warn_message;                                      \
             out += "\n\n";                                            \
-            std::cerr << out;                                         \
+            DEME_WARNING("%s", out.c_str());                          \
         }                                                             \
     }
 
@@ -552,15 +523,14 @@ class DEMClumpTemplate {
   private:
     void assertLength(size_t len, const std::string name) {
         if (nComp == 0) {
-            std::cerr << "The settings at the " << name
-                      << " call were applied to 0 sphere components.\nPlease consider using " << name
-                      << " only after loading the clump template." << std::endl;
+            DEME_WARNING("The settings at the %s call were applied to 0 sphere components.\nPlease consider using %s "
+                         "only after loading the clump template.",
+                         name.c_str(), name.c_str());
         }
         if (len != nComp) {
-            std::stringstream ss;
-            ss << name << " input argument must have length " << nComp << " (not " << len
-               << "), same as the number of sphere components in the clump template." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("%s input argument must have length %zu (not %zu), same as the number of sphere components in "
+                       "the clump template.",
+                       name.c_str(), nComp, len);
         }
     }
 

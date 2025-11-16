@@ -40,6 +40,7 @@
 #include "../kernel/DEMHelperKernels.cuh"
 #include "BdrsAndObjs.h"
 #include "../core/utils/WavefrontMeshLoader.hpp"
+#include "../core/utils/Logger.hpp"
 #include "utils/HostSideHelpers.hpp"
 
 namespace deme {
@@ -80,7 +81,7 @@ bool DEMMesh::LoadWavefrontMesh(std::string input_file, bool load_normals, bool 
 
     int ret = obj.LoadMesh(filename.c_str(), &emptybm, true);
     if (ret == -1) {
-        std::cerr << "Error loading OBJ file " << filename << std::endl;
+        DEME_ERROR_NOTHROW("Error loading OBJ file %s", filename.c_str());
         return false;
     }
 
@@ -357,9 +358,8 @@ void DEMMesh::SetPatchIDs(const std::vector<patchID_t>& patch_ids) {
     auto [compressed_ids, changed] = rank_transform<patchID_t>(patch_ids);
 
     if (changed) {
-        std::cerr << "Warning: Patch IDs you supplied for a mesh were not contiguous or did not start from 0.\nThey "
-                     "have been transformed to be contiguous and start from 0."
-                  << std::endl;
+        DEME_WARNING("Patch IDs you supplied for a mesh were not contiguous or did not start from 0.\nThey "
+                     "have been transformed to be contiguous and start from 0.");
     }
 
     // Copy the patch IDs

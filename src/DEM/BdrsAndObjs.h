@@ -240,17 +240,14 @@ class DEMMesh : public DEMInitializer {
 
     void assertTriLength(size_t len, const std::string name) {
         if (nTri == 0) {
-            std::cerr << "The settings at the " << name << " call were applied to 0 mesh facet.\nPlease consider using "
-                      << name
-                      << " only after loading the mesh file, because mesh utilities are supposed to provide per-facet "
-                         "control of your mesh, so we need to know the mesh first."
-                      << std::endl;
+            DEME_WARNING("The settings at the %s call were applied to 0 mesh facet.\nPlease consider using "
+                         "%s only after loading the mesh file, because mesh utilities are supposed to provide per-facet "
+                         "control of your mesh, so we need to know the mesh first.",
+                         name.c_str(), name.c_str());
         }
         if (len != nTri) {
-            std::stringstream ss;
-            ss << name << " input argument must have length " << nTri << " (not " << len
-               << "), same as the number of triangles in the mesh." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("%s input argument must have length %zu (not %zu), same as the number of triangles in the mesh.",
+                       name.c_str(), nTri, len);
         }
     }
 

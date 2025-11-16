@@ -156,7 +156,7 @@ constexpr float BIN_SIZE_MAX_CHANGE_RATE = 0.2;
 // Verbosity
 enum VERBOSITY {
     QUIET = 0,
-    DEME_ERROR = 10,
+    ERROR = 10,
     WARNING = 20,
     INFO = 30,
     STEP_ANOMALY = 32,
