@@ -105,9 +105,10 @@ class DEMExternObj : public DEMInitializer {
     /// Define object contact family number
     void SetFamily(const unsigned int code) {
         if (code > std::numeric_limits<family_t>::max()) {
-            DEME_ERROR("An external object is instructed to have family number %u, which is larger than the max "
-                       "allowance %u",
-                       code, std::numeric_limits<family_t>::max());
+            DEME_ERROR(
+                "An external object is instructed to have family number %u, which is larger than the max "
+                "allowance %u",
+                code, std::numeric_limits<family_t>::max());
         }
         family_code = code;
     }
@@ -230,9 +231,10 @@ class DEMMesh : public DEMInitializer {
   private:
     void assertPatchLength(size_t len, const std::string name) {
         if (len != nPatches) {
-            DEME_ERROR("%s input argument must have length %u (not %zu), same as the number of convex patches in the "
-                       "mesh.",
-                       name.c_str(), nPatches, len);
+            DEME_ERROR(
+                "%s input argument must have length %u (not %zu), same as the number of convex patches in the "
+                "mesh.",
+                name.c_str(), nPatches, len);
         }
     }
 
@@ -583,19 +585,21 @@ class DEMMesh : public DEMInitializer {
     void ClearWildcards() { deallocate_array(geo_wildcards); }
     void SetGeometryWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
         if (wildcards.begin()->second.size() != nPatches) {
-            DEME_ERROR("Input gemometry wildcard arrays in a SetGeometryWildcards call must all have the same size as "
-                       "the number of patches in this mesh.\nHere, the input array has length %zu but this mesh has %u "
-                       "patches.",
-                       wildcards.begin()->second.size(), nPatches);
+            DEME_ERROR(
+                "Input gemometry wildcard arrays in a SetGeometryWildcards call must all have the same size as "
+                "the number of patches in this mesh.\nHere, the input array has length %zu but this mesh has %u "
+                "patches.",
+                wildcards.begin()->second.size(), nPatches);
         }
         geo_wildcards = wildcards;
     }
     void AddGeometryWildcard(const std::string& name, const std::vector<float>& vals) {
         if (vals.size() != nPatches) {
-            DEME_ERROR("Input gemometry wildcard array in a AddGeometryWildcard call must have the same size as the "
-                       "number of patches in this mesh.\nHere, the input array has length %zu but this mesh has %u "
-                       "patches.",
-                       vals.size(), nPatches);
+            DEME_ERROR(
+                "Input gemometry wildcard array in a AddGeometryWildcard call must have the same size as the "
+                "number of patches in this mesh.\nHere, the input array has length %zu but this mesh has %u "
+                "patches.",
+                vals.size(), nPatches);
         }
         geo_wildcards[name] = vals;
     }

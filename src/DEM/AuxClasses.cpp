@@ -192,8 +192,9 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
                               const std::vector<std::string>& options,
                               bool force) {
     if (!(sys->GetInitStatus()) && !force) {
-        DEME_ERROR("Inspector should only be initialized or used after the simulation system is initialized (because "
-                   "it uses device-side data)!");
+        DEME_ERROR(std::string(
+            "Inspector should only be initialized or used after the simulation system is initialized (because "
+            "it uses device-side data)!"));
     }
     // We want to make sure if the in_region_code is legit, if it is not an all_domain query
     std::string in_region_specifier = in_region_code, placeholder;
@@ -201,10 +202,11 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
     if ((!all_domain) && (!is_all_spaces(in_region_code))) {
         if (!any_whole_word_match(in_region_code, {"X", "Y", "Z"}) ||
             !all_whole_word_match(in_region_code, {"return"}, placeholder)) {
-            DEME_ERROR("One of your insepctors is set to query a specific region, but the domian is not properly "
-                       "defined.\nIt needs to return a bool variable that is a result of logical operations involving "
-                       "X, Y and Z.\nYou can remove the region argument if all simulation entities should be "
-                       "considered.");
+            DEME_ERROR(std::string(
+                "One of your insepctors is set to query a specific region, but the domian is not properly "
+                "defined.\nIt needs to return a bool variable that is a result of logical operations involving "
+                "X, Y and Z.\nYou can remove the region argument if all simulation entities should be "
+                "considered."));
         }
         // Replace the return with our own variable
         in_region_specifier = replace_pattern(in_region_specifier, "return", "bool isInRegion = ");
@@ -222,8 +224,9 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
         inspection_kernel = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMOwnerQueryKernels", JitHelper::KERNEL_DIR / "DEMOwnerQueryKernels.cu", my_subs, options)));
     } else {
-        DEME_ERROR("Sorry, an inspector object you are using is not implemented yet.\nConsider letting the developers "
-                   "know this and they may help you.");
+        DEME_ERROR(std::string(
+            "Sorry, an inspector object you are using is not implemented yet.\nConsider letting the developers "
+            "know this and they may help you."));
     }
     initialized = true;
 }
@@ -234,10 +237,11 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
 
 void DEMTracker::assertThereIsForcePairs(const std::string& name) {
     if (sys->GetWhetherForceCollectInKernel()) {
-        DEME_ERROR("The solver is currently set to not record force pair info, so you cannot query force pairs using "
-                   "%s.\nYou can call SetCollectAccRightAfterForceCalc(false) before system initialization and try "
-                   "again.",
-                   name.c_str());
+        DEME_ERROR(
+            "The solver is currently set to not record force pair info, so you cannot query force pairs using "
+            "%s.\nYou can call SetCollectAccRightAfterForceCalc(false) before system initialization and try "
+            "again.",
+            name.c_str());
     }
 }
 void DEMTracker::assertMesh(const std::string& name) {
@@ -247,30 +251,34 @@ void DEMTracker::assertMesh(const std::string& name) {
 }
 void DEMTracker::assertGeoSize(size_t input_length, const std::string& name, const std::string& geo_type) {
     if (input_length != obj->nGeos) {
-        DEME_ERROR("%s is called with an input not the same size (number of %s) as the original tracked object!\nThe "
-                   "input has %zu %s while the tracked object has %zu.",
-                   name.c_str(), geo_type.c_str(), input_length, geo_type.c_str(), obj->nGeos);
+        DEME_ERROR(
+            "%s is called with an input not the same size (number of %s) as the original tracked object!\nThe "
+            "input has %zu %s while the tracked object has %zu.",
+            name.c_str(), geo_type.c_str(), input_length, geo_type.c_str(), obj->nGeos);
     }
 }
 void DEMTracker::assertOwnerSize(size_t input_length, const std::string& name) {
     if (input_length != obj->nSpanOwners) {
-        DEME_ERROR("%s is called with an input not the same size of the number of owners it tracks!\nThe input has "
-                   "%zu elements while the tracker tracks %zu entities.",
-                   name.c_str(), input_length, obj->nSpanOwners);
+        DEME_ERROR(
+            "%s is called with an input not the same size of the number of owners it tracks!\nThe input has "
+            "%zu elements while the tracker tracks %zu entities.",
+            name.c_str(), input_length, obj->nSpanOwners);
     }
 }
 void DEMTracker::assertOwnerOffsetValid(size_t offset, const std::string& name) {
     if (offset >= obj->nSpanOwners) {
-        DEME_ERROR("%s is called with an offset larger than the number of owners (minus 1, to be precise) it "
-                   "tracks!\nThe offset is %zu while the tracker tracks %zu entities.",
-                   name.c_str(), offset, obj->nSpanOwners);
+        DEME_ERROR(
+            "%s is called with an offset larger than the number of owners (minus 1, to be precise) it "
+            "tracks!\nThe offset is %zu while the tracker tracks %zu entities.",
+            name.c_str(), offset, obj->nSpanOwners);
     }
 }
 void DEMTracker::assertGeoOffsetValid(size_t offset, const std::string& name, const std::string& geo_type) {
     if (offset >= obj->nGeos) {
-        DEME_ERROR("%s is called with an offset larger than the number of %s (minus 1, to be precise) it tracks!\nThe "
-                   "offset is %zu %s while the tracked object has %zu.",
-                   name.c_str(), geo_type.c_str(), offset, geo_type.c_str(), obj->nGeos);
+        DEME_ERROR(
+            "%s is called with an offset larger than the number of %s (minus 1, to be precise) it tracks!\nThe "
+            "offset is %zu %s while the tracked object has %zu.",
+            name.c_str(), geo_type.c_str(), offset, geo_type.c_str(), obj->nGeos);
     }
 }
 

@@ -732,7 +732,7 @@ class ResourcePool : private NonCopyable {
     void resize(const std::string& name, size_t new_size) {
         auto it = name_to_index.find(name);
         if (it == name_to_index.end()) {
-            DEME_ERROR("Cannot resize: name not found");
+            DEME_ERROR(std::string("Cannot resize: name not found"));
         }
         vectors[it->second]->resize(new_size);
     }

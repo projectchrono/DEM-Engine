@@ -336,9 +336,10 @@ unsigned int DEMMesh::SplitIntoConvexPatches(float angle_threshold_deg) {
 
     // If material is set and we cannot broadcast it to all patches, we raise error
     if (isMaterialSet && materials.size() != nPatches) {
-        DEME_ERROR("The number of materials set (%zu) does not match the number of patches (%u). Please set the "
-                   "material for each patch or use a single material for all patches.",
-                   materials.size(), nPatches);
+        DEME_ERROR(
+            "The number of materials set (%zu) does not match the number of patches (%u). Please set the "
+            "material for each patch or use a single material for all patches.",
+            materials.size(), nPatches);
     }
     // If material is set and we can broadcast it to all patches, we do so
     if (isMaterialSet && materials.size() == 1) {
@@ -376,9 +377,10 @@ void DEMMesh::SetPatchIDs(const std::vector<patchID_t>& patch_ids) {
 
     // If material is set and we cannot broadcast it to all patches, we raise error
     if (isMaterialSet && materials.size() != nPatches) {
-        DEME_ERROR("The number of materials set (%zu) does not match the number of patches (%u). Please set the "
-                   "material for each patch or use a single material for all patches.",
-                   materials.size(), nPatches);
+        DEME_ERROR(
+            "The number of materials set (%zu) does not match the number of patches (%u). Please set the "
+            "material for each patch or use a single material for all patches.",
+            materials.size(), nPatches);
     }
     // If material is set and we can broadcast it to all patches, we do so
     if (isMaterialSet && materials.size() == 1) {
