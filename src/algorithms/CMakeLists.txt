@@ -28,6 +28,7 @@ set(algorithms_interface
 ### INTERNAL HEADERS ONLY (.h, .hpp, or .cuh) ###
 set(algorithms_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMStaticDeviceUtilities.cuh
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMAnalyticalBoundaryConstants.cuh
 )
 
 set(algorithms_sources
@@ -37,6 +38,11 @@ set(algorithms_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubContactDetection.cu
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMDynamicMisc.cu
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMKinematicMisc.cu
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMAnalyticalBoundaryConstants.cu
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMBinSphereKernels.cu
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMBinTriangleKernels.cu
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMCalcForceKernels.cu
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMCollectForceKernels.cu
 )
 
 target_sources(
