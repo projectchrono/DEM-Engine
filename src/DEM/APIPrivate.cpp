@@ -1807,17 +1807,10 @@ inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std
     array_content["_objSize3_"] = objSize3;
     array_content["_objMass_"] = objMass;
 
-    // For JIT-compiled kernels that don't use constant memory yet, keep the old approach
-    std::string analyticalEntityDefs = ANALYTICAL_COMPONENT_DEFINITIONS_JITIFIED();
-    analyticalEntityDefs = replace_patterns(analyticalEntityDefs, array_content);
-    if (ensure_kernel_line_num) {
-        analyticalEntityDefs = compact_code(analyticalEntityDefs);
-    }
-    strMap["_analyticalEntityDefs_;"] = analyticalEntityDefs;
-
-    // There is a special owner-only version used by force collection kernels. We have it here so we don't have not-used
-    // variable warnings while jitifying
-    strMap["_objOwner_"] = objOwner;
+    // Analytical boundary data is now in constant memory, so _analyticalEntityDefs_ and _objOwner_ are no longer needed
+    // However, we keep empty placeholders for backward compatibility
+    strMap["_analyticalEntityDefs_;"] = "// Analytical boundary data is now in constant memory";
+    strMap["_objOwner_"] = "// objOwner data is now in constant memory (d_objOwner)";
 
     // NEW: Also copy analytical boundary data to constant memory for static kernels
     // This allows us to use statically compiled kernels instead of JIT for better performance

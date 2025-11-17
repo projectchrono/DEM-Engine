@@ -39,10 +39,6 @@ set(algorithms_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMDynamicMisc.cu
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMKinematicMisc.cu
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMAnalyticalBoundaryConstants.cu
-	${CMAKE_CURRENT_SOURCE_DIR}/DEMBinSphereKernels.cu
-	${CMAKE_CURRENT_SOURCE_DIR}/DEMBinTriangleKernels.cu
-	${CMAKE_CURRENT_SOURCE_DIR}/DEMCalcForceKernels.cu
-	${CMAKE_CURRENT_SOURCE_DIR}/DEMCollectForceKernels.cu
 )
 
 target_sources(

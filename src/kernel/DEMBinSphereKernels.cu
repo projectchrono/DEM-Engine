@@ -1,12 +1,13 @@
 // DEM bin--sphere relations-related custom kernels
 #include <DEM/Defines.h>
 #include <DEMCollisionKernels_SphSph.cuh>
+#include <algorithms/DEMAnalyticalBoundaryConstants.cuh>
 _kernelIncludes_;
 
 // If clump templates are jitified, they will be below
 _clumpTemplateDefs_;
-// Definitions of analytical entites are below
-_analyticalEntityDefs_;
+// Analytical boundary data is now stored in constant memory (see DEMAnalyticalBoundaryConstants.cuh)
+// instead of being JIT-compiled here
 
 __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                                                  deme::DEMDataKT* granData,
@@ -77,7 +78,7 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
 
         // Each sphere entity should also check if it overlaps with an analytical boundary-type geometry
         for (deme::objID_t objB = 0; objB < simParams->nAnalGM; objB++) {
-            deme::bodyID_t objBOwner = objOwner[objB];
+            deme::bodyID_t objBOwner = deme::d_objOwner[objB];
             // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
             unsigned int objFamilyNum = granData->familyID[objBOwner];
             unsigned int maskMatID =
@@ -94,12 +95,12 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
             const float ownerOriQx = granData->oriQx[objBOwner];
             const float ownerOriQy = granData->oriQy[objBOwner];
             const float ownerOriQz = granData->oriQz[objBOwner];
-            float objBRelPosX = objRelPosX[objB];
-            float objBRelPosY = objRelPosY[objB];
-            float objBRelPosZ = objRelPosZ[objB];
-            float objBRotX = objRotX[objB];
-            float objBRotY = objRotY[objB];
-            float objBRotZ = objRotZ[objB];
+            float objBRelPosX = deme::d_objRelPosX[objB];
+            float objBRelPosY = deme::d_objRelPosY[objB];
+            float objBRelPosZ = deme::d_objRelPosZ[objB];
+            float objBRotX = deme::d_objRotX[objB];
+            float objBRotY = deme::d_objRotY[objB];
+            float objBRotZ = deme::d_objRotZ[objB];
             applyOriQToVector3<float, deme::oriQ_t>(objBRelPosX, objBRelPosY, objBRelPosZ, ownerOriQw, ownerOriQx,
                                                     ownerOriQy, ownerOriQz);
             applyOriQToVector3<float, deme::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx, ownerOriQy,
@@ -112,8 +113,8 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                 double3 cntPnt;  // cntPnt here is a placeholder
                 float3 cntNorm;  // cntNorm is placeholder too
                 contact_type = checkSphereEntityOverlap<double3, float, double>(
-                    myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner],
+                    myPosXYZ, myRadius, deme::d_objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                    deme::d_objSize1[objB], deme::d_objSize2[objB], deme::d_objSize3[objB], deme::d_objNormal[objB], granData->marginSize[objBOwner],
                     cntPnt, cntNorm, overlapDepth, overlapArea);
             }
             // overlapDepth (which has both entities' full margins) needs to be larger than the smaller one of the two
@@ -215,7 +216,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
         deme::binSphereTouchPairs_t mySphereGeoReportOffset_end = numAnalGeoSphereTouchesScan[sphereID + 1];
         // Each sphere entity should also check if it overlaps with an analytical boundary-type geometry
         for (deme::objID_t objB = 0; objB < simParams->nAnalGM; objB++) {
-            deme::bodyID_t objBOwner = objOwner[objB];
+            deme::bodyID_t objBOwner = deme::d_objOwner[objB];
             // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
             unsigned int objFamilyNum = granData->familyID[objBOwner];
             unsigned int maskMatID = locateMaskPair<unsigned int>(sphFamilyNum, objFamilyNum);
@@ -231,12 +232,12 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
             const float ownerOriQx = granData->oriQx[objBOwner];
             const float ownerOriQy = granData->oriQy[objBOwner];
             const float ownerOriQz = granData->oriQz[objBOwner];
-            float objBRelPosX = objRelPosX[objB];
-            float objBRelPosY = objRelPosY[objB];
-            float objBRelPosZ = objRelPosZ[objB];
-            float objBRotX = objRotX[objB];
-            float objBRotY = objRotY[objB];
-            float objBRotZ = objRotZ[objB];
+            float objBRelPosX = deme::d_objRelPosX[objB];
+            float objBRelPosY = deme::d_objRelPosY[objB];
+            float objBRelPosZ = deme::d_objRelPosZ[objB];
+            float objBRotX = deme::d_objRotX[objB];
+            float objBRotY = deme::d_objRotY[objB];
+            float objBRotZ = deme::d_objRotZ[objB];
             applyOriQToVector3<float, deme::oriQ_t>(objBRelPosX, objBRelPosY, objBRelPosZ, ownerOriQw, ownerOriQx,
                                                     ownerOriQy, ownerOriQz);
             applyOriQToVector3<float, deme::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx, ownerOriQy,
@@ -249,8 +250,8 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                 double3 cntPnt;  // cntPnt here is a placeholder
                 float3 cntNorm;  // cntNorm is placeholder too
                 contact_type = checkSphereEntityOverlap<double3, float, double>(
-                    myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner],
+                    myPosXYZ, myRadius, deme::d_objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                    deme::d_objSize1[objB], deme::d_objSize2[objB], deme::d_objSize3[objB], deme::d_objNormal[objB], granData->marginSize[objBOwner],
                     cntPnt, cntNorm, overlapDepth, overlapArea);
             }
             // overlapDepth (which has both entities' full margins) needs to be larger than the smaller one of the two

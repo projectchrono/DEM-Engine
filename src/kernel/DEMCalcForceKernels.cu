@@ -2,12 +2,13 @@
 #include <DEM/Defines.h>
 #include <DEMCollisionKernels_SphSph.cuh>
 #include <DEMCollisionKernels_SphTri_TriTri.cuh>
+#include <algorithms/DEMAnalyticalBoundaryConstants.cuh>
 _kernelIncludes_;
 
 // If clump templates are jitified, they will be below
 _clumpTemplateDefs_;
-// Definitions of analytical entites are below
-_analyticalEntityDefs_;
+// Analytical boundary data is now stored in constant memory (see DEMAnalyticalBoundaryConstants.cuh)
+// instead of being JIT-compiled here
 // Material properties are below
 _materialDefs_;
 // If mass properties are jitified, then they are below
@@ -289,17 +290,17 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
         // Geometry ID here is called sphereID, although it is not a sphere, it's more like analyticalID. But naming
         // it sphereID makes the acquisition process cleaner.
         deme::objID_t sphereID = granData->idGeometryB[myContactID];
-        deme::bodyID_t myOwner = objOwner[sphereID];
+        deme::bodyID_t myOwner = deme::d_objOwner[sphereID];
         // If B is analytical entity, its owner, relative location, material info is jitified.
-        bodyBMatType = objMaterial[sphereID];
-        BOwnerMass = objMass[sphereID];
+        bodyBMatType = deme::d_objMaterial[sphereID];
+        BOwnerMass = deme::d_objMass[sphereID];
         //// TODO: Is this OK?
         BRadius = DEME_HUGE_FLOAT;
         float3 myRelPos;
         float3 bodyBRot;
-        myRelPos.x = objRelPosX[sphereID];
-        myRelPos.y = objRelPosY[sphereID];
-        myRelPos.z = objRelPosZ[sphereID];
+        myRelPos.x = deme::d_objRelPosX[sphereID];
+        myRelPos.y = deme::d_objRelPosY[sphereID];
+        myRelPos.z = deme::d_objRelPosZ[sphereID];
         _forceModelIngredientAcqForB_;
         _forceModelGeoWildcardAcqForBAnal_;
 
@@ -312,25 +313,25 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
                               : granData->familyExtraMarginSize[BOwnerFamily];
 
         // B's orientation (such as plane normal) is rotated with its owner too
-        bodyBRot.x = objRotX[sphereID];
-        bodyBRot.y = objRotY[sphereID];
-        bodyBRot.z = objRotZ[sphereID];
+        bodyBRot.x = deme::d_objRotX[sphereID];
+        bodyBRot.y = deme::d_objRotY[sphereID];
+        bodyBRot.z = deme::d_objRotZ[sphereID];
         applyOriQToVector3<float, deme::oriQ_t>(bodyBRot.x, bodyBRot.y, bodyBRot.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
 
         // If B is an analytical entity, then A can be a sphere or a triangle.
         if constexpr (AType == deme::GEO_T_SPHERE) {
             // Note for this test on dT side we don't enlarge entities
             checkSphereEntityOverlap<double3, float, double>(
-                bodyAPos, ARadius, objType[sphereID], bodyBPos, bodyBRot, objSize1[sphereID], objSize2[sphereID],
-                objSize3[sphereID], objNormal[sphereID], 0.0, contactPnt, B2A, overlapDepth, overlapArea);
+                bodyAPos, ARadius, deme::d_objType[sphereID], bodyBPos, bodyBRot, deme::d_objSize1[sphereID], deme::d_objSize2[sphereID],
+                deme::d_objSize3[sphereID], deme::d_objNormal[sphereID], 0.0, contactPnt, B2A, overlapDepth, overlapArea);
             // Fix ContactType if needed
             if (overlapDepth < -extraMarginSize) {
                 ContactType = deme::NOT_A_CONTACT;
             }
         } else if constexpr (AType == deme::GEO_T_TRIANGLE) {
-            calcTriEntityOverlap<double3, double>(triANode1, triANode2, triANode3, objType[sphereID], bodyBPos,
-                                                  bodyBRot, objSize1[sphereID], objSize2[sphereID], objSize3[sphereID],
-                                                  objNormal[sphereID], contactPnt, B2A, overlapDepth, overlapArea);
+            calcTriEntityOverlap<double3, double>(triANode1, triANode2, triANode3, deme::d_objType[sphereID], bodyBPos,
+                                                  bodyBRot, deme::d_objSize1[sphereID], deme::d_objSize2[sphereID], deme::d_objSize3[sphereID],
+                                                  deme::d_objNormal[sphereID], contactPnt, B2A, overlapDepth, overlapArea);
             // Fix ContactType if needed
             if (overlapDepth < -extraMarginSize) {
                 ContactType = deme::NOT_A_CONTACT;

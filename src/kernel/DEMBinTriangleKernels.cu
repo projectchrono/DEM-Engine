@@ -2,10 +2,11 @@
 #include <DEM/Defines.h>
 #include <DEMCollisionKernels_SphTri_TriTri.cuh>
 #include <DEMTriangleBoxIntersect.cu>
+#include <algorithms/DEMAnalyticalBoundaryConstants.cuh>
 _kernelIncludes_;
 
-// Definitions of analytical entites are below
-_analyticalEntityDefs_;
+// Analytical boundary data is now stored in constant memory (see DEMAnalyticalBoundaryConstants.cuh)
+// instead of being JIT-compiled here
 
 inline __device__ float3
 sandwichVertex(float3 vertex, const float3& incenter, const float3& side, const float3& normal, float beta) {
@@ -147,7 +148,7 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
             deme::objID_t contact_count = 0;
             // Each triangle should also check if it overlaps with an analytical boundary-type geometry
             for (deme::objID_t objB = 0; objB < simParams->nAnalGM; objB++) {
-                deme::bodyID_t objBOwner = objOwner[objB];
+                deme::bodyID_t objBOwner = deme::d_objOwner[objB];
                 // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
                 unsigned int objFamilyNum = granData->familyID[objBOwner];
                 deme::bodyID_t triOwnerID = granData->triOwnerMesh[triID];
@@ -165,12 +166,12 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
                 const float ownerOriQx = granData->oriQx[objBOwner];
                 const float ownerOriQy = granData->oriQy[objBOwner];
                 const float ownerOriQz = granData->oriQz[objBOwner];
-                float objBRelPosX = objRelPosX[objB];
-                float objBRelPosY = objRelPosY[objB];
-                float objBRelPosZ = objRelPosZ[objB];
-                float objBRotX = objRotX[objB];
-                float objBRotY = objRotY[objB];
-                float objBRotZ = objRotZ[objB];
+                float objBRelPosX = deme::d_objRelPosX[objB];
+                float objBRelPosY = deme::d_objRelPosY[objB];
+                float objBRelPosZ = deme::d_objRelPosZ[objB];
+                float objBRotX = deme::d_objRotX[objB];
+                float objBRotY = deme::d_objRotY[objB];
+                float objBRotZ = deme::d_objRotZ[objB];
                 applyOriQToVector3<float, deme::oriQ_t>(objBRelPosX, objBRelPosY, objBRelPosZ, ownerOriQw, ownerOriQx,
                                                         ownerOriQy, ownerOriQz);
                 applyOriQToVector3<float, deme::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx,
@@ -182,16 +183,16 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
                 nodeB = to_real3<float3, double3>(vB1);
                 nodeC = to_real3<float3, double3>(vC1);
                 deme::contact_t contact_type = checkTriEntityOverlap<double3>(
-                    nodeA, nodeB, nodeC, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner]);
+                    nodeA, nodeB, nodeC, deme::d_objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                    deme::d_objSize1[objB], deme::d_objSize2[objB], deme::d_objSize3[objB], deme::d_objNormal[objB], granData->marginSize[objBOwner]);
                 if (contact_type == deme::NOT_A_CONTACT) {
                     nodeA = to_real3<float3, double3>(vA2);
                     nodeB = to_real3<float3, double3>(vB2);
                     nodeC = to_real3<float3, double3>(vC2);
-                    contact_type = checkTriEntityOverlap<double3>(nodeA, nodeB, nodeC, objType[objB], objBPosXYZ,
+                    contact_type = checkTriEntityOverlap<double3>(nodeA, nodeB, nodeC, deme::d_objType[objB], objBPosXYZ,
                                                                   make_float3(objBRotX, objBRotY, objBRotZ),
-                                                                  objSize1[objB], objSize2[objB], objSize3[objB],
-                                                                  objNormal[objB], granData->marginSize[objBOwner]);
+                                                                  deme::d_objSize1[objB], deme::d_objSize2[objB], deme::d_objSize3[objB],
+                                                                  deme::d_objNormal[objB], granData->marginSize[objBOwner]);
                 }
                 // Unlike the sphere-X contact case, we do not test against family extra margin here. This may result in
                 // more fake contact pairs, but the efficiency in the mesh-based particle case is not our top priority
@@ -278,7 +279,7 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
             deme::binsTriangleTouchPairs_t myTriGeoReportOffset = numAnalGeoTriTouchesScan[triID];
             deme::binsTriangleTouchPairs_t myTriGeoReportOffset_end = numAnalGeoTriTouchesScan[triID + 1];
             for (deme::objID_t objB = 0; objB < simParams->nAnalGM; objB++) {
-                deme::bodyID_t objBOwner = objOwner[objB];
+                deme::bodyID_t objBOwner = deme::d_objOwner[objB];
                 // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
                 unsigned int objFamilyNum = granData->familyID[objBOwner];
                 deme::bodyID_t triOwnerID = granData->triOwnerMesh[triID];
@@ -296,12 +297,12 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                 const float ownerOriQx = granData->oriQx[objBOwner];
                 const float ownerOriQy = granData->oriQy[objBOwner];
                 const float ownerOriQz = granData->oriQz[objBOwner];
-                float objBRelPosX = objRelPosX[objB];
-                float objBRelPosY = objRelPosY[objB];
-                float objBRelPosZ = objRelPosZ[objB];
-                float objBRotX = objRotX[objB];
-                float objBRotY = objRotY[objB];
-                float objBRotZ = objRotZ[objB];
+                float objBRelPosX = deme::d_objRelPosX[objB];
+                float objBRelPosY = deme::d_objRelPosY[objB];
+                float objBRelPosZ = deme::d_objRelPosZ[objB];
+                float objBRotX = deme::d_objRotX[objB];
+                float objBRotY = deme::d_objRotY[objB];
+                float objBRotZ = deme::d_objRotZ[objB];
                 applyOriQToVector3<float, deme::oriQ_t>(objBRelPosX, objBRelPosY, objBRelPosZ, ownerOriQw, ownerOriQx,
                                                         ownerOriQy, ownerOriQz);
                 applyOriQToVector3<float, deme::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx,
@@ -313,16 +314,16 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                 nodeB = to_real3<float3, double3>(vB1);
                 nodeC = to_real3<float3, double3>(vC1);
                 deme::contact_t contact_type = checkTriEntityOverlap<double3>(
-                    nodeA, nodeB, nodeC, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner]);
+                    nodeA, nodeB, nodeC, deme::d_objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                    deme::d_objSize1[objB], deme::d_objSize2[objB], deme::d_objSize3[objB], deme::d_objNormal[objB], granData->marginSize[objBOwner]);
                 if (contact_type == deme::NOT_A_CONTACT) {
                     nodeA = to_real3<float3, double3>(vA2);
                     nodeB = to_real3<float3, double3>(vB2);
                     nodeC = to_real3<float3, double3>(vC2);
-                    contact_type = checkTriEntityOverlap<double3>(nodeA, nodeB, nodeC, objType[objB], objBPosXYZ,
+                    contact_type = checkTriEntityOverlap<double3>(nodeA, nodeB, nodeC, deme::d_objType[objB], objBPosXYZ,
                                                                   make_float3(objBRotX, objBRotY, objBRotZ),
-                                                                  objSize1[objB], objSize2[objB], objSize3[objB],
-                                                                  objNormal[objB], granData->marginSize[objBOwner]);
+                                                                  deme::d_objSize1[objB], deme::d_objSize2[objB], deme::d_objSize3[objB],
+                                                                  deme::d_objNormal[objB], granData->marginSize[objBOwner]);
                 }
                 // Unlike the sphere-X contact case, we do not test against family extra margin here.
                 if (contact_type == deme::TRIANGLE_ANALYTICAL_CONTACT) {
