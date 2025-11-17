@@ -35,7 +35,7 @@ int main() {
 
     for (float TR : TRs) {
         DEMSolver DEMSim;
-        DEMSim.SetVerbosity(INFO);
+        DEMSim.SetVerbosity("INFO");
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
         DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
         DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);

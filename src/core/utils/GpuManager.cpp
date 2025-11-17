@@ -4,7 +4,9 @@
 
 #include <core/ApiVersion.h>
 #include "GpuManager.h"
-#include "GpuError.h"
+#include "Logger.hpp"
+
+namespace deme {
 
 GpuManager::GpuManager(unsigned int total_streams) {
     ndevices = scanNumDevices();
@@ -107,3 +109,5 @@ void GpuManager::setStreamAvailable(const StreamInfo& info) {
         }
     }
 }
+
+}  // namespace deme

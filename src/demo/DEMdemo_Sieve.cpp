@@ -22,8 +22,8 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEMSim;
-    // I generally use this demo to inspect if I have "lost contact pairs", so the verbosity is set to STEP_METRIC...
-    DEMSim.SetVerbosity(STEP_METRIC);
+    // I generally use this demo to inspect if I have "lost contact pairs", so the verbosity is set to METRIC...
+    DEMSim.SetVerbosity("METRIC");
 
     // If you don't need individual force information, then this option makes the solver run a bit faster.
     DEMSim.SetNoForceRecord();

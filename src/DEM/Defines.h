@@ -153,17 +153,6 @@ constexpr unsigned int THRESHOLD_CANT_JITIFY_ALL_COMP =
 constexpr float BIN_SIZE_MAX_CHANGE_RATE = 0.2;
 
 // Some enums...
-// Verbosity
-enum VERBOSITY {
-    QUIET = 0,
-    DEME_ERROR = 10,
-    WARNING = 20,
-    INFO = 30,
-    STEP_ANOMALY = 32,
-    STEP_METRIC = 35,
-    DEBUG = 40,
-    STEP_DEBUG = 50
-};
 // Stepping method
 enum class TIME_INTEGRATOR { FORWARD_EULER, CENTERED_DIFFERENCE, EXTENDED_TAYLOR, CHUNG };
 // Owner types

@@ -36,10 +36,10 @@ void DEMSolver::assignFamilyPersistentContact_impl(
     notStupidBool_t is_or_not,
     const std::function<bool(family_t, family_t, unsigned int, unsigned int)>& condition) {
     if (kT->solverFlags.isHistoryless) {
-        DEME_ERROR(
+        DEME_ERROR(std::string(
             "You cannot mark persistent contacts when using a wildcard-less/history-less contact model (since "
             "persistency is a part of the history).\nYou can use a different force model, and if you have to use this "
-            "one, add a placeholder wildcard.");
+            "one, add a placeholder wildcard."));
     }
     // Get device-major info to host first
     kT->previous_idGeometryA.toHost();
@@ -95,10 +95,10 @@ void DEMSolver::assignFamilyPersistentContact(unsigned int N1, unsigned int N2, 
 }
 void DEMSolver::assignPersistentContact(notStupidBool_t is_or_not) {
     if (kT->solverFlags.isHistoryless) {
-        DEME_ERROR(
+        DEME_ERROR(std::string(
             "You cannot mark persistent contacts when using a wildcard-less/history-less contact model (since "
             "persistency is a part of the history).\nYou can use a different force model, and if you have to use this "
-            "one, add a placeholder wildcard.");
+            "one, add a placeholder wildcard."));
     }
     kT->contactPersistency.toHost();
 
@@ -582,13 +582,12 @@ void DEMSolver::decideCDMarginStrat() {
 }
 
 void DEMSolver::reportInitStats() const {
-    DEME_INFO("\n");
     DEME_INFO("Number of total active devices: %d", dTkT_GpuManager->getNumDevices());
 
     DEME_INFO("User-specified X-dimension range: [%.7g, %.7g]", m_user_box_min.x, m_user_box_max.x);
     DEME_INFO("User-specified Y-dimension range: [%.7g, %.7g]", m_user_box_min.y, m_user_box_max.y);
     DEME_INFO("User-specified Z-dimension range: [%.7g, %.7g]", m_user_box_min.z, m_user_box_max.z);
-    DEME_INFO("User-specified dimensions should NOT be larger than the following simulation world.");
+    DEME_INFO(std::string("User-specified dimensions should NOT be larger than the following simulation world."));
     DEME_INFO("The dimension of the simulation world: %.17g, %.17g, %.17g", m_boxX, m_boxY, m_boxZ);
     DEME_INFO("Simulation world X range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_boxX);
     DEME_INFO("Simulation world Y range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_boxY);
@@ -610,16 +609,16 @@ void DEMSolver::reportInitStats() const {
     DEME_INFO("The number of material types: %u", nMatTuples);
     switch (m_force_model->type) {
         case (FORCE_MODEL::HERTZIAN):
-            DEME_INFO("History-based Hertzian contact model is in use.");
+            DEME_INFO(std::string("History-based Hertzian contact model is in use."));
             break;
         case (FORCE_MODEL::HERTZIAN_FRICTIONLESS):
-            DEME_INFO("Frictionless Hertzian contact model is in use.");
+            DEME_INFO(std::string("Frictionless Hertzian contact model is in use."));
             break;
         case (FORCE_MODEL::CUSTOM):
-            DEME_INFO("A user-custom force model is in use.");
+            DEME_INFO(std::string("A user-custom force model is in use."));
             break;
         default:
-            DEME_INFO("An unknown force model is in use, this is probably not going well...");
+            DEME_INFO(std::string("An unknown force model is in use, this is probably not going well..."));
     }
 
     if (use_user_defined_expand_factor) {
@@ -630,19 +629,17 @@ void DEMSolver::reportInitStats() const {
         DEME_INFO("This in the case of the smallest sphere, means enlarging radius by %.6g%%.",
                   (m_expand_factor / m_smallest_radius) * 100.0);
     } else {
-        DEME_INFO("The solver to set to adaptively change the contact margin size.");
+        DEME_INFO(std::string("The solver to set to adaptively change the contact margin size."));
         float initFutureDrift = (m_suggestedFutureDrift < 0.) ? 10.0 : m_suggestedFutureDrift;
         float expand_factor = (m_expand_safety_multi * AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE + m_expand_base_vel) *
                               initFutureDrift * m_ts_size;
-        DEME_STEP_METRIC(
+        DEME_DEBUG_PRINTF(
             "To give an example, all geometries may be enlarged/thickened by around %.6g (estimated with the initial "
             "step size, initial update frequency and velocity %.4g) for contact detection purpose.",
             expand_factor, AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE);
-        DEME_STEP_METRIC("This in the case of the smallest sphere, means enlarging radius by %.6g%%.",
-                         (expand_factor / m_smallest_radius) * 100.0);
+        DEME_DEBUG_PRINTF("This in the case of the smallest sphere, means enlarging radius by %.6g%%.",
+                          (expand_factor / m_smallest_radius) * 100.0);
     }
-
-    DEME_INFO("\n");
 
     // Debug outputs
     DEME_DEBUG_EXEC(printf("These owners are tracked: ");
@@ -688,7 +685,7 @@ void DEMSolver::preprocessAnalyticalObjs() {
                                         param.cyl.dir, param.cyl.radius, 0, 0, param.cyl.normal);
                     break;
                 default:
-                    DEME_ERROR("There is at least one analytical boundary that has a type not supported.");
+                    DEME_ERROR(std::string("There is at least one analytical boundary that has a type not supported."));
             }
         }
         nAnalGM += this_num_anal_ent;
@@ -767,9 +764,9 @@ void DEMSolver::preprocessTriangleObjs() {
             // and processed. This is the offset for the new ones being added in this update.
     for (const auto& mesh_obj : cached_mesh_objs) {
         if (!(mesh_obj->isMaterialSet)) {
-            DEME_ERROR(
+            DEME_ERROR(std::string(
                 "A meshed object is loaded but does not have associated material.\nPlease assign material to meshes "
-                "via SetMaterial.");
+                "via SetMaterial."));
         }
         // Put the mesh into the host-side cache
         m_meshes.push_back(mesh_obj);
@@ -842,6 +839,8 @@ void DEMSolver::preprocessTriangleObjs() {
             mesh_obj->GetNumPatches();  // This is used to keep track of the total number of patches across all meshes
         thisMeshObj++;
     }
+    DEME_DEBUG_PRINTF("Total number of mesh patches after this update: %zu", nMeshPatches);
+    DEME_DEBUG_PRINTF("Total number of mesh triangles after this update: %zu", nTriGM);
 }
 
 void DEMSolver::figureOutMaterialProxies() {
@@ -1353,17 +1352,17 @@ void DEMSolver::validateUserInputs() {
     // If not 2 GPUs detected, output warnings as needed
     int ndevices = dTkT_GpuManager->getNumDevices();
     if (ndevices == 0) {
-        DEME_ERROR(
+        DEME_ERROR(std::string(
             "No GPU device is detected. Try lspci and see what you get.\nIf you indeed have GPU devices, maybe you "
-            "should try rebooting or reinstalling cuda components?");
+            "should try rebooting or reinstalling cuda components?"));
         // } else if (ndevices == 1) {
         //     DEME_WARNING(
         //         "One GPU device is detected. On consumer cards, DEME's performance edge is limited with only one"
         //         "GPU.\nTry allocating 2 GPU devices if possible.");
     } else if (ndevices > 2) {
-        DEME_WARNING(
+        DEME_WARNING(std::string(
             "More than two GPU devices are detected.\nCurrently, DEME can make use of at most two devices.\nMore "
-            "devices will not improve the performance.");
+            "devices will not improve the performance."));
     }
 
     // Box size OK?
@@ -1375,26 +1374,15 @@ void DEMSolver::validateUserInputs() {
     }
 
     if (m_suggestedFutureDrift < 0) {
-        DEME_WARNING(
+        DEME_WARNING(std::string(
             "The physics of the DEM system can drift into the future as much as it wants compared to contact "
             "detections, because SetCDUpdateFreq was called with a negative argument.\nThere is also no guarantee on "
             "the contact margin size to be added, other than it will be no less than 0.\nPlease make sure this is "
-            "intended.");
+            "intended."));
     }
 
     // Fix the reserved family (reserved family number is in user family, not in impl family)
     SetFamilyFixed(RESERVED_FAMILY_NUM);
-}
-
-bool DEMSolver::goThroughWorkerAnomalies() {
-    bool there_is = false;
-    if (kT->anomalies.over_max_vel || dT->anomalies.over_max_vel) {
-        DEME_PRINTF(
-            "Workers reported there are simulation entities reached user-specified maximum velocity.\nDetails can be "
-            "shown by re-running with \"STEP_ANOMALY\" verbosity level.\n");
-        there_is = true;
-    }
-    return there_is;
 }
 
 // inline unsigned int stash_material_in_templates(std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,

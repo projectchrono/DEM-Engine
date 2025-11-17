@@ -144,9 +144,9 @@ inline void DEMKinematicThread::unpackMyBuffer() {
             *(stateParams.maxVel), simParams->errOutVel);
     } else if (*(stateParams.maxVel) >
                simParams->approxMaxVel) {  // If maxVel is larger than the user estimation, that is an anomaly
-        DEME_STEP_ANOMALY("Simulation entity velocity reached %.6g, over the user-estimated %.6g",
-                          *(stateParams.maxVel), simParams->approxMaxVel);
-        anomalies.over_max_vel = true;
+        // This prints when verbosity higher than METRIC
+        DEME_STATUS("OVER_MAX_VEL", "Simulation entity velocity reached %.6g, over the user-estimated %.6g",
+                    *(stateParams.maxVel), simParams->approxMaxVel);
     }
 
     // kT will need to derive the thickness of the CD margin, based on dT's info on system vel.

@@ -10,7 +10,7 @@
 #include <optional>
 #include <unordered_map>
 
-#include "GpuError.h"
+#include "Logger.hpp"
 #include "BaseClasses.hpp"
 #include "../../DEM/VariableTypes.h"
 
@@ -732,7 +732,7 @@ class ResourcePool : private NonCopyable {
     void resize(const std::string& name, size_t new_size) {
         auto it = name_to_index.find(name);
         if (it == name_to_index.end()) {
-            throw std::runtime_error("Cannot resize: name not found");
+            DEME_ERROR(std::string("Cannot resize: name not found"));
         }
         vectors[it->second]->resize(new_size);
     }
@@ -757,7 +757,7 @@ class ResourcePool : private NonCopyable {
     void release(const std::string& name) {
         auto it = name_to_index.find(name);
         if (it == name_to_index.end()) {
-            throw std::runtime_error("Cannot release: name not found");
+            DEME_ERROR("Cannot release: name not found");
         }
         vectors[it->second]->free();
         in_use[it->second] = std::nullopt;
@@ -804,7 +804,7 @@ class DeviceVectorPool : public ResourcePool<T, DeviceArray<T>> {
                 Base::vectors[index]->resize(size);
                 return Base::vectors[index]->data();
             } else {
-                throw std::runtime_error("Name already claimed: " + name);
+                DEME_ERROR("Name already claimed: %s", name.c_str());
             }
         }
 
@@ -827,7 +827,7 @@ class DeviceVectorPool : public ResourcePool<T, DeviceArray<T>> {
     T* get(const std::string& name) {
         auto it = this->name_to_index.find(name);
         if (it == this->name_to_index.end())
-            throw std::runtime_error("Name not found: " + name);
+            DEME_ERROR("Name not found: %s", name.c_str());
         return this->vectors[it->second]->data();
     }
 
@@ -860,7 +860,7 @@ class DualArrayPool : public ResourcePool<T, DualArray<T>> {
                 Base::vectors[index]->resize(size);
                 return Base::vectors[index].get();
             } else {
-                throw std::runtime_error("Name already claimed: " + name);
+                DEME_ERROR("Name already claimed: %s", name.c_str());
             }
         }
 
@@ -883,21 +883,21 @@ class DualArrayPool : public ResourcePool<T, DualArray<T>> {
     DualArray<T>* get(const std::string& name) {
         auto it = this->name_to_index.find(name);
         if (it == this->name_to_index.end())
-            throw std::runtime_error("Name not found: " + name);
+            DEME_ERROR("Name not found: %s", name.c_str());
         return this->vectors[it->second].get();
     }
 
     T* getHost(const std::string& name) {
         auto it = this->name_to_index.find(name);
         if (it == this->name_to_index.end())
-            throw std::runtime_error("Name not found: " + name);
+            DEME_ERROR("Name not found: %s", name.c_str());
         return this->vectors[it->second]->host();
     }
 
     T* getDevice(const std::string& name) {
         auto it = this->name_to_index.find(name);
         if (it == this->name_to_index.end())
-            throw std::runtime_error("Name not found: " + name);
+            DEME_ERROR("Name not found: %s", name.c_str());
         return this->vectors[it->second]->device();
     }
 
@@ -931,7 +931,7 @@ class DualStructPool : public ResourcePool<T, DualStruct<T>> {
                 size_t index = Base::name_to_index[name];
                 return Base::vectors[index].get();
             } else {
-                throw std::runtime_error("Name already claimed: " + name);
+                DEME_ERROR("Name already claimed: %s", name.c_str());
             }
         }
 
@@ -953,21 +953,21 @@ class DualStructPool : public ResourcePool<T, DualStruct<T>> {
     DualStruct<T>* get(const std::string& name) {
         auto it = this->name_to_index.find(name);
         if (it == this->name_to_index.end())
-            throw std::runtime_error("Name not found: " + name);
+            DEME_ERROR("Name not found: %s", name.c_str());
         return this->vectors[it->second].get();
     }
 
     T* getHost(const std::string& name) {
         auto it = this->name_to_index.find(name);
         if (it == this->name_to_index.end())
-            throw std::runtime_error("Name not found: " + name);
+            DEME_ERROR("Name not found: %s", name.c_str());
         return this->vectors[it->second]->getHostPointer();
     }
 
     T* getDevice(const std::string& name) {
         auto it = this->name_to_index.find(name);
         if (it == this->name_to_index.end())
-            throw std::runtime_error("Name not found: " + name);
+            DEME_ERROR("Name not found: %s", name.c_str());
         return this->vectors[it->second]->getDevicePointer();
     }
 };

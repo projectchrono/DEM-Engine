@@ -51,9 +51,6 @@ class DEMSolver {
     DEMSolver(unsigned int nGPUs = 2);
     ~DEMSolver();
 
-    /// Set output detail level.
-    void SetVerbosity(VERBOSITY verbose) { verbosity = verbose; }
-
     /// Instruct the dimension of the `world'. On initialization, this info will be used to figure out how to assign the
     /// num of voxels in each direction. If your `useful' domain is not box-shaped, then define a box that contains your
     /// domian.
@@ -169,7 +166,7 @@ class DEMSolver {
 
     /// Do not use this method. It has no effect.
     void SetSortContactPairs(bool use_sort) {
-        DEME_WARNING("SetSortContactPairs now has no effect. Do not use it in code.");
+        DEME_WARNING(std::string("SetSortContactPairs now has no effect. Do not use it in code."));
     }
 
     /// Instruct the solver to rearrange and consolidate clump templates information, then jitify it into GPU kernels
@@ -1339,9 +1336,6 @@ class DEMSolver {
     /// Show the wall time and percentages of wall time spend on various solver tasks.
     void ShowTimingStats();
 
-    /// Show potential anomalies that may have been there in the simulation, then clear the anomaly log.
-    void ShowAnomalies();
-
     /// Reset the collaboration stats between dT and kT back to the initial value (0). You should call this if you want
     /// to start over and re-inspect the stats of the new run; otherwise, it is generally not needed, you can go ahead
     /// and destroy DEMSolver.
@@ -1391,9 +1385,10 @@ class DEMSolver {
     void EnableGeometryWildcardOutput(bool enable = true) { m_is_out_geo_wildcards = enable; }
 
     /// @brief Set the verbosity level of the solver.
-    /// @param verbose "QUIET", "ERROR", "WARNING", "INFO", "STEP_ANOMALY", "STEP_METRIC", "DEBUG" or "STEP_DEBUG".
-    /// Recommend "INFO".
+    /// @param verbose "QUIET", "ERROR", "WARNING", "INFO", "METRIC" or "DEBUG". Recommend "INFO".
     void SetVerbosity(const std::string& verbose);
+    /// @brief Set output detail level.
+    void SetVerbosity(verbosity_t verbose);
     /// @brief Choose sphere and clump output file format.
     /// @param format Choice among "CSV", "BINARY".
     void SetOutputFormat(const std::string& format);
@@ -1411,6 +1406,13 @@ class DEMSolver {
     /// @brief Specify the output file format of meshes.
     /// @param format A choice between "VTK", "OBJ".
     void SetMeshOutputFormat(const std::string& format);
+    /// @brief Clear stored solver logs (errors, warnings, messages).
+    void ClearLog() { Logger::GetInstance().Clear(); }
+    /// @brief Show error and warnings.
+    void ShowWarnings();
+    /// @brief Show the anomalies that have been recorded in the log. This is useful for debugging and for users to
+    /// understand what potentially went wrong in their simulation.
+    void ShowAnomalies();
 
     // void SetOutputContent(const std::string& content) { SetOutputContent({content}); }
     // void SetContactOutputContent(const std::string& content) { SetContactOutputContent({content}); }
@@ -1446,7 +1448,7 @@ class DEMSolver {
     ////////////////////////////////////////////////////////////////////////////////
 
     // Verbosity
-    VERBOSITY verbosity = INFO;
+    verbosity_t verbosity = VERBOSITY_INFO;
     // If true, the solvers may need to do a per-step sweep to apply family number changes
     bool famnum_can_change_conditionally = false;
 
@@ -1983,8 +1985,6 @@ class DEMSolver {
     void assertSysInit(const std::string& method_name);
     /// Assert that the DEM simulation system is not initialized
     void assertSysNotInit(const std::string& method_name);
-    /// Print due information on worker threads reported anomalies
-    bool goThroughWorkerAnomalies();
     /// @brief Implementation of getting (unsorted) contact pairs from dT.
     /// @param type_func Exclude certain contact types from being outputted if this evaluates to false.
     void getContacts_impl(std::vector<bodyID_t>& idA,

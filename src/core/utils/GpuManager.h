@@ -5,6 +5,8 @@
 #include <vector>
 #include <mutex>
 
+namespace deme {
+
 // A device number manager that evenly distributes the streams needed to all the available devices
 class GpuManager {
   public:
@@ -47,5 +49,7 @@ class GpuManager {
     std::vector<std::vector<StreamInfo>> streams;
     std::mutex stream_manipulation_mutex;
 };
+
+}  // namespace deme
 
 #endif

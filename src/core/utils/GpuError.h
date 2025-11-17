@@ -11,29 +11,10 @@
 #include <exception>
 #include <cuda_runtime_api.h>
 
-#define DEME_GPU_CALL(res) \
-    { gpu_assert((res), __FILE__, __LINE__); }
-
-#define DEME_GPU_CALL_NOTHROW(res) \
-    { gpu_assert((res), __FILE__, __LINE__, false); }
+// DEME_GPU_CALL and DEME_GPU_CALL_NOTHROW are now defined in Logger.hpp
 
 #define DEME_GPU_CALL_WATCH_BETA(res) \
     { gpu_assert_watch_beta((res), __FILE__, __LINE__, *(stateParams.maxVel), true); }
-
-inline bool gpu_assert(cudaError_t code, const char* filename, int line, bool except = true) {
-    if (code != cudaSuccess) {
-        if (except) {
-            std::stringstream out;
-            out << "GPU Assertion: " << cudaGetErrorString(code) << ". This happened in " << filename << ":" << line
-                << "\n";
-            out << "You can check out the troubleshoot section of DEME to see if it helps, or post this error on "
-                   "Chrono's forum https://groups.google.com/g/projectchrono \n";
-            throw std::runtime_error(out.str());
-        }
-        return false;
-    }
-    return true;
-}
 
 inline bool gpu_assert_watch_beta(cudaError_t code, const char* filename, int line, float max_vel, bool except = true) {
     if (code != cudaSuccess) {

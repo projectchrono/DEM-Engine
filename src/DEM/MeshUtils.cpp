@@ -40,6 +40,7 @@
 #include "../kernel/DEMHelperKernels.cuh"
 #include "BdrsAndObjs.h"
 #include "../core/utils/WavefrontMeshLoader.hpp"
+#include "../core/utils/Logger.hpp"
 #include "utils/HostSideHelpers.hpp"
 
 namespace deme {
@@ -80,7 +81,7 @@ bool DEMMesh::LoadWavefrontMesh(std::string input_file, bool load_normals, bool 
 
     int ret = obj.LoadMesh(filename.c_str(), &emptybm, true);
     if (ret == -1) {
-        std::cerr << "Error loading OBJ file " << filename << std::endl;
+        DEME_ERROR_NOTHROW("Error loading OBJ file %s", filename.c_str());
         return false;
     }
 
@@ -335,11 +336,10 @@ unsigned int DEMMesh::SplitIntoConvexPatches(float angle_threshold_deg) {
 
     // If material is set and we cannot broadcast it to all patches, we raise error
     if (isMaterialSet && materials.size() != nPatches) {
-        std::stringstream ss;
-        ss << "The number of materials set (" << materials.size() << ") does not match the number of patches ("
-           << nPatches << "). Please set the material for each patch or use a single material for all patches."
-           << std::endl;
-        throw std::runtime_error(ss.str());
+        DEME_ERROR(
+            "The number of materials set (%zu) does not match the number of patches (%u). Please set the "
+            "material for each patch or use a single material for all patches.",
+            materials.size(), nPatches);
     }
     // If material is set and we can broadcast it to all patches, we do so
     if (isMaterialSet && materials.size() == 1) {
@@ -357,9 +357,9 @@ void DEMMesh::SetPatchIDs(const std::vector<patchID_t>& patch_ids) {
     auto [compressed_ids, changed] = rank_transform<patchID_t>(patch_ids);
 
     if (changed) {
-        std::cerr << "Warning: Patch IDs you supplied for a mesh were not contiguous or did not start from 0.\nThey "
-                     "have been transformed to be contiguous and start from 0."
-                  << std::endl;
+        DEME_WARNING(
+            std::string("Patch IDs you supplied for a mesh were not contiguous or did not start from 0.\nThey have "
+                        "been transformed to be contiguous and start from 0."));
     }
 
     // Copy the patch IDs
@@ -377,11 +377,10 @@ void DEMMesh::SetPatchIDs(const std::vector<patchID_t>& patch_ids) {
 
     // If material is set and we cannot broadcast it to all patches, we raise error
     if (isMaterialSet && materials.size() != nPatches) {
-        std::stringstream ss;
-        ss << "The number of materials set (" << materials.size() << ") does not match the number of patches ("
-           << nPatches << "). Please set the material for each patch or use a single material for all patches."
-           << std::endl;
-        throw std::runtime_error(ss.str());
+        DEME_ERROR(
+            "The number of materials set (%zu) does not match the number of patches (%u). Please set the "
+            "material for each patch or use a single material for all patches.",
+            materials.size(), nPatches);
     }
     // If material is set and we can broadcast it to all patches, we do so
     if (isMaterialSet && materials.size() == 1) {

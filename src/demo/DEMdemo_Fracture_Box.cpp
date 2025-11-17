@@ -23,7 +23,7 @@ const double math_PI = 3.1415927;
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::VEL);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);

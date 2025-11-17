@@ -26,6 +26,7 @@
 
 #include "../kernel/DEMHelperKernels.cuh"
 #include "../VariableTypes.h"
+#include "../../core/utils/Logger.hpp"
 
 namespace deme {
 
@@ -697,29 +698,25 @@ inline std::pair<std::vector<T>, bool> rank_transform(const std::vector<T>& a) {
 template <typename T>
 inline void assertPositive(const T& var, const std::string& func_name, const std::string& var_name) {
     if (var <= (T)0) {
-        std::stringstream out;
-        out << func_name << "'s " << var_name << " argument needs to be all-positive.\n";
-        throw std::runtime_error(out.str());
+        DEME_ERROR("%s's %s argument needs to be all-positive.", func_name.c_str(), var_name.c_str());
     }
 }
 template <typename T>
 inline void assertThreeElements(const std::vector<T>& vec, const std::string& func_name, const std::string& var_name) {
     if (vec.size() != 3) {
-        std::stringstream out;
-        out << func_name << "'s " << var_name
-            << " argument needs to be, or be composed of, length-3 lists/vectors. The provided size is " << vec.size()
-            << ".\n";
-        throw std::runtime_error(out.str());
+        DEME_ERROR(
+            "%s's %s argument needs to be, or be composed of, length-3 lists/vectors. The provided size is "
+            "%zu.",
+            func_name.c_str(), var_name.c_str(), vec.size());
     }
 }
 template <typename T>
 inline void assertFourElements(const std::vector<T>& vec, const std::string& func_name, const std::string& var_name) {
     if (vec.size() != 4) {
-        std::stringstream out;
-        out << func_name << "'s " << var_name
-            << " argument needs to be, or be composed of, length-4 lists/vectors. The provided size is " << vec.size()
-            << ".\n";
-        throw std::runtime_error(out.str());
+        DEME_ERROR(
+            "%s's %s argument needs to be, or be composed of, length-4 lists/vectors. The provided size is "
+            "%zu.",
+            func_name.c_str(), var_name.c_str(), vec.size());
     }
 }
 template <typename T>
@@ -727,12 +724,10 @@ inline void assertThreeElementsVector(const std::vector<std::vector<T>>& vec,
                                       const std::string& func_name,
                                       const std::string& var_name) {
     if (vec.at(0).size() != 3) {
-        std::stringstream out;
-        out << func_name << "'s " << var_name
-            << " argument needs to be a list/vector of length 3 vectors (in other words, n by 3 matrix).\n The "
-               "provided size is "
-            << vec.size() << " by " << vec.at(0).size() << ".\n";
-        throw std::runtime_error(out.str());
+        DEME_ERROR(
+            "%s's %s argument needs to be a list/vector of length 3 vectors (in other words, n by 3 matrix).\n "
+            "The provided size is %zu by %zu.",
+            func_name.c_str(), var_name.c_str(), vec.size(), vec.at(0).size());
     }
 }
 template <typename T>
@@ -740,12 +735,10 @@ inline void assertFourElementsVector(const std::vector<std::vector<T>>& vec,
                                      const std::string& func_name,
                                      const std::string& var_name) {
     if (vec.at(0).size() != 4) {
-        std::stringstream out;
-        out << func_name << "'s " << var_name
-            << " argument needs to be a list/vector of length 4 vectors (in other words, n by 4 matrix).\n The "
-               "provided size is "
-            << vec.size() << " by " << vec.at(0).size() << ".\n";
-        throw std::runtime_error(out.str());
+        DEME_ERROR(
+            "%s's %s argument needs to be a list/vector of length 4 vectors (in other words, n by 4 matrix).\n "
+            "The provided size is %zu by %zu.",
+            func_name.c_str(), var_name.c_str(), vec.size(), vec.at(0).size());
     }
 }
 

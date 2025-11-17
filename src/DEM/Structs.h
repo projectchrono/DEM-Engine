@@ -10,6 +10,7 @@
 #include "../core/utils/CudaAllocator.hpp"
 #include "../core/utils/ManagedMemory.hpp"
 #include "../core/utils/csv.hpp"
+#include "../core/utils/Logger.hpp"
 #include "../core/utils/GpuError.h"
 #include "../core/utils/DataMigrationHelper.hpp"
 #include "../core/utils/Timer.hpp"
@@ -139,108 +140,33 @@ enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
 // NOW DEFINING MACRO COMMANDS USED BY THE DEM MODULE
 // =============================================================================
 
-#define DEME_PRINTF(...)                    \
+#define DEME_PRINTF(...)                   \
+    {                                      \
+        if (verbosity > VERBOSITY_QUIET) { \
+            printf(__VA_ARGS__);           \
+        }                                  \
+    }
+
+// DEME_ERROR, DEME_WARNING, and DEME_INFO are now defined in Logger.hpp
+
+#define DEME_DEBUG_PRINTF(...)              \
     {                                       \
-        if (verbosity > VERBOSITY::QUIET) { \
-            printf(__VA_ARGS__);            \
-        }                                   \
-    }
-
-#define DEME_ERROR(...)                      \
-    {                                        \
-        char error_message[1024];            \
-        sprintf(error_message, __VA_ARGS__); \
-        std::string out = error_message;     \
-        out += "\n";                         \
-        out += "This happened in ";          \
-        out += __func__;                     \
-        out += ".\n";                        \
-        throw std::runtime_error(out);       \
-    }
-
-#define DEME_WARNING(...)                       \
-    {                                           \
-        if (verbosity >= VERBOSITY::WARNING) {  \
-            char warn_message[1024];            \
-            sprintf(warn_message, __VA_ARGS__); \
-            std::string out = "\nWARNING! ";    \
-            out += warn_message;                \
-            out += "\n\n";                      \
-            std::cerr << out;                   \
-        }                                       \
-    }
-
-#define DEME_INFO(...)                      \
-    {                                       \
-        if (verbosity >= VERBOSITY::INFO) { \
+        if (verbosity >= VERBOSITY_DEBUG) { \
             printf(__VA_ARGS__);            \
             printf("\n");                   \
         }                                   \
     }
 
-#define DEME_STEP_ANOMALY(...)                                        \
-    {                                                                 \
-        if (verbosity >= VERBOSITY::STEP_ANOMALY) {                   \
-            char warn_message[1024];                                  \
-            sprintf(warn_message, __VA_ARGS__);                       \
-            std::string out = "\n-------- SIM ANOMALY!!! --------\n"; \
-            out += warn_message;                                      \
-            out += "\n\n";                                            \
-            std::cerr << out;                                         \
-        }                                                             \
-    }
-
-#define DEME_STEP_METRIC(...)                      \
-    {                                              \
-        if (verbosity >= VERBOSITY::STEP_METRIC) { \
-            printf(__VA_ARGS__);                   \
-            printf("\n");                          \
-        }                                          \
-    }
-
-#define DEME_DEBUG_PRINTF(...)               \
-    {                                        \
-        if (verbosity >= VERBOSITY::DEBUG) { \
-            printf(__VA_ARGS__);             \
-            printf("\n");                    \
-        }                                    \
-    }
-
-#define DEME_DEBUG_EXEC(...)                 \
-    {                                        \
-        if (verbosity >= VERBOSITY::DEBUG) { \
-            __VA_ARGS__;                     \
-        }                                    \
-    }
-
-#define DEME_STEP_DEBUG_PRINTF(...)               \
-    {                                             \
-        if (verbosity >= VERBOSITY::STEP_DEBUG) { \
-            printf(__VA_ARGS__);                  \
-            printf("\n");                         \
-        }                                         \
-    }
-
-#define DEME_STEP_DEBUG_EXEC(...)                 \
-    {                                             \
-        if (verbosity >= VERBOSITY::STEP_DEBUG) { \
-            __VA_ARGS__;                          \
-        }                                         \
+#define DEME_DEBUG_EXEC(...)                \
+    {                                       \
+        if (verbosity >= VERBOSITY_DEBUG) { \
+            __VA_ARGS__;                    \
+        }                                   \
     }
 
 // =============================================================================
 // NOW SOME HOST-SIDE SIMPLE STRUCTS USED BY THE DEM MODULE
 // =============================================================================
-
-// Anomalies log
-class WorkerAnomalies {
-  public:
-    WorkerAnomalies() {}
-
-    bool over_max_vel = false;
-
-    void Clear() { over_max_vel = false; }
-};
 
 // Timers used by kT and dT
 class SolverTimers {
@@ -552,15 +478,16 @@ class DEMClumpTemplate {
   private:
     void assertLength(size_t len, const std::string name) {
         if (nComp == 0) {
-            std::cerr << "The settings at the " << name
-                      << " call were applied to 0 sphere components.\nPlease consider using " << name
-                      << " only after loading the clump template." << std::endl;
+            DEME_WARNING(
+                "The settings at the %s call were applied to 0 sphere components.\nPlease consider using %s "
+                "only after loading the clump template.",
+                name.c_str(), name.c_str());
         }
         if (len != nComp) {
-            std::stringstream ss;
-            ss << name << " input argument must have length " << nComp << " (not " << len
-               << "), same as the number of sphere components in the clump template." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(
+                "%s input argument must have length %zu (not %zu), same as the number of sphere components in "
+                "the clump template.",
+                name.c_str(), nComp, len);
         }
     }
 
@@ -702,10 +629,10 @@ class DEMClumpBatch : public DEMInitializer {
     size_t nExistContacts = 0;
     void assertLength(size_t len, const std::string name) {
         if (len != nClumps) {
-            std::stringstream ss;
-            ss << name << " input argument must have length " << nClumps << " (not " << len
-               << "), same as the number of clumps you originally added via AddClumps." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(
+                "%s input argument must have length %zu (not %zu), same as the number of clumps you originally "
+                "added via AddClumps.",
+                name.c_str(), nClumps, len);
         }
     }
 
@@ -833,10 +760,8 @@ class DEMClumpBatch : public DEMInitializer {
         assertLength(input.size(), "SetFamilies");
         if (any_of(input.begin(), input.end(),
                    [](unsigned int i) { return i > std::numeric_limits<family_t>::max(); })) {
-            std::stringstream ss;
-            ss << "Some clumps are instructed to have a family number larger than the max allowance "
-               << std::numeric_limits<family_t>::max() << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("Some clumps are instructed to have a family number larger than the max allowance %u",
+                       std::numeric_limits<family_t>::max());
         }
         families = input;
         family_isSpecified = true;
@@ -849,44 +774,39 @@ class DEMClumpBatch : public DEMInitializer {
     }
     void SetExistingContactWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
         if (wildcards.begin()->second.size() != nExistContacts) {
-            std::stringstream ss;
-            ss << "SetExistingContactWildcards needs to be called after SetExistingContacts, with each wildcard array "
-                  "having the same length as the number of contact pairs.\nThis way, each wildcard will have an "
-                  "associated contact pair."
-               << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(std::string(
+                "SetExistingContactWildcards needs to be called after SetExistingContacts, with each wildcard "
+                "array having the same length as the number of contact pairs.\nThis way, each wildcard will have "
+                "an associated contact pair."));
         }
         contact_wildcards = wildcards;
     }
     void AddExistingContactWildcard(const std::string& name, const std::vector<float>& vals) {
         if (vals.size() != nClumps) {
-            std::stringstream ss;
-            ss << "AddExistingContactWildcard needs to be called after SetExistingContacts, with the input wildcard "
-                  "array having the same length as the number of contact pairs.\nThis way, each wildcard will have an "
-                  "associated contact pair."
-               << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(std::string(
+                "AddExistingContactWildcard needs to be called after SetExistingContacts, with the input "
+                "wildcard array having the same length as the number of contact pairs.\nThis way, each wildcard "
+                "will have an associated contact pair."));
         }
         contact_wildcards[name] = vals;
     }
 
     void SetOwnerWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
         if (wildcards.begin()->second.size() != nClumps) {
-            std::stringstream ss;
-            ss << "Input owner wildcard arrays in a SetOwnerWildcards call must all have the same size as the number "
-                  "of clumps in this batch.\nHere, the input array has length "
-               << wildcards.begin()->second.size() << " but this batch has " << nClumps << " clumps." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(
+                "Input owner wildcard arrays in a SetOwnerWildcards call must all have the same size as the "
+                "number of clumps in this batch.\nHere, the input array has length %zu but this batch has %zu "
+                "clumps.",
+                wildcards.begin()->second.size(), nClumps);
         }
         owner_wildcards = wildcards;
     }
     void AddOwnerWildcard(const std::string& name, const std::vector<float>& vals) {
         if (vals.size() != nClumps) {
-            std::stringstream ss;
-            ss << "Input owner wildcard array in a AddOwnerWildcard call must have the same size as the number of "
-                  "clumps in this batch.\nHere, the input array has length "
-               << vals.size() << " but this batch has " << nClumps << " clumps." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(
+                "Input owner wildcard array in a AddOwnerWildcard call must have the same size as the number of "
+                "clumps in this batch.\nHere, the input array has length %zu but this batch has %zu clumps.",
+                vals.size(), nClumps);
         }
         owner_wildcards[name] = vals;
     }
@@ -896,21 +816,21 @@ class DEMClumpBatch : public DEMInitializer {
 
     void SetGeometryWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
         if (wildcards.begin()->second.size() != nSpheres) {
-            std::stringstream ss;
-            ss << "Input gemometry wildcard arrays in a SetGeometryWildcards call must all have the same size as the "
-                  "number of spheres in this batch.\nHere, the input array has length "
-               << wildcards.begin()->second.size() << " but this batch has " << nSpheres << " spheres." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(
+                "Input gemometry wildcard arrays in a SetGeometryWildcards call must all have the same size as "
+                "the number of spheres in this batch.\nHere, the input array has length %zu but this batch has "
+                "%zu spheres.",
+                wildcards.begin()->second.size(), nSpheres);
         }
         geo_wildcards = wildcards;
     }
     void AddGeometryWildcard(const std::string& name, const std::vector<float>& vals) {
         if (vals.size() != nSpheres) {
-            std::stringstream ss;
-            ss << "Input gemometry wildcard array in a AddGeometryWildcard call must have the same size as the number "
-                  "of spheres in this batch.\nHere, the input array has length "
-               << vals.size() << " but this batch has " << nSpheres << " spheres." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(
+                "Input gemometry wildcard array in a AddGeometryWildcard call must have the same size as the "
+                "number of spheres in this batch.\nHere, the input array has length %zu but this batch has %zu "
+                "spheres.",
+                vals.size(), nSpheres);
         }
         geo_wildcards[name] = vals;
     }
@@ -950,7 +870,7 @@ class DataContainer {
     template <typename T>
     void Insert(const std::string& key, std::vector<T> vec) {
         if (data_.count(key))
-            throw std::runtime_error("Key already exists: " + key);
+            DEME_ERROR("Key already exists: %s", key.c_str());
         data_[key] = std::make_shared<Holder<T>>(std::move(vec));
         types_[key] = &typeid(T);
     }
@@ -971,7 +891,7 @@ class DataContainer {
 
     const std::type_info& type_of(const std::string& key) const {
         if (!Contains(key))
-            throw std::runtime_error("Key not found: " + key);
+            DEME_ERROR("Key not found: %s", key.c_str());
         return *types_.at(key);  // dereference the pointer
     }
 
@@ -996,7 +916,7 @@ class DataContainer {
     }
     size_t Size() const {
         if (data_.empty()) {
-            throw std::runtime_error("DataContainer is empty.");
+            DEME_ERROR(std::string("DataContainer is empty."));
         }
         return data_.begin()->second->Size();
     }
@@ -1017,9 +937,7 @@ class DataContainer {
         std::size_t Size() const override { return data.size(); }
     };
 
-    virtual void on_missing_key(const std::string& key) const {
-        throw std::runtime_error("Key not found: '" + key + "'");
-    }
+    virtual void on_missing_key(const std::string& key) const { DEME_ERROR("Key not found: '%s'", key.c_str()); }
 
     template <typename T>
     void check_type(const std::string& key) const {
@@ -1027,7 +945,7 @@ class DataContainer {
             on_missing_key(key);
         }
         if (*types_.at(key) != typeid(T)) {
-            throw std::runtime_error("Type mismatch for key: " + key);
+            DEME_ERROR("Type mismatch for key: %s", key.c_str());
         }
     }
 
@@ -1086,9 +1004,10 @@ class ContactInfoContainer : public DataContainer {
 
   protected:
     void on_missing_key(const std::string& key) const override {
-        throw std::runtime_error("ContactInfoContainer does not have field: '" + key +
-                                 "', you may need to turn on the output of this field by correctly calling "
-                                 "SetContactOutputContent before Initialize().");
+        DEME_ERROR(
+            "ContactInfoContainer does not have field: '%s', you may need to turn on the output of this field "
+            "by correctly calling SetContactOutputContent before Initialize().",
+            key.c_str());
     }
 
   private:

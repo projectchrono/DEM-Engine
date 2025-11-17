@@ -71,7 +71,7 @@ inline void buildContactMap(std::vector<std::vector<bodyID_t>>& map,
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
