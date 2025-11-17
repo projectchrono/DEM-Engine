@@ -7,6 +7,7 @@
 #include "API.h"
 #include "Defines.h"
 #include "utils/HostSideHelpers.hpp"
+#include <algorithms/DEMAnalyticalBoundaryConstants.cuh>
 
 #include <iostream>
 #include <fstream>
@@ -1806,6 +1807,7 @@ inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std
     array_content["_objSize3_"] = objSize3;
     array_content["_objMass_"] = objMass;
 
+    // For JIT-compiled kernels that don't use constant memory yet, keep the old approach
     std::string analyticalEntityDefs = ANALYTICAL_COMPONENT_DEFINITIONS_JITIFIED();
     analyticalEntityDefs = replace_patterns(analyticalEntityDefs, array_content);
     if (ensure_kernel_line_num) {
@@ -1816,6 +1818,52 @@ inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std
     // There is a special owner-only version used by force collection kernels. We have it here so we don't have not-used
     // variable warnings while jitifying
     strMap["_objOwner_"] = objOwner;
+
+    // NEW: Also copy analytical boundary data to constant memory for static kernels
+    // This allows us to use statically compiled kernels instead of JIT for better performance
+    if (nAnalGM > 0) {
+        // Prepare host arrays for constant memory transfer
+        std::vector<objType_t> h_objType(nAnalGM);
+        std::vector<bodyID_t> h_objOwner(nAnalGM);
+        std::vector<float> h_objNormal(nAnalGM);
+        std::vector<materialsOffset_t> h_objMaterial(nAnalGM);
+        std::vector<float> h_objRelPosX(nAnalGM);
+        std::vector<float> h_objRelPosY(nAnalGM);
+        std::vector<float> h_objRelPosZ(nAnalGM);
+        std::vector<float> h_objRotX(nAnalGM);
+        std::vector<float> h_objRotY(nAnalGM);
+        std::vector<float> h_objRotZ(nAnalGM);
+        std::vector<float> h_objSize1(nAnalGM);
+        std::vector<float> h_objSize2(nAnalGM);
+        std::vector<float> h_objSize3(nAnalGM);
+        std::vector<float> h_objMass(nAnalGM);
+
+        for (unsigned int i = 0; i < nAnalGM; i++) {
+            bodyID_t myOwner = nOwnerClumps + m_anal_owner.at(i);
+            h_objOwner[i] = myOwner;
+            h_objType[i] = m_anal_types.at(i);
+            h_objMaterial[i] = m_anal_materials.at(i);
+            h_objNormal[i] = m_anal_normals.at(i);
+            h_objRelPosX[i] = m_anal_comp_pos.at(i).x;
+            h_objRelPosY[i] = m_anal_comp_pos.at(i).y;
+            h_objRelPosZ[i] = m_anal_comp_pos.at(i).z;
+            h_objRotX[i] = m_anal_comp_rot.at(i).x;
+            h_objRotY[i] = m_anal_comp_rot.at(i).y;
+            h_objRotZ[i] = m_anal_comp_rot.at(i).z;
+            h_objSize1[i] = m_anal_size_1.at(i);
+            h_objSize2[i] = m_anal_size_2.at(i);
+            h_objSize3[i] = m_anal_size_3.at(i);
+            h_objMass[i] = m_ext_obj_mass.at(m_anal_owner.at(i));
+        }
+
+        // Copy to constant memory
+        copyAnalyticalBoundaryDataToConstantMemory(
+            h_objType.data(), h_objOwner.data(), h_objNormal.data(), h_objMaterial.data(),
+            h_objRelPosX.data(), h_objRelPosY.data(), h_objRelPosZ.data(),
+            h_objRotX.data(), h_objRotY.data(), h_objRotZ.data(),
+            h_objSize1.data(), h_objSize2.data(), h_objSize3.data(), h_objMass.data(),
+            nAnalGM);
+    }
 }
 
 inline void DEMSolver::equipMassMoiVolume(std::unordered_map<std::string, std::string>& strMap) {
