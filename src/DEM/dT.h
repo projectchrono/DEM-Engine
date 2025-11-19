@@ -86,6 +86,7 @@ class DEMDynamicThread {
     DeviceArray<bodyID_t> idGeometryB_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
     DeviceArray<contact_t> contactType_buffer = DeviceArray<contact_t>(&m_approxDeviceBytesUsed);
     DeviceArray<contactPairs_t> contactMapping_buffer = DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<patchIDPair_t> contactPatchPairs_buffer = DeviceArray<patchIDPair_t>(&m_approxDeviceBytesUsed);
 
     // Simulation params-related variables
     DualStruct<DEMSimParams> simParams = DualStruct<DEMSimParams>();
@@ -200,6 +201,8 @@ class DEMDynamicThread {
     DualArray<bodyID_t> idGeometryB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<contact_t> contactType = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // DualArray<contactPairs_t> contactMapping;
+    // Fused mesh patch IDs for contacts involving meshes (mesh-mesh, mesh-analytical, sphere-mesh)
+    DualArray<patchIDPair_t> contactPatchPairs = DualArray<patchIDPair_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Some of dT's own work arrays
     // Force of each contact event. It is the force that bodyA feels. They are in global.

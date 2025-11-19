@@ -53,6 +53,7 @@ void DEMDynamicThread::packDataPointers() {
     idGeometryA.bindDevicePointer(&(granData->idGeometryA));
     idGeometryB.bindDevicePointer(&(granData->idGeometryB));
     contactType.bindDevicePointer(&(granData->contactType));
+    contactPatchPairs.bindDevicePointer(&(granData->contactPatchPairs));
     familyMaskMatrix.bindDevicePointer(&(granData->familyMasks));
     familyExtraMarginSize.bindDevicePointer(&(granData->familyExtraMarginSize));
 
@@ -1967,6 +1968,7 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     DEME_DUAL_ARRAY_RESIZE(idGeometryA, nContactPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(idGeometryB, nContactPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(contactType, nContactPairs, NOT_A_CONTACT);
+    DEME_DUAL_ARRAY_RESIZE(contactPatchPairs, nContactPairs, 0);
 
     if (!solverFlags.useNoContactRecord) {
         DEME_DUAL_ARRAY_RESIZE(contactForces, nContactPairs, make_float3(0));
@@ -2003,6 +2005,8 @@ inline void DEMDynamicThread::unpackMyBuffer() {
                              *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->contactType, contactType_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->contactPatchPairs, contactPatchPairs_buffer.data(),
+                             *solverScratchSpace.numContacts * sizeof(patchIDPair_t), cudaMemcpyDeviceToDevice));
     if (!solverFlags.isHistoryless) {
         // Note we don't have to use dedicated memory space for unpacking contactMapping_buffer contents, because we
         // only use it once per kT update, at the time of unpacking. So let us just use a temp vector to store it.

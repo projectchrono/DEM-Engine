@@ -319,6 +319,7 @@ struct DEMDataDT {
     bodyID_t* idGeometryB;
     contact_t* contactType;
     contactPairs_t* contactMapping;
+    patchIDPair_t* contactPatchPairs;
 
     // Family mask
     notStupidBool_t* familyMasks;
@@ -411,6 +412,7 @@ struct DEMDataKT {
     clumpComponentOffsetExt_t* clumpComponentOffsetExt;
     bodyID_t* triOwnerMesh;
     bodyID_t* ownerAnalBody;
+    bodyID_t* triPatchID;
     float3* relPosNode1;
     float3* relPosNode2;
     float3* relPosNode3;
@@ -420,6 +422,7 @@ struct DEMDataKT {
     bodyID_t* idGeometryB;
     contact_t* contactType;
     notStupidBool_t* contactPersistency;
+    patchIDPair_t* contactPatchPairs;
     bodyID_t* previous_idGeometryA;
     bodyID_t* previous_idGeometryB;
     contact_t* previous_contactType;
@@ -431,6 +434,7 @@ struct DEMDataKT {
     bodyID_t* pDTOwnedBuffer_idGeometryB = nullptr;
     contact_t* pDTOwnedBuffer_contactType = nullptr;
     contactPairs_t* pDTOwnedBuffer_contactMapping = nullptr;
+    patchIDPair_t* pDTOwnedBuffer_contactPatchPairs = nullptr;
 
     // The collection of pointers to DEM template arrays such as radiiSphere, still useful when there are template info
     // not directly jitified into the kernels

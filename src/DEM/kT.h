@@ -183,6 +183,10 @@ class DEMKinematicThread {
     DualArray<bodyID_t> ownerClumpBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> triOwnerMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
+    // Mesh patch information: each facet belongs to a patch
+    // Patch ID for each triangle facet (maps facet to patch)
+    DualArray<bodyID_t> triPatchID = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+
     // The ID that maps this sphere component's geometry-defining parameters, when this component is jitified
     DualArray<clumpComponentOffset_t> clumpComponentOffset =
         DualArray<clumpComponentOffset_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
@@ -196,6 +200,10 @@ class DEMKinematicThread {
     // Records if this contact is persistent and serves as kT's work array on treating their persistency.
     DualArray<notStupidBool_t> contactPersistency =
         DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+
+    // kT computed contact patch pair info (for mesh-involved contacts)
+    DualArray<patchIDPair_t> contactPatchPairs =
+        DualArray<patchIDPair_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // kT's timers
     std::vector<std::string> timer_names = {"Discretize domain",      "Find contact pairs", "Build history map",
@@ -282,17 +290,20 @@ class DEMKinematicThread {
                               const std::vector<unsigned int>& input_ext_obj_family,
                               const std::vector<unsigned int>& input_mesh_obj_family,
                               const std::vector<unsigned int>& input_mesh_facet_owner,
+                              const std::vector<bodyID_t>& input_mesh_facet_patch,
                               const std::vector<DEMTriangle>& input_mesh_facets,
                               const ClumpTemplateFlatten& clump_templates,
                               size_t nExistOwners,
                               size_t nExistSpheres,
-                              size_t nExistingFacets);
+                              size_t nExistingFacets,
+                              size_t nExistingMeshPatches);
 
     /// Initialize arrays
     void initGPUArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                        const std::vector<unsigned int>& input_ext_obj_family,
                        const std::vector<unsigned int>& input_mesh_obj_family,
                        const std::vector<unsigned int>& input_mesh_facet_owner,
+                       const std::vector<bodyID_t>& input_mesh_facet_patch,
                        const std::vector<DEMTriangle>& input_mesh_facets,
                        const std::vector<notStupidBool_t>& family_mask_matrix,
                        const ClumpTemplateFlatten& clump_templates);
@@ -303,6 +314,7 @@ class DEMKinematicThread {
                                const std::vector<unsigned int>& input_ext_obj_family,
                                const std::vector<unsigned int>& input_mesh_obj_family,
                                const std::vector<unsigned int>& input_mesh_facet_owner,
+                               const std::vector<bodyID_t>& input_mesh_facet_patch,
                                const std::vector<DEMTriangle>& input_mesh_facets,
                                const std::vector<notStupidBool_t>& family_mask_matrix,
                                const ClumpTemplateFlatten& clump_templates,

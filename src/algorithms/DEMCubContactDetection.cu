@@ -21,11 +21,13 @@ inline void contactEventArraysResize(size_t nContactPairs,
                                      DualArray<bodyID_t>& idGeometryB,
                                      DualArray<contact_t>& contactType,
                                      DualArray<notStupidBool_t>& contactPersistency,
+                                     DualArray<patchIDPair_t>& contactPatchPairs,
                                      DualStruct<DEMDataKT>& granData) {
     // Note these resizing are automatically on kT's device
     DEME_DUAL_ARRAY_RESIZE_NOVAL(idGeometryA, nContactPairs);
     DEME_DUAL_ARRAY_RESIZE_NOVAL(idGeometryB, nContactPairs);
     DEME_DUAL_ARRAY_RESIZE_NOVAL(contactType, nContactPairs);
+    DEME_DUAL_ARRAY_RESIZE_NOVAL(contactPatchPairs, nContactPairs);
 
     // In the case of user-loaded contacts, if the persistency array is not long enough then we have to manually
     // extend it.
@@ -48,6 +50,7 @@ inline void removeDuplicateContacts(DualStruct<DEMDataKT>& granData,
                                     DualArray<bodyID_t>& idGeometryB,
                                     DualArray<contact_t>& contactType,
                                     DualArray<notStupidBool_t>& contactPersistency,
+                                    DualArray<patchIDPair_t>& contactPatchPairs,
                                     bool process_persistency,
                                     bodyID_t safe_entity_count,
                                     size_t numTotalCnts,
@@ -104,7 +107,7 @@ inline void removeDuplicateContacts(DualStruct<DEMDataKT>& granData,
     // Potentially need to resize the contact arrays
     if (*pNumRetainedCnts > idGeometryA.size()) {
         contactEventArraysResize(*pNumRetainedCnts, idGeometryA, idGeometryB, contactType, contactPersistency,
-                                 granData);
+                                 contactPatchPairs, granData);
     }
     // Then select those needed contacts
     cubDEMSelectFlagged<bodyID_t, notStupidBool_t>(idA_sorted, granData->idGeometryA, retain_flags,
@@ -157,6 +160,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       DualArray<bodyID_t>& previous_idGeometryB,
                       DualArray<contact_t>& previous_contactType,
                       DualArray<notStupidBool_t>& contactPersistency,
+                      DualArray<patchIDPair_t>& contactPatchPairs,
                       DualArray<contactPairs_t>& contactMapping,
                       cudaStream_t& this_stream,
                       DEMSolverScratchData& scratchPad,
@@ -264,7 +268,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             nSphereGeoContact = *scratchPad.numContacts;
             if (*scratchPad.numContacts > idGeometryA.size()) {
                 contactEventArraysResize(*(scratchPad.numContacts), idGeometryA, idGeometryB, contactType,
-                                         contactPersistency, granData);
+                                         contactPersistency, contactPatchPairs, granData);
             }
             // std::cout << *pNumBinSphereTouchPairs << std::endl;
             // displayDeviceArray<binsSphereTouches_t>(numBinsSphereTouches, simParams->nSpheresGM);
@@ -476,7 +480,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 *scratchPad.numContacts = nSphereGeoContact + nTriGeoContact;
                 if (*scratchPad.numContacts > idGeometryA.size()) {
                     contactEventArraysResize(*(scratchPad.numContacts), idGeometryA, idGeometryB, contactType,
-                                             contactPersistency, granData);
+                                             contactPersistency, contactPatchPairs, granData);
                 }
                 // std::cout << "numAnalGeoTriTouchesScan: " << std::endl;
                 // displayDeviceArray<binsTriangleTouchPairs_t>(numAnalGeoTriTouchesScan, simParams->nTriGM);
@@ -755,7 +759,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 nSphereSphereContact + nSphereGeoContact + nTriGeoContact + nTriSphereContact + nTriTriContact;
             if (*scratchPad.numContacts > idGeometryA.size()) {
                 contactEventArraysResize(*scratchPad.numContacts, idGeometryA, idGeometryB, contactType,
-                                         contactPersistency, granData);
+                                         contactPersistency, contactPatchPairs, granData);
             }
 
             // Sphere--sphere contact pairs go after tri--anal-geo contacts
@@ -932,7 +936,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             scratchPad.finishUsingDualStruct("numPersistCnts");
 
             removeDuplicateContacts(granData, idA_sorted, idB_sorted, contactType_sorted, persistency_sorted,
-                                    idGeometryA, idGeometryB, contactType, contactPersistency, true,
+                                    idGeometryA, idGeometryB, contactType, contactPersistency, contactPatchPairs, true,
                                     DEME_MAX(simParams->nSpheresGM, simParams->nTriGM), numTotalCnts, this_stream,
                                     scratchPad);
 
@@ -977,7 +981,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // displayDeviceArray<contact_t>(contactType_sorted, numTotalCnts);
 
             removeDuplicateContacts(granData, idA_sorted, idB_sorted, contactType_sorted, persistency_sorted,
-                                    idGeometryA, idGeometryB, contactType, contactPersistency, false,
+                                    idGeometryA, idGeometryB, contactType, contactPersistency, contactPatchPairs, false,
                                     DEME_MAX(simParams->nSpheresGM, simParams->nTriGM), numTotalCnts, this_stream,
                                     scratchPad);
             // std::cout << "Contacts after duplication check: " << std::endl;
