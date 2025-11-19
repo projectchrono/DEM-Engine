@@ -806,6 +806,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     (granData->idGeometryB + nSphereGeoContact + nTriGeoContact + nSphereSphereContact);
                 contact_t* dType_sm =
                     (granData->contactType + nSphereGeoContact + nTriGeoContact + nSphereSphereContact);
+                patchIDPair_t* patchPairs_sm =
+                    (granData->contactPatchPairs + nSphereGeoContact + nTriGeoContact + nSphereSphereContact);
                 // Or tri--tri... They go after tri--sph contacts
                 bodyID_t* idTriA_mm = (granData->idGeometryA + nSphereGeoContact + nTriGeoContact +
                                        nSphereSphereContact + nTriSphereContact);
@@ -813,6 +815,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                                        nSphereSphereContact + nTriSphereContact);
                 contact_t* dType_mm = (granData->contactType + nSphereGeoContact + nTriGeoContact +
                                        nSphereSphereContact + nTriSphereContact);
+                patchIDPair_t* patchPairs_mm = (granData->contactPatchPairs + nSphereGeoContact + nTriGeoContact +
+                                                nSphereSphereContact + nTriSphereContact);
                 // And two possible types of contact are resolved both in this kernel
                 sphTri_contact_kernels->kernel("populateTriangleContactsEachBin")
                     .instantiate()
@@ -820,9 +824,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     .launch(&simParams, &granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
                             sphereIDsLookUpTable, mapTriActBinToSphActBin, triIDsEachBinTouches_sorted,
                             activeBinIDsForTri, numTrianglesBinTouches, triIDsLookUpTable, triSphContactReportOffsets,
-                            triTriContactReportOffsets, idSphA_sm, idTriB_sm, dType_sm, idTriA_mm, idTriB_mm, dType_mm,
-                            sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1, sandwichBNode2,
-                            sandwichBNode3, *pNumActiveBinsForTri, solverFlags.meshUniversalContact);
+                            triTriContactReportOffsets, idSphA_sm, idTriB_sm, dType_sm, patchPairs_sm, idTriA_mm,
+                            idTriB_mm, dType_mm, patchPairs_mm, sandwichANode1, sandwichANode2, sandwichANode3,
+                            sandwichBNode1, sandwichBNode2, sandwichBNode3, *pNumActiveBinsForTri,
+                            solverFlags.meshUniversalContact);
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
         }  // End of bin-wise contact detection subroutine

@@ -331,8 +331,10 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                     idGeoA[myTriGeoReportOffset] = triID;
                     idGeoB[myTriGeoReportOffset] = (deme::bodyID_t)objB;
                     contactType[myTriGeoReportOffset] = contact_type;
+                    // For mesh-analytical contact: mesh has patch ID, analytical object is assumed 0
+                    deme::bodyID_t triPatchID = granData->triPatchID[triID];
                     contactPatchPairs[myTriGeoReportOffset] =
-                        0;  //// TODO: Implement patch ID pair generator using encodeContactType
+                        encodeContactType<deme::patchIDPair_t, deme::bodyID_t>(triPatchID, 0);
                     myTriGeoReportOffset++;
                     if (myTriGeoReportOffset >= myTriGeoReportOffset_end) {
                         return;  // Don't step on the next triangle's domain
