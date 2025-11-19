@@ -1968,8 +1968,6 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     DEME_DUAL_ARRAY_RESIZE(idGeometryA, nContactPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(idGeometryB, nContactPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(contactType, nContactPairs, NOT_A_CONTACT);
-    DEME_DUAL_ARRAY_RESIZE(contactPatchPairs, nContactPairs, 0);
-
     if (!solverFlags.useNoContactRecord) {
         DEME_DUAL_ARRAY_RESIZE(contactForces, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactTorque_convToForce, nContactPairs, make_float3(0));
@@ -1982,6 +1980,12 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     // Sync pointers to device can be delayed... we'll only need to do that before kernel calls
 
     // Also note that dT does not have to worry about contact persistence, because kT handles that
+}
+
+inline void DEMDynamicThread::meshPatchPairsResize(size_t nMeshPatchPairs) {
+    DEME_DUAL_ARRAY_RESIZE(contactPatchPairs, nMeshPatchPairs, 0);
+    // Re-packing pointers to device now is automatic
+    // Sync pointers to device can be delayed... we'll only need to do that before kernel calls
 }
 
 inline void DEMDynamicThread::unpackMyBuffer() {
@@ -1998,6 +2002,9 @@ inline void DEMDynamicThread::unpackMyBuffer() {
     if (*solverScratchSpace.numContacts > idGeometryA.size() || *solverScratchSpace.numContacts > buffer_size) {
         contactEventArraysResize(*solverScratchSpace.numContacts);
     }
+    if (*solverScratchSpace.numMeshInvolvedContacts > contactPatchPairs.size()) {
+        meshPatchPairsResize(*solverScratchSpace.numMeshInvolvedContacts);
+    }
 
     DEME_GPU_CALL(cudaMemcpy(granData->idGeometryA, idGeometryA_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
@@ -2006,7 +2013,8 @@ inline void DEMDynamicThread::unpackMyBuffer() {
     DEME_GPU_CALL(cudaMemcpy(granData->contactType, contactType_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->contactPatchPairs, contactPatchPairs_buffer.data(),
-                             *solverScratchSpace.numContacts * sizeof(patchIDPair_t), cudaMemcpyDeviceToDevice));
+                             *solverScratchSpace.numMeshInvolvedContacts * sizeof(patchIDPair_t),
+                             cudaMemcpyDeviceToDevice));
     if (!solverFlags.isHistoryless) {
         // Note we don't have to use dedicated memory space for unpacking contactMapping_buffer contents, because we
         // only use it once per kT update, at the time of unpacking. So let us just use a temp vector to store it.

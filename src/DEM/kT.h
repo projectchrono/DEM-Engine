@@ -409,6 +409,8 @@ class DEMKinematicThread {
     void sendToTheirBuffer();
     // Resize dT's buffer arrays based on the number of contact pairs
     inline void transferArraysResize(size_t nContactPairs);
+    // Resize mesh patch pair array
+    inline void meshPatchPairsResize(size_t nMeshInvolvedContactPairs);
     // Automatic adjustments to sim params
     void calibrateParams();
     // The kT-side allocations that can be done at initialization time

@@ -25,11 +25,9 @@ inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
     DEME_DEVICE_ARRAY_RESIZE(dT->idGeometryA_buffer, nContactPairs);
     DEME_DEVICE_ARRAY_RESIZE(dT->idGeometryB_buffer, nContactPairs);
     DEME_DEVICE_ARRAY_RESIZE(dT->contactType_buffer, nContactPairs);
-    DEME_DEVICE_ARRAY_RESIZE(dT->contactPatchPairs_buffer, nContactPairs);
     granData->pDTOwnedBuffer_idGeometryA = dT->idGeometryA_buffer.data();
     granData->pDTOwnedBuffer_idGeometryB = dT->idGeometryB_buffer.data();
     granData->pDTOwnedBuffer_contactType = dT->contactType_buffer.data();
-    granData->pDTOwnedBuffer_contactPatchPairs = dT->contactPatchPairs_buffer.data();
 
     if (!solverFlags.isHistoryless) {
         DEME_DEVICE_ARRAY_RESIZE(dT->contactMapping_buffer, nContactPairs);
@@ -39,7 +37,16 @@ inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
 
     // But we don't have to toDevice granData or dT->granData, and this is because all _buffer arrays don't
-    // particupate kernel computations, so even if their values are fresh only on host, it's fine
+    // particupate kernel computations, so even if their pointers are fresh only on host, it's fine
+}
+
+inline void DEMKinematicThread::meshPatchPairsResize(size_t nMeshInvolvedContactPairs) {
+    // These buffers are on dT
+    DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+    DEME_DEVICE_ARRAY_RESIZE(dT->contactPatchPairs_buffer, nMeshInvolvedContactPairs);
+    granData->pDTOwnedBuffer_contactPatchPairs = dT->contactPatchPairs_buffer.data();
+    // Unset the device change we just made
+    DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
 }
 
 void DEMKinematicThread::calibrateParams() {
@@ -200,6 +207,10 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
     if (*solverScratchSpace.numContacts > dT->buffer_size) {
         transferArraysResize(*solverScratchSpace.numContacts);
     }
+    // Resize the mesh-contact transfer array too
+    if (*solverScratchSpace.numMeshInvolvedContacts > dT->contactPatchPairs_buffer.size()) {
+        meshPatchPairsResize(*solverScratchSpace.numMeshInvolvedContacts);
+    }
 
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA,
                              (*solverScratchSpace.numContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
@@ -208,7 +219,8 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactType, granData->contactType,
                              (*solverScratchSpace.numContacts) * sizeof(contact_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactPatchPairs, granData->contactPatchPairs,
-                             (*solverScratchSpace.numContacts) * sizeof(patchIDPair_t), cudaMemcpyDeviceToDevice));
+                             (*solverScratchSpace.numMeshInvolvedContacts) * sizeof(patchIDPair_t),
+                             cudaMemcpyDeviceToDevice));
     // DEME_MIGRATE_TO_DEVICE(dT->idGeometryA_buffer, dT->streamInfo.device, streamInfo.stream);
     // DEME_MIGRATE_TO_DEVICE(dT->idGeometryB_buffer, dT->streamInfo.device, streamInfo.stream);
     // DEME_MIGRATE_TO_DEVICE(dT->contactType_buffer, dT->streamInfo.device, streamInfo.stream);
@@ -288,7 +300,8 @@ void DEMKinematicThread::workerThread() {
             contactDetection(bin_sphere_kernels, bin_triangle_kernels, sphere_contact_kernels, sphTri_contact_kernels,
                              granData, simParams, solverFlags, verbosity, idGeometryA, idGeometryB, contactType,
                              previous_idGeometryA, previous_idGeometryB, previous_contactType, contactPersistency,
-                             contactPatchPairs, contactMapping, streamInfo.stream, solverScratchSpace, timers, stateParams);
+                             contactPatchPairs, contactMapping, streamInfo.stream, solverScratchSpace, timers,
+                             stateParams);
             CDAccumTimer.End();
 
             timers.GetTimer("Send to dT buffer").start();
@@ -531,6 +544,7 @@ void DEMKinematicThread::packTransferPointers(DEMDynamicThread*& dT) {
     granData->pDTOwnedBuffer_idGeometryB = dT->idGeometryB_buffer.data();
     granData->pDTOwnedBuffer_contactType = dT->contactType_buffer.data();
     granData->pDTOwnedBuffer_contactMapping = dT->contactMapping_buffer.data();
+    granData->pDTOwnedBuffer_contactPatchPairs = dT->contactPatchPairs_buffer.data();
 }
 
 void DEMKinematicThread::setSimParams(unsigned char nvXp2,
@@ -699,7 +713,7 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
         DEME_DUAL_ARRAY_RESIZE(idGeometryA, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(idGeometryB, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
-        DEME_DUAL_ARRAY_RESIZE(contactPatchPairs, cnt_arr_size, 0);
+        DEME_DUAL_ARRAY_RESIZE(contactPatchPairs, 0, 0);
         if (!solverFlags.isHistoryless) {
             DEME_DUAL_ARRAY_RESIZE(contactPersistency, cnt_arr_size, CONTACT_NOT_PERSISTENT);
             DEME_DUAL_ARRAY_RESIZE(previous_idGeometryA, cnt_arr_size, 0);

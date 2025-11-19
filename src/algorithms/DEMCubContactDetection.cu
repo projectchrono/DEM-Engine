@@ -21,17 +21,29 @@ inline void contactEventArraysResize(size_t nContactPairs,
                                      DualArray<bodyID_t>& idGeometryB,
                                      DualArray<contact_t>& contactType,
                                      DualArray<notStupidBool_t>& contactPersistency,
-                                     DualArray<patchIDPair_t>& contactPatchPairs,
                                      DualStruct<DEMDataKT>& granData) {
     // Note these resizing are automatically on kT's device
     DEME_DUAL_ARRAY_RESIZE_NOVAL(idGeometryA, nContactPairs);
     DEME_DUAL_ARRAY_RESIZE_NOVAL(idGeometryB, nContactPairs);
     DEME_DUAL_ARRAY_RESIZE_NOVAL(contactType, nContactPairs);
-    DEME_DUAL_ARRAY_RESIZE_NOVAL(contactPatchPairs, nContactPairs);
 
     // In the case of user-loaded contacts, if the persistency array is not long enough then we have to manually
     // extend it.
     DEME_DUAL_ARRAY_RESIZE(contactPersistency, nContactPairs, CONTACT_NOT_PERSISTENT);
+
+    // Re-packing pointers now is automatic
+
+    // It's safe to toDevice even though kT is working now and dT may write to its buffer
+    // This is because all buffer arrays are not used in kernels so their pointers are only meaningfully stored on host,
+    // so writing from host to device won't change the destination where dT writes
+    granData.toDevice();
+}
+
+inline void meshPatchPairsResize(size_t nMeshInvolvedContactPairs,
+                                 DualArray<patchIDPair_t>& contactPatchPairs,
+                                 DualStruct<DEMDataKT>& granData) {
+    // Note these resizing are automatically on kT's device
+    DEME_DUAL_ARRAY_RESIZE_NOVAL(contactPatchPairs, nMeshInvolvedContactPairs);
 
     // Re-packing pointers now is automatic
 
@@ -107,7 +119,7 @@ inline void removeDuplicateContacts(DualStruct<DEMDataKT>& granData,
     // Potentially need to resize the contact arrays
     if (*pNumRetainedCnts > idGeometryA.size()) {
         contactEventArraysResize(*pNumRetainedCnts, idGeometryA, idGeometryB, contactType, contactPersistency,
-                                 contactPatchPairs, granData);
+                                 granData);
     }
     // Then select those needed contacts
     cubDEMSelectFlagged<bodyID_t, notStupidBool_t>(idA_sorted, granData->idGeometryA, retain_flags,
@@ -268,7 +280,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             nSphereGeoContact = *scratchPad.numContacts;
             if (*scratchPad.numContacts > idGeometryA.size()) {
                 contactEventArraysResize(*(scratchPad.numContacts), idGeometryA, idGeometryB, contactType,
-                                         contactPersistency, contactPatchPairs, granData);
+                                         contactPersistency, granData);
             }
             // std::cout << *pNumBinSphereTouchPairs << std::endl;
             // displayDeviceArray<binsSphereTouches_t>(numBinsSphereTouches, simParams->nSpheresGM);
@@ -480,7 +492,12 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 *scratchPad.numContacts = nSphereGeoContact + nTriGeoContact;
                 if (*scratchPad.numContacts > idGeometryA.size()) {
                     contactEventArraysResize(*(scratchPad.numContacts), idGeometryA, idGeometryB, contactType,
-                                             contactPersistency, contactPatchPairs, granData);
+                                             contactPersistency, granData);
+                }
+                // Also, number of mesh-involved analytical contact gets its first update
+                *scratchPad.numMeshInvolvedContacts = nTriGeoContact;
+                if (*scratchPad.numMeshInvolvedContacts > contactPatchPairs.size()) {
+                    meshPatchPairsResize(*scratchPad.numMeshInvolvedContacts, contactPatchPairs, granData);
                 }
                 // std::cout << "numAnalGeoTriTouchesScan: " << std::endl;
                 // displayDeviceArray<binsTriangleTouchPairs_t>(numAnalGeoTriTouchesScan, simParams->nTriGM);
@@ -501,17 +518,21 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             bodyID_t* idTriA = (granData->idGeometryA + nSphereGeoContact);
             bodyID_t* idGeoB = (granData->idGeometryB + nSphereGeoContact);
             contact_t* dType = (granData->contactType + nSphereGeoContact);
+            patchIDPair_t* patchPairs = granData->contactPatchPairs;
             bin_triangle_kernels->kernel("populateBinTriangleTouchingPairs")
                 .instantiate()
                 .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
                 .launch(&simParams, &granData, numBinsTriTouchesScan, numAnalGeoTriTouchesScan, binIDsEachTriTouches,
                         triIDsEachBinTouches, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
-                        sandwichBNode2, sandwichBNode3, idTriA, idGeoB, dType, solverFlags.meshUniversalContact);
+                        sandwichBNode2, sandwichBNode3, idTriA, idGeoB, dType, patchPairs,
+                        solverFlags.meshUniversalContact);
             DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             // std::cout << "binIDsEachTriTouches: " << std::endl;
             // displayDeviceArray<binsTriangleTouches_t>(binIDsEachTriTouches, *pNumBinTriTouchPairs);
             // std::cout << "dType: " << std::endl;
             // displayDeviceArray<contact_t>(dType, nTriGeoContact);
+            // std::cout << "mesh patch pairs:" << std::endl;
+            // displayDeviceArray<patchIDPair_t>(patchPairs, nTriGeoContact);
 
             // 4th step: allocate and populate SORTED binIDsEachTriTouches and triIDsEachBinTouches. Note
             // numBinsTriTouchesScan can retire now (analytical contacts also processed).
@@ -759,7 +780,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 nSphereSphereContact + nSphereGeoContact + nTriGeoContact + nTriSphereContact + nTriTriContact;
             if (*scratchPad.numContacts > idGeometryA.size()) {
                 contactEventArraysResize(*scratchPad.numContacts, idGeometryA, idGeometryB, contactType,
-                                         contactPersistency, contactPatchPairs, granData);
+                                         contactPersistency, granData);
             }
 
             // Sphere--sphere contact pairs go after tri--anal-geo contacts
@@ -1331,11 +1352,8 @@ void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
                                 size_t nContacts) {
     // Make sure the storage is large enough
     if (nContacts > previous_idGeometryA.size()) {
-        // Previous contact arrays don't need patch pairs, but contactEventArraysResize requires it
-        // So we create a dummy array that won't be used
-        static DualArray<patchIDPair_t> dummy_contactPatchPairs;
         contactEventArraysResize(nContacts, previous_idGeometryA, previous_idGeometryB, previous_contactType,
-                                 contactPersistency, dummy_contactPatchPairs, kT_data);
+                                 contactPersistency, kT_data);
     }
 
     // Copy to temp array for easier usage
