@@ -653,7 +653,7 @@ void DEMSolver::reportInitStats() const {
 void DEMSolver::preprocessAnalyticalObjs() {
     // nExtObj can increase in mid-simulation if the user re-initialize using an `Add' flavor
     nExtObj += cached_extern_objs.size();
-    unsigned int thisExtObj =
+    unsigned int thisLoadExtObj =
         0;  // In preprocessing, this starts from 0 since if this is an update, the previous ext objs are already loaded
             // and processed. This is the offset for the new ones being added in this update.
     for (const auto& ext_obj : cached_extern_objs) {
@@ -673,15 +673,15 @@ void DEMSolver::preprocessAnalyticalObjs() {
             this_num_anal_ent++;
             switch (ext_obj->types.at(i)) {
                 case OBJ_COMPONENT::PLANE:
-                    addAnalCompTemplate(ANAL_OBJ_TYPE_PLANE, comp_mat.at(i), thisExtObj, param.plane.position,
+                    addAnalCompTemplate(ANAL_OBJ_TYPE_PLANE, comp_mat.at(i), thisLoadExtObj, param.plane.position,
                                         param.plane.normal);
                     break;
                 case OBJ_COMPONENT::PLATE:
-                    addAnalCompTemplate(ANAL_OBJ_TYPE_PLATE, comp_mat.at(i), thisExtObj, param.plate.center,
+                    addAnalCompTemplate(ANAL_OBJ_TYPE_PLATE, comp_mat.at(i), thisLoadExtObj, param.plate.center,
                                         param.plate.normal, param.plate.h_dim_x, param.plate.h_dim_y);
                     break;
                 case OBJ_COMPONENT::CYL_INF:
-                    addAnalCompTemplate(ANAL_OBJ_TYPE_CYL_INF, comp_mat.at(i), thisExtObj, param.cyl.center,
+                    addAnalCompTemplate(ANAL_OBJ_TYPE_CYL_INF, comp_mat.at(i), thisLoadExtObj, param.cyl.center,
                                         param.cyl.dir, param.cyl.radius, 0, 0, param.cyl.normal);
                     break;
                 default:
@@ -690,7 +690,7 @@ void DEMSolver::preprocessAnalyticalObjs() {
         }
         nAnalGM += this_num_anal_ent;
         m_ext_obj_comp_num.push_back(this_num_anal_ent);
-        thisExtObj++;
+        thisLoadExtObj++;
     }
 }
 
@@ -759,7 +759,7 @@ void DEMSolver::preprocessTriangleObjs() {
     bodyID_t thisMeshObj =
         0;  // In preprocessing, this starts from 0 since if this is an update, the previous mesh objects are already
             // loaded and processed. This is the offset for the new ones being added in this update.
-    bodyID_t thisPatchCount =
+    bodyID_t thisLoadPatchCount =
         0;  // In preprocessing, this starts from 0 since if this is an update, the previous patches are already loaded
             // and processed. This is the offset for the new ones being added in this update.
     for (const auto& mesh_obj : cached_mesh_objs) {
@@ -810,7 +810,7 @@ void DEMSolver::preprocessTriangleObjs() {
 
         for (unsigned int i = 0; i < mesh_obj->GetNumTriangles(); i++) {
             // Store which patch this facet belongs to
-            m_mesh_facet_patch.push_back(mesh_obj->m_patch_ids.at(i) + thisPatchCount);
+            m_mesh_facet_patch.push_back(mesh_obj->m_patch_ids.at(i) + thisLoadPatchCount);
 
             DEMTriangle tri = mesh_obj->GetTriangle(i);
             // If we wish to correct surface orientation based on given vertex normals, rather than using RHR...
@@ -832,11 +832,11 @@ void DEMSolver::preprocessTriangleObjs() {
             }
             m_mesh_facets.push_back(tri);
         }
-        thisPatchCount += mesh_obj->GetNumPatches();
+        thisLoadPatchCount += mesh_obj->GetNumPatches();
 
         nTriGM += mesh_obj->GetNumTriangles();
-        nMeshPatches +=
-            mesh_obj->GetNumPatches();  // This is used to keep track of the total number of patches across all meshes
+        nMeshPatches += mesh_obj->GetNumPatches();  // This is used to keep track of the total number of patches across
+                                                    // all meshes, potentially multiple mesh loads
         thisMeshObj++;
     }
     DEME_DEBUG_PRINTF("Total number of mesh patches after this update: %zu", nMeshPatches);

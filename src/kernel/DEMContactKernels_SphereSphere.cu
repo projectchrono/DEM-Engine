@@ -365,17 +365,23 @@ __global__ void populateSphereContactPairsEachBin(deme::DEMSimParams* simParams,
                     // here anyway
                     if (inBlockOffset < myReportOffset_end) {
                         // ----------------------------------------------------------------------------
-                        // IMPORTANT NOTE: Here, I did not adjust A and B ids to ensure A < B, but this is automatically
-                        // ensured due to 1) The binID--sphereID pairs were generated with an inherent order of
-                        // sphereID, then processed through (stable) radix sort, which preserved the blockwise order of
-                        // sphereID; 2) Then the ordered sphereIDs are loaded to shared mem, and the in-kernel contact
-                        // detection had threads reconstruct shared mem offsets from a recoverCntPair process, which
-                        // also ensures i < j. Therefore, the generated sphere contact pair has A < B. Though a change
-                        // in these processes could affect the ordering, and adding a if statement here is probably more
-                        // robust, I didn't do that, as a reminder of how fragile the things we built can be.
+                        // IMPORTANT NOTE: Here, we don't need to adjust A and B ids to ensure A < B, and it's
+                        // automatically ensured due to 1) The binID--sphereID pairs were generated with an inherent
+                        // order of sphereID, then processed through (stable) radix sort, which preserved the blockwise
+                        // order of sphereID; 2) Then the ordered sphereIDs are loaded to shared mem, and the in-kernel
+                        // contact detection had threads reconstruct shared mem offsets from a recoverCntPair process,
+                        // which also ensures i < j. Therefore, the generated sphere contact pair has A < B. However, a
+                        // change in these processes could affect the ordering, so I added this superfluous check to be
+                        // future-proof.
                         // ----------------------------------------------------------------------------
-                        idSphA[inBlockOffset] = bodyIDs[bodyA];
-                        idSphB[inBlockOffset] = bodyIDs[bodyB];
+                        if (bodyIDs[bodyA] <= bodyIDs[bodyB]) {
+                            // This branch will be reached, always
+                            idSphA[inBlockOffset] = bodyIDs[bodyA];
+                            idSphB[inBlockOffset] = bodyIDs[bodyB];
+                        } else {
+                            idSphA[inBlockOffset] = bodyIDs[bodyB];
+                            idSphB[inBlockOffset] = bodyIDs[bodyA];
+                        }
                         dType[inBlockOffset] = deme::SPHERE_SPHERE_CONTACT;
                     }
                 }

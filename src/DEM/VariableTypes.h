@@ -16,11 +16,14 @@ typedef long long ssize_t;
 typedef long ssize_t;
 #endif
 
-typedef uint16_t subVoxelPos_t;  ///< uint16 or uint32
+// Most simulation entities' ID type
+typedef unsigned int bodyID_t;
+// The type used to concatenate two mesh patch IDs together (for voting contact pairs)
+typedef uint64_t patchIDPair_t;
 
+typedef uint16_t subVoxelPos_t;  ///< uint16 or uint32
 typedef uint64_t voxelID_t;
 typedef float oriQ_t;
-typedef unsigned int bodyID_t;
 typedef unsigned int binID_t;
 typedef uint8_t objID_t;
 typedef uint16_t materialsOffset_t;
