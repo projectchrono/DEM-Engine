@@ -1331,8 +1331,11 @@ void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
                                 size_t nContacts) {
     // Make sure the storage is large enough
     if (nContacts > previous_idGeometryA.size()) {
+        // Previous contact arrays don't need patch pairs, but contactEventArraysResize requires it
+        // So we create a dummy array that won't be used
+        static DualArray<patchIDPair_t> dummy_contactPatchPairs;
         contactEventArraysResize(nContacts, previous_idGeometryA, previous_idGeometryB, previous_contactType,
-                                 contactPersistency, kT_data);
+                                 contactPersistency, dummy_contactPatchPairs, kT_data);
     }
 
     // Copy to temp array for easier usage

@@ -288,7 +288,7 @@ void DEMKinematicThread::workerThread() {
             contactDetection(bin_sphere_kernels, bin_triangle_kernels, sphere_contact_kernels, sphTri_contact_kernels,
                              granData, simParams, solverFlags, verbosity, idGeometryA, idGeometryB, contactType,
                              previous_idGeometryA, previous_idGeometryB, previous_contactType, contactPersistency,
-                             contactMapping, streamInfo.stream, solverScratchSpace, timers, stateParams);
+                             contactPatchPairs, contactMapping, streamInfo.stream, solverScratchSpace, timers, stateParams);
             CDAccumTimer.End();
 
             timers.GetTimer("Send to dT buffer").start();
