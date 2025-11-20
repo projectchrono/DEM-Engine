@@ -363,8 +363,8 @@ class DEMSolverScratchData {
   public:
     // Number of contacts in this CD step
     DualStruct<size_t> numContacts = DualStruct<size_t>(0);
-    // Number of contact pairs that involve mesh
-    DualStruct<size_t> numMeshInvolvedContacts = DualStruct<size_t>(0);
+    // Number of contact pairs that involve convex patch identification
+    DualStruct<size_t> numPatchEnabledContacts = DualStruct<size_t>(0);
     // Number of contacts in the previous CD step
     DualStruct<size_t> numPrevContacts = DualStruct<size_t>(0);
     // Number of spheres in the previous CD step (in case user added/removed clumps from the system)

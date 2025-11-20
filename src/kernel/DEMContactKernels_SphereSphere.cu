@@ -430,8 +430,14 @@ __global__ void populateSphereContactPairsEachBin(deme::DEMSimParams* simParams,
                     // The chance of offset going out-of-bound is very low, lower than sph--bin CD step, but I put it
                     // here anyway
                     if (inBlockOffset < myReportOffset_end) {
-                        idSphA[inBlockOffset] = bodyIDs[myThreadID];
-                        idSphB[inBlockOffset] = cur_bodyID;
+                        if (bodyIDs[myThreadID] <= cur_bodyID) {
+                            // This branch will be reached, always
+                            idSphA[inBlockOffset] = bodyIDs[myThreadID];
+                            idSphB[inBlockOffset] = cur_bodyID;
+                        } else {
+                            idSphA[inBlockOffset] = cur_bodyID;
+                            idSphB[inBlockOffset] = bodyIDs[myThreadID];
+                        }
                         dType[inBlockOffset] = deme::SPHERE_SPHERE_CONTACT;
                     }
                 }

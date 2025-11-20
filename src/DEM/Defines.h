@@ -82,11 +82,13 @@ const geoType_t GEO_T_ANALYTICAL = 4;  ///< Analytical components
 // For patch IDs: uses 32 bits per value (64 bits total, stored in patchIDPair_t/uint64_t)
 template <typename ReturnType = contact_t, typename InputType = geoType_t>
 inline __device__ __host__ constexpr ReturnType encodeContactType(InputType typeA, InputType typeB) {
-    constexpr size_t bits_per_value = sizeof(ReturnType) * 8 / 2;
-    return (typeA < typeB) ? static_cast<ReturnType>((static_cast<ReturnType>(typeA) << bits_per_value) | 
-                                                      (static_cast<ReturnType>(typeB) & ((static_cast<ReturnType>(1) << bits_per_value) - 1)))
-                           : static_cast<ReturnType>((static_cast<ReturnType>(typeB) << bits_per_value) | 
-                                                      (static_cast<ReturnType>(typeA) & ((static_cast<ReturnType>(1) << bits_per_value) - 1)));
+    constexpr size_t bits_per_value = sizeof(ReturnType) * DEME_BITS_PER_BYTE / 2;
+    return (typeA < typeB) ? static_cast<ReturnType>((static_cast<ReturnType>(typeA) << bits_per_value) |
+                                                     (static_cast<ReturnType>(typeB) &
+                                                      ((static_cast<ReturnType>(1) << bits_per_value) - 1)))
+                           : static_cast<ReturnType>((static_cast<ReturnType>(typeB) << bits_per_value) |
+                                                     (static_cast<ReturnType>(typeA) &
+                                                      ((static_cast<ReturnType>(1) << bits_per_value) - 1)));
 }
 
 // Templated decode function for typeA (always the smaller of the two, in high bits)

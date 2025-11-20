@@ -208,8 +208,8 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
         transferArraysResize(*solverScratchSpace.numContacts);
     }
     // Resize the mesh-contact transfer array too
-    if (*solverScratchSpace.numMeshInvolvedContacts > dT->contactPatchPairs_buffer.size()) {
-        meshPatchPairsResize(*solverScratchSpace.numMeshInvolvedContacts);
+    if (*solverScratchSpace.numPatchEnabledContacts > dT->contactPatchPairs_buffer.size()) {
+        meshPatchPairsResize(*solverScratchSpace.numPatchEnabledContacts);
     }
 
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA,
@@ -219,7 +219,7 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactType, granData->contactType,
                              (*solverScratchSpace.numContacts) * sizeof(contact_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactPatchPairs, granData->contactPatchPairs,
-                             (*solverScratchSpace.numMeshInvolvedContacts) * sizeof(patchIDPair_t),
+                             (*solverScratchSpace.numPatchEnabledContacts) * sizeof(patchIDPair_t),
                              cudaMemcpyDeviceToDevice));
     // DEME_MIGRATE_TO_DEVICE(dT->idGeometryA_buffer, dT->streamInfo.device, streamInfo.stream);
     // DEME_MIGRATE_TO_DEVICE(dT->idGeometryB_buffer, dT->streamInfo.device, streamInfo.stream);
@@ -514,6 +514,7 @@ void DEMKinematicThread::migrateDataToDevice() {
     clumpComponentOffsetExt.toDeviceAsync(streamInfo.stream);
 
     triOwnerMesh.toDeviceAsync(streamInfo.stream);
+    triPatchID.toDeviceAsync(streamInfo.stream);
     relPosNode1.toDeviceAsync(streamInfo.stream);
     relPosNode2.toDeviceAsync(streamInfo.stream);
     relPosNode3.toDeviceAsync(streamInfo.stream);

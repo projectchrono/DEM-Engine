@@ -418,11 +418,9 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                                                 deme::bodyID_t* idSphA_sm,
                                                 deme::bodyID_t* idTriB_sm,
                                                 deme::contact_t* dType_sm,
-                                                deme::patchIDPair_t* patchPairs_sm,
                                                 deme::bodyID_t* idTriA_mm,
                                                 deme::bodyID_t* idTriB_mm,
                                                 deme::contact_t* dType_mm,
-                                                deme::patchIDPair_t* patchPairs_mm,
                                                 float3* sandwichANode1,
                                                 float3* sandwichANode2,
                                                 float3* sandwichANode3,
@@ -562,10 +560,6 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                                 idSphA_sm[inBlockOffset] = sphereID;
                                 idTriB_sm[inBlockOffset] = triIDs[ind];
                                 dType_sm[inBlockOffset] = deme::SPHERE_TRIANGLE_CONTACT;
-                                // For sphere-mesh contact: sphere has no patch (0), mesh has patch ID
-                                deme::bodyID_t triPatchID = granData->triPatchID[triIDs[ind]];
-                                patchPairs_sm[inBlockOffset] =
-                                    encodeContactType<deme::patchIDPair_t, deme::bodyID_t>(0, triPatchID);
                             }
                         }
                     }
@@ -639,11 +633,6 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                             idTriB_mm[inBlockOffset] = triB_ID;
                         }
                         dType_mm[inBlockOffset] = deme::TRIANGLE_TRIANGLE_CONTACT;
-                        // For mesh-mesh contact: both meshes have patch IDs, pack them together
-                        deme::bodyID_t patchA = granData->triPatchID[triA_ID];
-                        deme::bodyID_t patchB = granData->triPatchID[triB_ID];
-                        patchPairs_mm[inBlockOffset] =
-                            encodeContactType<deme::patchIDPair_t, deme::bodyID_t>(patchA, patchB);
                     }
                 }
             }
@@ -690,16 +679,20 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                         // The chance of offset going out-of-bound is very low, lower than sph--bin CD step, but I put
                         // it here anyway
                         if (inBlockOffset < mmReportOffset_end) {
-                            deme::bodyID_t triA_ID = triIDs[myThreadID];
-                            deme::bodyID_t triB_ID = cur_bodyID;
-                            idTriA_mm[inBlockOffset] = triA_ID;
-                            idTriB_mm[inBlockOffset] = triB_ID;
+                            deme::bodyID_t triA_ID, triB_ID;
+                            if (triIDs[myThreadID] <= cur_bodyID) {
+                                // This branch will be reached, always
+                                triA_ID = triIDs[myThreadID];
+                                triB_ID = cur_bodyID;
+                                idTriA_mm[inBlockOffset] = triA_ID;
+                                idTriB_mm[inBlockOffset] = triB_ID;
+                            } else {
+                                triA_ID = cur_bodyID;
+                                triB_ID = triIDs[myThreadID];
+                                idTriA_mm[inBlockOffset] = triA_ID;
+                                idTriB_mm[inBlockOffset] = triB_ID;
+                            }
                             dType_mm[inBlockOffset] = deme::TRIANGLE_TRIANGLE_CONTACT;
-                            // For mesh-mesh contact: both meshes have patch IDs, pack them together
-                            deme::bodyID_t patchA = granData->triPatchID[triA_ID];
-                            deme::bodyID_t patchB = granData->triPatchID[triB_ID];
-                            patchPairs_mm[inBlockOffset] =
-                                encodeContactType<deme::patchIDPair_t, deme::bodyID_t>(patchA, patchB);
                         }
                     }
                 }
