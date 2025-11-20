@@ -61,6 +61,8 @@ class DEMDynamicThread {
     // dT's one-element buffer of kT-supplied nContacts (as buffer, it's device-only, but I used DualStruct just for
     // convenience...)
     DualStruct<size_t> nContactPairs_buffer = DualStruct<size_t>(0);
+    // Similarly, the nPatchEnabledContacts buffer
+    DualStruct<size_t> nPatchEnabledContactPairs_buffer = DualStruct<size_t>(0);
 
     // Array-used memory size in bytes
     size_t m_approxDeviceBytesUsed = 0;

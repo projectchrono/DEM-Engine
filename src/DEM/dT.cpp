@@ -1998,7 +1998,10 @@ inline void DEMDynamicThread::unpackMyBuffer() {
 
     DEME_GPU_CALL(
         cudaMemcpy(&(solverScratchSpace.numContacts), &nContactPairs_buffer, sizeof(size_t), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(&(solverScratchSpace.numPatchEnabledContacts), &nPatchEnabledContactPairs_buffer,
+                             sizeof(size_t), cudaMemcpyDeviceToDevice));
     solverScratchSpace.numContacts.toHost();
+    solverScratchSpace.numPatchEnabledContacts.toHost();
     // Need to resize those contact event-based arrays before usage
     if (*solverScratchSpace.numContacts > idGeometryA.size() || *solverScratchSpace.numContacts > buffer_size) {
         contactEventArraysResize(*solverScratchSpace.numContacts);

@@ -201,8 +201,12 @@ inline void DEMKinematicThread::unpackMyBuffer() {
 }
 
 inline void DEMKinematicThread::sendToTheirBuffer() {
+    // Send over the sum of contacts
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_nContactPairs, &(solverScratchSpace.numContacts), sizeof(size_t),
                              cudaMemcpyDeviceToDevice));
+    // Send over the sum of patch-enabled contacts
+    DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_nPatchEnabledContacts,
+                             &(solverScratchSpace.numPatchEnabledContacts), sizeof(size_t), cudaMemcpyDeviceToDevice));
     // Resize dT owned buffers before usage
     if (*solverScratchSpace.numContacts > dT->buffer_size) {
         transferArraysResize(*solverScratchSpace.numContacts);
@@ -541,6 +545,7 @@ void DEMKinematicThread::migrateDeviceModifiableInfoToHost() {
 void DEMKinematicThread::packTransferPointers(DEMDynamicThread*& dT) {
     // Set the pointers to dT owned buffers
     granData->pDTOwnedBuffer_nContactPairs = &(dT->nContactPairs_buffer);
+    granData->pDTOwnedBuffer_nPatchEnabledContacts = &(dT->nPatchEnabledContactPairs_buffer);
     granData->pDTOwnedBuffer_idGeometryA = dT->idGeometryA_buffer.data();
     granData->pDTOwnedBuffer_idGeometryB = dT->idGeometryB_buffer.data();
     granData->pDTOwnedBuffer_contactType = dT->contactType_buffer.data();

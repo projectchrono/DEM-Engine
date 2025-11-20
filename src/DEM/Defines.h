@@ -442,6 +442,7 @@ struct DEMDataKT {
 
     // data pointers that is kT's transfer destination
     size_t* pDTOwnedBuffer_nContactPairs = nullptr;
+    size_t* pDTOwnedBuffer_nPatchEnabledContacts = nullptr;
     bodyID_t* pDTOwnedBuffer_idGeometryA = nullptr;
     bodyID_t* pDTOwnedBuffer_idGeometryB = nullptr;
     contact_t* pDTOwnedBuffer_contactType = nullptr;
