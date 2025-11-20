@@ -324,7 +324,8 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                                                                   objSize1[objB], objSize2[objB], objSize3[objB],
                                                                   objNormal[objB], granData->marginSize[objBOwner]);
                 }
-                // Unlike the sphere-X contact case, we do not test against family extra margin here.
+                // Unlike the sphere-X contact case, we do not test against family extra margin here, which is more
+                // lenient and perhaps makes more fake contacts.
                 if (contact_type == deme::TRIANGLE_ANALYTICAL_CONTACT) {
                     idGeoA[myTriGeoReportOffset] = triID;
                     idGeoB[myTriGeoReportOffset] = (deme::bodyID_t)objB;

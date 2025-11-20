@@ -37,7 +37,16 @@ inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
 
     // But we don't have to toDevice granData or dT->granData, and this is because all _buffer arrays don't
-    // particupate kernel computations, so even if their values are fresh only on host, it's fine
+    // particupate kernel computations, so even if their pointers are fresh only on host, it's fine
+}
+
+inline void DEMKinematicThread::meshPatchPairsResize(size_t nMeshInvolvedContactPairs) {
+    // These buffers are on dT
+    DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+    DEME_DEVICE_ARRAY_RESIZE(dT->contactPatchPairs_buffer, nMeshInvolvedContactPairs);
+    granData->pDTOwnedBuffer_contactPatchPairs = dT->contactPatchPairs_buffer.data();
+    // Unset the device change we just made
+    DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
 }
 
 void DEMKinematicThread::calibrateParams() {
@@ -198,6 +207,10 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
     if (*solverScratchSpace.numContacts > dT->buffer_size) {
         transferArraysResize(*solverScratchSpace.numContacts);
     }
+    // Resize the mesh-contact transfer array too
+    if (*solverScratchSpace.numPatchEnabledContacts > dT->contactPatchPairs_buffer.size()) {
+        meshPatchPairsResize(*solverScratchSpace.numPatchEnabledContacts);
+    }
 
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA,
                              (*solverScratchSpace.numContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
@@ -205,6 +218,9 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
                              (*solverScratchSpace.numContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactType, granData->contactType,
                              (*solverScratchSpace.numContacts) * sizeof(contact_t), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactPatchPairs, granData->contactPatchPairs,
+                             (*solverScratchSpace.numPatchEnabledContacts) * sizeof(patchIDPair_t),
+                             cudaMemcpyDeviceToDevice));
     // DEME_MIGRATE_TO_DEVICE(dT->idGeometryA_buffer, dT->streamInfo.device, streamInfo.stream);
     // DEME_MIGRATE_TO_DEVICE(dT->idGeometryB_buffer, dT->streamInfo.device, streamInfo.stream);
     // DEME_MIGRATE_TO_DEVICE(dT->contactType_buffer, dT->streamInfo.device, streamInfo.stream);
@@ -284,7 +300,8 @@ void DEMKinematicThread::workerThread() {
             contactDetection(bin_sphere_kernels, bin_triangle_kernels, sphere_contact_kernels, sphTri_contact_kernels,
                              granData, simParams, solverFlags, verbosity, idGeometryA, idGeometryB, contactType,
                              previous_idGeometryA, previous_idGeometryB, previous_contactType, contactPersistency,
-                             contactMapping, streamInfo.stream, solverScratchSpace, timers, stateParams);
+                             contactPatchPairs, contactMapping, streamInfo.stream, solverScratchSpace, timers,
+                             stateParams);
             CDAccumTimer.End();
 
             timers.GetTimer("Send to dT buffer").start();
@@ -443,6 +460,7 @@ void DEMKinematicThread::packDataPointers() {
     idGeometryB.bindDevicePointer(&(granData->idGeometryB));
     contactType.bindDevicePointer(&(granData->contactType));
     contactPersistency.bindDevicePointer(&(granData->contactPersistency));
+    contactPatchPairs.bindDevicePointer(&(granData->contactPatchPairs));
     previous_idGeometryA.bindDevicePointer(&(granData->previous_idGeometryA));
     previous_idGeometryB.bindDevicePointer(&(granData->previous_idGeometryB));
     previous_contactType.bindDevicePointer(&(granData->previous_contactType));
@@ -457,6 +475,7 @@ void DEMKinematicThread::packDataPointers() {
 
     // Mesh-related
     triOwnerMesh.bindDevicePointer(&(granData->triOwnerMesh));
+    triPatchID.bindDevicePointer(&(granData->triPatchID));
     relPosNode1.bindDevicePointer(&(granData->relPosNode1));
     relPosNode2.bindDevicePointer(&(granData->relPosNode2));
     relPosNode3.bindDevicePointer(&(granData->relPosNode3));
@@ -495,6 +514,7 @@ void DEMKinematicThread::migrateDataToDevice() {
     clumpComponentOffsetExt.toDeviceAsync(streamInfo.stream);
 
     triOwnerMesh.toDeviceAsync(streamInfo.stream);
+    triPatchID.toDeviceAsync(streamInfo.stream);
     relPosNode1.toDeviceAsync(streamInfo.stream);
     relPosNode2.toDeviceAsync(streamInfo.stream);
     relPosNode3.toDeviceAsync(streamInfo.stream);
@@ -525,6 +545,7 @@ void DEMKinematicThread::packTransferPointers(DEMDynamicThread*& dT) {
     granData->pDTOwnedBuffer_idGeometryB = dT->idGeometryB_buffer.data();
     granData->pDTOwnedBuffer_contactType = dT->contactType_buffer.data();
     granData->pDTOwnedBuffer_contactMapping = dT->contactMapping_buffer.data();
+    granData->pDTOwnedBuffer_contactPatchPairs = dT->contactPatchPairs_buffer.data();
 }
 
 void DEMKinematicThread::setSimParams(unsigned char nvXp2,
@@ -661,6 +682,7 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
 
     // Resize to the number of triangle facets
     DEME_DUAL_ARRAY_RESIZE(triOwnerMesh, nTriGM, 0);
+    DEME_DUAL_ARRAY_RESIZE(triPatchID, nTriGM, 0);
     DEME_DUAL_ARRAY_RESIZE(relPosNode1, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(relPosNode2, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(relPosNode3, nTriGM, make_float3(0));
@@ -692,6 +714,7 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
         DEME_DUAL_ARRAY_RESIZE(idGeometryA, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(idGeometryB, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
+        DEME_DUAL_ARRAY_RESIZE(contactPatchPairs, 0, 0);
         if (!solverFlags.isHistoryless) {
             DEME_DUAL_ARRAY_RESIZE(contactPersistency, cnt_arr_size, CONTACT_NOT_PERSISTENT);
             DEME_DUAL_ARRAY_RESIZE(previous_idGeometryA, cnt_arr_size, 0);
@@ -712,11 +735,13 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
                                               const std::vector<unsigned int>& input_ext_obj_family,
                                               const std::vector<unsigned int>& input_mesh_obj_family,
                                               const std::vector<unsigned int>& input_mesh_facet_owner,
+                                              const std::vector<bodyID_t>& input_mesh_facet_patch,
                                               const std::vector<DEMTriangle>& input_mesh_facets,
                                               const ClumpTemplateFlatten& clump_templates,
                                               size_t nExistOwners,
                                               size_t nExistSpheres,
-                                              size_t nExistingFacets) {
+                                              size_t nExistingFacets,
+                                              size_t nExistingMeshPatches) {
     // All the input vectors should have the same length, nClumpTopo
     size_t k = 0;
     std::vector<unsigned int> prescans_comp;
@@ -819,6 +844,7 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
             if (input_mesh_facet_owner.at(k) != this_facet_owner)
                 break;
             triOwnerMesh[nExistingFacets + k] = owner_offset_for_mesh_obj + this_facet_owner;
+            triPatchID[nExistingFacets + k] = nExistingMeshPatches + input_mesh_facet_patch.at(k);
             DEMTriangle this_tri = input_mesh_facets.at(k);
             relPosNode1[nExistingFacets + k] = this_tri.p1;
             relPosNode2[nExistingFacets + k] = this_tri.p2;
@@ -836,6 +862,7 @@ void DEMKinematicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClum
                                        const std::vector<unsigned int>& input_ext_obj_family,
                                        const std::vector<unsigned int>& input_mesh_obj_family,
                                        const std::vector<unsigned int>& input_mesh_facet_owner,
+                                       const std::vector<bodyID_t>& input_mesh_facet_patch,
                                        const std::vector<DEMTriangle>& input_mesh_facets,
                                        const std::vector<notStupidBool_t>& family_mask_matrix,
                                        const ClumpTemplateFlatten& clump_templates) {
@@ -845,13 +872,14 @@ void DEMKinematicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClum
     registerPolicies(family_mask_matrix);
 
     populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, input_mesh_facet_owner,
-                         input_mesh_facets, clump_templates, 0, 0, 0);
+                         input_mesh_facet_patch, input_mesh_facets, clump_templates, 0, 0, 0, 0);
 }
 
 void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                                const std::vector<unsigned int>& input_ext_obj_family,
                                                const std::vector<unsigned int>& input_mesh_obj_family,
                                                const std::vector<unsigned int>& input_mesh_facet_owner,
+                                               const std::vector<bodyID_t>& input_mesh_facet_patch,
                                                const std::vector<DEMTriangle>& input_mesh_facets,
                                                const std::vector<notStupidBool_t>& family_mask_matrix,
                                                const ClumpTemplateFlatten& clump_templates,
@@ -864,7 +892,8 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
                                                unsigned int nExistingObj,
                                                unsigned int nExistingAnalGM) {
     populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, input_mesh_facet_owner,
-                         input_mesh_facets, clump_templates, nExistingOwners, nExistingSpheres, nExistingFacets);
+                         input_mesh_facet_patch, input_mesh_facets, clump_templates, nExistingOwners, nExistingSpheres,
+                         nExistingFacets, nExistingPatches);
 }
 
 void DEMKinematicThread::updatePrevContactArrays(DualStruct<DEMDataDT>& dT_data, size_t nContacts) {

@@ -1252,7 +1252,7 @@ void DEMSolver::initializeGPUArrays() {
         // Analytical objects' initial stats
         m_input_ext_obj_family,
         // Meshed objects' initial stats
-        m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facets,
+        m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facets,
         // Family mask
         m_family_mask_matrix,
         // Templates and misc.
@@ -1302,7 +1302,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // Analytical objects' initial stats
         m_input_ext_obj_family,
         // Meshed objects' initial stats
-        m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facets,
+        m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facets,
         // Family mask
         m_family_mask_matrix,
         // Templates and misc.

@@ -231,8 +231,9 @@ class Logger : private NonCopyable, public Singleton<Logger> {
         cudaError_t res = (code);                                                                                     \
         if (res != cudaSuccess) {                                                                                     \
             DEME_ERROR(                                                                                               \
-                "GPU Error: %s\nYou can check out the troubleshoot section of DEME to see if it helps, or post this " \
-                "error on Chrono's forum https://groups.google.com/g/projectchrono \n",                               \
+                "GPU Error: %s\nYou can check out the troubleshoot section of DEME to see if it helps.\nIf nothing "  \
+                "works, you can discuss this on forum https://groups.google.com/g/projectchrono, and please include " \
+                "a visual rendering of the simulation before crash.\n",                                               \
                 cudaGetErrorString(res));                                                                             \
         }                                                                                                             \
     }

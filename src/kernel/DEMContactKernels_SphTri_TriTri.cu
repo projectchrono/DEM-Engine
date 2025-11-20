@@ -619,13 +619,18 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                         // in these processes could affect the ordering, so I added this superfluous check to be
                         // future-proof.
                         // ----------------------------------------------------------------------------
+                        deme::bodyID_t triA_ID, triB_ID;
                         if (triIDs[bodyA] <= triIDs[bodyB]) {
                             // This branch will be reached, always
-                            idTriA_mm[inBlockOffset] = triIDs[bodyA];
-                            idTriB_mm[inBlockOffset] = triIDs[bodyB];
+                            triA_ID = triIDs[bodyA];
+                            triB_ID = triIDs[bodyB];
+                            idTriA_mm[inBlockOffset] = triA_ID;
+                            idTriB_mm[inBlockOffset] = triB_ID;
                         } else {
-                            idTriA_mm[inBlockOffset] = triIDs[bodyB];
-                            idTriB_mm[inBlockOffset] = triIDs[bodyA];
+                            triA_ID = triIDs[bodyB];
+                            triB_ID = triIDs[bodyA];
+                            idTriA_mm[inBlockOffset] = triA_ID;
+                            idTriB_mm[inBlockOffset] = triB_ID;
                         }
                         dType_mm[inBlockOffset] = deme::TRIANGLE_TRIANGLE_CONTACT;
                     }
@@ -674,8 +679,19 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                         // The chance of offset going out-of-bound is very low, lower than sph--bin CD step, but I put
                         // it here anyway
                         if (inBlockOffset < mmReportOffset_end) {
-                            idTriA_mm[inBlockOffset] = triIDs[myThreadID];
-                            idTriB_mm[inBlockOffset] = cur_bodyID;
+                            deme::bodyID_t triA_ID, triB_ID;
+                            if (triIDs[myThreadID] <= cur_bodyID) {
+                                // This branch will be reached, always
+                                triA_ID = triIDs[myThreadID];
+                                triB_ID = cur_bodyID;
+                                idTriA_mm[inBlockOffset] = triA_ID;
+                                idTriB_mm[inBlockOffset] = triB_ID;
+                            } else {
+                                triA_ID = cur_bodyID;
+                                triB_ID = triIDs[myThreadID];
+                                idTriA_mm[inBlockOffset] = triA_ID;
+                                idTriB_mm[inBlockOffset] = triB_ID;
+                            }
                             dType_mm[inBlockOffset] = deme::TRIANGLE_TRIANGLE_CONTACT;
                         }
                     }

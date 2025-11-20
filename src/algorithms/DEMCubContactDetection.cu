@@ -39,6 +39,20 @@ inline void contactEventArraysResize(size_t nContactPairs,
     granData.toDevice();
 }
 
+inline void meshPatchPairsResize(size_t nMeshInvolvedContactPairs,
+                                 DualArray<patchIDPair_t>& contactPatchPairs,
+                                 DualStruct<DEMDataKT>& granData) {
+    // Note these resizing are automatically on kT's device
+    DEME_DUAL_ARRAY_RESIZE_NOVAL(contactPatchPairs, nMeshInvolvedContactPairs);
+
+    // Re-packing pointers now is automatic
+
+    // It's safe to toDevice even though kT is working now and dT may write to its buffer
+    // This is because all buffer arrays are not used in kernels so their pointers are only meaningfully stored on host,
+    // so writing from host to device won't change the destination where dT writes
+    granData.toDevice();
+}
+
 inline void removeDuplicateContacts(DualStruct<DEMDataKT>& granData,
                                     bodyID_t* idA_sorted,
                                     bodyID_t* idB_sorted,
@@ -157,6 +171,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       DualArray<bodyID_t>& previous_idGeometryB,
                       DualArray<contact_t>& previous_contactType,
                       DualArray<notStupidBool_t>& contactPersistency,
+                      DualArray<patchIDPair_t>& contactPatchPairs,
                       DualArray<contactPairs_t>& contactMapping,
                       cudaStream_t& this_stream,
                       DEMSolverScratchData& scratchPad,
@@ -164,12 +179,14 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       kTStateParams& stateParams) {
     // A dumb check
     if (simParams->nSpheresGM == 0 && simParams->nTriGM == 0) {
-        *(scratchPad.numContacts) = 0;
+        *scratchPad.numContacts = 0;
+        *scratchPad.numPatchEnabledContacts = 0;
         *scratchPad.numPrevContacts = 0;
         *scratchPad.numPrevSpheres = 0;
         *scratchPad.numPrevTriangles = 0;
 
         scratchPad.numContacts.toDevice();
+        scratchPad.numPatchEnabledContacts.toDevice();
         scratchPad.numPrevContacts.toDevice();
         scratchPad.numPrevSpheres.toDevice();
         scratchPad.numPrevTriangles.toDevice();
@@ -508,6 +525,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // displayDeviceArray<binsTriangleTouches_t>(binIDsEachTriTouches, *pNumBinTriTouchPairs);
             // std::cout << "dType: " << std::endl;
             // displayDeviceArray<contact_t>(dType, nTriGeoContact);
+            // std::cout << "mesh patch pairs:" << std::endl;
+            // displayDeviceArray<patchIDPair_t>(patchPairs, nTriGeoContact);
 
             // 4th step: allocate and populate SORTED binIDsEachTriTouches and triIDsEachBinTouches. Note
             // numBinsTriTouchesScan can retire now (analytical contacts also processed).
@@ -781,6 +800,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     (granData->idGeometryB + nSphereGeoContact + nTriGeoContact + nSphereSphereContact);
                 contact_t* dType_sm =
                     (granData->contactType + nSphereGeoContact + nTriGeoContact + nSphereSphereContact);
+                // Mesh patch IDs of SM, MM contacts go after MA contacts
                 // Or tri--tri... They go after tri--sph contacts
                 bodyID_t* idTriA_mm = (granData->idGeometryA + nSphereGeoContact + nTriGeoContact +
                                        nSphereSphereContact + nTriSphereContact);
@@ -1313,6 +1333,45 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     scratchPad.numPrevContacts.toDevice();
     scratchPad.numPrevSpheres.toDevice();
     scratchPad.numPrevTriangles.toDevice();
+
+    // -----------------------------------------------------------------------------------------------------------
+    // At the very end, we prepare the auxiliary mesh-involved contact patch ID arrays, when meshUniversalContact is on.
+    // This auxiliary array does not need to be carried over between CD steps.
+    // -----------------------------------------------------------------------------------------------------------
+    if (solverFlags.meshUniversalContact) {
+        // Allocate mem that is enough...
+        // patchIDPair_t* full_patchID_pairs =
+        //     (patchIDPair_t*)scratchPad.allocateTempVector("full_patchID_pairs", (*scratchPad.numContacts) *
+        //     sizeof(patchIDPair_t));
+        // A flag used to selected mesh-involved contacts
+        // notStupidBool_t* isMeshInvolvedContact =
+        // (notStupidBool_t*)scratchPad.allocateTempVector("isMeshInvolvedContact", (*scratchPad.numContacts) *
+        // sizeof(notStupidBool_t));
+        if ((*scratchPad.numContacts) > contactPatchPairs.size()) {
+            meshPatchPairsResize(*scratchPad.numContacts, contactPatchPairs, granData);
+        }
+
+        // Based on the ready-to-ship (this CD iteration) contact arrays...
+        size_t blocks_needed_for_patch_ids =
+            (*scratchPad.numContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+        if (blocks_needed_for_patch_ids > 0) {
+            extractMeshInvolvedContactPatchIDPairs<<<dim3(blocks_needed_for_patch_ids),
+                                                     dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+                granData->contactPatchPairs,
+                /*isMeshInvolvedContact,*/
+                granData->contactType, granData->idGeometryA, granData->idGeometryB, granData->triPatchID,
+                *scratchPad.numContacts);
+            DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+        }
+        // If meshUniversalContact is on, numPatchEnabledContacts is just numContacts (if not enabled then it is zero)
+        *scratchPad.numPatchEnabledContacts = *scratchPad.numContacts;
+        scratchPad.numPatchEnabledContacts.toDevice();
+    } else {
+        *scratchPad.numPatchEnabledContacts = 0;
+        scratchPad.numPatchEnabledContacts.toDevice();
+    }
+    // std::cout << "contactPatchPairs: " << std::endl;
+    // displayDeviceArray<patchIDPair_t>(granData->contactPatchPairs, *scratchPad.numPatchEnabledContacts);
 }
 
 void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,

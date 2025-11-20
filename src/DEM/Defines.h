@@ -76,21 +76,33 @@ const geoType_t GEO_T_SPHERE = 1;
 const geoType_t GEO_T_TRIANGLE = 2;
 const geoType_t GEO_T_ANALYTICAL = 4;  ///< Analytical components
 
-// Encodes a canonical contact type (min(typeA, typeB) << 4 | max(typeA, typeB))
-// The smaller of the two types is always stored in the high 4 bits
-inline __device__ __host__ constexpr contact_t encodeContactType(geoType_t typeA, geoType_t typeB) {
-    return (typeA < typeB) ? static_cast<contact_t>((typeA << 4) | (typeB & 0xF))
-                           : static_cast<contact_t>((typeB << 4) | (typeA & 0xF));
+// Templated encode function that packs two values into one
+// The smaller value is stored in the high bits, the larger in the low bits
+// For contact types: uses 4 bits per value (8 bits total, stored in contact_t/uint8_t)
+// For patch IDs: uses 32 bits per value (64 bits total, stored in patchIDPair_t/uint64_t)
+template <typename ReturnType = contact_t, typename InputType = geoType_t>
+inline __device__ __host__ constexpr ReturnType encodeContactType(InputType typeA, InputType typeB) {
+    constexpr size_t bits_per_value = sizeof(ReturnType) * DEME_BITS_PER_BYTE / 2;
+    return (typeA < typeB) ? static_cast<ReturnType>((static_cast<ReturnType>(typeA) << bits_per_value) |
+                                                     (static_cast<ReturnType>(typeB) &
+                                                      ((static_cast<ReturnType>(1) << bits_per_value) - 1)))
+                           : static_cast<ReturnType>((static_cast<ReturnType>(typeB) << bits_per_value) |
+                                                     (static_cast<ReturnType>(typeA) &
+                                                      ((static_cast<ReturnType>(1) << bits_per_value) - 1)));
 }
 
-// Decodes typeA (always the smaller of the two, due to canonical ordering)
-inline __device__ __host__ constexpr geoType_t decodeTypeA(contact_t id) {
-    return id >> 4;
+// Templated decode function for typeA (always the smaller of the two, in high bits)
+template <typename InputType = contact_t, typename ReturnType = geoType_t>
+inline __device__ __host__ constexpr ReturnType decodeTypeA(InputType id) {
+    constexpr size_t bits_per_value = sizeof(InputType) * 8 / 2;
+    return static_cast<ReturnType>(id >> bits_per_value);
 }
 
-// Decodes typeB (always the larger of the two)
-inline __device__ __host__ constexpr geoType_t decodeTypeB(contact_t id) {
-    return id & 0xF;
+// Templated decode function for typeB (always the larger of the two, in low bits)
+template <typename InputType = contact_t, typename ReturnType = geoType_t>
+inline __device__ __host__ constexpr ReturnType decodeTypeB(InputType id) {
+    constexpr size_t bits_per_value = sizeof(InputType) * 8 / 2;
+    return static_cast<ReturnType>(id & ((static_cast<InputType>(1) << bits_per_value) - 1));
 }
 
 const contact_t NOT_A_CONTACT = 0;
@@ -319,6 +331,7 @@ struct DEMDataDT {
     bodyID_t* idGeometryB;
     contact_t* contactType;
     contactPairs_t* contactMapping;
+    patchIDPair_t* contactPatchPairs;
 
     // Family mask
     notStupidBool_t* familyMasks;
@@ -411,6 +424,7 @@ struct DEMDataKT {
     clumpComponentOffsetExt_t* clumpComponentOffsetExt;
     bodyID_t* triOwnerMesh;
     bodyID_t* ownerAnalBody;
+    bodyID_t* triPatchID;
     float3* relPosNode1;
     float3* relPosNode2;
     float3* relPosNode3;
@@ -420,6 +434,7 @@ struct DEMDataKT {
     bodyID_t* idGeometryB;
     contact_t* contactType;
     notStupidBool_t* contactPersistency;
+    patchIDPair_t* contactPatchPairs;
     bodyID_t* previous_idGeometryA;
     bodyID_t* previous_idGeometryB;
     contact_t* previous_contactType;
@@ -431,6 +446,7 @@ struct DEMDataKT {
     bodyID_t* pDTOwnedBuffer_idGeometryB = nullptr;
     contact_t* pDTOwnedBuffer_contactType = nullptr;
     contactPairs_t* pDTOwnedBuffer_contactMapping = nullptr;
+    patchIDPair_t* pDTOwnedBuffer_contactPatchPairs = nullptr;
 
     // The collection of pointers to DEM template arrays such as radiiSphere, still useful when there are template info
     // not directly jitified into the kernels
