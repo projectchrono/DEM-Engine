@@ -17,7 +17,10 @@ _moiDefs_;
 _forceModelPrerequisites_;
 
 // Helper function to convert double to float3 for storage
-// Note: This conversion depends on platform endianness and assumes sizeof(double) == 2 * sizeof(float)
+// Note: This conversion depends on platform endianness. On little-endian systems (standard for x86/x64 and NVIDIA GPUs),
+// the least significant bytes of the double are stored in f[0] and most significant in f[1]. This is consistent across
+// the same architecture, ensuring proper round-trip conversion when reading back the data in follow-up kernels.
+// This assumes sizeof(double) == 2 * sizeof(float), which is verified by static_assert.
 inline __device__ float3 doubleToFloat3Storage(double value) {
     static_assert(sizeof(double) == 2 * sizeof(float), 
                   "Double must be exactly twice the size of float for this conversion");
