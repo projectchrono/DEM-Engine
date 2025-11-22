@@ -375,6 +375,23 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
         // Use contactForces, contactPointGeometryAB to store the contact info for the next
         // kernel to compute forces. contactForces is used to store the contact normal. contactPointGeometryA is used to
         // store the (double) contact penetration. contactPointGeometryB is used to store the (double) contact area
+        
+        // Store contact normal (B2A is already a float3)
+        granData->contactForces[myContactID] = B2A;
+        
+        // Store contact penetration depth (double) in contactPointGeometryA (float3)
+        // We cast the double to store it in the first 8 bytes of float3
+        float3 depthStorage;
+        *reinterpret_cast<double*>(&depthStorage) = overlapDepth;
+        depthStorage.z = 0.0f;  // Clear the third component for safety
+        granData->contactPointGeometryA[myContactID] = depthStorage;
+        
+        // Store contact area (double) in contactPointGeometryB (float3)
+        // We cast the double to store it in the first 8 bytes of float3
+        float3 areaStorage;
+        *reinterpret_cast<double*>(&areaStorage) = overlapArea;
+        areaStorage.z = 0.0f;  // Clear the third component for safety
+        granData->contactPointGeometryB[myContactID] = areaStorage;
     }
 }
 
