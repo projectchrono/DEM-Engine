@@ -380,17 +380,29 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
         granData->contactForces[myContactID] = B2A;
         
         // Store contact penetration depth (double) in contactPointGeometryA (float3)
-        // We cast the double to store it in the first 8 bytes of float3
+        // Use a union to safely convert double to float3 storage
+        union {
+            double d;
+            float f[2];
+        } depthConverter;
+        depthConverter.d = overlapDepth;
         float3 depthStorage;
-        *reinterpret_cast<double*>(&depthStorage) = overlapDepth;
-        depthStorage.z = 0.0f;  // Clear the third component for safety
+        depthStorage.x = depthConverter.f[0];
+        depthStorage.y = depthConverter.f[1];
+        depthStorage.z = 0.0f;
         granData->contactPointGeometryA[myContactID] = depthStorage;
         
         // Store contact area (double) in contactPointGeometryB (float3)
-        // We cast the double to store it in the first 8 bytes of float3
+        // Use a union to safely convert double to float3 storage
+        union {
+            double d;
+            float f[2];
+        } areaConverter;
+        areaConverter.d = overlapArea;
         float3 areaStorage;
-        *reinterpret_cast<double*>(&areaStorage) = overlapArea;
-        areaStorage.z = 0.0f;  // Clear the third component for safety
+        areaStorage.x = areaConverter.f[0];
+        areaStorage.y = areaConverter.f[1];
+        areaStorage.z = 0.0f;
         granData->contactPointGeometryB[myContactID] = areaStorage;
     }
 }
