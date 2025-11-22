@@ -16,6 +16,19 @@ _moiDefs_;
 // If the user has some utility functions, they will be included here
 _forceModelPrerequisites_;
 
+// Helper function to convert double to float3 for storage
+// Note: This conversion depends on platform endianness and assumes sizeof(double) == 2 * sizeof(float)
+inline __device__ float3 doubleToFloat3Storage(double value) {
+    static_assert(sizeof(double) == 2 * sizeof(float), 
+                  "Double must be exactly twice the size of float for this conversion");
+    union {
+        double d;
+        float f[2];
+    } converter;
+    converter.d = value;
+    return make_float3(converter.f[0], converter.f[1], 0.0f);
+}
+
 template <typename T1>
 inline __device__ void equipOwnerPosRot(deme::DEMSimParams* simParams,
                                         deme::DEMDataDT* granData,
@@ -380,30 +393,10 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
         granData->contactForces[myContactID] = B2A;
         
         // Store contact penetration depth (double) in contactPointGeometryA (float3)
-        // Use a union to safely convert double to float3 storage
-        union {
-            double d;
-            float f[2];
-        } depthConverter;
-        depthConverter.d = overlapDepth;
-        float3 depthStorage;
-        depthStorage.x = depthConverter.f[0];
-        depthStorage.y = depthConverter.f[1];
-        depthStorage.z = 0.0f;
-        granData->contactPointGeometryA[myContactID] = depthStorage;
+        granData->contactPointGeometryA[myContactID] = doubleToFloat3Storage(overlapDepth);
         
         // Store contact area (double) in contactPointGeometryB (float3)
-        // Use a union to safely convert double to float3 storage
-        union {
-            double d;
-            float f[2];
-        } areaConverter;
-        areaConverter.d = overlapArea;
-        float3 areaStorage;
-        areaStorage.x = areaConverter.f[0];
-        areaStorage.y = areaConverter.f[1];
-        areaStorage.z = 0.0f;
-        granData->contactPointGeometryB[myContactID] = areaStorage;
+        granData->contactPointGeometryB[myContactID] = doubleToFloat3Storage(overlapArea);
     }
 }
 
