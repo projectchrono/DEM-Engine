@@ -1,7 +1,5 @@
-// DEM force computation related custom kernels
 #include <DEM/Defines.h>
 #include <DEMHelperKernels.cuh>
-_kernelIncludes_;
 
 inline __device__ void cleanUpContactForces(size_t thisContact,
                                             deme::DEMSimParams* simParams,

@@ -338,36 +338,44 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
         }
     }
 
-    _forceModelContactWildcardAcq_;
-    if (ContactType != deme::NOT_A_CONTACT) {
-        float3 force = make_float3(0, 0, 0);
-        float3 torque_only_force = make_float3(0, 0, 0);
-        // Local position of the contact point is always a piece of info we require... regardless of force model
-        float3 locCPA = to_float3(contactPnt - AOwnerPos);
-        float3 locCPB = to_float3(contactPnt - BOwnerPos);
-        // Now map this contact point location to bodies' local ref
-        applyOriQToVector3<float, deme::oriQ_t>(locCPA.x, locCPA.y, locCPA.z, AOriQ.w, -AOriQ.x, -AOriQ.y, -AOriQ.z);
-        applyOriQToVector3<float, deme::oriQ_t>(locCPB.x, locCPB.y, locCPB.z, BOriQ.w, -BOriQ.x, -BOriQ.y, -BOriQ.z);
-        // The following part, the force model, is user-specifiable
-        // NOTE!! "force" and all wildcards must be properly set by this piece of code
-        { _DEMForceModel_; }
+    if constexpr (CONTACT_TYPE == deme::SPHERE_SPHERE_CONTACT || CONTACT_TYPE == deme::SPHERE_ANALYTICAL_CONTACT) {
+        _forceModelContactWildcardAcq_;
+        if (ContactType != deme::NOT_A_CONTACT) {
+            float3 force = make_float3(0, 0, 0);
+            float3 torque_only_force = make_float3(0, 0, 0);
+            // Local position of the contact point is always a piece of info we require... regardless of force model
+            float3 locCPA = to_float3(contactPnt - AOwnerPos);
+            float3 locCPB = to_float3(contactPnt - BOwnerPos);
+            // Now map this contact point location to bodies' local ref
+            applyOriQToVector3<float, deme::oriQ_t>(locCPA.x, locCPA.y, locCPA.z, AOriQ.w, -AOriQ.x, -AOriQ.y,
+                                                    -AOriQ.z);
+            applyOriQToVector3<float, deme::oriQ_t>(locCPB.x, locCPB.y, locCPB.z, BOriQ.w, -BOriQ.x, -BOriQ.y,
+                                                    -BOriQ.z);
+            // The following part, the force model, is user-specifiable
+            // NOTE!! "force" and all wildcards must be properly set by this piece of code
+            { _DEMForceModel_; }
 
-        // Write contact location values back to global memory
-        _contactInfoWrite_;
+            // Write contact location values back to global memory
+            _contactInfoWrite_;
 
-        // If force model modifies owner wildcards, write them back here
-        _forceModelOwnerWildcardWrite_;
+            // If force model modifies owner wildcards, write them back here
+            _forceModelOwnerWildcardWrite_;
 
-        // Optionally, the forces can be reduced to acc right here (may be faster)
-        _forceCollectInPlaceStrat_;
-    } else {
-        // The contact is no longer active, so we need to destroy its contact history recording
-        _forceModelContactWildcardDestroy_;
+            // Optionally, the forces can be reduced to acc right here (may be faster)
+            _forceCollectInPlaceStrat_;
+        } else {
+            // The contact is no longer active, so we need to destroy its contact history recording
+            _forceModelContactWildcardDestroy_;
+        }
+
+        // Updated contact wildcards need to be write back to global mem. It is here because contact wildcard may need
+        // to be destroyed for non-contact, so it has to go last.
+        _forceModelContactWildcardWrite_;
+    } else {  // else, another follow-up kernel is needed to compute force
+        // Use contactForces, contactPointGeometryAB to store the contact info for the next
+        // kernel to compute forces. contactForces is used to store the contact normal. contactPointGeometryA is used to
+        // store the (double) contact penetration. contactPointGeometryB is used to store the (double) contact area
     }
-
-    // Updated contact wildcards need to be write back to global mem. It is here because contact wildcard may need
-    // to be destroyed for non-contact, so it has to go last.
-    _forceModelContactWildcardWrite_;
 }
 
 // 5 specialized kernels for different contact types

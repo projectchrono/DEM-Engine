@@ -31,12 +31,12 @@ set(algorithms_headers
 )
 
 set(algorithms_sources
-	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubWrappers.cu 
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubForceCollection.cu
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubInstantiations.cu
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubContactDetection.cu
-	${CMAKE_CURRENT_SOURCE_DIR}/DEMDynamicMisc.cu
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubWrappers.cu 
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMKinematicMisc.cu
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMDynamicMisc.cu
 )
 
 target_sources(

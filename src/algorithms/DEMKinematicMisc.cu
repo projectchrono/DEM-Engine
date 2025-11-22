@@ -174,27 +174,27 @@ __global__ void extractMeshInvolvedContactPatchIDPairs(deme::patchIDPair_t* cont
                                                        size_t nContacts) {
     deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContacts) {
+        deme::bodyID_t bodyA = idGeometryA[myID];
+        deme::bodyID_t bodyB = idGeometryB[myID];
         switch (contactType[myID]) {
             case deme::SPHERE_TRIANGLE_CONTACT: {
-                deme::bodyID_t bodyB = idGeometryB[myID];
                 deme::bodyID_t patchB = triPatchID[bodyB];
-                // For sphere-triangle contact: triangle has patch ID, sphere is assumed 0
+                // For sphere-triangle contact: triangle has patch ID, sphere does not but its geoID serves the same
+                // purpose
                 contactPatchPairs[myID] = deme::encodeContactType<deme::patchIDPair_t, deme::bodyID_t>(
-                    0, patchB);  // Input bodyID_t, return patchIDPair_t
+                    bodyA, patchB);  // Input bodyID_t, return patchIDPair_t
                 // isMeshInvolvedContact[myID] = 1;
                 break;
             }
             case deme::TRIANGLE_ANALYTICAL_CONTACT: {
-                deme::bodyID_t bodyA = idGeometryA[myID];
                 deme::bodyID_t patchA = triPatchID[bodyA];
-                // For mesh-analytical contact: mesh has patch ID, analytical object is assumed 0
-                contactPatchPairs[myID] = deme::encodeContactType<deme::patchIDPair_t, deme::bodyID_t>(patchA, 0);
+                // For mesh-analytical contact: mesh has patch ID, analytical object does not but its geoID serves the
+                // same purpose
+                contactPatchPairs[myID] = deme::encodeContactType<deme::patchIDPair_t, deme::bodyID_t>(patchA, bodyB);
                 // isMeshInvolvedContact[myID] = 1;
                 break;
             }
             case deme::TRIANGLE_TRIANGLE_CONTACT: {
-                deme::bodyID_t bodyA = idGeometryA[myID];
-                deme::bodyID_t bodyB = idGeometryB[myID];
                 deme::bodyID_t patchA = triPatchID[bodyA];
                 deme::bodyID_t patchB = triPatchID[bodyB];
                 // For triangle-triangle contact: both triangles have patch IDs

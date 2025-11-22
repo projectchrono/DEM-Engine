@@ -536,7 +536,8 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
         DEME_DUAL_ARRAY_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
         DEME_DUAL_ARRAY_RESIZE(contactPatchPairs, 0, 0);
 
-        if (!solverFlags.useNoContactRecord) {
+        // meshUniversalContact case uses these arrays to temp store
+        if (!solverFlags.useNoContactRecord || solverFlags.meshUniversalContact) {
             DEME_DUAL_ARRAY_RESIZE(contactForces, cnt_arr_size, make_float3(0));
             DEME_DUAL_ARRAY_RESIZE(contactTorque_convToForce, cnt_arr_size, make_float3(0));
             DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, cnt_arr_size, make_float3(0));
@@ -1969,7 +1970,9 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     DEME_DUAL_ARRAY_RESIZE(idGeometryA, nContactPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(idGeometryB, nContactPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(contactType, nContactPairs, NOT_A_CONTACT);
-    if (!solverFlags.useNoContactRecord) {
+
+    // meshUniversalContact case uses these arrays to temp store
+    if (!solverFlags.useNoContactRecord || solverFlags.meshUniversalContact) {
         DEME_DUAL_ARRAY_RESIZE(contactForces, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactTorque_convToForce, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, nContactPairs, make_float3(0));
@@ -2224,6 +2227,27 @@ inline void DEMDynamicThread::dispatchCalcForceKernels(
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
+inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
+    const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountMap,
+    const std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>&
+        typeKernelMap) {
+    // For each contact type that exists, check if it is patch(mesh)-related type...
+    for (size_t i = 0; i < m_numExistingTypes; i++) {
+        contact_t contact_type = existingContactTypes[i];
+        if (contact_type == SPHERE_ANALYTICAL_CONTACT || contact_type == TRIANGLE_TRIANGLE_CONTACT ||
+            contact_type == TRIANGLE_ANALYTICAL_CONTACT) {
+            const auto& start_count = typeStartCountMap.at(contact_type);
+            // Offset and count being contactPairs_t is very important, as CUDA kernel arguments cannot safely
+            // implicitly convert type (from size_t to unsigned int, for example)
+            contactPairs_t startOffset = start_count.first;
+            contactPairs_t count = start_count.second;
+
+            // Vote for the contact direction; voting power depends on the contact area
+        }
+    }
+    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+}
+
 void DEMDynamicThread::calculateForces() {
     // Reset force (acceleration) arrays for this time step
     size_t nContactPairs = *solverScratchSpace.numContacts;
@@ -2241,8 +2265,9 @@ void DEMDynamicThread::calculateForces() {
             .launch(&simParams, &granData);
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        // prepareForceArrays needs to clear contact force arrays, only if the user asks us to record contact forces.
-        // So...
+        // prepareForceArrays needs to clear contact force arrays, only if the user asks us to record contact forces. If
+        // meshUniversalContact is on, then although we use these arrays, no need to initialize them to 0, because the
+        // kernel will overwrite them anyway.
         if (!solverFlags.useNoContactRecord) {
             prep_force_kernels->kernel("prepareForceArrays")
                 .instantiate()
@@ -2260,6 +2285,11 @@ void DEMDynamicThread::calculateForces() {
 
         // Call specialized kernels for each contact type that exists
         dispatchCalcForceKernels(typeStartCountMap, contactTypeKernelMap);
+        // Note: dispatchCalcForceKernels calculates forces induced by the most basic primitives, aka spheres,
+        // triangles... However, for contacts to be truely physical, sometimes such contact pairs within a patch (which
+        // marks a convex component of a owner) need to vote to decide the true contact. This is where the second step
+        // comes in.
+        dispatchPatchBasedForceCorrections(typeStartCountMap, contactTypeKernelMap);
 
         // displayDeviceFloat3(granData->contactForces, nContactPairs);
         // displayDeviceArray<contact_t>(granData->contactType, nContactPairs);

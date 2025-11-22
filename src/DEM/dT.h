@@ -699,6 +699,10 @@ class DEMDynamicThread {
         const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountMap,
         const std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>&
             typeKernelMap);
+    inline void dispatchPatchBasedForceCorrections(
+        const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountMap,
+        const std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>&
+            typeKernelMap);
     // Update clump-based acceleration array based on sphere-based force array
     void calculateForces();
 

@@ -363,7 +363,7 @@ class DEMSolverScratchData {
   public:
     // Number of contacts in this CD step
     DualStruct<size_t> numContacts = DualStruct<size_t>(0);
-    // Number of contact pairs that involve convex patch identification
+    // Number of contact pairs that involve convex patch identification (most useful in meshes)
     DualStruct<size_t> numPatchEnabledContacts = DualStruct<size_t>(0);
     // Number of contacts in the previous CD step
     DualStruct<size_t> numPrevContacts = DualStruct<size_t>(0);
