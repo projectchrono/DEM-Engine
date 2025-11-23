@@ -333,6 +333,12 @@ struct DEMDataDT {
     contactPairs_t* contactMapping;
     patchIDPair_t* contactPatchPairs;
 
+    // NEW: Separate patch IDs and mapping arrays
+    bodyID_t* idPatchA;
+    bodyID_t* idPatchB;
+    contactPairs_t* patchToGeomMapA;
+    contactPairs_t* patchToGeomMapB;
+
     // Family mask
     notStupidBool_t* familyMasks;
     // Extra margin size
@@ -440,6 +446,12 @@ struct DEMDataKT {
     contact_t* previous_contactType;
     contactPairs_t* contactMapping;
 
+    // NEW: Separate patch IDs and mapping arrays (kT work arrays)
+    bodyID_t* idPatchA;
+    bodyID_t* idPatchB;
+    contactPairs_t* patchToGeomMapA;
+    contactPairs_t* patchToGeomMapB;
+
     // data pointers that is kT's transfer destination
     size_t* pDTOwnedBuffer_nContactPairs = nullptr;
     size_t* pDTOwnedBuffer_nPatchEnabledContacts = nullptr;
@@ -448,6 +460,12 @@ struct DEMDataKT {
     contact_t* pDTOwnedBuffer_contactType = nullptr;
     contactPairs_t* pDTOwnedBuffer_contactMapping = nullptr;
     patchIDPair_t* pDTOwnedBuffer_contactPatchPairs = nullptr;
+
+    // NEW: Buffer pointers for separate patch arrays
+    bodyID_t* pDTOwnedBuffer_idPatchA = nullptr;
+    bodyID_t* pDTOwnedBuffer_idPatchB = nullptr;
+    contactPairs_t* pDTOwnedBuffer_patchToGeomMapA = nullptr;
+    contactPairs_t* pDTOwnedBuffer_patchToGeomMapB = nullptr;
 
     // The collection of pointers to DEM template arrays such as radiiSphere, still useful when there are template info
     // not directly jitified into the kernels

@@ -54,6 +54,13 @@ void DEMDynamicThread::packDataPointers() {
     idGeometryB.bindDevicePointer(&(granData->idGeometryB));
     contactType.bindDevicePointer(&(granData->contactType));
     contactPatchPairs.bindDevicePointer(&(granData->contactPatchPairs));
+    
+    // NEW: Bind separate patch ID and mapping array pointers
+    idPatchA.bindDevicePointer(&(granData->idPatchA));
+    idPatchB.bindDevicePointer(&(granData->idPatchB));
+    patchToGeomMapA.bindDevicePointer(&(granData->patchToGeomMapA));
+    patchToGeomMapB.bindDevicePointer(&(granData->patchToGeomMapB));
+    
     familyMaskMatrix.bindDevicePointer(&(granData->familyMasks));
     familyExtraMarginSize.bindDevicePointer(&(granData->familyExtraMarginSize));
 
@@ -1988,6 +1995,13 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
 
 inline void DEMDynamicThread::meshPatchPairsResize(size_t nPatchPairs) {
     DEME_DUAL_ARRAY_RESIZE(contactPatchPairs, nPatchPairs, 0);
+    
+    // NEW: Resize separate patch ID and mapping arrays
+    DEME_DUAL_ARRAY_RESIZE(idPatchA, nPatchPairs, 0);
+    DEME_DUAL_ARRAY_RESIZE(idPatchB, nPatchPairs, 0);
+    DEME_DUAL_ARRAY_RESIZE(patchToGeomMapA, nPatchPairs, 0);
+    DEME_DUAL_ARRAY_RESIZE(patchToGeomMapB, nPatchPairs, 0);
+    
     // Re-packing pointers to device now is automatic
     // Sync pointers to device can be delayed... we'll only need to do that before kernel calls
 }
@@ -2018,6 +2032,17 @@ inline void DEMDynamicThread::unpackMyBuffer() {
                              *solverScratchSpace.numContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->contactPatchPairs, contactPatchPairs_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(patchIDPair_t), cudaMemcpyDeviceToDevice));
+    
+    // NEW: Unpack separate patch IDs and mapping arrays
+    DEME_GPU_CALL(cudaMemcpy(granData->idPatchA, idPatchA_buffer.data(),
+                             *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->idPatchB, idPatchB_buffer.data(),
+                             *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->patchToGeomMapA, patchToGeomMapA_buffer.data(),
+                             *solverScratchSpace.numContacts * sizeof(contactPairs_t), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->patchToGeomMapB, patchToGeomMapB_buffer.data(),
+                             *solverScratchSpace.numContacts * sizeof(contactPairs_t), cudaMemcpyDeviceToDevice));
+    
     if (!solverFlags.isHistoryless) {
         // Note we don't have to use dedicated memory space for unpacking contactMapping_buffer contents, because we
         // only use it once per kT update, at the time of unpacking. So let us just use a temp vector to store it.

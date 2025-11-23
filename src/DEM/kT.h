@@ -205,6 +205,17 @@ class DEMKinematicThread {
     DualArray<patchIDPair_t> contactPatchPairs =
         DualArray<patchIDPair_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
+    // NEW: Separate patch IDs for contact pairs (instead of combined patchIDPair_t)
+    // These arrays store patch IDs for contacts involving patches (mesh-based contacts)
+    // They are potentially smaller in size than idGeometryA/B arrays
+    DualArray<bodyID_t> idPatchA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> idPatchB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    
+    // Mapping arrays: index from idPatch arrays into idGeometry arrays
+    // For each element in idPatchA/B, these provide the corresponding index in idGeometryA/B
+    DualArray<contactPairs_t> patchToGeomMapA = DualArray<contactPairs_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<contactPairs_t> patchToGeomMapB = DualArray<contactPairs_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+
     // kT's timers
     std::vector<std::string> timer_names = {"Discretize domain",      "Find contact pairs", "Build history map",
                                             "Unpack updates from dT", "Send to dT buffer",  "Wait for dT update"};
