@@ -1371,7 +1371,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // This ensures that when dT does reduce-by-key on contactPatchPairs, the keys are sorted
         if (*scratchPad.numContacts > 0) {
             // First, identify the contact type segments using run-length encoding
-            // Maximum number of contact types (5 main types: sph-sph, sph-tri, sph-anal, tri-tri, tri-anal)
+            // Maximum number of contact types (5 main types: sph-sph, sph-tri, sph-anal, tri-tri, tri-anal,
+            // but we allocate 16 to provide a safety buffer for future extensions)
             constexpr size_t MAX_CONTACT_TYPES = 16;
             contact_t* unique_types = (contact_t*)scratchPad.allocateTempVector("unique_types", MAX_CONTACT_TYPES * sizeof(contact_t));
             size_t* type_counts = (size_t*)scratchPad.allocateTempVector("type_counts", MAX_CONTACT_TYPES * sizeof(size_t));
@@ -1406,7 +1407,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     if (count > 1) { // Only sort if segment has more than 1 element
                         size_t segment_bytes = count * sizeof(patchIDPair_t);
                         
-                        // Sort idGeometryA with contactPatchPairs
+                        // First sort: get sorted keys and sort idGeometryA
                         DEME_GPU_CALL(cudaMemcpy(patchPairs_keys + offset, granData->contactPatchPairs + offset,
                                                 segment_bytes, cudaMemcpyDeviceToDevice));
                         cubDEMSortByKeys<patchIDPair_t, bodyID_t>(
@@ -1414,15 +1415,17 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                             granData->idGeometryA + offset, idA_sorted + offset,
                             count, this_stream, scratchPad);
                         
-                        // Sort idGeometryB with contactPatchPairs (using original keys again)
+                        // Second sort: sort idGeometryB using original keys
+                        // Note: This will overwrite patchPairs_sorted but produce the same sorted key order
                         DEME_GPU_CALL(cudaMemcpy(patchPairs_keys + offset, granData->contactPatchPairs + offset,
                                                 segment_bytes, cudaMemcpyDeviceToDevice));
                         cubDEMSortByKeys<patchIDPair_t, bodyID_t>(
                             patchPairs_keys + offset, patchPairs_sorted + offset,
                             granData->idGeometryB + offset, idB_sorted + offset,
                             count, this_stream, scratchPad);
+                        // patchPairs_sorted now contains the final sorted keys (same as from first sort due to stable sort)
                     } else if (count == 1) {
-                        // Just copy single elements
+                        // Just copy single elements (no sorting needed)
                         DEME_GPU_CALL(cudaMemcpy(patchPairs_sorted + offset, granData->contactPatchPairs + offset,
                                                 sizeof(patchIDPair_t), cudaMemcpyDeviceToDevice));
                         DEME_GPU_CALL(cudaMemcpy(idA_sorted + offset, granData->idGeometryA + offset,
