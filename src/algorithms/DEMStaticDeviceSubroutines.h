@@ -39,6 +39,16 @@ void cubSumReduceByKey(T1* d_keys_in,
                        cudaStream_t& this_stream,
                        DEMSolverScratchData& scratchPad);
 
+// Special version for float3 values
+void cubSumReduceByKeyFloat3(patchIDPair_t* d_keys_in,
+                             patchIDPair_t* d_unique_out,
+                             float3* d_vals_in,
+                             float3* d_aggregates_out,
+                             size_t* d_num_out,
+                             size_t n,
+                             cudaStream_t& this_stream,
+                             DEMSolverScratchData& scratchPad);
+
 template <typename T1>
 void cubMaxReduce(T1* d_in, T1* d_out, size_t n, cudaStream_t& this_stream, DEMSolverScratchData& scratchPad);
 template <typename T1, typename T2>

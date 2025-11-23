@@ -2243,6 +2243,67 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
             contactPairs_t count = start_count.second;
 
             // Vote for the contact direction; voting power depends on the contact area
+            if (count > 0) {
+                // Allocate temporary arrays for the voting process
+                float3* weightedNormals = (float3*)solverScratchSpace.allocateTempVector(
+                    "weightedNormals", count * sizeof(float3));
+                double* areas = (double*)solverScratchSpace.allocateTempVector(
+                    "areas", count * sizeof(double));
+                
+                // Allocate arrays for reduce-by-key results
+                patchIDPair_t* uniqueKeys = (patchIDPair_t*)solverScratchSpace.allocateTempVector(
+                    "uniqueKeys", count * sizeof(patchIDPair_t));
+                float3* votedWeightedNormals = (float3*)solverScratchSpace.allocateTempVector(
+                    "votedWeightedNormals", count * sizeof(float3));
+                double* totalAreas = (double*)solverScratchSpace.allocateTempVector(
+                    "totalAreas", count * sizeof(double));
+                size_t* numUniqueKeys = (size_t*)solverScratchSpace.allocateTempVector(
+                    "numUniqueKeys", sizeof(size_t));
+                
+                // Step 1: Prepare weighted normals and areas
+                size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+                patch_voting_kernels->kernel("prepareWeightedNormalsForVoting")
+                    .instantiate()
+                    .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+                    .launch(&granData, weightedNormals, areas, startOffset, count);
+                DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+                
+                // Step 2: Reduce-by-key for weighted normals (sum)
+                // Get the keys array segment for this contact type
+                patchIDPair_t* keys = granData->contactPatchPairs + startOffset;
+                cubSumReduceByKeyFloat3(keys, uniqueKeys, weightedNormals, votedWeightedNormals,
+                                       numUniqueKeys, count, streamInfo.stream, solverScratchSpace);
+                
+                // Step 3: Reduce-by-key for areas (sum)
+                // Need to use keys again with a different output for unique keys
+                patchIDPair_t* uniqueKeys2 = (patchIDPair_t*)solverScratchSpace.allocateTempVector(
+                    "uniqueKeys2", count * sizeof(patchIDPair_t));
+                size_t* numUniqueKeys2 = (size_t*)solverScratchSpace.allocateTempVector(
+                    "numUniqueKeys2", sizeof(size_t));
+                cubSumReduceByKey<patchIDPair_t, double>(keys, uniqueKeys2, areas, totalAreas,
+                                                         numUniqueKeys2, count, streamInfo.stream, 
+                                                         solverScratchSpace);
+                
+                // Step 4: Normalize the voted normals by total area and scatter back to original positions
+                // Note: numUniqueKeys and numUniqueKeys2 should be the same
+                blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+                patch_voting_kernels->kernel("normalizeAndScatterVotedNormals")
+                    .instantiate()
+                    .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+                    .launch(keys, uniqueKeys, votedWeightedNormals, totalAreas, 
+                           granData->contactTorque_convToForce, numUniqueKeys, startOffset, count);
+                DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+                
+                // Clean up temporary arrays
+                solverScratchSpace.finishUsingTempVector("weightedNormals");
+                solverScratchSpace.finishUsingTempVector("areas");
+                solverScratchSpace.finishUsingTempVector("uniqueKeys");
+                solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
+                solverScratchSpace.finishUsingTempVector("totalAreas");
+                solverScratchSpace.finishUsingTempVector("numUniqueKeys");
+                solverScratchSpace.finishUsingTempVector("uniqueKeys2");
+                solverScratchSpace.finishUsingTempVector("numUniqueKeys2");
+            }
         }
     }
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -2675,6 +2736,11 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
         collect_force_kernels = std::make_shared<jitify::Program>(std::move(
             JitHelper::buildProgram("DEMCollectForceKernels_Compact",
                                     JitHelper::KERNEL_DIR / "DEMCollectForceKernels_Compact.cu", Subs, JitifyOptions)));
+    }
+    // Patch-based voting kernels for mesh contact correction
+    {
+        patch_voting_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMPatchVotingKernels", JitHelper::KERNEL_DIR / "DEMPatchVotingKernels.cu", Subs, JitifyOptions)));
     }
     // Then integration kernels
     {

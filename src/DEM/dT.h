@@ -750,6 +750,7 @@ class DEMDynamicThread {
     std::shared_ptr<jitify::Program> prep_force_kernels;
     std::shared_ptr<jitify::Program> cal_force_kernels;
     std::shared_ptr<jitify::Program> collect_force_kernels;
+    std::shared_ptr<jitify::Program> patch_voting_kernels;
     std::shared_ptr<jitify::Program> integrator_kernels;
     // std::shared_ptr<jitify::Program> quarry_stats_kernels;
     std::shared_ptr<jitify::Program> mod_kernels;

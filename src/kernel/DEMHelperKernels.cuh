@@ -442,4 +442,19 @@ inline __device__ float3 doubleToFloat3Storage(double value) {
     return make_float3(converter.f[0], converter.f[1], 0.0f);
 }
 
+// Helper function to extract double from float3 storage
+// This is the reverse operation of doubleToFloat3Storage
+inline __device__ double float3StorageToDouble(const float3& storage) {
+    static_assert(
+        sizeof(double) == 2 * sizeof(float),
+        "Double must be exactly twice the size of float on this system for this conversion to work correctly.");
+    union {
+        double d;
+        float f[2];
+    } converter;
+    converter.f[0] = storage.x;
+    converter.f[1] = storage.y;
+    return converter.d;
+}
+
 #endif
