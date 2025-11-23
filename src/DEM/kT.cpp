@@ -576,6 +576,12 @@ void DEMKinematicThread::packTransferPointers(DEMDynamicThread*& dT) {
     granData->pDTOwnedBuffer_contactType = dT->contactType_buffer.data();
     granData->pDTOwnedBuffer_contactMapping = dT->contactMapping_buffer.data();
     granData->pDTOwnedBuffer_contactPatchPairs = dT->contactPatchPairs_buffer.data();
+    
+    // NEW: Set pointers for separate patch arrays
+    granData->pDTOwnedBuffer_idPatchA = dT->idPatchA_buffer.data();
+    granData->pDTOwnedBuffer_idPatchB = dT->idPatchB_buffer.data();
+    granData->pDTOwnedBuffer_patchToGeomMapA = dT->patchToGeomMapA_buffer.data();
+    granData->pDTOwnedBuffer_patchToGeomMapB = dT->patchToGeomMapB_buffer.data();
 }
 
 void DEMKinematicThread::setSimParams(unsigned char nvXp2,
@@ -745,6 +751,13 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
         DEME_DUAL_ARRAY_RESIZE(idGeometryB, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
         DEME_DUAL_ARRAY_RESIZE(contactPatchPairs, 0, 0);
+        
+        // NEW: Initialize separate patch ID and mapping arrays
+        DEME_DUAL_ARRAY_RESIZE(idPatchA, 0, 0);
+        DEME_DUAL_ARRAY_RESIZE(idPatchB, 0, 0);
+        DEME_DUAL_ARRAY_RESIZE(patchToGeomMapA, 0, 0);
+        DEME_DUAL_ARRAY_RESIZE(patchToGeomMapB, 0, 0);
+        
         if (!solverFlags.isHistoryless) {
             DEME_DUAL_ARRAY_RESIZE(contactPersistency, cnt_arr_size, CONTACT_NOT_PERSISTENT);
             DEME_DUAL_ARRAY_RESIZE(previous_idGeometryA, cnt_arr_size, 0);
