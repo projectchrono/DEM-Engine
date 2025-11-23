@@ -21,17 +21,34 @@ __global__ void prepareWeightedNormalsForVoting(deme::DEMDataDT* granData,
         double area = float3StorageToDouble(areaStorage);
         
         // Compute weighted normal (normal * area)
-        weightedNormals[idx].x = normal.x * area;
-        weightedNormals[idx].y = normal.y * area;
-        weightedNormals[idx].z = normal.z * area;
+        weightedNormals[idx] = make_float3(normal.x * area, normal.y * area, normal.z * area);
         
         // Store area for reduction
         areas[idx] = area;
     }
 }
 
+// Device function for binary search to find key index
+__device__ inline size_t binarySearchKey(deme::patchIDPair_t* keys, size_t count, deme::patchIDPair_t target) {
+    size_t left = 0;
+    size_t right = count;
+    
+    while (left < right) {
+        size_t mid = left + (right - left) / 2;
+        if (keys[mid] < target) {
+            left = mid + 1;
+        } else if (keys[mid] > target) {
+            right = mid;
+        } else {
+            return mid;
+        }
+    }
+    return count; // Not found
+}
+
 // Kernel to normalize the voted normals by dividing by total area and scatter to output
 // If total area is 0, set result to (0,0,0)
+// Assumes uniqueKeys are sorted (CUB's ReduceByKey maintains sort order)
 __global__ void normalizeAndScatterVotedNormals(deme::patchIDPair_t* originalKeys,
                                                  deme::patchIDPair_t* uniqueKeys,
                                                  float3* votedWeightedNormals,
@@ -45,22 +62,20 @@ __global__ void normalizeAndScatterVotedNormals(deme::patchIDPair_t* originalKey
         // Get the key for this contact
         deme::patchIDPair_t myKey = originalKeys[idx];
         
-        // Find the corresponding unique key (linear search - could be optimized with binary search if sorted)
+        // Find the corresponding unique key using binary search
         size_t numUnique = *numUniqueKeys;
-        float3 votedNormal = make_float3(0.0f, 0.0f, 0.0f);
+        size_t keyIdx = binarySearchKey(uniqueKeys, numUnique, myKey);
         
-        for (size_t i = 0; i < numUnique; i++) {
-            if (uniqueKeys[i] == myKey) {
-                double totalArea = totalAreas[i];
-                if (totalArea > 0.0) {
-                    // Normalize by dividing by total area
-                    votedNormal.x = votedWeightedNormals[i].x / totalArea;
-                    votedNormal.y = votedWeightedNormals[i].y / totalArea;
-                    votedNormal.z = votedWeightedNormals[i].z / totalArea;
-                }
-                // else: votedNormal remains (0,0,0)
-                break;
+        float3 votedNormal = make_float3(0.0f, 0.0f, 0.0f);
+        if (keyIdx < numUnique) {
+            double totalArea = totalAreas[keyIdx];
+            if (totalArea > 0.0) {
+                // Normalize by dividing by total area
+                votedNormal.x = votedWeightedNormals[keyIdx].x / totalArea;
+                votedNormal.y = votedWeightedNormals[keyIdx].y / totalArea;
+                votedNormal.z = votedWeightedNormals[keyIdx].z / totalArea;
             }
+            // else: votedNormal remains (0,0,0)
         }
         
         // Write to output at the correct position

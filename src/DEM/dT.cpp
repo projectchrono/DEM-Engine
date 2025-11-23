@@ -2275,13 +2275,9 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                        numUniqueKeys, count, streamInfo.stream, solverScratchSpace);
                 
                 // Step 3: Reduce-by-key for areas (sum)
-                // Need to use keys again with a different output for unique keys
-                patchIDPair_t* uniqueKeys2 = (patchIDPair_t*)solverScratchSpace.allocateTempVector(
-                    "uniqueKeys2", count * sizeof(patchIDPair_t));
-                size_t* numUniqueKeys2 = (size_t*)solverScratchSpace.allocateTempVector(
-                    "numUniqueKeys2", sizeof(size_t));
-                cubSumReduceByKey<patchIDPair_t, double>(keys, uniqueKeys2, areas, totalAreas,
-                                                         numUniqueKeys2, count, streamInfo.stream, 
+                // Reuse the same keys input - uniqueKeys will be populated again but should be identical
+                cubSumReduceByKey<patchIDPair_t, double>(keys, uniqueKeys, areas, totalAreas,
+                                                         numUniqueKeys, count, streamInfo.stream, 
                                                          solverScratchSpace);
                 
                 // Step 4: Normalize the voted normals by total area and scatter back to original positions
@@ -2301,8 +2297,6 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
                 solverScratchSpace.finishUsingTempVector("totalAreas");
                 solverScratchSpace.finishUsingTempVector("numUniqueKeys");
-                solverScratchSpace.finishUsingTempVector("uniqueKeys2");
-                solverScratchSpace.finishUsingTempVector("numUniqueKeys2");
             }
         }
     }
