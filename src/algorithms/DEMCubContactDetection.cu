@@ -1385,6 +1385,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 (patchIDPair_t*)scratchPad.allocateTempVector("patchPairs_keys", patch_arr_bytes);
 
             // Sort each segment
+            // Note: We sort the same keys multiple times with different value arrays. An alternative approach
+            // would be to sort once with an index array, then use a gather kernel to rearrange all arrays.
+            // However, CUB's RadixSort is highly optimized, and for the typical segment sizes here,
+            // multiple sorts may be competitive with or faster than index-based gather operations.
             size_t offset = 0;
             for (size_t i = 0; i < numTypes; i++) {
                 size_t count = host_type_counts[i];
