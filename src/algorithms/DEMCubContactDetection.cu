@@ -1367,6 +1367,18 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             size_t id_arr_bytes = (*scratchPad.numContacts) * sizeof(bodyID_t);
             bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector("idA_sorted", id_arr_bytes);
             bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector("idB_sorted", id_arr_bytes);
+            size_t type_arr_bytes = (*scratchPad.numContacts) * sizeof(contact_t);
+            contact_t* contactType_sorted =
+                (contact_t*)scratchPad.allocateTempVector("contactType_sorted_patch", type_arr_bytes);
+            
+            // Allocate for contactMapping if not historyless
+            contactPairs_t* contactMapping_sorted = nullptr;
+            size_t mapping_arr_bytes = 0;
+            if (!solverFlags.isHistoryless) {
+                mapping_arr_bytes = (*scratchPad.numContacts) * sizeof(contactPairs_t);
+                contactMapping_sorted =
+                    (contactPairs_t*)scratchPad.allocateTempVector("contactMapping_sorted_patch", mapping_arr_bytes);
+            }
 
             // Allocate temp array to preserve original keys for each sort
             patchIDPair_t* patchPairs_keys =
@@ -1379,21 +1391,37 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 if (count > 1) {  // Only sort if segment has more than 1 element
                     size_t segment_bytes = count * sizeof(patchIDPair_t);
 
-                    // First sort: get sorted keys and sort idGeometryA
+                    // Sort idGeometryA with contactPatchPairs
                     DEME_GPU_CALL(cudaMemcpy(patchPairs_keys + offset, granData->contactPatchPairs + offset,
                                              segment_bytes, cudaMemcpyDeviceToDevice));
                     cubDEMSortByKeys<patchIDPair_t, bodyID_t>(patchPairs_keys + offset, patchPairs_sorted + offset,
                                                               granData->idGeometryA + offset, idA_sorted + offset,
                                                               count, this_stream, scratchPad);
 
-                    // Second sort: sort idGeometryB using original keys
-                    // Note: This will overwrite patchPairs_sorted but produce the same sorted key order
+                    // Sort idGeometryB with contactPatchPairs
                     DEME_GPU_CALL(cudaMemcpy(patchPairs_keys + offset, granData->contactPatchPairs + offset,
                                              segment_bytes, cudaMemcpyDeviceToDevice));
                     cubDEMSortByKeys<patchIDPair_t, bodyID_t>(patchPairs_keys + offset, patchPairs_sorted + offset,
                                                               granData->idGeometryB + offset, idB_sorted + offset,
                                                               count, this_stream, scratchPad);
-                    // patchPairs_sorted now contains the final sorted keys (same as from first sort due to stable sort)
+                    
+                    // Sort contactType with contactPatchPairs
+                    DEME_GPU_CALL(cudaMemcpy(patchPairs_keys + offset, granData->contactPatchPairs + offset,
+                                             segment_bytes, cudaMemcpyDeviceToDevice));
+                    cubDEMSortByKeys<patchIDPair_t, contact_t>(patchPairs_keys + offset, patchPairs_sorted + offset,
+                                                               granData->contactType + offset, contactType_sorted + offset,
+                                                               count, this_stream, scratchPad);
+                    
+                    // Sort contactMapping if not historyless
+                    if (!solverFlags.isHistoryless) {
+                        DEME_GPU_CALL(cudaMemcpy(patchPairs_keys + offset, granData->contactPatchPairs + offset,
+                                                 segment_bytes, cudaMemcpyDeviceToDevice));
+                        cubDEMSortByKeys<patchIDPair_t, contactPairs_t>(
+                            patchPairs_keys + offset, patchPairs_sorted + offset,
+                            granData->contactMapping + offset, contactMapping_sorted + offset,
+                            count, this_stream, scratchPad);
+                    }
+                    // patchPairs_sorted now contains the final sorted keys (same for all sorts due to stable sort)
                 } else if (count == 1) {
                     // Just copy single elements (no sorting needed)
                     DEME_GPU_CALL(cudaMemcpy(patchPairs_sorted + offset, granData->contactPatchPairs + offset,
@@ -1402,6 +1430,12 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                                              cudaMemcpyDeviceToDevice));
                     DEME_GPU_CALL(cudaMemcpy(idB_sorted + offset, granData->idGeometryB + offset, sizeof(bodyID_t),
                                              cudaMemcpyDeviceToDevice));
+                    DEME_GPU_CALL(cudaMemcpy(contactType_sorted + offset, granData->contactType + offset, sizeof(contact_t),
+                                             cudaMemcpyDeviceToDevice));
+                    if (!solverFlags.isHistoryless) {
+                        DEME_GPU_CALL(cudaMemcpy(contactMapping_sorted + offset, granData->contactMapping + offset,
+                                                 sizeof(contactPairs_t), cudaMemcpyDeviceToDevice));
+                    }
                 }
                 offset += count;
             }
@@ -1413,12 +1447,21 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 cudaMemcpy(granData->contactPatchPairs, patchPairs_sorted, patch_arr_bytes, cudaMemcpyDeviceToDevice));
             DEME_GPU_CALL(cudaMemcpy(granData->idGeometryA, idA_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
             DEME_GPU_CALL(cudaMemcpy(granData->idGeometryB, idB_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
+            DEME_GPU_CALL(cudaMemcpy(granData->contactType, contactType_sorted, type_arr_bytes, cudaMemcpyDeviceToDevice));
+            if (!solverFlags.isHistoryless) {
+                DEME_GPU_CALL(cudaMemcpy(granData->contactMapping, contactMapping_sorted, mapping_arr_bytes,
+                                        cudaMemcpyDeviceToDevice));
+            }
 
             delete[] host_type_counts;
 
             scratchPad.finishUsingTempVector("patchPairs_sorted");
             scratchPad.finishUsingTempVector("idA_sorted");
             scratchPad.finishUsingTempVector("idB_sorted");
+            scratchPad.finishUsingTempVector("contactType_sorted_patch");
+            if (!solverFlags.isHistoryless) {
+                scratchPad.finishUsingTempVector("contactMapping_sorted_patch");
+            }
         }
 
         scratchPad.finishUsingTempVector("unique_types");
