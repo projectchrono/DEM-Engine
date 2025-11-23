@@ -204,16 +204,13 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
     // Send over the sum of contacts
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_nContactPairs, &(solverScratchSpace.numContacts), sizeof(size_t),
                              cudaMemcpyDeviceToDevice));
-    // Send over the sum of patch-enabled contacts
-    DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_nPatchEnabledContacts,
-                             &(solverScratchSpace.numPatchEnabledContacts), sizeof(size_t), cudaMemcpyDeviceToDevice));
     // Resize dT owned buffers before usage
     if (*solverScratchSpace.numContacts > dT->buffer_size) {
         transferArraysResize(*solverScratchSpace.numContacts);
     }
     // Resize the mesh-contact transfer array too
-    if (*solverScratchSpace.numPatchEnabledContacts > dT->contactPatchPairs_buffer.size()) {
-        meshPatchPairsResize(*solverScratchSpace.numPatchEnabledContacts);
+    if (*solverScratchSpace.numContacts > dT->contactPatchPairs_buffer.size()) {
+        meshPatchPairsResize(*solverScratchSpace.numContacts);
     }
 
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA,
@@ -223,8 +220,7 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactType, granData->contactType,
                              (*solverScratchSpace.numContacts) * sizeof(contact_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactPatchPairs, granData->contactPatchPairs,
-                             (*solverScratchSpace.numPatchEnabledContacts) * sizeof(patchIDPair_t),
-                             cudaMemcpyDeviceToDevice));
+                             (*solverScratchSpace.numContacts) * sizeof(patchIDPair_t), cudaMemcpyDeviceToDevice));
     // DEME_MIGRATE_TO_DEVICE(dT->idGeometryA_buffer, dT->streamInfo.device, streamInfo.stream);
     // DEME_MIGRATE_TO_DEVICE(dT->idGeometryB_buffer, dT->streamInfo.device, streamInfo.stream);
     // DEME_MIGRATE_TO_DEVICE(dT->contactType_buffer, dT->streamInfo.device, streamInfo.stream);

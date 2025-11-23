@@ -71,6 +71,28 @@ template void cubSumReduceByKey<notStupidBool_t, double>(notStupidBool_t* d_keys
                                                          size_t n,
                                                          cudaStream_t& this_stream,
                                                          DEMSolverScratchData& scratchPad);
+template void cubSumReduceByKey<patchIDPair_t, double>(patchIDPair_t* d_keys_in,
+                                                       patchIDPair_t* d_unique_out,
+                                                       double* d_vals_in,
+                                                       double* d_aggregates_out,
+                                                       size_t* d_num_out,
+                                                       size_t n,
+                                                       cudaStream_t& this_stream,
+                                                       DEMSolverScratchData& scratchPad);
+
+// Special instantiation for float3 which needs custom add operator
+void cubSumReduceByKeyFloat3(patchIDPair_t* d_keys_in,
+                             patchIDPair_t* d_unique_out,
+                             float3* d_vals_in,
+                             float3* d_aggregates_out,
+                             size_t* d_num_out,
+                             size_t n,
+                             cudaStream_t& this_stream,
+                             DEMSolverScratchData& scratchPad) {
+    CubFloat3Add add_op;
+    cubDEMReduceByKeys<patchIDPair_t, float3, CubFloat3Add>(d_keys_in, d_unique_out, d_vals_in, d_aggregates_out,
+                                                            d_num_out, add_op, n, this_stream, scratchPad);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 // Reduce::Max

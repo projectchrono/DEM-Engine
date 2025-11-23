@@ -371,10 +371,19 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
         // Updated contact wildcards need to be write back to global mem. It is here because contact wildcard may need
         // to be destroyed for non-contact, so it has to go last.
         _forceModelContactWildcardWrite_;
-    } else {  // else, another follow-up kernel is needed to compute force
+    } else {  // If this is the kernel for a mesh-related contact, another follow-up kernel is needed to compute force
         // Use contactForces, contactPointGeometryAB to store the contact info for the next
         // kernel to compute forces. contactForces is used to store the contact normal. contactPointGeometryA is used to
         // store the (double) contact penetration. contactPointGeometryB is used to store the (double) contact area
+
+        // Store contact normal (B2A is already a float3)
+        granData->contactForces[myContactID] = B2A;
+        // Store contact penetration depth (double) in contactPointGeometryA (float3)
+        granData->contactPointGeometryA[myContactID] = doubleToFloat3Storage(overlapDepth);
+        // Store contact area (double) in contactPointGeometryB (float3)
+        // If this is not a contact, we store 0.0 in the area, so it has no voting power in the next kernel.
+        granData->contactPointGeometryB[myContactID] =
+            doubleToFloat3Storage((ContactType == deme::NOT_A_CONTACT || overlapArea <= 0.0) ? 0.0 : overlapArea);
     }
 }
 
