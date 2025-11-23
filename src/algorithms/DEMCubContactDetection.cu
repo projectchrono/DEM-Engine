@@ -1366,6 +1366,77 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // If meshUniversalContact is on, numPatchEnabledContacts is just numContacts (if not enabled then it is zero)
         *scratchPad.numPatchEnabledContacts = *scratchPad.numContacts;
         scratchPad.numPatchEnabledContacts.toDevice();
+        
+        // Sort contactPatchPairs within each contact type segment
+        // This ensures that when dT does reduce-by-key on contactPatchPairs, the keys are sorted
+        if (*scratchPad.numContacts > 0) {
+            // First, identify the contact type segments using run-length encoding
+            size_t max_types = 16; // Maximum number of contact types (sufficient for typical cases)
+            contact_t* unique_types = (contact_t*)scratchPad.allocateTempVector("unique_types", max_types * sizeof(contact_t));
+            size_t* type_counts = (size_t*)scratchPad.allocateTempVector("type_counts", max_types * sizeof(size_t));
+            scratchPad.allocateDualStruct("numUniqueTypes");
+            
+            cubDEMRunLengthEncode<contact_t, size_t>(granData->contactType, unique_types, type_counts,
+                                                     scratchPad.getDualStructDevice("numUniqueTypes"),
+                                                     *scratchPad.numContacts, this_stream, scratchPad);
+            scratchPad.syncDualStructDeviceToHost("numUniqueTypes");
+            size_t numTypes = *scratchPad.getDualStructHost("numUniqueTypes");
+            
+            // Now sort within each type segment
+            if (numTypes > 0) {
+                // Copy type_counts to host to know segment boundaries
+                size_t* host_type_counts = new size_t[numTypes];
+                DEME_GPU_CALL(cudaMemcpy(host_type_counts, type_counts, numTypes * sizeof(size_t), cudaMemcpyDeviceToHost));
+                
+                // Allocate temp arrays for sorting
+                size_t patch_arr_bytes = (*scratchPad.numContacts) * sizeof(patchIDPair_t);
+                patchIDPair_t* patchPairs_sorted = (patchIDPair_t*)scratchPad.allocateTempVector("patchPairs_sorted", patch_arr_bytes);
+                size_t id_arr_bytes = (*scratchPad.numContacts) * sizeof(bodyID_t);
+                bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector("idA_sorted", id_arr_bytes);
+                bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector("idB_sorted", id_arr_bytes);
+                
+                // Sort each segment
+                size_t offset = 0;
+                for (size_t i = 0; i < numTypes; i++) {
+                    size_t count = host_type_counts[i];
+                    if (count > 1) { // Only sort if segment has more than 1 element
+                        // Sort by contactPatchPairs within this segment
+                        cubDEMSortByKeys<patchIDPair_t, bodyID_t>(
+                            granData->contactPatchPairs + offset, patchPairs_sorted + offset,
+                            granData->idGeometryA + offset, idA_sorted + offset,
+                            count, this_stream, scratchPad);
+                        cubDEMSortByKeys<patchIDPair_t, bodyID_t>(
+                            granData->contactPatchPairs + offset, patchPairs_sorted + offset,
+                            granData->idGeometryB + offset, idB_sorted + offset,
+                            count, this_stream, scratchPad);
+                    } else if (count == 1) {
+                        // Just copy single element
+                        DEME_GPU_CALL(cudaMemcpy(patchPairs_sorted + offset, granData->contactPatchPairs + offset,
+                                                sizeof(patchIDPair_t), cudaMemcpyDeviceToDevice));
+                        DEME_GPU_CALL(cudaMemcpy(idA_sorted + offset, granData->idGeometryA + offset,
+                                                sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+                        DEME_GPU_CALL(cudaMemcpy(idB_sorted + offset, granData->idGeometryB + offset,
+                                                sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+                    }
+                    offset += count;
+                }
+                
+                // Copy sorted arrays back
+                DEME_GPU_CALL(cudaMemcpy(granData->contactPatchPairs, patchPairs_sorted, patch_arr_bytes, cudaMemcpyDeviceToDevice));
+                DEME_GPU_CALL(cudaMemcpy(granData->idGeometryA, idA_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
+                DEME_GPU_CALL(cudaMemcpy(granData->idGeometryB, idB_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
+                
+                delete[] host_type_counts;
+                
+                scratchPad.finishUsingTempVector("patchPairs_sorted");
+                scratchPad.finishUsingTempVector("idA_sorted");
+                scratchPad.finishUsingTempVector("idB_sorted");
+            }
+            
+            scratchPad.finishUsingTempVector("unique_types");
+            scratchPad.finishUsingTempVector("type_counts");
+            scratchPad.finishUsingDualStruct("numUniqueTypes");
+        }
     } else {
         *scratchPad.numPatchEnabledContacts = 0;
         scratchPad.numPatchEnabledContacts.toDevice();
