@@ -1387,8 +1387,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // Sort each segment
             // Note: We sort the same keys multiple times with different value arrays. An alternative approach
             // would be to sort once with an index array, then use a gather kernel to rearrange all arrays.
-            // However, CUB's RadixSort is highly optimized, and for the typical segment sizes here,
-            // multiple sorts may be competitive with or faster than index-based gather operations.
+            // However, CUB's RadixSort is highly optimized for GPU execution. The current approach was chosen
+            // for simplicity and may be evaluated for performance optimization in the future if profiling
+            // shows this section as a bottleneck.
             size_t offset = 0;
             for (size_t i = 0; i < numTypes; i++) {
                 size_t count = host_type_counts[i];
@@ -1425,7 +1426,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                             granData->contactMapping + offset, contactMapping_sorted + offset,
                             count, this_stream, scratchPad);
                     }
-                    // patchPairs_sorted now contains the final sorted keys (same for all sorts due to stable sort)
+                    // patchPairs_sorted now contains the final sorted keys
+                    // Note: Each sort with the same input keys produces the same output key order,
+                    // ensuring all value arrays are consistently ordered
                 } else if (count == 1) {
                     // Just copy single elements (no sorting needed)
                     DEME_GPU_CALL(cudaMemcpy(patchPairs_sorted + offset, granData->contactPatchPairs + offset,
