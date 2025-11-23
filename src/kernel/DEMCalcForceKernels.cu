@@ -16,22 +16,6 @@ _moiDefs_;
 // If the user has some utility functions, they will be included here
 _forceModelPrerequisites_;
 
-// Helper function to convert double to float3 for storage
-// Note: This conversion depends on platform endianness. On little-endian systems (standard for x86/x64 and NVIDIA GPUs),
-// the least significant bytes of the double are stored in f[0] and most significant in f[1]. This is consistent across
-// the same architecture, ensuring proper round-trip conversion when reading back the data in follow-up kernels.
-// This assumes sizeof(double) == 2 * sizeof(float), which is verified by static_assert.
-inline __device__ float3 doubleToFloat3Storage(double value) {
-    static_assert(sizeof(double) == 2 * sizeof(float), 
-                  "Double must be exactly twice the size of float for this conversion");
-    union {
-        double d;
-        float f[2];
-    } converter;
-    converter.d = value;
-    return make_float3(converter.f[0], converter.f[1], 0.0f);
-}
-
 template <typename T1>
 inline __device__ void equipOwnerPosRot(deme::DEMSimParams* simParams,
                                         deme::DEMDataDT* granData,
@@ -391,13 +375,11 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
         // Use contactForces, contactPointGeometryAB to store the contact info for the next
         // kernel to compute forces. contactForces is used to store the contact normal. contactPointGeometryA is used to
         // store the (double) contact penetration. contactPointGeometryB is used to store the (double) contact area
-        
+
         // Store contact normal (B2A is already a float3)
         granData->contactForces[myContactID] = B2A;
-        
         // Store contact penetration depth (double) in contactPointGeometryA (float3)
         granData->contactPointGeometryA[myContactID] = doubleToFloat3Storage(overlapDepth);
-        
         // Store contact area (double) in contactPointGeometryB (float3)
         granData->contactPointGeometryB[myContactID] = doubleToFloat3Storage(overlapArea);
     }
