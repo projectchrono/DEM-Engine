@@ -2275,7 +2275,9 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                        numUniqueKeys, count, streamInfo.stream, solverScratchSpace);
                 
                 // Step 3: Reduce-by-key for areas (sum)
-                // Reuse the same keys input - uniqueKeys will be populated again but should be identical
+                // Note: CUB's ReduceByKey on the same input keys produces identical uniqueKeys output,
+                // so it's safe to reuse the same uniqueKeys array. The values will be overwritten but
+                // will be identical to the first call since the input keys are the same.
                 cubSumReduceByKey<patchIDPair_t, double>(keys, uniqueKeys, areas, totalAreas,
                                                          numUniqueKeys, count, streamInfo.stream, 
                                                          solverScratchSpace);

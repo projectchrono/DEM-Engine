@@ -70,10 +70,11 @@ __global__ void normalizeAndScatterVotedNormals(deme::patchIDPair_t* originalKey
         if (keyIdx < numUnique) {
             double totalArea = totalAreas[keyIdx];
             if (totalArea > 0.0) {
-                // Normalize by dividing by total area
-                votedNormal.x = votedWeightedNormals[keyIdx].x / totalArea;
-                votedNormal.y = votedWeightedNormals[keyIdx].y / totalArea;
-                votedNormal.z = votedWeightedNormals[keyIdx].z / totalArea;
+                // Normalize by dividing by total area (use reciprocal multiplication for efficiency)
+                double invTotalArea = 1.0 / totalArea;
+                votedNormal.x = votedWeightedNormals[keyIdx].x * invTotalArea;
+                votedNormal.y = votedWeightedNormals[keyIdx].y * invTotalArea;
+                votedNormal.z = votedWeightedNormals[keyIdx].z * invTotalArea;
             }
             // else: votedNormal remains (0,0,0)
         }
