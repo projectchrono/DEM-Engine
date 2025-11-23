@@ -91,12 +91,12 @@ PYBIND11_MODULE(DEME, obj) {
 
     // Setting path prefix
     std::filesystem::path path = loc;
-    RuntimeDataHelper::SetPathPrefix(path);
-    deme::SetDEMEDataPath(path / "share/data");
+    DEMERuntimeDataHelper::SetPathPrefix(path);
+    deme::SetDEMEDataPath();
 
     // Setting JitHelper variables
-    deme::SetDEMEKernelPath(path / "share/kernel");
-    deme::SetDEMEIncludePath(path / "include");
+    deme::SetDEMEKernelPath();
+    deme::SetDEMEIncludePath();
 
     // To define methods independent of a class, use obj.def() syntax to wrap them!
     obj.def("FrameTransformGlobalToLocal", &deme::FrameTransformGlobalToLocal,
@@ -122,9 +122,9 @@ PYBIND11_MODULE(DEME, obj) {
 
     obj.attr("PI") = py::float_(3.141592653589793238462643383279502884197);
 
-    py::class_<RuntimeDataHelper>(obj, "RuntimeDataHelper")
+    py::class_<DEMERuntimeDataHelper>(obj, "DEMERuntimeDataHelper")
         .def(py::init<>())
-        .def_static("SetPathPrefix", &RuntimeDataHelper::SetPathPrefix);
+        .def_static("SetPathPrefix", &DEMERuntimeDataHelper::SetPathPrefix);
 
     py::class_<deme::PDSampler>(obj, "PDSampler")
         .def(py::init<float>())

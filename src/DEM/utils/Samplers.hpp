@@ -38,8 +38,8 @@
 #include <random>
 #include <utility>
 #include <vector>
-#include <DEM/HostSideHelpers.hpp>
-#include <DEM/Defines.h>
+
+#include "../HostSideHelpers.hpp"
 
 namespace deme {
 

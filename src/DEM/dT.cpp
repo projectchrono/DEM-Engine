@@ -1822,6 +1822,11 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
                          << contactInfo->Get<float3>("Point")[i].y << "," << contactInfo->Get<float3>("Point")[i].z;
         }
 
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NORMAL) {
+            outstrstream << "," << contactInfo->Get<float3>("Normal")[i].x << ","
+                         << contactInfo->Get<float3>("Normal")[i].y << "," << contactInfo->Get<float3>("Normal")[i].z;
+        }
+
         // Torque is in global already...
         if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE) {
             outstrstream << "," << contactInfo->Get<float3>("Torque")[i].x << ","

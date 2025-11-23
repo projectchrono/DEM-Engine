@@ -17,6 +17,7 @@
 #include "../core/utils/ThreadManager.h"
 #include "../core/utils/GpuManager.h"
 #include "../core/utils/DEMEPaths.h"
+#include "../core/utils/JitHelper.h"
 #include "Defines.h"
 #include "Structs.h"
 #include "BdrsAndObjs.h"
