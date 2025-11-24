@@ -267,8 +267,8 @@ std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
     std::vector<bodyID_t> geo_to_watch;               // geo IDs that need to scan
 
     // Get device-major info to host first
-    dT->idGeometryA.toHostAsync(dT->streamInfo.stream);
-    dT->idGeometryB.toHostAsync(dT->streamInfo.stream);
+    dT->idPrimitiveA.toHostAsync(dT->streamInfo.stream);
+    dT->idPrimitiveB.toHostAsync(dT->streamInfo.stream);
     dT->contactType.toHostAsync(dT->streamInfo.stream);
 
     // These arrays can't change on device
@@ -301,8 +301,8 @@ std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
     // one contact entity is clump, it must be in idA
     if (this_type != OWNER_T_CLUMP) {
         for (size_t i = 0; i < dT->getNumContacts(); i++) {
-            auto idA = dT->idGeometryA[i];
-            auto idB = dT->idGeometryB[i];
+            auto idA = dT->idPrimitiveA[i];
+            auto idB = dT->idPrimitiveB[i];
             if (!check_exist(geo_to_watch, idB))
                 continue;
             auto cnt_type = dT->contactType[i];
@@ -319,8 +319,8 @@ std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
         }
     } else {  // If a clump, then both idA and idB need to be checked
         for (size_t i = 0; i < dT->getNumContacts(); i++) {
-            auto idA = dT->idGeometryA[i];
-            auto idB = dT->idGeometryB[i];
+            auto idA = dT->idPrimitiveA[i];
+            auto idB = dT->idPrimitiveB[i];
             auto cnt_type = dT->contactType[i];
             if (check_exist(geo_to_watch, idA)) {
                 if (cnt_type == SPHERE_SPHERE_CONTACT) {

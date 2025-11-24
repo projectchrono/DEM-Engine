@@ -84,8 +84,8 @@ class DEMDynamicThread {
     // kT modifies these arrays; dT uses them only.
 
     // dT gets contact pair/location/history map info from kT
-    DeviceArray<bodyID_t> idGeometryA_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
-    DeviceArray<bodyID_t> idGeometryB_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<bodyID_t> idPrimitiveA_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<bodyID_t> idPrimitiveB_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
     DeviceArray<contact_t> contactType_buffer = DeviceArray<contact_t>(&m_approxDeviceBytesUsed);
     DeviceArray<contactPairs_t> contactMapping_buffer = DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed);
     DeviceArray<patchIDPair_t> contactPatchPairs_buffer = DeviceArray<patchIDPair_t>(&m_approxDeviceBytesUsed);
@@ -204,8 +204,8 @@ class DEMDynamicThread {
         DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Contact pair/location, for dT's personal use!!
-    DualArray<bodyID_t> idGeometryA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<bodyID_t> idGeometryB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> idPrimitiveA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> idPrimitiveB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<contact_t> contactType = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // DualArray<contactPairs_t> contactMapping;
     // Fused mesh patch IDs for contacts involving meshes (mesh-mesh, mesh-analytical, sphere-mesh)

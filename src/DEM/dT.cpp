@@ -50,8 +50,8 @@ void DEMDynamicThread::packDataPointers() {
     alphaZ.bindDevicePointer(&(granData->alphaZ));
     accSpecified.bindDevicePointer(&(granData->accSpecified));
     angAccSpecified.bindDevicePointer(&(granData->angAccSpecified));
-    idGeometryA.bindDevicePointer(&(granData->idGeometryA));
-    idGeometryB.bindDevicePointer(&(granData->idGeometryB));
+    idPrimitiveA.bindDevicePointer(&(granData->idPrimitiveA));
+    idPrimitiveB.bindDevicePointer(&(granData->idPrimitiveB));
     contactType.bindDevicePointer(&(granData->contactType));
     contactPatchPairs.bindDevicePointer(&(granData->contactPatchPairs));
 
@@ -135,8 +135,8 @@ void DEMDynamicThread::migrateDataToDevice() {
     alphaZ.toDeviceAsync(streamInfo.stream);
     accSpecified.toDeviceAsync(streamInfo.stream);
     angAccSpecified.toDeviceAsync(streamInfo.stream);
-    idGeometryA.toDeviceAsync(streamInfo.stream);
-    idGeometryB.toDeviceAsync(streamInfo.stream);
+    idPrimitiveA.toDeviceAsync(streamInfo.stream);
+    idPrimitiveB.toDeviceAsync(streamInfo.stream);
     contactType.toDeviceAsync(streamInfo.stream);
     familyMaskMatrix.toDeviceAsync(streamInfo.stream);
     familyExtraMarginSize.toDeviceAsync(streamInfo.stream);
@@ -223,8 +223,8 @@ void DEMDynamicThread::migrateClumpPosInfoToHost() {
 }
 
 void DEMDynamicThread::migrateContactInfoToHost() {
-    idGeometryA.toHost();
-    idGeometryB.toHost();
+    idPrimitiveA.toHost();
+    idPrimitiveB.toHost();
     contactType.toHost();
     contactForces.toHost();
     contactTorque_convToForce.toHost();
@@ -537,8 +537,8 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
         // nSpheresGM*DEME_INIT_CNT_MULTIPLIER elements.
         size_t cnt_arr_size =
             DEME_MAX(*solverScratchSpace.numContacts + nExtraContacts, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
-        DEME_DUAL_ARRAY_RESIZE(idGeometryA, cnt_arr_size, 0);
-        DEME_DUAL_ARRAY_RESIZE(idGeometryB, cnt_arr_size, 0);
+        DEME_DUAL_ARRAY_RESIZE(idPrimitiveA, cnt_arr_size, 0);
+        DEME_DUAL_ARRAY_RESIZE(idPrimitiveB, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
         DEME_DUAL_ARRAY_RESIZE(contactPatchPairs, 0, 0);
 
@@ -587,8 +587,8 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     // accidentally clamp those arrays.
     /*
     buffer_size = DEME_MAX(buffer_size, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
-    DEME_DEVICE_ARRAY_RESIZE(idGeometryA_buffer, buffer_size);
-    DEME_DEVICE_ARRAY_RESIZE(idGeometryB_buffer, buffer_size);
+    DEME_DEVICE_ARRAY_RESIZE(idPrimitiveA_buffer, buffer_size);
+    DEME_DEVICE_ARRAY_RESIZE(idPrimitiveB_buffer, buffer_size);
     DEME_DEVICE_ARRAY_RESIZE(contactType_buffer, buffer_size);
     DEME_DEVICE_ARRAY_RESIZE(contactMapping_buffer, buffer_size);
     */
@@ -879,8 +879,8 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                 const auto& idPair = a_batch->contact_pairs.at(jj);
                 // idPair.first + n_processed_sp_comp can take into account the sphere components that have been loaded
                 // in previous batches, makes this loading process scalable.
-                idGeometryA[cnt_arr_offset] = idPair.first + n_processed_sp_comp + nExistSpheres;
-                idGeometryB[cnt_arr_offset] = idPair.second + n_processed_sp_comp + nExistSpheres;
+                idPrimitiveA[cnt_arr_offset] = idPair.first + n_processed_sp_comp + nExistSpheres;
+                idPrimitiveB[cnt_arr_offset] = idPair.second + n_processed_sp_comp + nExistSpheres;
                 contactType[cnt_arr_offset] = SPHERE_SPHERE_CONTACT;  // Only sph--sph cnt for now
                 unsigned int w_num = 0;
                 for (const auto& w_name : m_contact_wildcard_names) {
@@ -1686,8 +1686,8 @@ std::shared_ptr<ContactInfoContainer> DEMDynamicThread::generateContactInfo(floa
     size_t useful_cnt = 0;
     for (size_t i = 0; i < total_contacts; i++) {
         // Geos that are involved in this contact
-        auto geoA = idGeometryA[i];
-        auto geoB = idGeometryB[i];
+        auto geoA = idPrimitiveA[i];
+        auto geoB = idPrimitiveB[i];
         auto type = contactType[i];
         // We don't output fake contacts; but right now, no contact will be marked fake by kT, so no need to check that
         // if (type == NOT_A_CONTACT)
@@ -1979,8 +1979,8 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
 }
 
 inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
-    DEME_DUAL_ARRAY_RESIZE(idGeometryA, nContactPairs, 0);
-    DEME_DUAL_ARRAY_RESIZE(idGeometryB, nContactPairs, 0);
+    DEME_DUAL_ARRAY_RESIZE(idPrimitiveA, nContactPairs, 0);
+    DEME_DUAL_ARRAY_RESIZE(idPrimitiveB, nContactPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(contactType, nContactPairs, NOT_A_CONTACT);
 
     // NEW: Resize geomToPatchMap to match geometry array size
@@ -2023,16 +2023,16 @@ inline void DEMDynamicThread::unpackMyBuffer() {
         cudaMemcpy(&(solverScratchSpace.numContacts), &nContactPairs_buffer, sizeof(size_t), cudaMemcpyDeviceToDevice));
     solverScratchSpace.numContacts.toHost();
     // Need to resize those contact event-based arrays before usage
-    if (*solverScratchSpace.numContacts > idGeometryA.size() || *solverScratchSpace.numContacts > buffer_size) {
+    if (*solverScratchSpace.numContacts > idPrimitiveA.size() || *solverScratchSpace.numContacts > buffer_size) {
         contactEventArraysResize(*solverScratchSpace.numContacts);
     }
     if (*solverScratchSpace.numContacts > contactPatchPairs.size()) {
         meshPatchPairsResize(*solverScratchSpace.numContacts);
     }
 
-    DEME_GPU_CALL(cudaMemcpy(granData->idGeometryA, idGeometryA_buffer.data(),
+    DEME_GPU_CALL(cudaMemcpy(granData->idPrimitiveA, idPrimitiveA_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->idGeometryB, idGeometryB_buffer.data(),
+    DEME_GPU_CALL(cudaMemcpy(granData->idPrimitiveB, idPrimitiveB_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->contactType, contactType_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
@@ -2183,9 +2183,9 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
                 DEME_DEBUG_PRINTF("New number of contacts: %zu", *solverScratchSpace.numContacts);
                 DEME_DEBUG_PRINTF("Old number of contacts: %zu", *solverScratchSpace.numPrevContacts);
                 DEME_DEBUG_PRINTF("New contact A:");
-                DEME_DEBUG_EXEC(displayDeviceArray<bodyID_t>(granData->idGeometryA, *solverScratchSpace.numContacts));
+                DEME_DEBUG_EXEC(displayDeviceArray<bodyID_t>(granData->idPrimitiveA, *solverScratchSpace.numContacts));
                 DEME_DEBUG_PRINTF("New contact B:");
-                DEME_DEBUG_EXEC(displayDeviceArray<bodyID_t>(granData->idGeometryB, *solverScratchSpace.numContacts));
+                DEME_DEBUG_EXEC(displayDeviceArray<bodyID_t>(granData->idPrimitiveB, *solverScratchSpace.numContacts));
                 DEME_DEBUG_PRINTF("Old version of the last contact wildcard:");
                 DEME_DEBUG_EXEC(displayDeviceArray<float>(granData->contactWildcards[simParams->nContactWildcards - 1],
                                                           *solverScratchSpace.numPrevContacts));
@@ -2372,8 +2372,8 @@ void DEMDynamicThread::calculateForces() {
 
         // displayDeviceFloat3(granData->contactForces, nContactPairs);
         // displayDeviceArray<contact_t>(granData->contactType, nContactPairs);
-        // displayDeviceArray<bodyID_t>(granData->idGeometryA, nContactPairs);
-        // displayDeviceArray<bodyID_t>(granData->idGeometryB, nContactPairs);
+        // displayDeviceArray<bodyID_t>(granData->idPrimitiveA, nContactPairs);
+        // displayDeviceArray<bodyID_t>(granData->idPrimitiveB, nContactPairs);
         // std::cout << "===========================" << std::endl;
         timers.GetTimer("Calculate contact forces").stop();
 
@@ -3084,16 +3084,16 @@ void DEMDynamicThread::setFamilyContactWildcardValue_impl(
     // Get host updated then send all to device
     migrateFamilyToHost();
     contactWildcards[wc_num]->toHost();
-    idGeometryA.toHost();
-    idGeometryB.toHost();
+    idPrimitiveA.toHost();
+    idPrimitiveB.toHost();
     contactType.toHost();
 
     size_t numCnt = *solverScratchSpace.numContacts;
     for (size_t i = 0; i < numCnt; i++) {
         contact_t typeContact = contactType[i];
-        bodyID_t geoA = idGeometryA[i];
+        bodyID_t geoA = idPrimitiveA[i];
         bodyID_t ownerA = getGeoOwnerID(geoA, decodeTypeA(typeContact));
-        bodyID_t geoB = idGeometryB[i];
+        bodyID_t geoB = idPrimitiveB[i];
         bodyID_t ownerB = getGeoOwnerID(geoB, decodeTypeB(typeContact));
 
         unsigned int famA = +(familyID[ownerA]);

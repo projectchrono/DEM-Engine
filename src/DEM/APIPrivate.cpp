@@ -42,8 +42,8 @@ void DEMSolver::assignFamilyPersistentContact_impl(
             "one, add a placeholder wildcard."));
     }
     // Get device-major info to host first
-    kT->previous_idGeometryA.toHost();
-    kT->previous_idGeometryB.toHost();
+    kT->previous_idPrimitiveA.toHost();
+    kT->previous_idPrimitiveB.toHost();
     kT->previous_contactType.toHost();
     kT->contactPersistency.toHost();
     if (dT->solverFlags.canFamilyChangeOnDevice) {
@@ -53,8 +53,8 @@ void DEMSolver::assignFamilyPersistentContact_impl(
     // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
     // as persistent but not found in CD, it will be added to the contact array.
     for (size_t i = 0; i < *(kT->solverScratchSpace.numPrevContacts); i++) {
-        bodyID_t bodyA = kT->previous_idGeometryA[i];
-        bodyID_t bodyB = kT->previous_idGeometryB[i];
+        bodyID_t bodyA = kT->previous_idPrimitiveA[i];
+        bodyID_t bodyB = kT->previous_idPrimitiveB[i];
         contact_t c_type = kT->previous_contactType[i];
 
         bodyID_t ownerA = dT->getGeoOwnerID(bodyA, decodeTypeA(c_type));
@@ -337,8 +337,8 @@ void DEMSolver::getContacts_impl(std::vector<bodyID_t>& idA,
     if (dT->solverFlags.canFamilyChangeOnDevice) {
         dT->familyID.toHostAsync(dT->streamInfo.stream);
     }
-    dT->idGeometryA.toHostAsync(dT->streamInfo.stream);
-    dT->idGeometryB.toHostAsync(dT->streamInfo.stream);
+    dT->idPrimitiveA.toHostAsync(dT->streamInfo.stream);
+    dT->idPrimitiveB.toHostAsync(dT->streamInfo.stream);
     dT->contactType.toHostAsync(dT->streamInfo.stream);
 
     size_t num_contacts = dT->getNumContacts();
@@ -354,8 +354,8 @@ void DEMSolver::getContacts_impl(std::vector<bodyID_t>& idA,
     for (size_t i = 0; i < num_contacts; i++) {
         contact_t this_type = dT->contactType[i];
         if (type_func(this_type)) {
-            idA[useful_contacts] = dT->getGeoOwnerID(dT->idGeometryA[i], decodeTypeA(this_type));
-            idB[useful_contacts] = dT->getGeoOwnerID(dT->idGeometryB[i], decodeTypeB(this_type));
+            idA[useful_contacts] = dT->getGeoOwnerID(dT->idPrimitiveA[i], decodeTypeA(this_type));
+            idB[useful_contacts] = dT->getGeoOwnerID(dT->idPrimitiveB[i], decodeTypeB(this_type));
             cnt_type[useful_contacts] = this_type;
             famA[useful_contacts] = dT->familyID[idA[useful_contacts]];
             famB[useful_contacts] = dT->familyID[idB[useful_contacts]];
