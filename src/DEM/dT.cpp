@@ -58,8 +58,7 @@ void DEMDynamicThread::packDataPointers() {
     // NEW: Bind separate patch ID and mapping array pointers
     idPatchA.bindDevicePointer(&(granData->idPatchA));
     idPatchB.bindDevicePointer(&(granData->idPatchB));
-    patchToGeomMapA.bindDevicePointer(&(granData->patchToGeomMapA));
-    patchToGeomMapB.bindDevicePointer(&(granData->patchToGeomMapB));
+    geomToPatchMap.bindDevicePointer(&(granData->geomToPatchMap));
     
     familyMaskMatrix.bindDevicePointer(&(granData->familyMasks));
     familyExtraMarginSize.bindDevicePointer(&(granData->familyExtraMarginSize));
@@ -543,11 +542,11 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
         DEME_DUAL_ARRAY_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
         DEME_DUAL_ARRAY_RESIZE(contactPatchPairs, 0, 0);
         
-        // NEW: Initialize separate patch ID and mapping arrays
+        // NEW: Initialize separate patch ID arrays (sized to 0, will grow for mesh contacts)
+        // and geomToPatchMap (sized to geometry array length)
         DEME_DUAL_ARRAY_RESIZE(idPatchA, 0, 0);
         DEME_DUAL_ARRAY_RESIZE(idPatchB, 0, 0);
-        DEME_DUAL_ARRAY_RESIZE(patchToGeomMapA, 0, 0);
-        DEME_DUAL_ARRAY_RESIZE(patchToGeomMapB, 0, 0);
+        DEME_DUAL_ARRAY_RESIZE(geomToPatchMap, cnt_arr_size, 0);
 
         // meshUniversalContact case uses these arrays to temp store
         if (!solverFlags.useNoContactRecord || solverFlags.meshUniversalContact) {
@@ -1983,6 +1982,9 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     DEME_DUAL_ARRAY_RESIZE(idGeometryA, nContactPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(idGeometryB, nContactPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(contactType, nContactPairs, NOT_A_CONTACT);
+    
+    // NEW: Resize geomToPatchMap to match geometry array size
+    DEME_DUAL_ARRAY_RESIZE(geomToPatchMap, nContactPairs, 0);
 
     // meshUniversalContact case uses these arrays to temp store
     if (!solverFlags.useNoContactRecord || solverFlags.meshUniversalContact) {
@@ -2002,11 +2004,9 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
 inline void DEMDynamicThread::meshPatchPairsResize(size_t nPatchPairs) {
     DEME_DUAL_ARRAY_RESIZE(contactPatchPairs, nPatchPairs, 0);
     
-    // NEW: Resize separate patch ID and mapping arrays
+    // NEW: Resize separate patch ID arrays (sized to patch pairs, the shorter array)
     DEME_DUAL_ARRAY_RESIZE(idPatchA, nPatchPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(idPatchB, nPatchPairs, 0);
-    DEME_DUAL_ARRAY_RESIZE(patchToGeomMapA, nPatchPairs, 0);
-    DEME_DUAL_ARRAY_RESIZE(patchToGeomMapB, nPatchPairs, 0);
     
     // Re-packing pointers to device now is automatic
     // Sync pointers to device can be delayed... we'll only need to do that before kernel calls
@@ -2039,14 +2039,12 @@ inline void DEMDynamicThread::unpackMyBuffer() {
     DEME_GPU_CALL(cudaMemcpy(granData->contactPatchPairs, contactPatchPairs_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(patchIDPair_t), cudaMemcpyDeviceToDevice));
     
-    // NEW: Unpack separate patch IDs and mapping arrays
+    // NEW: Unpack separate patch IDs and mapping array
     DEME_GPU_CALL(cudaMemcpy(granData->idPatchA, idPatchA_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->idPatchB, idPatchB_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->patchToGeomMapA, patchToGeomMapA_buffer.data(),
-                             *solverScratchSpace.numContacts * sizeof(contactPairs_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->patchToGeomMapB, patchToGeomMapB_buffer.data(),
+    DEME_GPU_CALL(cudaMemcpy(granData->geomToPatchMap, geomToPatchMap_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(contactPairs_t), cudaMemcpyDeviceToDevice));
     
     if (!solverFlags.isHistoryless) {

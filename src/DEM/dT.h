@@ -93,8 +93,7 @@ class DEMDynamicThread {
     // NEW: Buffer arrays for separate patch IDs and their mapping to geometry arrays
     DeviceArray<bodyID_t> idPatchA_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
     DeviceArray<bodyID_t> idPatchB_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
-    DeviceArray<contactPairs_t> patchToGeomMapA_buffer = DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed);
-    DeviceArray<contactPairs_t> patchToGeomMapB_buffer = DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<contactPairs_t> geomToPatchMap_buffer = DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed);
 
     // Simulation params-related variables
     DualStruct<DEMSimParams> simParams = DualStruct<DEMSimParams>();
@@ -216,8 +215,7 @@ class DEMDynamicThread {
     // NEW: Separate patch IDs and mapping arrays (work arrays for dT)
     DualArray<bodyID_t> idPatchA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> idPatchB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<contactPairs_t> patchToGeomMapA = DualArray<contactPairs_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<contactPairs_t> patchToGeomMapB = DualArray<contactPairs_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<contactPairs_t> geomToPatchMap = DualArray<contactPairs_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Some of dT's own work arrays
     // Force of each contact event. It is the force that bodyA feels. They are in global.
