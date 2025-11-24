@@ -321,8 +321,9 @@ void DEMKinematicThread::workerThread() {
             contactDetection(bin_sphere_kernels, bin_triangle_kernels, sphere_contact_kernels, sphTri_contact_kernels,
                              granData, simParams, solverFlags, verbosity, idPrimitiveA, idPrimitiveB, contactType,
                              previous_idPrimitiveA, previous_idPrimitiveB, previous_contactType, contactPersistency,
-                             contactPatchPairs, contactMapping, streamInfo.stream, solverScratchSpace, timers,
-                             stateParams);
+                             contactPatchPairs, contactMapping,
+                             idPatchA, idPatchB, previous_idPatchA, previous_idPatchB, geomToPatchMap,
+                             streamInfo.stream, solverScratchSpace, timers, stateParams);
             CDAccumTimer.End();
 
             timers.GetTimer("Send to dT buffer").start();
@@ -490,6 +491,8 @@ void DEMKinematicThread::packDataPointers() {
     // NEW: Bind separate patch ID and mapping array pointers
     idPatchA.bindDevicePointer(&(granData->idPatchA));
     idPatchB.bindDevicePointer(&(granData->idPatchB));
+    previous_idPatchA.bindDevicePointer(&(granData->previous_idPatchA));
+    previous_idPatchB.bindDevicePointer(&(granData->previous_idPatchB));
     geomToPatchMap.bindDevicePointer(&(granData->geomToPatchMap));
 
     familyMaskMatrix.bindDevicePointer(&(granData->familyMasks));
@@ -533,6 +536,8 @@ void DEMKinematicThread::migrateDataToDevice() {
     previous_idPrimitiveB.toDeviceAsync(streamInfo.stream);
     previous_contactType.toDeviceAsync(streamInfo.stream);
     contactMapping.toDeviceAsync(streamInfo.stream);
+    previous_idPatchA.toDeviceAsync(streamInfo.stream);
+    previous_idPatchB.toDeviceAsync(streamInfo.stream);
     familyMaskMatrix.toDeviceAsync(streamInfo.stream);
     familyExtraMarginSize.toDeviceAsync(streamInfo.stream);
 
@@ -761,6 +766,8 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
             DEME_DUAL_ARRAY_RESIZE(previous_idPrimitiveB, cnt_arr_size, 0);
             DEME_DUAL_ARRAY_RESIZE(previous_contactType, cnt_arr_size, NOT_A_CONTACT);
             DEME_DUAL_ARRAY_RESIZE(contactMapping, cnt_arr_size, NULL_MAPPING_PARTNER);
+            DEME_DUAL_ARRAY_RESIZE(previous_idPatchA, 0, 0);
+            DEME_DUAL_ARRAY_RESIZE(previous_idPatchB, 0, 0);
         }
     }
 }

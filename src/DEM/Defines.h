@@ -448,6 +448,8 @@ struct DEMDataKT {
     // NEW: Separate patch IDs and mapping array (kT work arrays)
     bodyID_t* idPatchA;
     bodyID_t* idPatchB;
+    bodyID_t* previous_idPatchA;
+    bodyID_t* previous_idPatchB;
     contactPairs_t* geomToPatchMap;
 
     // data pointers that is kT's transfer destination
