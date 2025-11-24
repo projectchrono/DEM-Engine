@@ -33,11 +33,11 @@ inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
         DEME_DEVICE_ARRAY_RESIZE(dT->contactMapping_buffer, nContactPairs);
         granData->pDTOwnedBuffer_contactMapping = dT->contactMapping_buffer.data();
     }
-    
+
     // NEW: Resize geomToPatchMap buffer (same size as geometry arrays)
     DEME_DEVICE_ARRAY_RESIZE(dT->geomToPatchMap_buffer, nContactPairs);
     granData->pDTOwnedBuffer_geomToPatchMap = dT->geomToPatchMap_buffer.data();
-    
+
     // Unset the device change we just made
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
 
@@ -50,13 +50,13 @@ inline void DEMKinematicThread::meshPatchPairsResize(size_t nMeshInvolvedContact
     DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
     DEME_DEVICE_ARRAY_RESIZE(dT->contactPatchPairs_buffer, nMeshInvolvedContactPairs);
     granData->pDTOwnedBuffer_contactPatchPairs = dT->contactPatchPairs_buffer.data();
-    
+
     // NEW: Resize the separate patch ID arrays (sized to mesh-involved contacts, the shorter array)
     DEME_DEVICE_ARRAY_RESIZE(dT->idPatchA_buffer, nMeshInvolvedContactPairs);
     DEME_DEVICE_ARRAY_RESIZE(dT->idPatchB_buffer, nMeshInvolvedContactPairs);
     granData->pDTOwnedBuffer_idPatchA = dT->idPatchA_buffer.data();
     granData->pDTOwnedBuffer_idPatchB = dT->idPatchB_buffer.data();
-    
+
     // Unset the device change we just made
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
 }
@@ -233,7 +233,7 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
                              (*solverScratchSpace.numContacts) * sizeof(contact_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactPatchPairs, granData->contactPatchPairs,
                              (*solverScratchSpace.numContacts) * sizeof(patchIDPair_t), cudaMemcpyDeviceToDevice));
-    
+
     // NEW: Transfer separate patch IDs and mapping array
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idPatchA, granData->idPatchA,
                              (*solverScratchSpace.numContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
@@ -241,7 +241,7 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
                              (*solverScratchSpace.numContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_geomToPatchMap, granData->geomToPatchMap,
                              (*solverScratchSpace.numContacts) * sizeof(contactPairs_t), cudaMemcpyDeviceToDevice));
-    
+
     // DEME_MIGRATE_TO_DEVICE(dT->idGeometryA_buffer, dT->streamInfo.device, streamInfo.stream);
     // DEME_MIGRATE_TO_DEVICE(dT->idGeometryB_buffer, dT->streamInfo.device, streamInfo.stream);
     // DEME_MIGRATE_TO_DEVICE(dT->contactType_buffer, dT->streamInfo.device, streamInfo.stream);
@@ -486,12 +486,12 @@ void DEMKinematicThread::packDataPointers() {
     previous_idGeometryB.bindDevicePointer(&(granData->previous_idGeometryB));
     previous_contactType.bindDevicePointer(&(granData->previous_contactType));
     contactMapping.bindDevicePointer(&(granData->contactMapping));
-    
+
     // NEW: Bind separate patch ID and mapping array pointers
     idPatchA.bindDevicePointer(&(granData->idPatchA));
     idPatchB.bindDevicePointer(&(granData->idPatchB));
     geomToPatchMap.bindDevicePointer(&(granData->geomToPatchMap));
-    
+
     familyMaskMatrix.bindDevicePointer(&(granData->familyMasks));
     familyExtraMarginSize.bindDevicePointer(&(granData->familyExtraMarginSize));
 
@@ -574,7 +574,7 @@ void DEMKinematicThread::packTransferPointers(DEMDynamicThread*& dT) {
     granData->pDTOwnedBuffer_contactType = dT->contactType_buffer.data();
     granData->pDTOwnedBuffer_contactMapping = dT->contactMapping_buffer.data();
     granData->pDTOwnedBuffer_contactPatchPairs = dT->contactPatchPairs_buffer.data();
-    
+
     // NEW: Set pointers for separate patch arrays
     granData->pDTOwnedBuffer_idPatchA = dT->idPatchA_buffer.data();
     granData->pDTOwnedBuffer_idPatchB = dT->idPatchB_buffer.data();
@@ -748,13 +748,13 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
         DEME_DUAL_ARRAY_RESIZE(idGeometryB, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
         DEME_DUAL_ARRAY_RESIZE(contactPatchPairs, 0, 0);
-        
+
         // NEW: Initialize separate patch ID arrays (sized to 0, will grow for mesh contacts)
         // and geomToPatchMap (sized to geometry array length)
         DEME_DUAL_ARRAY_RESIZE(idPatchA, 0, 0);
         DEME_DUAL_ARRAY_RESIZE(idPatchB, 0, 0);
         DEME_DUAL_ARRAY_RESIZE(geomToPatchMap, cnt_arr_size, 0);
-        
+
         if (!solverFlags.isHistoryless) {
             DEME_DUAL_ARRAY_RESIZE(contactPersistency, cnt_arr_size, CONTACT_NOT_PERSISTENT);
             DEME_DUAL_ARRAY_RESIZE(previous_idGeometryA, cnt_arr_size, 0);

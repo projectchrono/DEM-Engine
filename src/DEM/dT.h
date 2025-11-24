@@ -215,7 +215,8 @@ class DEMDynamicThread {
     // NEW: Separate patch IDs and mapping arrays (work arrays for dT)
     DualArray<bodyID_t> idPatchA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> idPatchB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<contactPairs_t> geomToPatchMap = DualArray<contactPairs_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<contactPairs_t> geomToPatchMap =
+        DualArray<contactPairs_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Some of dT's own work arrays
     // Force of each contact event. It is the force that bodyA feels. They are in global.

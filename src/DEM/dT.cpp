@@ -54,12 +54,12 @@ void DEMDynamicThread::packDataPointers() {
     idGeometryB.bindDevicePointer(&(granData->idGeometryB));
     contactType.bindDevicePointer(&(granData->contactType));
     contactPatchPairs.bindDevicePointer(&(granData->contactPatchPairs));
-    
+
     // NEW: Bind separate patch ID and mapping array pointers
     idPatchA.bindDevicePointer(&(granData->idPatchA));
     idPatchB.bindDevicePointer(&(granData->idPatchB));
     geomToPatchMap.bindDevicePointer(&(granData->geomToPatchMap));
-    
+
     familyMaskMatrix.bindDevicePointer(&(granData->familyMasks));
     familyExtraMarginSize.bindDevicePointer(&(granData->familyExtraMarginSize));
 
@@ -541,7 +541,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
         DEME_DUAL_ARRAY_RESIZE(idGeometryB, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
         DEME_DUAL_ARRAY_RESIZE(contactPatchPairs, 0, 0);
-        
+
         // NEW: Initialize separate patch ID arrays (sized to 0, will grow for mesh contacts)
         // and geomToPatchMap (sized to geometry array length)
         DEME_DUAL_ARRAY_RESIZE(idPatchA, 0, 0);
@@ -1982,7 +1982,7 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     DEME_DUAL_ARRAY_RESIZE(idGeometryA, nContactPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(idGeometryB, nContactPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(contactType, nContactPairs, NOT_A_CONTACT);
-    
+
     // NEW: Resize geomToPatchMap to match geometry array size
     DEME_DUAL_ARRAY_RESIZE(geomToPatchMap, nContactPairs, 0);
 
@@ -2003,11 +2003,11 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
 
 inline void DEMDynamicThread::meshPatchPairsResize(size_t nPatchPairs) {
     DEME_DUAL_ARRAY_RESIZE(contactPatchPairs, nPatchPairs, 0);
-    
+
     // NEW: Resize separate patch ID arrays (sized to patch pairs, the shorter array)
     DEME_DUAL_ARRAY_RESIZE(idPatchA, nPatchPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(idPatchB, nPatchPairs, 0);
-    
+
     // Re-packing pointers to device now is automatic
     // Sync pointers to device can be delayed... we'll only need to do that before kernel calls
 }
@@ -2038,7 +2038,7 @@ inline void DEMDynamicThread::unpackMyBuffer() {
                              *solverScratchSpace.numContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->contactPatchPairs, contactPatchPairs_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(patchIDPair_t), cudaMemcpyDeviceToDevice));
-    
+
     // NEW: Unpack separate patch IDs and mapping array
     DEME_GPU_CALL(cudaMemcpy(granData->idPatchA, idPatchA_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
@@ -2046,7 +2046,7 @@ inline void DEMDynamicThread::unpackMyBuffer() {
                              *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->geomToPatchMap, geomToPatchMap_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(contactPairs_t), cudaMemcpyDeviceToDevice));
-    
+
     if (!solverFlags.isHistoryless) {
         // Note we don't have to use dedicated memory space for unpacking contactMapping_buffer contents, because we
         // only use it once per kT update, at the time of unpacking. So let us just use a temp vector to store it.

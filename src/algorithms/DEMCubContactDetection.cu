@@ -843,6 +843,60 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         scratchPad.finishUsingDualStruct("numActiveBinsForTri");
 
         // -----------------------------------------------------------------------------------------------------------
+        // One more thing: We need to remove duplicates in the contact list, because tri--tri contacts are not
+        // guaranteed to be unique.
+        // -----------------------------------------------------------------------------------------------------------
+
+        if (solverFlags.meshUniversalContact) {
+            // To remove duplicates, we sort by idA...
+            size_t numTotalCnts = *scratchPad.numContacts;
+            size_t total_ids_bytes = numTotalCnts * sizeof(bodyID_t);
+            size_t total_types_bytes = numTotalCnts * sizeof(contact_t);
+            size_t total_persistency_bytes = numTotalCnts * sizeof(notStupidBool_t);
+            contact_t* contactType_sorted =
+                (contact_t*)scratchPad.allocateTempVector("contactType_sorted", total_types_bytes);
+            bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector("idA_sorted", total_ids_bytes);
+            bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector("idB_sorted", total_ids_bytes);
+            notStupidBool_t* persistency_sorted =
+                (notStupidBool_t*)scratchPad.allocateTempVector("persistency_sorted", total_persistency_bytes);
+            //// TODO: But do I have to SortByKey three times?? Can I zip these value arrays together??
+            // Although it is stupid, do pay attention to that it does leverage the fact that RadixSort is stable.
+            cubDEMSortByKeys<bodyID_t, bodyID_t>(granData->idGeometryA, idA_sorted, granData->idGeometryB, idB_sorted,
+                                                 numTotalCnts, this_stream, scratchPad);
+            cubDEMSortByKeys<bodyID_t, contact_t>(granData->idGeometryA, idA_sorted, granData->contactType,
+                                                  contactType_sorted, numTotalCnts, this_stream, scratchPad);
+            cubDEMSortByKeys<bodyID_t, notStupidBool_t>(granData->idGeometryA, idA_sorted, granData->contactPersistency,
+                                                        persistency_sorted, numTotalCnts, this_stream, scratchPad);
+            // std::cout << "Contacts before duplication check: " << std::endl;
+            // displayDeviceArray<bodyID_t>(idA_sorted, numTotalCnts);
+            // displayDeviceArray<bodyID_t>(idB_sorted, numTotalCnts);
+            // displayDeviceArray<contact_t>(contactType_sorted, numTotalCnts);
+
+            removeDuplicateContacts(granData, idA_sorted, idB_sorted, contactType_sorted, persistency_sorted,
+                                    idGeometryA, idGeometryB, contactType, contactPersistency, false,
+                                    DEME_MAX(simParams->nSpheresGM, simParams->nTriGM), numTotalCnts, this_stream,
+                                    scratchPad);
+            // std::cout << "Contacts after duplication check: " << std::endl;
+            // displayDeviceArray<bodyID_t>(granData->idGeometryA, *scratchPad.numContacts);
+            // displayDeviceArray<bodyID_t>(granData->idGeometryB, *scratchPad.numContacts);
+            // displayDeviceArray<contact_t>(granData->contactType, *scratchPad.numContacts);
+
+            scratchPad.finishUsingTempVector("contactType_sorted");
+            scratchPad.finishUsingTempVector("idA_sorted");
+            scratchPad.finishUsingTempVector("idB_sorted");
+            scratchPad.finishUsingTempVector("persistency_sorted");
+
+            // This step sorts the contact array by idA and stores them in work arrays, which saves effort later
+            contactArraysAreSortedByA = true;
+        }
+
+        timers.GetTimer("Find contact pairs").stop();
+        // std::cout << "Contacts: " << std::endl;
+        // displayDeviceArray<bodyID_t>(granData->idGeometryA, *scratchPad.numContacts);
+        // displayDeviceArray<bodyID_t>(granData->idGeometryB, *scratchPad.numContacts);
+        // displayDeviceArray<contact_t>(granData->contactType, *scratchPad.numContacts);
+
+        // -----------------------------------------------------------------------------------------------------------
         // One more task: If the user specified persistent contacts, we check the previous contact list
         // and see if there are some contacts we need to add to the current list. Even if we detected 0 contacts, we
         // might still have persistent contacts to add to the list.
@@ -963,61 +1017,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             contactArraysAreSortedByA = true;
         }
 
-        // -----------------------------------------------------------------------------------------------------------
-        // One more thing: We need to remove duplicates in the contact list, because tri--tri contacts are not
-        // guaranteed to be unique. Of course, if there are persistent contacts, we have done the duplicate removal
-        // already.
-        // -----------------------------------------------------------------------------------------------------------
-
-        if (solverFlags.meshUniversalContact && !solverFlags.hasPersistentContacts) {
-            // To remove duplicates, we sort by idA...
-            size_t numTotalCnts = *scratchPad.numContacts;
-            size_t total_ids_bytes = numTotalCnts * sizeof(bodyID_t);
-            size_t total_types_bytes = numTotalCnts * sizeof(contact_t);
-            size_t total_persistency_bytes = numTotalCnts * sizeof(notStupidBool_t);
-            contact_t* contactType_sorted =
-                (contact_t*)scratchPad.allocateTempVector("contactType_sorted", total_types_bytes);
-            bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector("idA_sorted", total_ids_bytes);
-            bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector("idB_sorted", total_ids_bytes);
-            notStupidBool_t* persistency_sorted =
-                (notStupidBool_t*)scratchPad.allocateTempVector("persistency_sorted", total_persistency_bytes);
-            //// TODO: But do I have to SortByKey three times?? Can I zip these value arrays together??
-            // Although it is stupid, do pay attention to that it does leverage the fact that RadixSort is stable.
-            cubDEMSortByKeys<bodyID_t, bodyID_t>(granData->idGeometryA, idA_sorted, granData->idGeometryB, idB_sorted,
-                                                 numTotalCnts, this_stream, scratchPad);
-            cubDEMSortByKeys<bodyID_t, contact_t>(granData->idGeometryA, idA_sorted, granData->contactType,
-                                                  contactType_sorted, numTotalCnts, this_stream, scratchPad);
-            cubDEMSortByKeys<bodyID_t, notStupidBool_t>(granData->idGeometryA, idA_sorted, granData->contactPersistency,
-                                                        persistency_sorted, numTotalCnts, this_stream, scratchPad);
-            // std::cout << "Contacts before duplication check: " << std::endl;
-            // displayDeviceArray<bodyID_t>(idA_sorted, numTotalCnts);
-            // displayDeviceArray<bodyID_t>(idB_sorted, numTotalCnts);
-            // displayDeviceArray<contact_t>(contactType_sorted, numTotalCnts);
-
-            removeDuplicateContacts(granData, idA_sorted, idB_sorted, contactType_sorted, persistency_sorted,
-                                    idGeometryA, idGeometryB, contactType, contactPersistency, false,
-                                    DEME_MAX(simParams->nSpheresGM, simParams->nTriGM), numTotalCnts, this_stream,
-                                    scratchPad);
-            // std::cout << "Contacts after duplication check: " << std::endl;
-            // displayDeviceArray<bodyID_t>(granData->idGeometryA, *scratchPad.numContacts);
-            // displayDeviceArray<bodyID_t>(granData->idGeometryB, *scratchPad.numContacts);
-            // displayDeviceArray<contact_t>(granData->contactType, *scratchPad.numContacts);
-
-            scratchPad.finishUsingTempVector("contactType_sorted");
-            scratchPad.finishUsingTempVector("idA_sorted");
-            scratchPad.finishUsingTempVector("idB_sorted");
-            scratchPad.finishUsingTempVector("persistency_sorted");
-
-            // This step sorts the contact array by idA and stores them in work arrays, which saves effort later
-            contactArraysAreSortedByA = true;
-        }
-
-        timers.GetTimer("Find contact pairs").stop();
-        // std::cout << "Contacts: " << std::endl;
-        // displayDeviceArray<bodyID_t>(granData->idGeometryA, *scratchPad.numContacts);
-        // displayDeviceArray<bodyID_t>(granData->idGeometryB, *scratchPad.numContacts);
-        // displayDeviceArray<contact_t>(granData->contactType, *scratchPad.numContacts);
-
     }  // End of contact pairs construction of this CD step
 
     // -----------------------------------------------------------------------------------------------------------
@@ -1109,7 +1108,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             }
         }
 
-        // Only need to proceed if history-based
+        // Only need to actually create the mapping if the force model has history
         if (!solverFlags.isHistoryless) {
             geoSphereTouches_t* old_idA_runlength =
                 (geoSphereTouches_t*)scratchPad.allocateTempVector("old_idA_runlength", run_length_bytes);
