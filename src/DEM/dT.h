@@ -454,8 +454,8 @@ class DEMDynamicThread {
 
     /// @brief Fill res with the `wc_num' wildcard values, for n spheres starting from ID.
     void getSphereWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
-    /// @brief Fill res with the `wc_num' wildcard values, for n triangles starting from ID.
-    void getTriWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
+    /// @brief Fill res with the `wc_num' wildcard values, for n mesh patches starting from ID.
+    void getPatchWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
     /// @brief Fill res with the `wc_num' wildcard values, for n analytical entities starting from ID.
     void getAnalWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
 

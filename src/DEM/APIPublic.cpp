@@ -540,8 +540,8 @@ std::vector<float> DEMSolver::GetFamilyOwnerWildcardValue(unsigned int N, const 
     return res;
 }
 
-std::vector<float> DEMSolver::GetTriWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
-    assertSysInit("GetTriWildcardValue");
+std::vector<float> DEMSolver::GetPatchWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
+    assertSysInit("GetPatchWildcardValue");
     if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
         DEME_ERROR(
             "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
@@ -549,7 +549,7 @@ std::vector<float> DEMSolver::GetTriWildcardValue(bodyID_t geoID, const std::str
             name.c_str());
     }
     std::vector<float> res;
-    dT->getTriWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
+    dT->getPatchWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
     return res;
 }
 

@@ -1052,7 +1052,7 @@ class DEMSolver {
     /// @param name Wildcard's name.
     /// @param n The number of triangles to query following the ID of the first one.
     /// @return Vector of values of the wildcards.
-    std::vector<float> GetTriWildcardValue(bodyID_t geoID, const std::string& name, size_t n);
+    std::vector<float> GetPatchWildcardValue(bodyID_t geoID, const std::string& name, size_t n);
     /// @brief Get the geometry wildcard's values of a series of spheres.
     /// @param geoID The ID of the first sphere.
     /// @param name Wildcard's name.

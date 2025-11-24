@@ -3193,7 +3193,7 @@ void DEMDynamicThread::getSphereWildcardValue(std::vector<float>& res, bodyID_t 
     res = std::move(sphereWildcards[wc_num]->getVal(ID, n));
 }
 
-void DEMDynamicThread::getTriWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n) {
+void DEMDynamicThread::getPatchWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n) {
     res = std::move(patchWildcards[wc_num]->getVal(ID, n));
 }
 
