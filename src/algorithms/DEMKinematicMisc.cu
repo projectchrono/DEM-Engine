@@ -238,39 +238,3 @@ __global__ void markNewPatchPairGroups(deme::patchIDPair_t* sortedPatchPairs,
         }
     }
 }
-
-// Transform contactMapping from primitive-level to patch-level mapping.
-// For each unique patch pair index p, find the first primitive contact with geomToPatchMap[i] == p,
-// use contactMapping[i] to get the previous primitive index j, then look up prev_geomToPatchMap[j]
-// to get the previous patch pair index. Store this in the result array at position p.
-// This kernel operates on the unique patch pairs (numContacts), not primitive contacts.
-__global__ void transformContactMappingToPatchLevel(deme::contactPairs_t* patchMapping,
-                                                     deme::contactPairs_t* primitiveMapping,
-                                                     deme::contactPairs_t* geomToPatchMap,
-                                                     deme::contactPairs_t* prev_geomToPatchMap,
-                                                     size_t numPrimitiveContacts,
-                                                     size_t numContacts) {
-    // Each thread processes one primitive contact
-    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (myID < numPrimitiveContacts) {
-        // Get the patch index for this primitive contact
-        deme::contactPairs_t patchIdx = geomToPatchMap[myID];
-        
-        // Get the previous primitive contact index
-        deme::contactPairs_t prevPrimitiveIdx = primitiveMapping[myID];
-        
-        // If there's a valid mapping
-        if (prevPrimitiveIdx != deme::NULL_MAPPING_PARTNER) {
-            // Get the previous patch index
-            deme::contactPairs_t prevPatchIdx = prev_geomToPatchMap[prevPrimitiveIdx];
-            
-            // Store in the patch-level mapping
-            // Multiple threads may write to the same patchIdx, but they'll all write the same value
-            // (since all primitive contacts with the same patchIdx map to the same previous patch)
-            patchMapping[patchIdx] = prevPatchIdx;
-        } else {
-            // No mapping - this is a new contact
-            patchMapping[patchIdx] = deme::NULL_MAPPING_PARTNER;
-        }
-    }
-}
