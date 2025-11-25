@@ -322,7 +322,7 @@ void DEMKinematicThread::workerThread() {
                              granData, simParams, solverFlags, verbosity, idPrimitiveA, idPrimitiveB, contactType,
                              previous_idPrimitiveA, previous_idPrimitiveB, previous_contactType, contactPersistency,
                              contactPatchPairs, contactMapping, idPatchA, idPatchB, previous_idPatchA,
-                             previous_idPatchB, patchContactType, prev_patchContactType, geomToPatchMap, 
+                             previous_idPatchB, patchContactType, prev_patchContactType, geomToPatchMap,
                              streamInfo.stream, solverScratchSpace, timers, stateParams);
             CDAccumTimer.End();
 

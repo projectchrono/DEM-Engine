@@ -230,8 +230,7 @@ __global__ void markNewPatchPairGroups(deme::patchIDPair_t* sortedPatchPairs,
     deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
         if (myID == 0) {
-            // First element is always the start of a new group
-            isNewGroup[myID] = 1;
+            isNewGroup[myID] = 0;
         } else {
             // Compare with previous element - if different, it's a new group
             isNewGroup[myID] = (sortedPatchPairs[myID] != sortedPatchPairs[myID - 1]) ? 1 : 0;
