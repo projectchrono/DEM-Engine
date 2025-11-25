@@ -1505,7 +1505,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
 
         }  // End of history-based model mapping
 
-        // After all these, the contact arrays are sorted by contact type not A now
+        // Reset the flag as primitive contact arrays may be sorted differently for the next CD iteration
         contactArraysAreSortedByA = false;
 
     }  // End of contact sorting--mapping subroutine
