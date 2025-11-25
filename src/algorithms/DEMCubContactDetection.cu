@@ -1552,6 +1552,78 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             cubDEMPrefixScan<contactPairs_t, contactPairs_t>(isNewGroup, granData->geomToPatchMap,
                                                              *scratchPad.numPrimitiveContacts, this_stream, scratchPad);
 
+            // For history-based models, transform contactMapping from primitive-level to patch-level
+            if (!solverFlags.isHistoryless && *scratchPad.numPrevPrimitiveContacts > 0) {
+                // Step 5: Compute prev_geomToPatchMap for the previous contacts
+                // First, extract patch pairs from previous contacts
+                size_t prev_patch_arr_bytes = (*scratchPad.numPrevPrimitiveContacts) * sizeof(patchIDPair_t);
+                patchIDPair_t* prev_contactPatchPairs = (patchIDPair_t*)scratchPad.allocateTempVector(
+                    "prev_contactPatchPairs", prev_patch_arr_bytes);
+
+                size_t blocks_for_prev_patch =
+                    (*scratchPad.numPrevPrimitiveContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+                if (blocks_for_prev_patch > 0) {
+                    extractPatchInvolvedContactPatchIDPairs<<<dim3(blocks_for_prev_patch),
+                                                               dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+                        prev_contactPatchPairs, granData->previous_contactType, granData->previous_idPrimitiveA,
+                        granData->previous_idPrimitiveB, granData->triPatchID, *scratchPad.numPrevPrimitiveContacts);
+                    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+                }
+
+                // Mark where each new unique patch pair begins in previous contacts
+                size_t prev_mapping_arr_bytes = (*scratchPad.numPrevPrimitiveContacts) * sizeof(contactPairs_t);
+                contactPairs_t* prev_isNewGroup = (contactPairs_t*)scratchPad.allocateTempVector(
+                    "prev_isNewGroup", prev_mapping_arr_bytes);
+                contactPairs_t* prev_geomToPatchMap = (contactPairs_t*)scratchPad.allocateTempVector(
+                    "prev_geomToPatchMap", prev_mapping_arr_bytes);
+
+                if (blocks_for_prev_patch > 0) {
+                    markNewPatchPairGroups<<<dim3(blocks_for_prev_patch), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                              this_stream>>>(prev_contactPatchPairs, prev_isNewGroup,
+                                                             *scratchPad.numPrevPrimitiveContacts);
+                    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+                }
+
+                // Exclusive prefix scan to get prev_geomToPatchMap
+                cubDEMPrefixScan<contactPairs_t, contactPairs_t>(prev_isNewGroup, prev_geomToPatchMap,
+                                                                 *scratchPad.numPrevPrimitiveContacts, this_stream,
+                                                                 scratchPad);
+
+                // Step 6: Transform contactMapping from primitive-level to patch-level
+                // Allocate temp array for patch-level mapping
+                size_t patch_mapping_bytes = numUniquePatchPairs * sizeof(contactPairs_t);
+                contactPairs_t* patchLevelMapping =
+                    (contactPairs_t*)scratchPad.allocateTempVector("patchLevelMapping", patch_mapping_bytes);
+
+                // Initialize with NULL_MAPPING_PARTNER
+                DEME_GPU_CALL(cudaMemset((void*)patchLevelMapping, 0xFF, patch_mapping_bytes));
+
+                // Transform mapping using the kernel
+                size_t blocks_for_transform =
+                    (*scratchPad.numPrimitiveContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+                if (blocks_for_transform > 0) {
+                    transformContactMappingToPatchLevel<<<dim3(blocks_for_transform), dim3(DEME_MAX_THREADS_PER_BLOCK),
+                                                          0, this_stream>>>(
+                        patchLevelMapping, granData->contactMapping, granData->geomToPatchMap, prev_geomToPatchMap,
+                        *scratchPad.numPrimitiveContacts, numUniquePatchPairs);
+                    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+                }
+
+                // Copy patch-level mapping back to contactMapping
+                // First resize if needed
+                if (numUniquePatchPairs > contactMapping.size()) {
+                    DEME_DUAL_ARRAY_RESIZE_NOVAL(contactMapping, numUniquePatchPairs);
+                    granData.toDevice();
+                }
+                DEME_GPU_CALL(cudaMemcpy(granData->contactMapping, patchLevelMapping, patch_mapping_bytes,
+                                         cudaMemcpyDeviceToDevice));
+
+                scratchPad.finishUsingTempVector("prev_contactPatchPairs");
+                scratchPad.finishUsingTempVector("prev_isNewGroup");
+                scratchPad.finishUsingTempVector("prev_geomToPatchMap");
+                scratchPad.finishUsingTempVector("patchLevelMapping");
+            }
+
             scratchPad.finishUsingTempVector("unique_patch_pairs");
             scratchPad.finishUsingTempVector("patch_pair_counts");
             scratchPad.finishUsingTempVector("isNewGroup");
