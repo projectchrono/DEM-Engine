@@ -1293,7 +1293,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     offset += count;
                 }
 
-                // Now construct idPatchA/B and geomToPatchMap from the sorted data
+                // Now construct idPatchA/B, patchContactType and geomToPatchMap from the sorted data
                 // Step 1: Use run-length encoding to find unique patch pairs
                 size_t max_unique = *scratchPad.numPrimitiveContacts;  // Upper bound on unique pairs
                 patchIDPair_t* unique_patch_pairs = (patchIDPair_t*)scratchPad.allocateTempVector(
@@ -1311,10 +1311,11 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 // This numUniquePatchPairs is the actual numContacts
                 *scratchPad.numContacts = numUniquePatchPairs;
 
-                // Step 2: Resize idPatchA/B to hold the unique patch pairs
+                // Step 2: Resize idPatchA/B and patchContactType to hold the unique patch pairs
                 if (numUniquePatchPairs > idPatchA.size()) {
                     DEME_DUAL_ARRAY_RESIZE_NOVAL(idPatchA, numUniquePatchPairs);
                     DEME_DUAL_ARRAY_RESIZE_NOVAL(idPatchB, numUniquePatchPairs);
+                    DEME_DUAL_ARRAY_RESIZE_NOVAL(patchContactType, numUniquePatchPairs);
                     granData.toDevice();
                 }
 
@@ -1356,6 +1357,17 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 cubDEMPrefixScan<contactPairs_t, contactPairs_t>(
                     isNewGroup, granData->geomToPatchMap, *scratchPad.numPrimitiveContacts, this_stream, scratchPad);
 
+                // Step 5: Extract patchContactType from sorted contactType using geomToPatchMap
+                // Since primitives are sorted by type first, then by patch pair, all primitives in a patch
+                // group share the same contact type. We extract the type of the first primitive in each group.
+                if (numUniquePatchPairs > 0 && blocks_needed_for_mark > 0) {
+                    extractPatchContactTypes<<<dim3(blocks_needed_for_mark), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                               this_stream>>>(granData->patchContactType, contactType_sorted,
+                                                              granData->geomToPatchMap, *scratchPad.numPrimitiveContacts,
+                                                              numUniquePatchPairs);
+                    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+                }
+
                 scratchPad.finishUsingTempVector("unique_patch_pairs");
                 scratchPad.finishUsingTempVector("patch_pair_counts");
                 scratchPad.finishUsingTempVector("isNewGroup");
@@ -1376,6 +1388,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // std::cout << "Patch contacts:" << std::endl;
             // displayDeviceArray<bodyID_t>(granData->idPatchA, *scratchPad.numContacts);
             // displayDeviceArray<bodyID_t>(granData->idPatchB, *scratchPad.numContacts);
+            // displayDeviceArray<contact_t>(granData->patchContactType, *scratchPad.numContacts);
             // displayDeviceArray<contactPairs_t>(granData->geomToPatchMap, *scratchPad.numPrimitiveContacts);
         }
 
@@ -1384,41 +1397,46 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     }  // End of contact pairs construction of this CD step
 
     // -----------------------------------------------------------------------------------------------------------
-    // Constructing contact history
+    // Constructing contact history (patch-based)
+    // The contact mapping is now built between previous_idPatchA/B and current idPatchA/B.
+    // We have numContacts elements to work with (patch-based contacts), not numPrimitiveContacts.
+    // Both current and previous patch arrays are sorted by contact type, and within each type, 
+    // they are sorted by the combined contact patch ID pair.
     // -----------------------------------------------------------------------------------------------------------
 
     timers.GetTimer("Build history map").start();
     // Now, identify enduring contacts in history-based models.
-    if (*scratchPad.numPrimitiveContacts > 0) {
-        size_t type_arr_bytes = (*scratchPad.numPrimitiveContacts) * sizeof(contact_t);
-        size_t id_arr_bytes = (*scratchPad.numPrimitiveContacts) * sizeof(bodyID_t);
-        // There could be a few cases where arrays are sorted by A: we did duplicate removal; we had persistent contacts
-        // etc. In those cases, no need to sort again.
-        if (!contactArraysAreSortedByA) {
-            sortPrimitiveContactsAndTypesByA(granData->idPrimitiveA, granData->idPrimitiveB, granData->contactType,
-                                             *scratchPad.numPrimitiveContacts, this_stream, scratchPad);
-        }
-
-        // For history-based models, construct the enduring contact map. bodyA can be sphere or triangle.
+    if (*scratchPad.numContacts > 0) {
+        // For history-based models, construct the enduring contact map at the patch level.
         // This CD run and previous CD run could have different number of geos in them. We pick the larger
         // number to refer in building the enduring contact map to avoid potential problems.
         size_t nGeoSafe = DEME_MAX(DEME_MAX(simParams->nSpheresGM, *scratchPad.numPrevSpheres),
                                    DEME_MAX(simParams->nTriGM, *scratchPad.numPrevTriangles));
 
-        // First, identify the new and old idA run-length
-        size_t run_length_bytes = nGeoSafe * sizeof(geoSphereTouches_t);
-        geoSphereTouches_t* new_idA_runlength =
-            (geoSphereTouches_t*)scratchPad.allocateTempVector("new_idA_runlength", run_length_bytes);
-        size_t unique_id_bytes = nGeoSafe * sizeof(bodyID_t);
-        bodyID_t* unique_new_idA = (bodyID_t*)scratchPad.allocateTempVector("unique_new_idA", unique_id_bytes);
-        scratchPad.allocateDualStruct("numUniqueNewA");
-        cubDEMRunLengthEncode<bodyID_t, geoSphereTouches_t>(granData->idPrimitiveA, unique_new_idA, new_idA_runlength,
-                                                            scratchPad.getDualStructDevice("numUniqueNewA"),
-                                                            *scratchPad.numPrimitiveContacts, this_stream, scratchPad);
-        scratchPad.syncDualStructDeviceToHost("numUniqueNewA");
-        size_t* pNumUniqueNewA = scratchPad.getDualStructHost("numUniqueNewA");
-        // Now, we do a tab-keeping job: how many contacts on average a sphere has?
-        {
+        // For tab-keeping: how many contacts on average a sphere has? (using primitive contacts for this stat)
+        if (*scratchPad.numPrimitiveContacts > 0) {
+            // First, identify unique idA in primitive contacts
+            size_t run_length_bytes = nGeoSafe * sizeof(geoSphereTouches_t);
+            geoSphereTouches_t* new_idA_runlength =
+                (geoSphereTouches_t*)scratchPad.allocateTempVector("new_idA_runlength", run_length_bytes);
+            size_t unique_id_bytes = nGeoSafe * sizeof(bodyID_t);
+            bodyID_t* unique_new_idA = (bodyID_t*)scratchPad.allocateTempVector("unique_new_idA", unique_id_bytes);
+            scratchPad.allocateDualStruct("numUniqueNewA");
+
+            // Need to sort primitive contacts by A first if not already done
+            if (!contactArraysAreSortedByA) {
+                sortPrimitiveContactsAndTypesByA(granData->idPrimitiveA, granData->idPrimitiveB, granData->contactType,
+                                                 *scratchPad.numPrimitiveContacts, this_stream, scratchPad);
+                contactArraysAreSortedByA = true;
+            }
+
+            cubDEMRunLengthEncode<bodyID_t, geoSphereTouches_t>(
+                granData->idPrimitiveA, unique_new_idA, new_idA_runlength,
+                scratchPad.getDualStructDevice("numUniqueNewA"), *scratchPad.numPrimitiveContacts, this_stream,
+                scratchPad);
+            scratchPad.syncDualStructDeviceToHost("numUniqueNewA");
+            size_t* pNumUniqueNewA = scratchPad.getDualStructHost("numUniqueNewA");
+
             // Figure out how many contacts an item in idA array typically has.
             stateParams.avgCntsPerSphere =
                 (*pNumUniqueNewA > 0) ? (float)(*scratchPad.numPrimitiveContacts) / (float)(*pNumUniqueNewA) : 0.0;
@@ -1438,150 +1456,54 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     "rendering of the simulation before crash.\n",
                     stateParams.avgCntsPerSphere, solverFlags.errOutAvgSphCnts);
             }
+
+            scratchPad.finishUsingTempVector("new_idA_runlength");
+            scratchPad.finishUsingTempVector("unique_new_idA");
+            scratchPad.finishUsingDualStruct("numUniqueNewA");
         }
 
         // Only need to actually create the mapping if the force model has history
         if (!solverFlags.isHistoryless) {
-            // We don't assume the order of the previous primitive contact array, so sort by A is needed
-            sortPrimitiveContactsAndTypesByA(granData->previous_idPrimitiveA, granData->previous_idPrimitiveB,
-                                             granData->previous_contactType, *scratchPad.numPrevPrimitiveContacts,
-                                             this_stream, scratchPad);
-
-            // With A-sorted previous contact array, we can now run-length encode to find old idA run-length
-            geoSphereTouches_t* old_idA_runlength =
-                (geoSphereTouches_t*)scratchPad.allocateTempVector("old_idA_runlength", run_length_bytes);
-            bodyID_t* unique_old_idA = (bodyID_t*)scratchPad.allocateTempVector("unique_old_idA", unique_id_bytes);
-            scratchPad.allocateDualStruct("numUniqueOldA");
-            cubDEMRunLengthEncode<bodyID_t, geoSphereTouches_t>(
-                granData->previous_idPrimitiveA, unique_old_idA, old_idA_runlength,
-                scratchPad.getDualStructDevice("numUniqueOldA"), *(scratchPad.numPrevPrimitiveContacts), this_stream,
-                scratchPad);
-            scratchPad.syncDualStructDeviceToHost("numUniqueOldA");
-            size_t* pNumUniqueOldA = scratchPad.getDualStructHost("numUniqueOldA");
-            // Then, add zeros to run-length arrays such that even if a geoID is not present in idA, it has a
-            // place in the run-length arrays that indicates 0 run-length
-            geoSphereTouches_t* new_idA_runlength_full =
-                (geoSphereTouches_t*)scratchPad.allocateTempVector("new_idA_runlength_full", run_length_bytes);
-            geoSphereTouches_t* old_idA_runlength_full =
-                (geoSphereTouches_t*)scratchPad.allocateTempVector("old_idA_runlength_full", run_length_bytes);
-            DEME_GPU_CALL(cudaMemset((void*)new_idA_runlength_full, 0, run_length_bytes));
-            DEME_GPU_CALL(cudaMemset((void*)old_idA_runlength_full, 0, run_length_bytes));
-            size_t blocks_needed_for_mapping =
-                (*pNumUniqueNewA + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-            if (blocks_needed_for_mapping > 0) {
-                fillRunLengthArray<<<dim3(blocks_needed_for_mapping), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                     this_stream>>>(new_idA_runlength_full, unique_new_idA, new_idA_runlength,
-                                                    *pNumUniqueNewA);
-                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-            }
-
-            blocks_needed_for_mapping = (*pNumUniqueOldA + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-            if (blocks_needed_for_mapping > 0) {
-                fillRunLengthArray<<<dim3(blocks_needed_for_mapping), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                     this_stream>>>(old_idA_runlength_full, unique_old_idA, old_idA_runlength,
-                                                    *pNumUniqueOldA);
-                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-            }
-            // DEME_DEBUG_PRINTF("Unique contact IDs (A):");
-            // DEME_DEBUG_EXEC(displayDeviceArray<bodyID_t>(unique_new_idA, *pNumUniqueNewA));
-            // DEME_DEBUG_PRINTF("Unique contacts run-length:");
-            // DEME_DEBUG_EXEC(displayDeviceArray<geoSphereTouches_t>(new_idA_runlength, *pNumUniqueNewA));
-            scratchPad.finishUsingTempVector("old_idA_runlength");
-            scratchPad.finishUsingTempVector("unique_old_idA");
-            scratchPad.finishUsingDualStruct("numUniqueOldA");
-
-            // Then, prescan to find run-length offsets, in preparation for custom kernels
-            size_t scanned_runlength_bytes = nGeoSafe * sizeof(contactPairs_t);
-            contactPairs_t* new_idA_scanned_runlength =
-                (contactPairs_t*)scratchPad.allocateTempVector("new_idA_scanned_runlength", scanned_runlength_bytes);
-            contactPairs_t* old_idA_scanned_runlength =
-                (contactPairs_t*)scratchPad.allocateTempVector("old_idA_scanned_runlength", scanned_runlength_bytes);
-            cubDEMPrefixScan<geoSphereTouches_t, contactPairs_t>(new_idA_runlength_full, new_idA_scanned_runlength,
-                                                                 nGeoSafe, this_stream, scratchPad);
-            cubDEMPrefixScan<geoSphereTouches_t, contactPairs_t>(old_idA_runlength_full, old_idA_scanned_runlength,
-                                                                 nGeoSafe, this_stream, scratchPad);
-
-            // Then, each thread will scan a sphere, if this sphere has non-zero run-length in both new and old idA,
-            // manually store the mapping. This mapping's elemental values are the indices of the corresponding
-            // contacts in the previous contact array.
-            if (*scratchPad.numPrimitiveContacts > contactMapping.size()) {
-                DEME_DUAL_ARRAY_RESIZE_NOVAL(contactMapping, *scratchPad.numPrimitiveContacts);
+            // Resize contactMapping to hold numContacts elements (patch-based)
+            if (*scratchPad.numContacts > contactMapping.size()) {
+                DEME_DUAL_ARRAY_RESIZE_NOVAL(contactMapping, *scratchPad.numContacts);
                 granData.toDevice();
             }
-            blocks_needed_for_mapping = (nGeoSafe + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
+
+            // Build patch-based contact mapping using the new kernel
+            // Both current and previous patch arrays are already sorted by type, then by patch ID pair
+            size_t blocks_needed_for_mapping =
+                (*scratchPad.numContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
             if (blocks_needed_for_mapping > 0) {
-                buildPersistentMap<<<dim3(blocks_needed_for_mapping), dim3(DEME_NUM_BODIES_PER_BLOCK), 0,
-                                     this_stream>>>(new_idA_runlength_full, old_idA_runlength_full,
-                                                    new_idA_scanned_runlength, old_idA_scanned_runlength,
-                                                    granData->contactMapping, &granData, nGeoSafe);
+                buildPatchContactMapping<<<dim3(blocks_needed_for_mapping), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                           this_stream>>>(
+                    granData->idPatchA, granData->idPatchB, granData->patchContactType, granData->previous_idPatchA,
+                    granData->previous_idPatchB, granData->prev_patchContactType, granData->contactMapping,
+                    *scratchPad.numContacts, *scratchPad.numPrevContacts);
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
-            // DEME_DEBUG_PRINTF("Contact mapping:");
-            // DEME_DEBUG_EXEC(displayDeviceArray<contactPairs_t>(granData->contactMapping,
-            // *scratchPad.numPrimitiveContacts));
-            scratchPad.finishUsingTempVector("new_idA_runlength_full");
-            scratchPad.finishUsingTempVector("old_idA_runlength_full");
-            scratchPad.finishUsingTempVector("new_idA_scanned_runlength");
-            scratchPad.finishUsingTempVector("old_idA_scanned_runlength");
+            // DEME_DEBUG_PRINTF("Patch contact mapping:");
+            // DEME_DEBUG_EXEC(displayDeviceArray<contactPairs_t>(granData->contactMapping, *scratchPad.numContacts));
 
-            // An apparatus to understand how contacts will be sorted before shipping
-            contactPairs_t* old_arr_unsort_to_sort_map;
-            {
-                size_t map_arr_bytes = (*scratchPad.numPrevPrimitiveContacts) * sizeof(contactPairs_t);
-                old_arr_unsort_to_sort_map =
-                    (contactPairs_t*)scratchPad.allocateTempVector("old_arr_unsort_to_sort_map", map_arr_bytes);
-                contactPairs_t* one_to_n = (contactPairs_t*)scratchPad.allocateTempVector("one_to_n", map_arr_bytes);
-                size_t blocks_needed_for_mapping =
-                    (*scratchPad.numPrevPrimitiveContacts + DEME_MAX_THREADS_PER_BLOCK - 1) /
-                    DEME_MAX_THREADS_PER_BLOCK;
-                if (blocks_needed_for_mapping > 0) {
-                    lineNumbers<<<dim3(blocks_needed_for_mapping), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
-                        one_to_n, *scratchPad.numPrevPrimitiveContacts);
-                    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-
-                    contact_t* old_contactType_sorted = (contact_t*)scratchPad.allocateTempVector(
-                        "old_contactType_sorted", (*scratchPad.numPrevPrimitiveContacts) * sizeof(contact_t));
-                    // Sorted by type is how we shipped the old contact pair info
-                    cubDEMSortByKeys<contact_t, contactPairs_t>(
-                        granData->previous_contactType, old_contactType_sorted, one_to_n, old_arr_unsort_to_sort_map,
-                        *scratchPad.numPrevPrimitiveContacts, this_stream, scratchPad);
-                    // Now, we have `map from' info. But we need `map to' info.
-                    convertToAndFrom<<<dim3(blocks_needed_for_mapping), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                       this_stream>>>(old_arr_unsort_to_sort_map, one_to_n,
-                                                      *scratchPad.numPrevPrimitiveContacts);
-                    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-                }
-                // one_to_n used for temp storage; now give it back to the true mapping we wanted.
-                // So here, old_arr_unsort_to_sort_map's memory space is not needed anymore, but one_to_n must still
-                // live, a little nuance to pay attention to. However, alas, we can always just delay memory freeing
-                // and do it all at the very end: this is exactly what I did here.
-                old_arr_unsort_to_sort_map = one_to_n;
-                scratchPad.finishUsingTempVector("old_contactType_sorted");
-            }
-
-            // Finally, copy new contact array to old contact array for the record.
-            if (*scratchPad.numPrimitiveContacts > previous_idPrimitiveA.size()) {
+            // Copy current patch arrays to previous arrays for the next iteration
+            size_t patch_id_arr_bytes = (*scratchPad.numContacts) * sizeof(bodyID_t);
+            size_t patch_type_arr_bytes = (*scratchPad.numContacts) * sizeof(contact_t);
+            if (*scratchPad.numContacts > previous_idPatchA.size()) {
                 // Note these resizing are automatically on kT's device
-                DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_idPrimitiveA, *scratchPad.numPrimitiveContacts);
-                DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_idPrimitiveB, *scratchPad.numPrimitiveContacts);
-                DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_contactType, *scratchPad.numPrimitiveContacts);
+                DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_idPatchA, *scratchPad.numContacts);
+                DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_idPatchB, *scratchPad.numContacts);
+                DEME_DUAL_ARRAY_RESIZE_NOVAL(prev_patchContactType, *scratchPad.numContacts);
                 // Re-packing pointers now is automatic
                 granData.toDevice();
             }
-            DEME_GPU_CALL(cudaMemcpy(granData->previous_idPrimitiveA, granData->idPrimitiveA, id_arr_bytes,
+            DEME_GPU_CALL(cudaMemcpy(granData->previous_idPatchA, granData->idPatchA, patch_id_arr_bytes,
                                      cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(granData->previous_idPrimitiveB, granData->idPrimitiveB, id_arr_bytes,
+            DEME_GPU_CALL(cudaMemcpy(granData->previous_idPatchB, granData->idPatchB, patch_id_arr_bytes,
                                      cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(granData->previous_contactType, granData->contactType, type_arr_bytes,
+            DEME_GPU_CALL(cudaMemcpy(granData->prev_patchContactType, granData->patchContactType, patch_type_arr_bytes,
                                      cudaMemcpyDeviceToDevice));
 
-        } else {  // If historyless, we don't need contact mapping
-            // Primitive contacts are already sorted by patch IDs in the earlier patch ID generation step
-        }
-        // This part is light on memory, so we can delay some freeing
-        scratchPad.finishUsingTempVector("new_idA_runlength");
-        scratchPad.finishUsingTempVector("unique_new_idA");
-        scratchPad.finishUsingDualStruct("numUniqueNewA");
+        }  // End of history-based model mapping
 
         // After all these, the contact arrays are sorted by contact type not A now
         contactArraysAreSortedByA = false;
@@ -1589,9 +1511,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     }  // End of contact sorting--mapping subroutine
     timers.GetTimer("Build history map").stop();
 
-    std::cout << "Contacts: " << std::endl;
-    displayDeviceArray<bodyID_t>(granData->idPatchA, *scratchPad.numContacts);
-    displayDeviceArray<bodyID_t>(granData->idPatchB, *scratchPad.numContacts);
+    // std::cout << "Patch Contacts: " << std::endl;
+    // displayDeviceArray<bodyID_t>(granData->idPatchA, *scratchPad.numContacts);
+    // displayDeviceArray<bodyID_t>(granData->idPatchB, *scratchPad.numContacts);
+    // displayDeviceArray<contact_t>(granData->patchContactType, *scratchPad.numContacts);
 
     // Finally, don't forget to store the number of contacts for the next iteration, even if there is 0 contacts (in
     // that case, mapping will not be constructed, but we don't have to worry b/c in the next iteration, simply no work
