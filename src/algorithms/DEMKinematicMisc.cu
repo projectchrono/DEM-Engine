@@ -208,9 +208,9 @@ __global__ void extractPatchInvolvedContactPatchIDPairs(deme::patchIDPair_t* con
 
 // Decode unique patch pairs into separate idPatchA/idPatchB arrays
 __global__ void decodePatchPairsToSeparateArrays(deme::patchIDPair_t* uniquePatchPairs,
-                                                  deme::bodyID_t* idPatchA,
-                                                  deme::bodyID_t* idPatchB,
-                                                  size_t numUnique) {
+                                                 deme::bodyID_t* idPatchA,
+                                                 deme::bodyID_t* idPatchB,
+                                                 size_t numUnique) {
     deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < numUnique) {
         deme::patchIDPair_t patchPair = uniquePatchPairs[myID];
@@ -225,8 +225,8 @@ __global__ void decodePatchPairsToSeparateArrays(deme::patchIDPair_t* uniquePatc
 // and using prefix scan on "is first of group" flags.
 // For sorted patch pairs, mark 1 at each position where a new unique value starts, then prefix scan.
 __global__ void markNewPatchPairGroups(deme::patchIDPair_t* sortedPatchPairs,
-                                        deme::contactPairs_t* isNewGroup,
-                                        size_t n) {
+                                       deme::contactPairs_t* isNewGroup,
+                                       size_t n) {
     deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
         if (myID == 0) {
