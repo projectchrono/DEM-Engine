@@ -450,6 +450,8 @@ struct DEMDataKT {
     bodyID_t* idPatchB;
     bodyID_t* previous_idPatchA;
     bodyID_t* previous_idPatchB;
+    contact_t* patchContactType;
+    contact_t* prev_patchContactType;
     contactPairs_t* geomToPatchMap;
 
     // data pointers that is kT's transfer destination

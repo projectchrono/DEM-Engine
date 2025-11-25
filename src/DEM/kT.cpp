@@ -322,8 +322,8 @@ void DEMKinematicThread::workerThread() {
                              granData, simParams, solverFlags, verbosity, idPrimitiveA, idPrimitiveB, contactType,
                              previous_idPrimitiveA, previous_idPrimitiveB, previous_contactType, contactPersistency,
                              contactPatchPairs, contactMapping, idPatchA, idPatchB, previous_idPatchA,
-                             previous_idPatchB, geomToPatchMap, streamInfo.stream, solverScratchSpace, timers,
-                             stateParams);
+                             previous_idPatchB, patchContactType, prev_patchContactType, geomToPatchMap, 
+                             streamInfo.stream, solverScratchSpace, timers, stateParams);
             CDAccumTimer.End();
 
             timers.GetTimer("Send to dT buffer").start();
@@ -493,6 +493,8 @@ void DEMKinematicThread::packDataPointers() {
     idPatchB.bindDevicePointer(&(granData->idPatchB));
     previous_idPatchA.bindDevicePointer(&(granData->previous_idPatchA));
     previous_idPatchB.bindDevicePointer(&(granData->previous_idPatchB));
+    patchContactType.bindDevicePointer(&(granData->patchContactType));
+    prev_patchContactType.bindDevicePointer(&(granData->prev_patchContactType));
     geomToPatchMap.bindDevicePointer(&(granData->geomToPatchMap));
 
     familyMaskMatrix.bindDevicePointer(&(granData->familyMasks));
@@ -538,6 +540,8 @@ void DEMKinematicThread::migrateDataToDevice() {
     contactMapping.toDeviceAsync(streamInfo.stream);
     previous_idPatchA.toDeviceAsync(streamInfo.stream);
     previous_idPatchB.toDeviceAsync(streamInfo.stream);
+    patchContactType.toDeviceAsync(streamInfo.stream);
+    prev_patchContactType.toDeviceAsync(streamInfo.stream);
     familyMaskMatrix.toDeviceAsync(streamInfo.stream);
     familyExtraMarginSize.toDeviceAsync(streamInfo.stream);
 
@@ -768,6 +772,8 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
             DEME_DUAL_ARRAY_RESIZE(contactMapping, cnt_arr_size, NULL_MAPPING_PARTNER);
             DEME_DUAL_ARRAY_RESIZE(previous_idPatchA, cnt_arr_size, 0);
             DEME_DUAL_ARRAY_RESIZE(previous_idPatchB, cnt_arr_size, 0);
+            DEME_DUAL_ARRAY_RESIZE(patchContactType, cnt_arr_size, NOT_A_CONTACT);
+            DEME_DUAL_ARRAY_RESIZE(prev_patchContactType, cnt_arr_size, NOT_A_CONTACT);
         }
     }
 }
