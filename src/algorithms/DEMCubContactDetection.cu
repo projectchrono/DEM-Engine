@@ -158,6 +158,38 @@ inline void removeDuplicateContacts(DualStruct<DEMDataKT>& granData,
     scratchPad.finishUsingTempVector("retain_flags");
 }
 
+inline void sortPrimitiveContactsAndTypesByA(bodyID_t* idPrimitiveA,
+                                             bodyID_t* idPrimitiveB,
+                                             contact_t* contactType,
+                                             size_t numContacts,
+                                             cudaStream_t& this_stream,
+                                             DEMSolverScratchData& scratchPad) {
+    // Sort contact arrays based on idPrimitiveA
+    size_t id_arr_bytes = numContacts * sizeof(bodyID_t);
+    bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector("idA_sorted", id_arr_bytes);
+    bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector("idB_sorted", id_arr_bytes);
+    size_t type_arr_bytes = numContacts * sizeof(contact_t);
+    contact_t* contactType_sorted = (contact_t*)scratchPad.allocateTempVector("contactType_sorted", type_arr_bytes);
+
+    // Use CUB to sort
+    cubDEMSortByKeys<bodyID_t, bodyID_t>(idPrimitiveA, idA_sorted, idPrimitiveB, idB_sorted, numContacts, this_stream,
+                                         scratchPad);
+    cubDEMSortByKeys<bodyID_t, contact_t>(idPrimitiveA, idA_sorted, contactType, contactType_sorted, numContacts,
+                                          this_stream, scratchPad);
+
+    // Copy back to original arrays
+    DEME_GPU_CALL(cudaMemcpyAsync(idPrimitiveA, idA_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice, this_stream));
+    DEME_GPU_CALL(cudaMemcpyAsync(idPrimitiveB, idB_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice, this_stream));
+    DEME_GPU_CALL(
+        cudaMemcpyAsync(contactType, contactType_sorted, type_arr_bytes, cudaMemcpyDeviceToDevice, this_stream));
+    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+
+    // Unclaim temp vectors
+    scratchPad.finishUsingTempVector("idA_sorted");
+    scratchPad.finishUsingTempVector("idB_sorted");
+    scratchPad.finishUsingTempVector("contactType_sorted");
+}
+
 void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       std::shared_ptr<jitify::Program>& bin_triangle_kernels,
                       std::shared_ptr<jitify::Program>& sphere_contact_kernels,
@@ -1052,28 +1084,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // There could be a few cases where arrays are sorted by A: we did duplicate removal; we had persistent contacts
         // etc. In those cases, no need to sort again.
         if (!contactArraysAreSortedByA) {
-            contact_t* contactType_sorted =
-                (contact_t*)scratchPad.allocateTempVector("contactType_sorted", type_arr_bytes);
-            bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector("idA_sorted", id_arr_bytes);
-            bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector("idB_sorted", id_arr_bytes);
-
-            //// TODO: But do I have to SortByKey two times?? Can I zip these value arrays together??
-            // Although it is stupid, do pay attention to that it does leverage the fact that RadixSort is stable.
-            cubDEMSortByKeys<bodyID_t, bodyID_t>(granData->idPrimitiveA, idA_sorted, granData->idPrimitiveB, idB_sorted,
-                                                 *scratchPad.numPrimitiveContacts, this_stream, scratchPad);
-            cubDEMSortByKeys<bodyID_t, contact_t>(granData->idPrimitiveA, idA_sorted, granData->contactType,
-                                                  contactType_sorted, *scratchPad.numPrimitiveContacts, this_stream,
-                                                  scratchPad);
-
-            // Copy back to idPrimitive arrays
-            DEME_GPU_CALL(cudaMemcpy(granData->idPrimitiveA, idA_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(granData->idPrimitiveB, idB_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(
-                cudaMemcpy(granData->contactType, contactType_sorted, type_arr_bytes, cudaMemcpyDeviceToDevice));
-            // Short-lifespan vectors can now be freed
-            scratchPad.finishUsingTempVector("contactType_sorted");
-            scratchPad.finishUsingTempVector("idA_sorted");
-            scratchPad.finishUsingTempVector("idB_sorted");
+            sortPrimitiveContactsAndTypesByA(granData->idPrimitiveA, granData->idPrimitiveB, granData->contactType,
+                                             *scratchPad.numPrimitiveContacts, this_stream, scratchPad);
         }
 
         // For history-based models, construct the enduring contact map. bodyA can be sphere or triangle.
@@ -1119,6 +1131,12 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
 
         // Only need to actually create the mapping if the force model has history
         if (!solverFlags.isHistoryless) {
+            // We don't assume the order of the previous primitive contact array, so sort by A is needed
+            sortPrimitiveContactsAndTypesByA(granData->previous_idPrimitiveA, granData->previous_idPrimitiveB,
+                                             granData->previous_contactType, *scratchPad.numPrevPrimitiveContacts,
+                                             this_stream, scratchPad);
+
+            // With A-sorted previous contact array, we can now run-length encode to find old idA run-length
             geoSphereTouches_t* old_idA_runlength =
                 (geoSphereTouches_t*)scratchPad.allocateTempVector("old_idA_runlength", run_length_bytes);
             bodyID_t* unique_old_idA = (bodyID_t*)scratchPad.allocateTempVector("unique_old_idA", unique_id_bytes);
@@ -1195,44 +1213,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             scratchPad.finishUsingTempVector("new_idA_scanned_runlength");
             scratchPad.finishUsingTempVector("old_idA_scanned_runlength");
 
-            // One thing we need to do before storing the old contact pairs: figure out how it is mapped to the final
-            // sorted primitive contact array
-            contactPairs_t* old_arr_unsort_to_sort_map;
-            {
-                size_t map_arr_bytes = (*scratchPad.numPrevPrimitiveContacts) * sizeof(contactPairs_t);
-                old_arr_unsort_to_sort_map =
-                    (contactPairs_t*)scratchPad.allocateTempVector("old_arr_unsort_to_sort_map", map_arr_bytes);
-                contactPairs_t* one_to_n = (contactPairs_t*)scratchPad.allocateTempVector("one_to_n", map_arr_bytes);
-                size_t blocks_needed_for_mapping =
-                    (*scratchPad.numPrevPrimitiveContacts + DEME_MAX_THREADS_PER_BLOCK - 1) /
-                    DEME_MAX_THREADS_PER_BLOCK;
-                if (blocks_needed_for_mapping > 0) {
-                    lineNumbers<<<dim3(blocks_needed_for_mapping), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
-                        one_to_n, *scratchPad.numPrevPrimitiveContacts);
-                    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+            //// TODO: Appropriately sort the contact and mapping (based on patch IDs)
 
-                    contact_t* old_contactType_sorted = (contact_t*)scratchPad.allocateTempVector(
-                        "old_contactType_sorted", (*scratchPad.numPrevPrimitiveContacts) * sizeof(contact_t));
-                    // Sorted by type is how we finalize the old contact pair info
-                    cubDEMSortByKeys<contact_t, contactPairs_t>(
-                        granData->previous_contactType, old_contactType_sorted, one_to_n, old_arr_unsort_to_sort_map,
-                        *scratchPad.numPrevPrimitiveContacts, this_stream, scratchPad);
-                    // Now, we have `map from' info. But we need `map to' info.
-                    convertToAndFrom<<<dim3(blocks_needed_for_mapping), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                       this_stream>>>(old_arr_unsort_to_sort_map, one_to_n,
-                                                      *scratchPad.numPrevPrimitiveContacts);
-                    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-                }
-                // one_to_n used for temp storage; now give it back to the true mapping we wanted.
-                // So here, old_arr_unsort_to_sort_map's memory space is not needed anymore, but one_to_n must still
-                // live, a little nuance to pay attention to. However, alas, we can always just delay memory freeing
-                // and do it all at the very end: this is exactly what I did here.
-                old_arr_unsort_to_sort_map = one_to_n;
-                scratchPad.finishUsingTempVector("old_contactType_sorted");
-            }
-
-            // Finally, copy new contact array to old contact array for the record. Note we register old contact pairs
-            // with the array sorted by A, but when supplying dT, it was sorted by contact type.
+            // Finally, copy new contact array to old contact array for the record.
             if (*scratchPad.numPrimitiveContacts > previous_idPrimitiveA.size()) {
                 // Note these resizing are automatically on kT's device
                 DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_idPrimitiveA, *scratchPad.numPrimitiveContacts);
@@ -1248,84 +1231,13 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             DEME_GPU_CALL(cudaMemcpy(granData->previous_contactType, granData->contactType, type_arr_bytes,
                                      cudaMemcpyDeviceToDevice));
 
-            // dT benefits from type-sorted contact array, so we sort
-            {
-                size_t type_arr_bytes = (*scratchPad.numPrimitiveContacts) * sizeof(contact_t);
-                contact_t* contactType_sorted =
-                    (contact_t*)scratchPad.allocateTempVector("contactType_sorted", type_arr_bytes);
-                size_t id_arr_bytes = (*scratchPad.numPrimitiveContacts) * sizeof(bodyID_t);
-                bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector("idA_sorted", id_arr_bytes);
-                bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector("idB_sorted", id_arr_bytes);
-                size_t cnt_arr_bytes = (*scratchPad.numPrimitiveContacts) * sizeof(contactPairs_t);
-                contactPairs_t* map_sorted =
-                    (contactPairs_t*)scratchPad.allocateTempVector("map_sorted", cnt_arr_bytes);
-
-                //// TODO: But do I have to SortByKey three times?? Can I zip these value arrays together??
-                cubDEMSortByKeys<contact_t, bodyID_t>(granData->contactType, contactType_sorted, granData->idPrimitiveB,
-                                                      idB_sorted, *scratchPad.numPrimitiveContacts, this_stream,
-                                                      scratchPad);
-                cubDEMSortByKeys<contact_t, bodyID_t>(granData->contactType, contactType_sorted, granData->idPrimitiveA,
-                                                      idA_sorted, *scratchPad.numPrimitiveContacts, this_stream,
-                                                      scratchPad);
-                cubDEMSortByKeys<contact_t, contactPairs_t>(granData->contactType, contactType_sorted,
-                                                            granData->contactMapping, map_sorted,
-                                                            *scratchPad.numPrimitiveContacts, this_stream, scratchPad);
-
-                // Finally, map the mapping array so it takes into account that arrays are shipped after sorting.
-                size_t blocks_needed_for_mapping =
-                    (*scratchPad.numPrimitiveContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-                if (blocks_needed_for_mapping > 0) {
-                    rearrangeMapping<<<dim3(blocks_needed_for_mapping), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                       this_stream>>>(map_sorted, old_arr_unsort_to_sort_map,
-                                                      *scratchPad.numPrimitiveContacts);
-                    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-                }
-
-                // Copy back to idPrimitive arrays
-                DEME_GPU_CALL(cudaMemcpy(granData->idPrimitiveA, idA_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
-                DEME_GPU_CALL(cudaMemcpy(granData->idPrimitiveB, idB_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
-                DEME_GPU_CALL(
-                    cudaMemcpy(granData->contactType, contactType_sorted, type_arr_bytes, cudaMemcpyDeviceToDevice));
-                DEME_GPU_CALL(
-                    cudaMemcpy(granData->contactMapping, map_sorted, cnt_arr_bytes, cudaMemcpyDeviceToDevice));
-
-                scratchPad.finishUsingTempVector("contactType_sorted");
-                scratchPad.finishUsingTempVector("idA_sorted");
-                scratchPad.finishUsingTempVector("idB_sorted");
-                scratchPad.finishUsingTempVector("map_sorted");
-            }
         } else {  // If historyless, we still want to sort based on type
-            size_t type_arr_bytes = (*scratchPad.numPrimitiveContacts) * sizeof(contact_t);
-            contact_t* contactType_sorted =
-                (contact_t*)scratchPad.allocateTempVector("contactType_sorted", type_arr_bytes);
-            size_t id_arr_bytes = (*scratchPad.numPrimitiveContacts) * sizeof(bodyID_t);
-            bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector("idA_sorted", id_arr_bytes);
-            bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector("idB_sorted", id_arr_bytes);
-
-            cubDEMSortByKeys<contact_t, bodyID_t>(granData->contactType, contactType_sorted, granData->idPrimitiveB,
-                                                  idB_sorted, *scratchPad.numPrimitiveContacts, this_stream,
-                                                  scratchPad);
-            cubDEMSortByKeys<contact_t, bodyID_t>(granData->contactType, contactType_sorted, granData->idPrimitiveA,
-                                                  idA_sorted, *scratchPad.numPrimitiveContacts, this_stream,
-                                                  scratchPad);
-
-            // Copy back to idPrimitive arrays
-            DEME_GPU_CALL(cudaMemcpy(granData->idPrimitiveA, idA_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(granData->idPrimitiveB, idB_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(
-                cudaMemcpy(granData->contactType, contactType_sorted, type_arr_bytes, cudaMemcpyDeviceToDevice));
-            scratchPad.finishUsingTempVector("contactType_sorted");
-            scratchPad.finishUsingTempVector("idA_sorted");
-            scratchPad.finishUsingTempVector("idB_sorted");
+            //// TODO: Appropriately sort the contact and mapping (based on patch IDs)
         }
         // This part is light on memory, so we can delay some freeing
         scratchPad.finishUsingTempVector("new_idA_runlength");
         scratchPad.finishUsingTempVector("unique_new_idA");
         scratchPad.finishUsingDualStruct("numUniqueNewA");
-        // Note one_to_n corresponds to the pointer name old_arr_unsort_to_sort_map, an exception to general "matched"
-        // naming convension. But we delayed their freeing, so you see them both freed here.
-        scratchPad.finishUsingTempVector("one_to_n");
-        scratchPad.finishUsingTempVector("old_arr_unsort_to_sort_map");
 
         // After all these, the contact arrays are sorted by contact type not A now
         contactArraysAreSortedByA = false;
