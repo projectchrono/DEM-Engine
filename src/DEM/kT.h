@@ -166,14 +166,14 @@ class DEMKinematicThread {
     DualArray<float> familyExtraMarginSize = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // kT computed contact pair info
-    DualArray<bodyID_t> idGeometryA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<bodyID_t> idGeometryB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> idPrimitiveA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> idPrimitiveB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<contact_t> contactType = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Contact pair info at the previous time step. This is needed by dT so enduring contacts are identified in
     // history-based models.
-    DualArray<bodyID_t> previous_idGeometryA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<bodyID_t> previous_idGeometryB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> previous_idPrimitiveA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> previous_idPrimitiveB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<contact_t> previous_contactType = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<contactPairs_t> contactMapping =
         DualArray<contactPairs_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
@@ -204,6 +204,26 @@ class DEMKinematicThread {
     // kT computed contact patch pair info (for mesh-involved contacts)
     DualArray<patchIDPair_t> contactPatchPairs =
         DualArray<patchIDPair_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+
+    // NEW: Separate patch IDs for contact pairs (instead of combined patchIDPair_t)
+    // These arrays store patch IDs for contacts involving patches (mesh-based contacts)
+    // They are potentially smaller in size than idPrimitiveA/B arrays
+    DualArray<bodyID_t> idPatchA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> idPatchB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+
+    // Patch IDs at the previous time step. Needed for history-based models with mesh contacts.
+    DualArray<bodyID_t> previous_idPatchA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> previous_idPatchB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+
+    // Contact types at patch level (corresponding to idPatchA/B arrays)
+    DualArray<contact_t> patchContactType = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<contact_t> prev_patchContactType = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+
+    // Mapping array: maps from primitive-based pair index to patch-based pair index
+    // Same length as primitive pair arrays (idPrimitiveA/B). For each primitive pair,
+    // records the index where the corresponding patch pair appears in idPatchA/B (the shorter array)
+    DualArray<contactPairs_t> geomToPatchMap =
+        DualArray<contactPairs_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // kT's timers
     std::vector<std::string> timer_names = {"Discretize domain",      "Find contact pairs", "Build history map",

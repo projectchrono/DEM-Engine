@@ -76,7 +76,7 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
     // Based on A's type, equip info
     // ----------------------------------------------------------------
     if constexpr (AType == deme::GEO_T_SPHERE) {
-        deme::bodyID_t sphereID = granData->idGeometryA[myContactID];
+        deme::bodyID_t sphereID = granData->idPrimitiveA[myContactID];
         deme::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
 
         float3 myRelPos;
@@ -107,7 +107,7 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
     } else if constexpr (AType == deme::GEO_T_TRIANGLE) {
         // Geometry ID here is called sphereID, although it is not a sphere, it's more like triID. But naming it
         // sphereID makes the acquisition process cleaner.
-        deme::bodyID_t sphereID = granData->idGeometryA[myContactID];
+        deme::bodyID_t sphereID = granData->idPrimitiveA[myContactID];
         deme::bodyID_t myOwner = granData->triOwnerMesh[sphereID];
         //// TODO: Is this OK?
         ARadius = DEME_HUGE_FLOAT;
@@ -153,7 +153,7 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
     // Then B, location and velocity, depending on type
     // ----------------------------------------------------------------
     if constexpr (BType == deme::GEO_T_SPHERE) {
-        deme::bodyID_t sphereID = granData->idGeometryB[myContactID];
+        deme::bodyID_t sphereID = granData->idPrimitiveB[myContactID];
         deme::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
 
         float3 myRelPos;
@@ -198,7 +198,7 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
     } else if constexpr (BType == deme::GEO_T_TRIANGLE) {
         // Geometry ID here is called sphereID, although it is not a sphere, it's more like triID. But naming it
         // sphereID makes the acquisition process cleaner.
-        deme::bodyID_t sphereID = granData->idGeometryB[myContactID];
+        deme::bodyID_t sphereID = granData->idPrimitiveB[myContactID];
         deme::bodyID_t myOwner = granData->triOwnerMesh[sphereID];
         //// TODO: Is this OK?
         BRadius = DEME_HUGE_FLOAT;
@@ -288,7 +288,7 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
     } else if constexpr (BType == deme::GEO_T_ANALYTICAL) {
         // Geometry ID here is called sphereID, although it is not a sphere, it's more like analyticalID. But naming
         // it sphereID makes the acquisition process cleaner.
-        deme::objID_t sphereID = granData->idGeometryB[myContactID];
+        deme::objID_t sphereID = granData->idPrimitiveB[myContactID];
         deme::bodyID_t myOwner = objOwner[sphereID];
         // If B is analytical entity, its owner, relative location, material info is jitified.
         bodyBMatType = objMaterial[sphereID];

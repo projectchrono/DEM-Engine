@@ -34,7 +34,7 @@ __global__ void buildPersistentMap(deme::geoSphereTouches_t* new_idA_runlength_f
             for (deme::geoSphereTouches_t i = 0; i < new_cnt_count; i++) {
                 // Current contact number we are inspecting
                 deme::contactPairs_t this_contact = new_cnt_offset + i;
-                deme::bodyID_t new_idB = granData->idGeometryB[this_contact];
+                deme::bodyID_t new_idB = granData->idPrimitiveB[this_contact];
                 deme::contact_t new_cntType = granData->contactType[this_contact];
                 // Mark it as no matching pair found, being a new contact; modify it later
                 deme::contactPairs_t my_partner = deme::NULL_MAPPING_PARTNER;
@@ -45,7 +45,7 @@ __global__ void buildPersistentMap(deme::geoSphereTouches_t* new_idA_runlength_f
                 }
                 // Loop through the old idB to see if there is a match
                 for (deme::geoSphereTouches_t j = 0; j < old_cnt_count; j++) {
-                    deme::bodyID_t old_idB = granData->previous_idGeometryB[old_cnt_offset + j];
+                    deme::bodyID_t old_idB = granData->previous_idPrimitiveB[old_cnt_offset + j];
                     deme::contact_t old_cntType = granData->previous_contactType[old_cnt_offset + j];
                     // If both idB and contact type match, then it is an enduring contact, write it to the mapping
                     // array
@@ -165,17 +165,16 @@ __global__ void markDuplicateContacts(deme::geoSphereTouches_t* idA_runlength,
     }
 }
 
-__global__ void extractMeshInvolvedContactPatchIDPairs(deme::patchIDPair_t* contactPatchPairs,
-                                                       // deme::notStupidBool_t* isMeshInvolvedContact,
-                                                       deme::contact_t* contactType,
-                                                       deme::bodyID_t* idGeometryA,
-                                                       deme::bodyID_t* idGeometryB,
-                                                       deme::bodyID_t* triPatchID,
-                                                       size_t nContacts) {
+__global__ void extractPatchInvolvedContactPatchIDPairs(deme::patchIDPair_t* contactPatchPairs,
+                                                        deme::contact_t* contactType,
+                                                        deme::bodyID_t* idPrimitiveA,
+                                                        deme::bodyID_t* idPrimitiveB,
+                                                        deme::bodyID_t* triPatchID,
+                                                        size_t nContacts) {
     deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContacts) {
-        deme::bodyID_t bodyA = idGeometryA[myID];
-        deme::bodyID_t bodyB = idGeometryB[myID];
+        deme::bodyID_t bodyA = idPrimitiveA[myID];
+        deme::bodyID_t bodyB = idPrimitiveB[myID];
         switch (contactType[myID]) {
             case deme::SPHERE_TRIANGLE_CONTACT: {
                 deme::bodyID_t patchB = triPatchID[bodyB];
@@ -183,7 +182,6 @@ __global__ void extractMeshInvolvedContactPatchIDPairs(deme::patchIDPair_t* cont
                 // purpose
                 contactPatchPairs[myID] = deme::encodeContactType<deme::patchIDPair_t, deme::bodyID_t>(
                     bodyA, patchB);  // Input bodyID_t, return patchIDPair_t
-                // isMeshInvolvedContact[myID] = 1;
                 break;
             }
             case deme::TRIANGLE_ANALYTICAL_CONTACT: {
@@ -191,7 +189,6 @@ __global__ void extractMeshInvolvedContactPatchIDPairs(deme::patchIDPair_t* cont
                 // For mesh-analytical contact: mesh has patch ID, analytical object does not but its geoID serves the
                 // same purpose
                 contactPatchPairs[myID] = deme::encodeContactType<deme::patchIDPair_t, deme::bodyID_t>(patchA, bodyB);
-                // isMeshInvolvedContact[myID] = 1;
                 break;
             }
             case deme::TRIANGLE_TRIANGLE_CONTACT: {
@@ -199,12 +196,44 @@ __global__ void extractMeshInvolvedContactPatchIDPairs(deme::patchIDPair_t* cont
                 deme::bodyID_t patchB = triPatchID[bodyB];
                 // For triangle-triangle contact: both triangles have patch IDs
                 contactPatchPairs[myID] = deme::encodeContactType<deme::patchIDPair_t, deme::bodyID_t>(patchA, patchB);
-                // isMeshInvolvedContact[myID] = 1;
                 break;
             }
             default:
-                // isMeshInvolvedContact[myID] = 0;
+                // In other no-mesh cases, for now, we just use geoID as patchIDs
+                contactPatchPairs[myID] = deme::encodeContactType<deme::patchIDPair_t, deme::bodyID_t>(bodyA, bodyB);
                 break;
+        }
+    }
+}
+
+// Decode unique patch pairs into separate idPatchA/idPatchB arrays
+__global__ void decodePatchPairsToSeparateArrays(deme::patchIDPair_t* uniquePatchPairs,
+                                                 deme::bodyID_t* idPatchA,
+                                                 deme::bodyID_t* idPatchB,
+                                                 size_t numUnique) {
+    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < numUnique) {
+        deme::patchIDPair_t patchPair = uniquePatchPairs[myID];
+        // decodeTypeA returns the value stored in high bits (always the smaller of the two when encoded)
+        // decodeTypeB returns the value stored in low bits (always the larger of the two when encoded)
+        idPatchA[myID] = deme::decodeTypeA<deme::patchIDPair_t, deme::bodyID_t>(patchPair);
+        idPatchB[myID] = deme::decodeTypeB<deme::patchIDPair_t, deme::bodyID_t>(patchPair);
+    }
+}
+
+// Build geomToPatchMap by detecting boundaries of unique patch pairs in sorted array
+// and using prefix scan on "is first of group" flags.
+// For sorted patch pairs, mark 1 at each position where a new unique value starts, then prefix scan.
+__global__ void markNewPatchPairGroups(deme::patchIDPair_t* sortedPatchPairs,
+                                       deme::contactPairs_t* isNewGroup,
+                                       size_t n) {
+    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        if (myID == 0) {
+            isNewGroup[myID] = 0;
+        } else {
+            // Compare with previous element - if different, it's a new group
+            isNewGroup[myID] = (sortedPatchPairs[myID] != sortedPatchPairs[myID - 1]) ? 1 : 0;
         }
     }
 }

@@ -20,7 +20,7 @@ __global__ void forceToAcc(deme::DEMDataDT* granData, size_t n) {
         {
             float myMass;
             float3 myMOI;
-            const deme::bodyID_t idGeo = granData->idGeometryA[myID];
+            const deme::bodyID_t idGeo = granData->idPrimitiveA[myID];
             const float3 myCntPnt = granData->contactPointGeometryA[myID];
 
             const deme::bodyID_t myOwner = DEME_GET_GEO_OWNER_ID(idGeo, deme::decodeTypeA(thisCntType));
@@ -57,7 +57,7 @@ __global__ void forceToAcc(deme::DEMDataDT* granData, size_t n) {
         {
             float myMass;
             float3 myMOI;
-            const deme::bodyID_t idGeo = granData->idGeometryB[myID];
+            const deme::bodyID_t idGeo = granData->idPrimitiveB[myID];
             const float3 myCntPnt = granData->contactPointGeometryB[myID];
 
             deme::bodyID_t myOwner = DEME_GET_GEO_OWNER_ID(idGeo, deme::decodeTypeB(thisCntType));

@@ -361,10 +361,14 @@ class DEMSolverScratchData {
     DualStructPool<size_t> m_dualStructPool;
 
   public:
-    // Number of contacts in this CD step
+    // Number of contacts (in terms of convex patches) in this CD step
     DualStruct<size_t> numContacts = DualStruct<size_t>(0);
     // Number of contacts in the previous CD step
     DualStruct<size_t> numPrevContacts = DualStruct<size_t>(0);
+    // Number of contacts between the primitives (spheres/triangles) in this CD step
+    DualStruct<size_t> numPrimitiveContacts = DualStruct<size_t>(0);
+    // Number of previous step's primitive contacts
+    DualStruct<size_t> numPrevPrimitiveContacts = DualStruct<size_t>(0);
     // Number of spheres in the previous CD step (in case user added/removed clumps from the system)
     DualStruct<size_t> numPrevSpheres = DualStruct<size_t>(0);
     // Prev number of triangles

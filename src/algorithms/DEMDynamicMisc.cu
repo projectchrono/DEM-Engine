@@ -25,9 +25,9 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < numCnt) {
         contact_t typeContact = granData->contactType[i];
-        bodyID_t geoA = granData->idGeometryA[i];
+        bodyID_t geoA = granData->idPrimitiveA[i];
         bodyID_t ownerA = DEME_GET_GEO_OWNER_ID(geoA, decodeTypeA(typeContact));
-        bodyID_t geoB = granData->idGeometryB[i];
+        bodyID_t geoB = granData->idPrimitiveB[i];
         bodyID_t ownerB = DEME_GET_GEO_OWNER_ID(geoB, decodeTypeB(typeContact));
 
         bool AorB;  // true for A, false for B

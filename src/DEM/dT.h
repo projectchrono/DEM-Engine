@@ -84,11 +84,16 @@ class DEMDynamicThread {
     // kT modifies these arrays; dT uses them only.
 
     // dT gets contact pair/location/history map info from kT
-    DeviceArray<bodyID_t> idGeometryA_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
-    DeviceArray<bodyID_t> idGeometryB_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<bodyID_t> idPrimitiveA_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<bodyID_t> idPrimitiveB_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
     DeviceArray<contact_t> contactType_buffer = DeviceArray<contact_t>(&m_approxDeviceBytesUsed);
     DeviceArray<contactPairs_t> contactMapping_buffer = DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed);
     DeviceArray<patchIDPair_t> contactPatchPairs_buffer = DeviceArray<patchIDPair_t>(&m_approxDeviceBytesUsed);
+
+    // NEW: Buffer arrays for separate patch IDs and their mapping to geometry arrays
+    DeviceArray<bodyID_t> idPatchA_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<bodyID_t> idPatchB_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<contactPairs_t> geomToPatchMap_buffer = DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed);
 
     // Simulation params-related variables
     DualStruct<DEMSimParams> simParams = DualStruct<DEMSimParams>();
@@ -199,13 +204,19 @@ class DEMDynamicThread {
         DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Contact pair/location, for dT's personal use!!
-    DualArray<bodyID_t> idGeometryA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<bodyID_t> idGeometryB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> idPrimitiveA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> idPrimitiveB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<contact_t> contactType = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // DualArray<contactPairs_t> contactMapping;
     // Fused mesh patch IDs for contacts involving meshes (mesh-mesh, mesh-analytical, sphere-mesh)
     DualArray<patchIDPair_t> contactPatchPairs =
         DualArray<patchIDPair_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+
+    // NEW: Separate patch IDs and mapping arrays (work arrays for dT)
+    DualArray<bodyID_t> idPatchA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> idPatchB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<contactPairs_t> geomToPatchMap =
+        DualArray<contactPairs_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Some of dT's own work arrays
     // Force of each contact event. It is the force that bodyA feels. They are in global.
@@ -443,8 +454,8 @@ class DEMDynamicThread {
 
     /// @brief Fill res with the `wc_num' wildcard values, for n spheres starting from ID.
     void getSphereWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
-    /// @brief Fill res with the `wc_num' wildcard values, for n triangles starting from ID.
-    void getTriWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
+    /// @brief Fill res with the `wc_num' wildcard values, for n mesh patches starting from ID.
+    void getPatchWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
     /// @brief Fill res with the `wc_num' wildcard values, for n analytical entities starting from ID.
     void getAnalWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
 

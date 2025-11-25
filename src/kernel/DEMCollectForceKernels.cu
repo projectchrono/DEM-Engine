@@ -15,8 +15,8 @@ __global__ void cashInOwnerIndex(deme::bodyID_t* idAOwner,
                                  size_t nContactPairs) {
     deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContactPairs) {
-        deme::bodyID_t idGeoA = granData->idGeometryA[myID];
-        deme::bodyID_t idGeoB = granData->idGeometryB[myID];
+        deme::bodyID_t idGeoA = granData->idPrimitiveA[myID];
+        deme::bodyID_t idGeoB = granData->idPrimitiveB[myID];
         deme::contact_t thisCntType = granData->contactType[myID];
         idAOwner[myID] = DEME_GET_GEO_OWNER_ID(idGeoA, deme::decodeTypeA(thisCntType));
         idBOwner[myID] = DEME_GET_GEO_OWNER_ID(idGeoB, deme::decodeTypeB(thisCntType));

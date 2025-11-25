@@ -22,17 +22,22 @@ inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
     // These buffers are on dT
     DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
     dT->buffer_size = nContactPairs;
-    DEME_DEVICE_ARRAY_RESIZE(dT->idGeometryA_buffer, nContactPairs);
-    DEME_DEVICE_ARRAY_RESIZE(dT->idGeometryB_buffer, nContactPairs);
+    DEME_DEVICE_ARRAY_RESIZE(dT->idPrimitiveA_buffer, nContactPairs);
+    DEME_DEVICE_ARRAY_RESIZE(dT->idPrimitiveB_buffer, nContactPairs);
     DEME_DEVICE_ARRAY_RESIZE(dT->contactType_buffer, nContactPairs);
-    granData->pDTOwnedBuffer_idGeometryA = dT->idGeometryA_buffer.data();
-    granData->pDTOwnedBuffer_idGeometryB = dT->idGeometryB_buffer.data();
+    granData->pDTOwnedBuffer_idPrimitiveA = dT->idPrimitiveA_buffer.data();
+    granData->pDTOwnedBuffer_idPrimitiveB = dT->idPrimitiveB_buffer.data();
     granData->pDTOwnedBuffer_contactType = dT->contactType_buffer.data();
 
     if (!solverFlags.isHistoryless) {
         DEME_DEVICE_ARRAY_RESIZE(dT->contactMapping_buffer, nContactPairs);
         granData->pDTOwnedBuffer_contactMapping = dT->contactMapping_buffer.data();
     }
+
+    // NEW: Resize geomToPatchMap buffer (same size as geometry arrays)
+    DEME_DEVICE_ARRAY_RESIZE(dT->geomToPatchMap_buffer, nContactPairs);
+    granData->pDTOwnedBuffer_geomToPatchMap = dT->geomToPatchMap_buffer.data();
+
     // Unset the device change we just made
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
 
@@ -45,6 +50,13 @@ inline void DEMKinematicThread::meshPatchPairsResize(size_t nMeshInvolvedContact
     DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
     DEME_DEVICE_ARRAY_RESIZE(dT->contactPatchPairs_buffer, nMeshInvolvedContactPairs);
     granData->pDTOwnedBuffer_contactPatchPairs = dT->contactPatchPairs_buffer.data();
+
+    // NEW: Resize the separate patch ID arrays (sized to mesh-involved contacts, the shorter array)
+    DEME_DEVICE_ARRAY_RESIZE(dT->idPatchA_buffer, nMeshInvolvedContactPairs);
+    DEME_DEVICE_ARRAY_RESIZE(dT->idPatchB_buffer, nMeshInvolvedContactPairs);
+    granData->pDTOwnedBuffer_idPatchA = dT->idPatchA_buffer.data();
+    granData->pDTOwnedBuffer_idPatchB = dT->idPatchB_buffer.data();
+
     // Unset the device change we just made
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
 }
@@ -213,16 +225,25 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
         meshPatchPairsResize(*solverScratchSpace.numContacts);
     }
 
-    DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA,
+    DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idPrimitiveA, granData->idPrimitiveA,
                              (*solverScratchSpace.numContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryB, granData->idGeometryB,
+    DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idPrimitiveB, granData->idPrimitiveB,
                              (*solverScratchSpace.numContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactType, granData->contactType,
                              (*solverScratchSpace.numContacts) * sizeof(contact_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactPatchPairs, granData->contactPatchPairs,
                              (*solverScratchSpace.numContacts) * sizeof(patchIDPair_t), cudaMemcpyDeviceToDevice));
-    // DEME_MIGRATE_TO_DEVICE(dT->idGeometryA_buffer, dT->streamInfo.device, streamInfo.stream);
-    // DEME_MIGRATE_TO_DEVICE(dT->idGeometryB_buffer, dT->streamInfo.device, streamInfo.stream);
+
+    // NEW: Transfer separate patch IDs and mapping array
+    DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idPatchA, granData->idPatchA,
+                             (*solverScratchSpace.numContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idPatchB, granData->idPatchB,
+                             (*solverScratchSpace.numContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_geomToPatchMap, granData->geomToPatchMap,
+                             (*solverScratchSpace.numContacts) * sizeof(contactPairs_t), cudaMemcpyDeviceToDevice));
+
+    // DEME_MIGRATE_TO_DEVICE(dT->idPrimitiveA_buffer, dT->streamInfo.device, streamInfo.stream);
+    // DEME_MIGRATE_TO_DEVICE(dT->idPrimitiveB_buffer, dT->streamInfo.device, streamInfo.stream);
     // DEME_MIGRATE_TO_DEVICE(dT->contactType_buffer, dT->streamInfo.device, streamInfo.stream);
     if (!solverFlags.isHistoryless) {
         DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactMapping, granData->contactMapping,
@@ -298,10 +319,11 @@ void DEMKinematicThread::workerThread() {
             // For auto-adjusting bin size, this part of code is encapsuled in an accumulative timer.
             CDAccumTimer.Begin();
             contactDetection(bin_sphere_kernels, bin_triangle_kernels, sphere_contact_kernels, sphTri_contact_kernels,
-                             granData, simParams, solverFlags, verbosity, idGeometryA, idGeometryB, contactType,
-                             previous_idGeometryA, previous_idGeometryB, previous_contactType, contactPersistency,
-                             contactPatchPairs, contactMapping, streamInfo.stream, solverScratchSpace, timers,
-                             stateParams);
+                             granData, simParams, solverFlags, verbosity, idPrimitiveA, idPrimitiveB, contactType,
+                             previous_idPrimitiveA, previous_idPrimitiveB, previous_contactType, contactPersistency,
+                             contactPatchPairs, contactMapping, idPatchA, idPatchB, previous_idPatchA,
+                             previous_idPatchB, patchContactType, prev_patchContactType, geomToPatchMap,
+                             streamInfo.stream, solverScratchSpace, timers, stateParams);
             CDAccumTimer.End();
 
             timers.GetTimer("Send to dT buffer").start();
@@ -456,15 +478,25 @@ void DEMKinematicThread::packDataPointers() {
     oriQy.bindDevicePointer(&(granData->oriQy));
     oriQz.bindDevicePointer(&(granData->oriQz));
     marginSize.bindDevicePointer(&(granData->marginSize));
-    idGeometryA.bindDevicePointer(&(granData->idGeometryA));
-    idGeometryB.bindDevicePointer(&(granData->idGeometryB));
+    idPrimitiveA.bindDevicePointer(&(granData->idPrimitiveA));
+    idPrimitiveB.bindDevicePointer(&(granData->idPrimitiveB));
     contactType.bindDevicePointer(&(granData->contactType));
     contactPersistency.bindDevicePointer(&(granData->contactPersistency));
     contactPatchPairs.bindDevicePointer(&(granData->contactPatchPairs));
-    previous_idGeometryA.bindDevicePointer(&(granData->previous_idGeometryA));
-    previous_idGeometryB.bindDevicePointer(&(granData->previous_idGeometryB));
+    previous_idPrimitiveA.bindDevicePointer(&(granData->previous_idPrimitiveA));
+    previous_idPrimitiveB.bindDevicePointer(&(granData->previous_idPrimitiveB));
     previous_contactType.bindDevicePointer(&(granData->previous_contactType));
     contactMapping.bindDevicePointer(&(granData->contactMapping));
+
+    // NEW: Bind separate patch ID and mapping array pointers
+    idPatchA.bindDevicePointer(&(granData->idPatchA));
+    idPatchB.bindDevicePointer(&(granData->idPatchB));
+    previous_idPatchA.bindDevicePointer(&(granData->previous_idPatchA));
+    previous_idPatchB.bindDevicePointer(&(granData->previous_idPatchB));
+    patchContactType.bindDevicePointer(&(granData->patchContactType));
+    prev_patchContactType.bindDevicePointer(&(granData->prev_patchContactType));
+    geomToPatchMap.bindDevicePointer(&(granData->geomToPatchMap));
+
     familyMaskMatrix.bindDevicePointer(&(granData->familyMasks));
     familyExtraMarginSize.bindDevicePointer(&(granData->familyExtraMarginSize));
 
@@ -498,14 +530,18 @@ void DEMKinematicThread::migrateDataToDevice() {
     oriQy.toDeviceAsync(streamInfo.stream);
     oriQz.toDeviceAsync(streamInfo.stream);
     marginSize.toDeviceAsync(streamInfo.stream);
-    idGeometryA.toDeviceAsync(streamInfo.stream);
-    idGeometryB.toDeviceAsync(streamInfo.stream);
+    idPrimitiveA.toDeviceAsync(streamInfo.stream);
+    idPrimitiveB.toDeviceAsync(streamInfo.stream);
     contactType.toDeviceAsync(streamInfo.stream);
     contactPersistency.toDeviceAsync(streamInfo.stream);
-    previous_idGeometryA.toDeviceAsync(streamInfo.stream);
-    previous_idGeometryB.toDeviceAsync(streamInfo.stream);
+    previous_idPrimitiveA.toDeviceAsync(streamInfo.stream);
+    previous_idPrimitiveB.toDeviceAsync(streamInfo.stream);
     previous_contactType.toDeviceAsync(streamInfo.stream);
     contactMapping.toDeviceAsync(streamInfo.stream);
+    previous_idPatchA.toDeviceAsync(streamInfo.stream);
+    previous_idPatchB.toDeviceAsync(streamInfo.stream);
+    patchContactType.toDeviceAsync(streamInfo.stream);
+    prev_patchContactType.toDeviceAsync(streamInfo.stream);
     familyMaskMatrix.toDeviceAsync(streamInfo.stream);
     familyExtraMarginSize.toDeviceAsync(streamInfo.stream);
 
@@ -542,11 +578,16 @@ void DEMKinematicThread::packTransferPointers(DEMDynamicThread*& dT) {
     // Set the pointers to dT owned buffers
     granData->pDTOwnedBuffer_nContactPairs = &(dT->nContactPairs_buffer);
     granData->pDTOwnedBuffer_nPatchEnabledContacts = &(dT->nPatchEnabledContactPairs_buffer);
-    granData->pDTOwnedBuffer_idGeometryA = dT->idGeometryA_buffer.data();
-    granData->pDTOwnedBuffer_idGeometryB = dT->idGeometryB_buffer.data();
+    granData->pDTOwnedBuffer_idPrimitiveA = dT->idPrimitiveA_buffer.data();
+    granData->pDTOwnedBuffer_idPrimitiveB = dT->idPrimitiveB_buffer.data();
     granData->pDTOwnedBuffer_contactType = dT->contactType_buffer.data();
     granData->pDTOwnedBuffer_contactMapping = dT->contactMapping_buffer.data();
     granData->pDTOwnedBuffer_contactPatchPairs = dT->contactPatchPairs_buffer.data();
+
+    // NEW: Set pointers for separate patch arrays
+    granData->pDTOwnedBuffer_idPatchA = dT->idPatchA_buffer.data();
+    granData->pDTOwnedBuffer_idPatchB = dT->idPatchB_buffer.data();
+    granData->pDTOwnedBuffer_geomToPatchMap = dT->geomToPatchMap_buffer.data();
 }
 
 void DEMKinematicThread::setSimParams(unsigned char nvXp2,
@@ -712,16 +753,27 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
     // enough to decrease the number of reallocations in the simulation, but not too large that eats too much memory.
     {
         size_t cnt_arr_size = DEME_MAX(*solverScratchSpace.numPrevContacts, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
-        DEME_DUAL_ARRAY_RESIZE(idGeometryA, cnt_arr_size, 0);
-        DEME_DUAL_ARRAY_RESIZE(idGeometryB, cnt_arr_size, 0);
+        DEME_DUAL_ARRAY_RESIZE(idPrimitiveA, cnt_arr_size, 0);
+        DEME_DUAL_ARRAY_RESIZE(idPrimitiveB, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
         DEME_DUAL_ARRAY_RESIZE(contactPatchPairs, 0, 0);
+
+        // NEW: Initialize separate patch ID arrays (sized to 0, will grow for mesh contacts)
+        // and geomToPatchMap (sized to geometry array length)
+        DEME_DUAL_ARRAY_RESIZE(idPatchA, cnt_arr_size, 0);
+        DEME_DUAL_ARRAY_RESIZE(idPatchB, cnt_arr_size, 0);
+        DEME_DUAL_ARRAY_RESIZE(geomToPatchMap, cnt_arr_size, 0);
+
         if (!solverFlags.isHistoryless) {
             DEME_DUAL_ARRAY_RESIZE(contactPersistency, cnt_arr_size, CONTACT_NOT_PERSISTENT);
-            DEME_DUAL_ARRAY_RESIZE(previous_idGeometryA, cnt_arr_size, 0);
-            DEME_DUAL_ARRAY_RESIZE(previous_idGeometryB, cnt_arr_size, 0);
+            DEME_DUAL_ARRAY_RESIZE(previous_idPrimitiveA, cnt_arr_size, 0);
+            DEME_DUAL_ARRAY_RESIZE(previous_idPrimitiveB, cnt_arr_size, 0);
             DEME_DUAL_ARRAY_RESIZE(previous_contactType, cnt_arr_size, NOT_A_CONTACT);
             DEME_DUAL_ARRAY_RESIZE(contactMapping, cnt_arr_size, NULL_MAPPING_PARTNER);
+            DEME_DUAL_ARRAY_RESIZE(previous_idPatchA, cnt_arr_size, 0);
+            DEME_DUAL_ARRAY_RESIZE(previous_idPatchB, cnt_arr_size, 0);
+            DEME_DUAL_ARRAY_RESIZE(patchContactType, cnt_arr_size, NOT_A_CONTACT);
+            DEME_DUAL_ARRAY_RESIZE(prev_patchContactType, cnt_arr_size, NOT_A_CONTACT);
         }
     }
 }
@@ -901,7 +953,7 @@ void DEMKinematicThread::updatePrevContactArrays(DualStruct<DEMDataDT>& dT_data,
     // Store the incoming info in kT's arrays
     // Note kT never had the responsibility to migrate contact info to host, even at Update, as even in this case
     // its host-side update comes from dT
-    overwritePrevContactArrays(granData, dT_data, previous_idGeometryA, previous_idGeometryB, previous_contactType,
+    overwritePrevContactArrays(granData, dT_data, previous_idPrimitiveA, previous_idPrimitiveB, previous_contactType,
                                simParams, contactPersistency, solverScratchSpace, streamInfo.stream, nContacts);
     DEME_DEBUG_PRINTF("Number of contacts after a user-manual contact load: %zu", nContacts);
     DEME_DEBUG_PRINTF("Number of spheres after a user-manual contact load: %zu", (size_t)simParams->nSpheresGM);

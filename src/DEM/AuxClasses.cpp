@@ -507,7 +507,7 @@ float DEMTracker::GetGeometryWildcardValue(const std::string& name, size_t offse
             break;
         case (OWNER_TYPE::MESH):
             assertGeoOffsetValid(offset, "GetGeometryWildcardValue", "mesh patches");
-            res = sys->GetTriWildcardValue(obj->geoID + offset, name, 1);
+            res = sys->GetPatchWildcardValue(obj->geoID + offset, name, 1);
             break;
     }
     return res[0];
@@ -523,7 +523,7 @@ std::vector<float> DEMTracker::GetGeometryWildcardValues(const std::string& name
             res = sys->GetAnalWildcardValue(obj->geoID, name, obj->nGeos);
             break;
         case (OWNER_TYPE::MESH):
-            res = sys->GetTriWildcardValue(obj->geoID, name, obj->nGeos);
+            res = sys->GetPatchWildcardValue(obj->geoID, name, obj->nGeos);
             break;
     }
     return res;

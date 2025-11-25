@@ -249,6 +249,13 @@ template void cubRunLengthEncode<contact_t, contactPairs_t>(contact_t* d_in,
                                                             size_t n,
                                                             cudaStream_t& this_stream,
                                                             DEMSolverScratchData& scratchPad);
+template void cubRunLengthEncode<patchIDPair_t, contactPairs_t>(patchIDPair_t* d_in,
+                                                                patchIDPair_t* d_unique_out,
+                                                                contactPairs_t* d_counts_out,
+                                                                size_t* d_num_out,
+                                                                size_t n,
+                                                                cudaStream_t& this_stream,
+                                                                DEMSolverScratchData& scratchPad);
 
 template <typename T1, typename T2>
 void cubPrefixScan(T1* d_in, T2* d_out, size_t n, cudaStream_t& this_stream, DEMSolverScratchData& scratchPad) {
