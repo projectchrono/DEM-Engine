@@ -165,13 +165,12 @@ __global__ void markDuplicateContacts(deme::geoSphereTouches_t* idA_runlength,
     }
 }
 
-__global__ void extractMeshInvolvedContactPatchIDPairs(deme::patchIDPair_t* contactPatchPairs,
-                                                       // deme::notStupidBool_t* isMeshInvolvedContact,
-                                                       deme::contact_t* contactType,
-                                                       deme::bodyID_t* idPrimitiveA,
-                                                       deme::bodyID_t* idPrimitiveB,
-                                                       deme::bodyID_t* triPatchID,
-                                                       size_t nContacts) {
+__global__ void extractPatchInvolvedContactPatchIDPairs(deme::patchIDPair_t* contactPatchPairs,
+                                                        deme::contact_t* contactType,
+                                                        deme::bodyID_t* idPrimitiveA,
+                                                        deme::bodyID_t* idPrimitiveB,
+                                                        deme::bodyID_t* triPatchID,
+                                                        size_t nContacts) {
     deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContacts) {
         deme::bodyID_t bodyA = idPrimitiveA[myID];
@@ -183,7 +182,6 @@ __global__ void extractMeshInvolvedContactPatchIDPairs(deme::patchIDPair_t* cont
                 // purpose
                 contactPatchPairs[myID] = deme::encodeContactType<deme::patchIDPair_t, deme::bodyID_t>(
                     bodyA, patchB);  // Input bodyID_t, return patchIDPair_t
-                // isMeshInvolvedContact[myID] = 1;
                 break;
             }
             case deme::TRIANGLE_ANALYTICAL_CONTACT: {
@@ -191,7 +189,6 @@ __global__ void extractMeshInvolvedContactPatchIDPairs(deme::patchIDPair_t* cont
                 // For mesh-analytical contact: mesh has patch ID, analytical object does not but its geoID serves the
                 // same purpose
                 contactPatchPairs[myID] = deme::encodeContactType<deme::patchIDPair_t, deme::bodyID_t>(patchA, bodyB);
-                // isMeshInvolvedContact[myID] = 1;
                 break;
             }
             case deme::TRIANGLE_TRIANGLE_CONTACT: {
@@ -199,11 +196,11 @@ __global__ void extractMeshInvolvedContactPatchIDPairs(deme::patchIDPair_t* cont
                 deme::bodyID_t patchB = triPatchID[bodyB];
                 // For triangle-triangle contact: both triangles have patch IDs
                 contactPatchPairs[myID] = deme::encodeContactType<deme::patchIDPair_t, deme::bodyID_t>(patchA, patchB);
-                // isMeshInvolvedContact[myID] = 1;
                 break;
             }
             default:
-                // isMeshInvolvedContact[myID] = 0;
+                // In other no-mesh cases, for now, we just use geoID as patchIDs
+                contactPatchPairs[myID] = deme::encodeContactType<deme::patchIDPair_t, deme::bodyID_t>(bodyA, bodyB);
                 break;
         }
     }

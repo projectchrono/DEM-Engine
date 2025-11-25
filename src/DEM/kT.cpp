@@ -756,8 +756,8 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
 
         // NEW: Initialize separate patch ID arrays (sized to 0, will grow for mesh contacts)
         // and geomToPatchMap (sized to geometry array length)
-        DEME_DUAL_ARRAY_RESIZE(idPatchA, 0, 0);
-        DEME_DUAL_ARRAY_RESIZE(idPatchB, 0, 0);
+        DEME_DUAL_ARRAY_RESIZE(idPatchA, cnt_arr_size, 0);
+        DEME_DUAL_ARRAY_RESIZE(idPatchB, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(geomToPatchMap, cnt_arr_size, 0);
 
         if (!solverFlags.isHistoryless) {
@@ -766,8 +766,8 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
             DEME_DUAL_ARRAY_RESIZE(previous_idPrimitiveB, cnt_arr_size, 0);
             DEME_DUAL_ARRAY_RESIZE(previous_contactType, cnt_arr_size, NOT_A_CONTACT);
             DEME_DUAL_ARRAY_RESIZE(contactMapping, cnt_arr_size, NULL_MAPPING_PARTNER);
-            DEME_DUAL_ARRAY_RESIZE(previous_idPatchA, 0, 0);
-            DEME_DUAL_ARRAY_RESIZE(previous_idPatchB, 0, 0);
+            DEME_DUAL_ARRAY_RESIZE(previous_idPatchA, cnt_arr_size, 0);
+            DEME_DUAL_ARRAY_RESIZE(previous_idPatchB, cnt_arr_size, 0);
         }
     }
 }
