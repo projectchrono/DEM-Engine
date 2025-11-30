@@ -1244,14 +1244,21 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             scratchPad.syncDualStructDeviceToHost("numUniqueTypes");
             size_t numTypes = *scratchPad.getDualStructHost("numUniqueTypes");
 
-            // Now sort within each type segment
+            // Now sort within each type segment and construct patch ID lists gradually
+            // This approach handles the corner case where two primitive contacts from different types
+            // have the same encoded patch ID - they should be considered as separate patch contacts.
             if (numTypes > 0) {
                 // Copy type_counts to host to know segment boundaries
                 size_t* host_type_counts = new size_t[numTypes];
                 DEME_GPU_CALL(
                     cudaMemcpy(host_type_counts, type_counts, numTypes * sizeof(size_t), cudaMemcpyDeviceToHost));
 
-                // Allocate temp arrays for sorting
+                // Copy unique_types to host for contact type assignment
+                contact_t* host_unique_types = new contact_t[numTypes];
+                DEME_GPU_CALL(
+                    cudaMemcpy(host_unique_types, unique_types, numTypes * sizeof(contact_t), cudaMemcpyDeviceToHost));
+
+                // Allocate temp arrays for sorting (for the entire primitive contact array)
                 size_t patch_arr_bytes = (*scratchPad.numPrimitiveContacts) * sizeof(patchIDPair_t);
                 patchIDPair_t* patchPairs_sorted =
                     (patchIDPair_t*)scratchPad.allocateTempVector("patchPairs_sorted", patch_arr_bytes);
@@ -1262,120 +1269,147 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 contact_t* contactType_sorted =
                     (contact_t*)scratchPad.allocateTempVector("contactType_sorted_patch", type_arr_bytes);
 
-                // Sort each segment
-                size_t offset = 0;
-                for (size_t i = 0; i < numTypes; i++) {
-                    size_t count = host_type_counts[i];
-                    if (count > 1) {  // Only sort if segment has more than 1 element
-                        // Sort idPrimitiveA with contactPatchPairs
-                        cubDEMSortByKeys<patchIDPair_t, bodyID_t>(
-                            contactPatchPairs + offset, patchPairs_sorted + offset, granData->idPrimitiveA + offset,
-                            idA_sorted + offset, count, this_stream, scratchPad);
-
-                        // Sort idPrimitiveB with contactPatchPairs
-                        cubDEMSortByKeys<patchIDPair_t, bodyID_t>(
-                            contactPatchPairs + offset, patchPairs_sorted + offset, granData->idPrimitiveB + offset,
-                            idB_sorted + offset, count, this_stream, scratchPad);
-
-                        // Sort contactType with contactPatchPairs
-                        cubDEMSortByKeys<patchIDPair_t, contact_t>(
-                            contactPatchPairs + offset, patchPairs_sorted + offset, granData->contactType + offset,
-                            contactType_sorted + offset, count, this_stream, scratchPad);
-                    } else if (count == 1) {
-                        // Just copy single elements (no sorting needed)
-                        DEME_GPU_CALL(cudaMemcpy(patchPairs_sorted + offset, contactPatchPairs + offset,
-                                                 sizeof(patchIDPair_t), cudaMemcpyDeviceToDevice));
-                        DEME_GPU_CALL(cudaMemcpy(idA_sorted + offset, granData->idPrimitiveA + offset, sizeof(bodyID_t),
-                                                 cudaMemcpyDeviceToDevice));
-                        DEME_GPU_CALL(cudaMemcpy(idB_sorted + offset, granData->idPrimitiveB + offset, sizeof(bodyID_t),
-                                                 cudaMemcpyDeviceToDevice));
-                        DEME_GPU_CALL(cudaMemcpy(contactType_sorted + offset, granData->contactType + offset,
-                                                 sizeof(contact_t), cudaMemcpyDeviceToDevice));
-                    }
-                    offset += count;
-                }
-
-                //// TODO: Deal with the fact that at type jump, there could be same patchID pairs. But the current
-                ///approach does / not handle that.
-
-                // Now construct idPatchA/B, patchContactType and geomToPatchMap from the sorted data
-                // Step 1: Use run-length encoding to find unique patch pairs
-                size_t max_unique = *scratchPad.numPrimitiveContacts;  // Upper bound on unique pairs
+                // Allocate temp arrays for per-type run-length encoding
+                size_t max_unique_per_segment = *scratchPad.numPrimitiveContacts;  // Upper bound
                 patchIDPair_t* unique_patch_pairs = (patchIDPair_t*)scratchPad.allocateTempVector(
-                    "unique_patch_pairs", max_unique * sizeof(patchIDPair_t));
+                    "unique_patch_pairs", max_unique_per_segment * sizeof(patchIDPair_t));
                 contactPairs_t* patch_pair_counts = (contactPairs_t*)scratchPad.allocateTempVector(
-                    "patch_pair_counts", max_unique * sizeof(contactPairs_t));
+                    "patch_pair_counts", max_unique_per_segment * sizeof(contactPairs_t));
                 scratchPad.allocateDualStruct("numUniquePatchPairs");
 
-                cubDEMRunLengthEncode<patchIDPair_t, contactPairs_t>(
-                    patchPairs_sorted, unique_patch_pairs, patch_pair_counts,
-                    scratchPad.getDualStructDevice("numUniquePatchPairs"), *scratchPad.numPrimitiveContacts,
-                    this_stream, scratchPad);
-                scratchPad.syncDualStructDeviceToHost("numUniquePatchPairs");
-                size_t numUniquePatchPairs = *scratchPad.getDualStructHost("numUniquePatchPairs");
-                // This numUniquePatchPairs is the actual numContacts
-                *scratchPad.numContacts = numUniquePatchPairs;
-
-                // Step 2: Resize idPatchA/B and patchContactType to hold the unique patch pairs
-                if (numUniquePatchPairs > idPatchA.size()) {
-                    DEME_DUAL_ARRAY_RESIZE_NOVAL(idPatchA, numUniquePatchPairs);
-                    DEME_DUAL_ARRAY_RESIZE_NOVAL(idPatchB, numUniquePatchPairs);
-                    DEME_DUAL_ARRAY_RESIZE_NOVAL(patchContactType, numUniquePatchPairs);
-                    granData.toDevice();
-                }
-
-                // Step 3: Decode unique patch pairs into idPatchA/B using kernel
-                if (numUniquePatchPairs > 0) {
-                    size_t blocks_needed_for_decode =
-                        (numUniquePatchPairs + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-                    decodePatchPairsToSeparateArrays<<<dim3(blocks_needed_for_decode), dim3(DEME_MAX_THREADS_PER_BLOCK),
-                                                       0, this_stream>>>(unique_patch_pairs, granData->idPatchA,
-                                                                         granData->idPatchB, numUniquePatchPairs);
-                    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-                }
-
-                // Step 4: Build geomToPatchMap
-                // geomToPatchMap has the same length as idPrimitiveA/B (numPrimitiveContacts)
-                // For each contact, it stores the index in idPatchA/B that this contact corresponds to
-
-                // Ensure geomToPatchMap is sized to numPrimitiveContacts
+                // Ensure geomToPatchMap is sized to numPrimitiveContacts before the loop
                 if (*scratchPad.numPrimitiveContacts > geomToPatchMap.size()) {
                     DEME_DUAL_ARRAY_RESIZE_NOVAL(geomToPatchMap, *scratchPad.numPrimitiveContacts);
                     granData.toDevice();
                 }
 
-                // Allocate temp array for "is new group" markers
-                contactPairs_t* isNewGroup = (contactPairs_t*)scratchPad.allocateTempVector(
-                    "isNewGroup", (*scratchPad.numPrimitiveContacts) * sizeof(contactPairs_t));
+                // Track total unique patch pairs across all types
+                size_t totalUniquePatchPairs = 0;
+                size_t prim_offset = 0;  // Offset in primitive contact array
 
-                // Mark where each new unique patch pair begins
-                size_t blocks_needed_for_mark =
-                    (*scratchPad.numPrimitiveContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-                if (blocks_needed_for_mark > 0) {
-                    markNewPatchPairGroups<<<dim3(blocks_needed_for_mark), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                             this_stream>>>(patchPairs_sorted, isNewGroup,
-                                                            *scratchPad.numPrimitiveContacts);
-                    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+                // Process each type segment separately
+                for (size_t i = 0; i < numTypes; i++) {
+                    size_t count = host_type_counts[i];
+                    if (count == 0)
+                        continue;
+
+                    // Step 1a: Sort this type segment by patch ID pairs
+                    if (count > 1) {
+                        // Sort idPrimitiveA with contactPatchPairs
+                        cubDEMSortByKeys<patchIDPair_t, bodyID_t>(
+                            contactPatchPairs + prim_offset, patchPairs_sorted + prim_offset,
+                            granData->idPrimitiveA + prim_offset, idA_sorted + prim_offset, count, this_stream,
+                            scratchPad);
+
+                        // Sort idPrimitiveB with contactPatchPairs
+                        cubDEMSortByKeys<patchIDPair_t, bodyID_t>(
+                            contactPatchPairs + prim_offset, patchPairs_sorted + prim_offset,
+                            granData->idPrimitiveB + prim_offset, idB_sorted + prim_offset, count, this_stream,
+                            scratchPad);
+
+                        // Sort contactType with contactPatchPairs
+                        cubDEMSortByKeys<patchIDPair_t, contact_t>(
+                            contactPatchPairs + prim_offset, patchPairs_sorted + prim_offset,
+                            granData->contactType + prim_offset, contactType_sorted + prim_offset, count, this_stream,
+                            scratchPad);
+                    } else {
+                        // Just copy single elements (no sorting needed)
+                        DEME_GPU_CALL(cudaMemcpy(patchPairs_sorted + prim_offset, contactPatchPairs + prim_offset,
+                                                 sizeof(patchIDPair_t), cudaMemcpyDeviceToDevice));
+                        DEME_GPU_CALL(cudaMemcpy(idA_sorted + prim_offset, granData->idPrimitiveA + prim_offset,
+                                                 sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+                        DEME_GPU_CALL(cudaMemcpy(idB_sorted + prim_offset, granData->idPrimitiveB + prim_offset,
+                                                 sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+                        DEME_GPU_CALL(cudaMemcpy(contactType_sorted + prim_offset, granData->contactType + prim_offset,
+                                                 sizeof(contact_t), cudaMemcpyDeviceToDevice));
+                    }
+
+                    // Step 1b: Run-length encode to find unique patch pairs WITHIN this type segment
+                    cubDEMRunLengthEncode<patchIDPair_t, contactPairs_t>(
+                        patchPairs_sorted + prim_offset, unique_patch_pairs, patch_pair_counts,
+                        scratchPad.getDualStructDevice("numUniquePatchPairs"), count, this_stream, scratchPad);
+                    scratchPad.syncDualStructDeviceToHost("numUniquePatchPairs");
+                    size_t numUniqueInSegment = *scratchPad.getDualStructHost("numUniquePatchPairs");
+
+                    // Step 2: Ensure idPatchA/B and patchContactType are large enough
+                    size_t newTotalSize = totalUniquePatchPairs + numUniqueInSegment;
+                    if (newTotalSize > idPatchA.size()) {
+                        DEME_DUAL_ARRAY_RESIZE_NOVAL(idPatchA, newTotalSize);
+                        DEME_DUAL_ARRAY_RESIZE_NOVAL(idPatchB, newTotalSize);
+                        DEME_DUAL_ARRAY_RESIZE_NOVAL(patchContactType, newTotalSize);
+                        granData.toDevice();
+                    }
+
+                    // Step 3: Decode unique patch pairs into idPatchA/B at the appropriate offset
+                    if (numUniqueInSegment > 0) {
+                        size_t blocks_needed_for_decode =
+                            (numUniqueInSegment + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+                        decodePatchPairsToSeparateArrays<<<dim3(blocks_needed_for_decode),
+                                                           dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+                            unique_patch_pairs, granData->idPatchA + totalUniquePatchPairs,
+                            granData->idPatchB + totalUniquePatchPairs, numUniqueInSegment);
+                        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+
+                        // Set patchContactType for this segment - all have the same type
+                        contact_t thisType = host_unique_types[i];
+                        size_t type_segment_bytes = numUniqueInSegment * sizeof(contact_t);
+                        contact_t* host_type_segment = new contact_t[numUniqueInSegment];
+                        for (size_t j = 0; j < numUniqueInSegment; j++) {
+                            host_type_segment[j] = thisType;
+                        }
+                        DEME_GPU_CALL(cudaMemcpy(granData->patchContactType + totalUniquePatchPairs, host_type_segment,
+                                                 type_segment_bytes, cudaMemcpyHostToDevice));
+                        delete[] host_type_segment;
+                    }
+
+                    // Step 4: Build geomToPatchMap for this segment
+                    // Allocate temp array for "is new group" markers for this segment
+                    contactPairs_t* isNewGroup = (contactPairs_t*)scratchPad.allocateTempVector(
+                        "isNewGroup", count * sizeof(contactPairs_t));
+
+                    size_t blocks_needed_for_mark =
+                        (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+                    if (blocks_needed_for_mark > 0) {
+                        markNewPatchPairGroups<<<dim3(blocks_needed_for_mark), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                                 this_stream>>>(patchPairs_sorted + prim_offset, isNewGroup, count);
+                        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+                    }
+
+                    // Prefix scan on isNewGroup to get the index within this type segment
+                    contactPairs_t* segment_geomToPatch = (contactPairs_t*)scratchPad.allocateTempVector(
+                        "segment_geomToPatch", count * sizeof(contactPairs_t));
+                    cubDEMPrefixScan<contactPairs_t, contactPairs_t>(isNewGroup, segment_geomToPatch, count,
+                                                                     this_stream, scratchPad);
+
+                    // Add the global offset (totalUniquePatchPairs) to get the final geomToPatchMap values
+                    // Copy to the correct location in geomToPatchMap with offset adjustment
+                    if (count > 0) {
+                        // We need to add totalUniquePatchPairs to each value in segment_geomToPatch
+                        // and copy to granData->geomToPatchMap + prim_offset
+                        contactPairs_t* host_segment = new contactPairs_t[count];
+                        DEME_GPU_CALL(cudaMemcpy(host_segment, segment_geomToPatch, count * sizeof(contactPairs_t),
+                                                 cudaMemcpyDeviceToHost));
+                        for (size_t j = 0; j < count; j++) {
+                            host_segment[j] += totalUniquePatchPairs;
+                        }
+                        DEME_GPU_CALL(cudaMemcpy(granData->geomToPatchMap + prim_offset, host_segment,
+                                                 count * sizeof(contactPairs_t), cudaMemcpyHostToDevice));
+                        delete[] host_segment;
+                    }
+
+                    scratchPad.finishUsingTempVector("isNewGroup");
+                    scratchPad.finishUsingTempVector("segment_geomToPatch");
+
+                    // Update offsets
+                    totalUniquePatchPairs += numUniqueInSegment;
+                    prim_offset += count;
                 }
 
-                // Exclusive prefix scan on isNewGroup to get the index in idPatchA/B for each contact
-                cubDEMPrefixScan<contactPairs_t, contactPairs_t>(
-                    isNewGroup, granData->geomToPatchMap, *scratchPad.numPrimitiveContacts, this_stream, scratchPad);
-
-                // Step 5: Extract patchContactType from sorted contactType using geomToPatchMap
-                // Since primitives are sorted by type first, then by patch pair, all primitives in a patch
-                // group share the same contact type. We extract the type of the first primitive in each group.
-                if (numUniquePatchPairs > 0 && blocks_needed_for_mark > 0) {
-                    extractPatchContactTypes<<<dim3(blocks_needed_for_mark), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                               this_stream>>>(granData->patchContactType, contactType_sorted,
-                                                              granData->geomToPatchMap,
-                                                              *scratchPad.numPrimitiveContacts, numUniquePatchPairs);
-                    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-                }
+                // Set the total number of patch contacts
+                *scratchPad.numContacts = totalUniquePatchPairs;
 
                 scratchPad.finishUsingTempVector("unique_patch_pairs");
                 scratchPad.finishUsingTempVector("patch_pair_counts");
-                scratchPad.finishUsingTempVector("isNewGroup");
                 scratchPad.finishUsingDualStruct("numUniquePatchPairs");
 
                 scratchPad.finishUsingTempVector("patchPairs_sorted");
@@ -1384,6 +1418,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 scratchPad.finishUsingTempVector("contactType_sorted_patch");
 
                 delete[] host_type_counts;
+                delete[] host_unique_types;
             }
 
             scratchPad.finishUsingTempVector("unique_types");
