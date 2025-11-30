@@ -359,6 +359,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         *scratchPad.numPrevPrimitiveContacts = 0;
         *scratchPad.numPrevSpheres = 0;
         *scratchPad.numPrevTriangles = 0;
+        *scratchPad.numPrevMeshPatches = 0;
 
         scratchPad.numContacts.toDevice();
         scratchPad.numPrimitiveContacts.toDevice();
@@ -366,6 +367,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         scratchPad.numPrevPrimitiveContacts.toDevice();
         scratchPad.numPrevSpheres.toDevice();
         scratchPad.numPrevTriangles.toDevice();
+        scratchPad.numPrevMeshPatches.toDevice();
         return;
     }
     // These are needed for the solver to keep tab... But you know, we may have no triangles or no contacts, so
@@ -1215,7 +1217,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             patchIDPair_t* contactPatchPairs = (patchIDPair_t*)scratchPad.allocateTempVector(
                 "contactPatchPairs", (*scratchPad.numPrimitiveContacts) * sizeof(patchIDPair_t));
 
-            // Based on the ready-to-ship (this CD iteration) contact arrays...
+            // Based on the complete primitive contact arrays...
             size_t blocks_needed_for_patch_ids =
                 (*scratchPad.numPrimitiveContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
             if (blocks_needed_for_patch_ids > 0) {
@@ -1293,6 +1295,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     offset += count;
                 }
 
+                //// TODO: Deal with the fact that at type jump, there could be same patchID pairs. But the current
+                ///approach does / not handle that.
+
                 // Now construct idPatchA/B, patchContactType and geomToPatchMap from the sorted data
                 // Step 1: Use run-length encoding to find unique patch pairs
                 size_t max_unique = *scratchPad.numPrimitiveContacts;  // Upper bound on unique pairs
@@ -1363,8 +1368,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 if (numUniquePatchPairs > 0 && blocks_needed_for_mark > 0) {
                     extractPatchContactTypes<<<dim3(blocks_needed_for_mark), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
                                                this_stream>>>(granData->patchContactType, contactType_sorted,
-                                                              granData->geomToPatchMap, *scratchPad.numPrimitiveContacts,
-                                                              numUniquePatchPairs);
+                                                              granData->geomToPatchMap,
+                                                              *scratchPad.numPrimitiveContacts, numUniquePatchPairs);
                     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                 }
 
@@ -1400,7 +1405,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     // Constructing contact history (patch-based)
     // The contact mapping is now built between previous_idPatchA/B and current idPatchA/B.
     // We have numContacts elements to work with (patch-based contacts), not numPrimitiveContacts.
-    // Both current and previous patch arrays are sorted by contact type, and within each type, 
+    // Both current and previous patch arrays are sorted by contact type, and within each type,
     // they are sorted by the combined contact patch ID pair.
     // -----------------------------------------------------------------------------------------------------------
 
@@ -1410,9 +1415,13 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // For history-based models, construct the enduring contact map at the patch level.
         // This CD run and previous CD run could have different number of geos in them. We pick the larger
         // number to refer in building the enduring contact map to avoid potential problems.
+        // Note that we don't use nTri, but nMeshPatches, because final contact results are patch-based.
+        // But for clumps, a sphere serves as a patch, so nSpheresGM is still relevant.
         size_t nGeoSafe = DEME_MAX(DEME_MAX(simParams->nSpheresGM, *scratchPad.numPrevSpheres),
-                                   DEME_MAX(simParams->nTriGM, *scratchPad.numPrevTriangles));
+                                   DEME_MAX(simParams->nMeshPatches, *scratchPad.numPrevMeshPatches));
 
+        //// TODO: Move this part after contact mapping is built
+        /*
         // For tab-keeping: how many contacts on average a sphere has? (using primitive contacts for this stat)
         if (*scratchPad.numPrimitiveContacts > 0) {
             // First, identify unique idA in primitive contacts
@@ -1461,6 +1470,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             scratchPad.finishUsingTempVector("unique_new_idA");
             scratchPad.finishUsingDualStruct("numUniqueNewA");
         }
+        */
 
         // Only need to actually create the mapping if the force model has history
         if (!solverFlags.isHistoryless) {
@@ -1482,8 +1492,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     *scratchPad.numContacts, *scratchPad.numPrevContacts);
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
-            // DEME_DEBUG_PRINTF("Patch contact mapping:");
-            // DEME_DEBUG_EXEC(displayDeviceArray<contactPairs_t>(granData->contactMapping, *scratchPad.numContacts));
+            std::cout << "Patch contact mapping:" << std::endl;
+            displayDeviceArray<contactPairs_t>(granData->contactMapping, *scratchPad.numContacts);
 
             // Copy current patch arrays to previous arrays for the next iteration
             size_t patch_id_arr_bytes = (*scratchPad.numContacts) * sizeof(bodyID_t);
@@ -1505,7 +1515,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
 
         }  // End of history-based model mapping
 
-        // Reset the flag as primitive contact arrays may be sorted differently for the next CD iteration
+        // Reset the flag; althought at the end of subroutine, not very necessary
         contactArraysAreSortedByA = false;
 
     }  // End of contact sorting--mapping subroutine
@@ -1523,6 +1533,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     *scratchPad.numPrevPrimitiveContacts = *scratchPad.numPrimitiveContacts;
     *scratchPad.numPrevSpheres = simParams->nSpheresGM;
     *scratchPad.numPrevTriangles = simParams->nTriGM;
+    *scratchPad.numPrevMeshPatches = simParams->nMeshPatches;
 
     // dT kT may send these numbers to each other from device
     scratchPad.numContacts.toDevice();
@@ -1531,6 +1542,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     scratchPad.numPrevPrimitiveContacts.toDevice();
     scratchPad.numPrevSpheres.toDevice();
     scratchPad.numPrevTriangles.toDevice();
+    scratchPad.numPrevMeshPatches.toDevice();
 }
 
 void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
