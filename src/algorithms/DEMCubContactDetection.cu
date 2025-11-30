@@ -1350,16 +1350,12 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                             granData->idPatchB + totalUniquePatchPairs, numUniqueInSegment);
                         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 
-                        // Set patchContactType for this segment - all have the same type
+                        // Set patchContactType for this segment - all have the same type (using GPU kernel)
                         contact_t thisType = host_unique_types[i];
-                        size_t type_segment_bytes = numUniqueInSegment * sizeof(contact_t);
-                        contact_t* host_type_segment = new contact_t[numUniqueInSegment];
-                        for (size_t j = 0; j < numUniqueInSegment; j++) {
-                            host_type_segment[j] = thisType;
-                        }
-                        DEME_GPU_CALL(cudaMemcpy(granData->patchContactType + totalUniquePatchPairs, host_type_segment,
-                                                 type_segment_bytes, cudaMemcpyHostToDevice));
-                        delete[] host_type_segment;
+                        fillContactTypeArray<<<dim3(blocks_needed_for_decode), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                               this_stream>>>(granData->patchContactType + totalUniquePatchPairs,
+                                                              thisType, numUniqueInSegment);
+                        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                     }
 
                     // Step 4: Build geomToPatchMap for this segment
@@ -1375,30 +1371,19 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                     }
 
-                    // Prefix scan on isNewGroup to get the index within this type segment
-                    contactPairs_t* segment_geomToPatch = (contactPairs_t*)scratchPad.allocateTempVector(
-                        "segment_geomToPatch", count * sizeof(contactPairs_t));
-                    cubDEMPrefixScan<contactPairs_t, contactPairs_t>(isNewGroup, segment_geomToPatch, count,
-                                                                     this_stream, scratchPad);
+                    // Prefix scan on isNewGroup and write result directly to the geomToPatchMap location
+                    cubDEMPrefixScan<contactPairs_t, contactPairs_t>(isNewGroup, granData->geomToPatchMap + prim_offset,
+                                                                     count, this_stream, scratchPad);
 
                     // Add the global offset (totalUniquePatchPairs) to get the final geomToPatchMap values
-                    // Copy to the correct location in geomToPatchMap with offset adjustment
-                    if (count > 0) {
-                        // We need to add totalUniquePatchPairs to each value in segment_geomToPatch
-                        // and copy to granData->geomToPatchMap + prim_offset
-                        contactPairs_t* host_segment = new contactPairs_t[count];
-                        DEME_GPU_CALL(cudaMemcpy(host_segment, segment_geomToPatch, count * sizeof(contactPairs_t),
-                                                 cudaMemcpyDeviceToHost));
-                        for (size_t j = 0; j < count; j++) {
-                            host_segment[j] += totalUniquePatchPairs;
-                        }
-                        DEME_GPU_CALL(cudaMemcpy(granData->geomToPatchMap + prim_offset, host_segment,
-                                                 count * sizeof(contactPairs_t), cudaMemcpyHostToDevice));
-                        delete[] host_segment;
+                    if (count > 0 && totalUniquePatchPairs > 0) {
+                        addOffsetToArray<<<dim3(blocks_needed_for_mark), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                           this_stream>>>(granData->geomToPatchMap + prim_offset,
+                                                          (contactPairs_t)totalUniquePatchPairs, count);
+                        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                     }
 
                     scratchPad.finishUsingTempVector("isNewGroup");
-                    scratchPad.finishUsingTempVector("segment_geomToPatch");
 
                     // Update offsets
                     totalUniquePatchPairs += numUniqueInSegment;
@@ -1527,8 +1512,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     *scratchPad.numContacts, *scratchPad.numPrevContacts);
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
-            std::cout << "Patch contact mapping:" << std::endl;
-            displayDeviceArray<contactPairs_t>(granData->contactMapping, *scratchPad.numContacts);
+            // DEME_DEBUG_PRINTF("Patch contact mapping:");
+            // DEME_DEBUG_EXEC(displayDeviceArray<contactPairs_t>(granData->contactMapping, *scratchPad.numContacts));
 
             // Copy current patch arrays to previous arrays for the next iteration
             size_t patch_id_arr_bytes = (*scratchPad.numContacts) * sizeof(bodyID_t);

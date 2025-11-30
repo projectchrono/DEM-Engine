@@ -4,6 +4,22 @@
 
 #include <stdio.h>
 
+// Kernel to add a constant offset to each element of an array
+__global__ void addOffsetToArray(deme::contactPairs_t* arr, deme::contactPairs_t offset, size_t n) {
+    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        arr[myID] += offset;
+    }
+}
+
+// Kernel to fill a contact_t array with a constant value
+__global__ void fillContactTypeArray(deme::contact_t* arr, deme::contact_t val, size_t n) {
+    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        arr[myID] = val;
+    }
+}
+
 __global__ void fillRunLengthArray(deme::geoSphereTouches_t* runlength_full,
                                    deme::bodyID_t* unique_ids,
                                    deme::geoSphereTouches_t* runlength,
