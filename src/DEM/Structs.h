@@ -468,7 +468,7 @@ struct kTStateParams {
     size_t numBins = 0;
 
     // Current average num of contacts per sphere has.
-    float avgCntsPerSphere = 0.;
+    float avgCntsPerPrimitive = 0.;
 
     // float maxVel_buffer; // buffer for the current max vel sent by dT
     DualStruct<float> maxVel = DualStruct<float>(0.f);  // kT's own storage of max vel

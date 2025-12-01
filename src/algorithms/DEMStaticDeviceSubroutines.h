@@ -114,7 +114,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       DualArray<bodyID_t>& previous_idPrimitiveB,
                       DualArray<contact_t>& previous_contactType,
                       DualArray<notStupidBool_t>& contactPersistency,
-                      DualArray<patchIDPair_t>& contactPatchPairs,
                       DualArray<contactPairs_t>& contactMapping,
                       // NEW: Separate patch ID arrays and mapping
                       DualArray<bodyID_t>& idPatchA,

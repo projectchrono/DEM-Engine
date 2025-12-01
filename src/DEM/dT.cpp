@@ -53,7 +53,6 @@ void DEMDynamicThread::packDataPointers() {
     idPrimitiveA.bindDevicePointer(&(granData->idPrimitiveA));
     idPrimitiveB.bindDevicePointer(&(granData->idPrimitiveB));
     contactType.bindDevicePointer(&(granData->contactType));
-    contactPatchPairs.bindDevicePointer(&(granData->contactPatchPairs));
 
     // NEW: Bind separate patch ID and mapping array pointers
     idPatchA.bindDevicePointer(&(granData->idPatchA));
@@ -533,14 +532,13 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     // of reallocations in the simulation, but not too large that eats too much memory.
     {
         // In any case, in this initialization process we should not make contact arrays smaller than it used to be, or
-        // we may lose data. Also, if this is a new-boot, we allocate this array for at least
-        // nSpheresGM*DEME_INIT_CNT_MULTIPLIER elements.
+        // we may lose data. Also, if this is a new-boot, we allocate this array for at least INITIAL_CONTACT_ARRAY_SIZE
+        // elements.
         size_t cnt_arr_size =
-            DEME_MAX(*solverScratchSpace.numPrimitiveContacts + nExtraContacts, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
+            DEME_MAX(*solverScratchSpace.numPrimitiveContacts + nExtraContacts, INITIAL_CONTACT_ARRAY_SIZE);
         DEME_DUAL_ARRAY_RESIZE(idPrimitiveA, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(idPrimitiveB, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
-        DEME_DUAL_ARRAY_RESIZE(contactPatchPairs, 0, 0);
 
         // NEW: Initialize separate patch ID arrays (sized to 0, will grow for mesh contacts)
         // and geomToPatchMap (sized to geometry array length)
@@ -586,7 +584,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     // will cause problems in the case of a re-init-ed simulation with more clumps added to system, since we may
     // accidentally clamp those arrays.
     /*
-    buffer_size = DEME_MAX(buffer_size, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
+    buffer_size = DEME_MAX(buffer_size, INITIAL_CONTACT_ARRAY_SIZE);
     DEME_DEVICE_ARRAY_RESIZE(idPrimitiveA_buffer, buffer_size);
     DEME_DEVICE_ARRAY_RESIZE(idPrimitiveB_buffer, buffer_size);
     DEME_DEVICE_ARRAY_RESIZE(contactType_buffer, buffer_size);
@@ -2002,8 +2000,6 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
 }
 
 inline void DEMDynamicThread::meshPatchPairsResize(size_t nPatchPairs) {
-    DEME_DUAL_ARRAY_RESIZE(contactPatchPairs, nPatchPairs, 0);
-
     // NEW: Resize separate patch ID arrays (sized to patch pairs, the shorter array)
     DEME_DUAL_ARRAY_RESIZE(idPatchA, nPatchPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(idPatchB, nPatchPairs, 0);
@@ -2026,7 +2022,7 @@ inline void DEMDynamicThread::unpackMyBuffer() {
     if (*solverScratchSpace.numContacts > idPrimitiveA.size() || *solverScratchSpace.numContacts > buffer_size) {
         contactEventArraysResize(*solverScratchSpace.numContacts);
     }
-    if (*solverScratchSpace.numContacts > contactPatchPairs.size()) {
+    if (*solverScratchSpace.numContacts > idPatchA.size()) {
         meshPatchPairsResize(*solverScratchSpace.numContacts);
     }
 
@@ -2036,8 +2032,6 @@ inline void DEMDynamicThread::unpackMyBuffer() {
                              *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->contactType, contactType_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->contactPatchPairs, contactPatchPairs_buffer.data(),
-                             *solverScratchSpace.numContacts * sizeof(patchIDPair_t), cudaMemcpyDeviceToDevice));
 
     // NEW: Unpack separate patch IDs and mapping array
     DEME_GPU_CALL(cudaMemcpy(granData->idPatchA, idPatchA_buffer.data(),
@@ -2267,6 +2261,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
             contactPairs_t startOffset = start_count.first;
             contactPairs_t count = start_count.second;
 
+            //// TODO: Rewrite voting
             // Vote for the contact direction; voting power depends on the contact area
             if (count > 0) {
                 // Allocate temporary arrays for the voting process
@@ -2293,26 +2288,14 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
 
                 // Step 2: Reduce-by-key for weighted normals (sum)
                 // Get the keys array segment for this contact type
-                patchIDPair_t* keys = granData->contactPatchPairs + startOffset;
-                cubSumReduceByKeyFloat3(keys, uniqueKeys, weightedNormals, votedWeightedNormals, numUniqueKeys, count,
-                                        streamInfo.stream, solverScratchSpace);
 
                 // Step 3: Reduce-by-key for areas (sum)
                 // Note: CUB's ReduceByKey on the same input keys produces identical uniqueKeys output,
                 // so it's safe to reuse the same uniqueKeys array. The values will be overwritten but
                 // will be identical to the first call since the input keys are the same.
-                cubSumReduceByKey<patchIDPair_t, double>(keys, uniqueKeys, areas, totalAreas, numUniqueKeys, count,
-                                                         streamInfo.stream, solverScratchSpace);
 
                 // Step 4: Normalize the voted normals by total area and scatter back to original positions
                 // Note: numUniqueKeys and numUniqueKeys2 should be the same
-                blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-                patch_voting_kernels->kernel("normalizeAndScatterVotedNormals")
-                    .instantiate()
-                    .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-                    .launch(keys, uniqueKeys, votedWeightedNormals, totalAreas, granData->contactTorque_convToForce,
-                            numUniqueKeys, startOffset, count);
-                DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
                 // Clean up temporary arrays
                 solverScratchSpace.finishUsingTempVector("weightedNormals");

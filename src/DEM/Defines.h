@@ -52,7 +52,6 @@ constexpr int64_t MAX_SUBVOXEL = (int64_t)1 << VOXEL_RES_POWER2;
 
 #define DEME_NUM_TRIANGLE_PER_BLOCK 512
 #define DEME_MAX_THREADS_PER_BLOCK 1024
-#define DEME_INIT_CNT_MULTIPLIER 1
 // If there are more than this number of analytical geometry, we may have difficulty jitify them all
 #define DEME_THRESHOLD_TOO_MANY_ANAL_GEO 64
 // If a clump has more than this number of sphere components, it is automatically considered a non-jitifiable big clump
@@ -331,7 +330,6 @@ struct DEMDataDT {
     bodyID_t* idPrimitiveB;
     contact_t* contactType;
     contactPairs_t* contactMapping;
-    patchIDPair_t* contactPatchPairs;
 
     // NEW: Separate patch IDs and mapping array
     bodyID_t* idPatchA;
@@ -439,7 +437,6 @@ struct DEMDataKT {
     bodyID_t* idPrimitiveB;
     contact_t* contactType;
     notStupidBool_t* contactPersistency;
-    patchIDPair_t* contactPatchPairs;
     bodyID_t* previous_idPrimitiveA;
     bodyID_t* previous_idPrimitiveB;
     contact_t* previous_contactType;
@@ -496,6 +493,8 @@ const unsigned int NUM_STEPS_RESERVED_AFTER_RENEWING_FREQ_TUNER = 10;
 const float DEFAULT_BOX_DOMAIN_SIZE = 20.;
 // The enlargement ratio we apply to the target sim world size when we construct it.
 const float DEFAULT_BOX_DOMAIN_ENLARGE_RATIO = 0.2;
+// Initial contact array size; does not matter that much as they can be resized anytime in simulation
+const contactPairs_t INITIAL_CONTACT_ARRAY_SIZE = 1024;
 
 // #ifndef CUB_IGNORE_DEPRECATED_API
 // #define CUB_IGNORE_DEPRECATED_API

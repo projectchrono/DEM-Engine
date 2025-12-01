@@ -175,8 +175,10 @@ class DEMKinematicThread {
     DualArray<bodyID_t> previous_idPrimitiveA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> previous_idPrimitiveB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<contact_t> previous_contactType = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<contactPairs_t> contactMapping =
-        DualArray<contactPairs_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+
+    // Records if this primitive contact is persistent and serves as kT's work array on treating their persistency.
+    DualArray<notStupidBool_t> contactPersistency =
+        DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Sphere-related arrays
     // Owner body ID of this component
@@ -197,14 +199,6 @@ class DEMKinematicThread {
     // The ID that maps this analytical entity component's geometry-defining parameters, when this component is jitified
     // DualArray<clumpComponentOffset_t> analComponentOffset;
 
-    // Records if this contact is persistent and serves as kT's work array on treating their persistency.
-    DualArray<notStupidBool_t> contactPersistency =
-        DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-
-    // kT computed contact patch pair info (for mesh-involved contacts)
-    DualArray<patchIDPair_t> contactPatchPairs =
-        DualArray<patchIDPair_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-
     // NEW: Separate patch IDs for contact pairs (instead of combined patchIDPair_t)
     // These arrays store patch IDs for contacts involving patches (mesh-based contacts)
     // They are potentially smaller in size than idPrimitiveA/B arrays
@@ -223,6 +217,10 @@ class DEMKinematicThread {
     // Same length as primitive pair arrays (idPrimitiveA/B). For each primitive pair,
     // records the index where the corresponding patch pair appears in idPatchA/B (the shorter array)
     DualArray<contactPairs_t> geomToPatchMap =
+        DualArray<contactPairs_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+
+    // The mapping between time steps, of patch-based contact pairs
+    DualArray<contactPairs_t> contactMapping =
         DualArray<contactPairs_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // kT's timers
