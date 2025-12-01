@@ -54,15 +54,16 @@ class DEMDynamicThread {
     // Friend system DEMKinematicThread
     DEMKinematicThread* kT;
 
-    // Number of items in the buffer array (which is not a dual vector, due to our need to explicitly control where
-    // it is allocated)
-    size_t buffer_size = 0;
+    // Number of items in the buffer array for primitive contact info
+    size_t primitiveBufferSize = 0;
+    // Number of items in the buffer array for patch-enabled contact info
+    size_t patchBufferSize = 0;
 
-    // dT's one-element buffer of kT-supplied nContacts (as buffer, it's device-only, but I used DualStruct just for
-    // convenience...)
-    DualStruct<size_t> nContactPairs_buffer = DualStruct<size_t>(0);
-    // Similarly, the nPatchEnabledContacts buffer
-    DualStruct<size_t> nPatchEnabledContactPairs_buffer = DualStruct<size_t>(0);
+    // dT's one-element buffer of kT-supplied nPrimitiveContactPairs (as buffer, it's device-only, but I used DualStruct
+    // just for convenience...)
+    DualStruct<size_t> nPrimitiveContactPairs_buffer = DualStruct<size_t>(0);
+    // Similarly, the patch contact-related buffer
+    DualStruct<size_t> nPatchContactPairs_buffer = DualStruct<size_t>(0);
 
     // Array-used memory size in bytes
     size_t m_approxDeviceBytesUsed = 0;
@@ -88,11 +89,11 @@ class DEMDynamicThread {
     DeviceArray<bodyID_t> idPrimitiveB_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
     DeviceArray<contact_t> contactType_buffer = DeviceArray<contact_t>(&m_approxDeviceBytesUsed);
     DeviceArray<contactPairs_t> contactMapping_buffer = DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed);
-    DeviceArray<patchIDPair_t> contactPatchPairs_buffer = DeviceArray<patchIDPair_t>(&m_approxDeviceBytesUsed);
 
     // NEW: Buffer arrays for separate patch IDs and their mapping to geometry arrays
     DeviceArray<bodyID_t> idPatchA_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
     DeviceArray<bodyID_t> idPatchB_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<contact_t> contactTypePatch_buffer = DeviceArray<contact_t>(&m_approxDeviceBytesUsed);
     DeviceArray<contactPairs_t> geomToPatchMap_buffer = DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed);
 
     // Simulation params-related variables
@@ -212,6 +213,7 @@ class DEMDynamicThread {
     // NEW: Separate patch IDs and mapping arrays (work arrays for dT)
     DualArray<bodyID_t> idPatchA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> idPatchB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<contact_t> contactTypePatch = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<contactPairs_t> geomToPatchMap =
         DualArray<contactPairs_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
@@ -737,9 +739,9 @@ class DEMDynamicThread {
     // Send produced data to kT-owned biffers
     void sendToTheirBuffer();
     // Resize some work arrays based on the number of contact pairs provided by kT
-    void contactEventArraysResize(size_t nContactPairs);
+    void contactPrimitivesArraysResize(size_t nContactPairs);
     // Resize mesh patch pair array based on the number of mesh-involved contact pairs
-    void meshPatchPairsResize(size_t nMeshInvolvedContactPairs);
+    void transferPatchArrayResize(size_t nMeshInvolvedContactPairs);
 
     // Deallocate everything
     void deallocateEverything();

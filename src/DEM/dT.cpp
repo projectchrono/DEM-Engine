@@ -53,11 +53,12 @@ void DEMDynamicThread::packDataPointers() {
     idPrimitiveA.bindDevicePointer(&(granData->idPrimitiveA));
     idPrimitiveB.bindDevicePointer(&(granData->idPrimitiveB));
     contactType.bindDevicePointer(&(granData->contactType));
+    geomToPatchMap.bindDevicePointer(&(granData->geomToPatchMap));
 
     // NEW: Bind separate patch ID and mapping array pointers
     idPatchA.bindDevicePointer(&(granData->idPatchA));
     idPatchB.bindDevicePointer(&(granData->idPatchB));
-    geomToPatchMap.bindDevicePointer(&(granData->geomToPatchMap));
+    contactTypePatch.bindDevicePointer(&(granData->contactTypePatch));
 
     familyMaskMatrix.bindDevicePointer(&(granData->familyMasks));
     familyExtraMarginSize.bindDevicePointer(&(granData->familyExtraMarginSize));
@@ -134,9 +135,18 @@ void DEMDynamicThread::migrateDataToDevice() {
     alphaZ.toDeviceAsync(streamInfo.stream);
     accSpecified.toDeviceAsync(streamInfo.stream);
     angAccSpecified.toDeviceAsync(streamInfo.stream);
+
+    // Primitive contact info
     idPrimitiveA.toDeviceAsync(streamInfo.stream);
     idPrimitiveB.toDeviceAsync(streamInfo.stream);
     contactType.toDeviceAsync(streamInfo.stream);
+    geomToPatchMap.toDeviceAsync(streamInfo.stream);
+
+    // Separate patch contact info
+    contactTypePatch.toDeviceAsync(streamInfo.stream);
+    idPatchA.toDeviceAsync(streamInfo.stream);
+    idPatchB.toDeviceAsync(streamInfo.stream);
+
     familyMaskMatrix.toDeviceAsync(streamInfo.stream);
     familyExtraMarginSize.toDeviceAsync(streamInfo.stream);
 
@@ -222,9 +232,18 @@ void DEMDynamicThread::migrateClumpPosInfoToHost() {
 }
 
 void DEMDynamicThread::migrateContactInfoToHost() {
+    // Primitive contact info
     idPrimitiveA.toHost();
     idPrimitiveB.toHost();
     contactType.toHost();
+    geomToPatchMap.toHost();
+
+    // Separate patch contact info
+    contactTypePatch.toHost();
+    idPatchA.toHost();
+    idPatchB.toHost();
+
+    // Contact results
     contactForces.toHost();
     contactTorque_convToForce.toHost();
     contactPointGeometryA.toHost();
@@ -537,10 +556,11 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
         DEME_DUAL_ARRAY_RESIZE(idPrimitiveA, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(idPrimitiveB, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
+        DEME_DUAL_ARRAY_RESIZE(geomToPatchMap, cnt_arr_size, 0);
 
         DEME_DUAL_ARRAY_RESIZE(idPatchA, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(idPatchB, cnt_arr_size, 0);
-        DEME_DUAL_ARRAY_RESIZE(geomToPatchMap, cnt_arr_size, 0);
+        DEME_DUAL_ARRAY_RESIZE(contactTypePatch, cnt_arr_size, NOT_A_CONTACT);
 
         // meshUniversalContact case uses these arrays to temp store
         if (!solverFlags.useNoContactRecord || solverFlags.meshUniversalContact) {
@@ -576,16 +596,9 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(existingContactTypes, NUM_SUPPORTED_CONTACT_TYPES + 1, NOT_A_CONTACT);
     DEME_DUAL_ARRAY_RESIZE(typeStartOffsets, NUM_SUPPORTED_CONTACT_TYPES + 1, 0);
 
-    // You know what, let's not init dT buffers, since kT will change it when needed anyway. Besides, changing it here
+    // You know what, let's not init dT's buffers, since kT will change it when needed anyway. Besides, changing it here
     // will cause problems in the case of a re-init-ed simulation with more clumps added to system, since we may
     // accidentally clamp those arrays.
-    /*
-    buffer_size = DEME_MAX(buffer_size, INITIAL_CONTACT_ARRAY_SIZE);
-    DEME_DEVICE_ARRAY_RESIZE(idPrimitiveA_buffer, buffer_size);
-    DEME_DEVICE_ARRAY_RESIZE(idPrimitiveB_buffer, buffer_size);
-    DEME_DEVICE_ARRAY_RESIZE(contactType_buffer, buffer_size);
-    DEME_DEVICE_ARRAY_RESIZE(contactMapping_buffer, buffer_size);
-    */
 }
 
 void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, std::string>& template_number_name_map,
@@ -1972,7 +1985,7 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     ptFile << ostream.str();
 }
 
-inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
+inline void DEMDynamicThread::contactPrimitivesArraysResize(size_t nContactPairs) {
     DEME_DUAL_ARRAY_RESIZE(idPrimitiveA, nContactPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(idPrimitiveB, nContactPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(contactType, nContactPairs, NOT_A_CONTACT);
@@ -1995,10 +2008,11 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     // Also note that dT does not have to worry about contact persistence, because kT handles that
 }
 
-inline void DEMDynamicThread::meshPatchPairsResize(size_t nPatchPairs) {
+inline void DEMDynamicThread::transferPatchArrayResize(size_t nPatchPairs) {
     // NEW: Resize separate patch ID arrays (sized to patch pairs, the shorter array)
     DEME_DUAL_ARRAY_RESIZE(idPatchA, nPatchPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(idPatchB, nPatchPairs, 0);
+    DEME_DUAL_ARRAY_RESIZE(contactTypePatch, nPatchPairs, NOT_A_CONTACT);
 
     // Re-packing pointers to device now is automatic
     // Sync pointers to device can be delayed... we'll only need to do that before kernel calls
@@ -2007,35 +2021,42 @@ inline void DEMDynamicThread::meshPatchPairsResize(size_t nPatchPairs) {
 inline void DEMDynamicThread::unpackMyBuffer() {
     // Make a note on the contact number of the previous time step
     *solverScratchSpace.numPrevContacts = *solverScratchSpace.numContacts;
+    *solverScratchSpace.numPrevPrimitiveContacts = *solverScratchSpace.numPrimitiveContacts;
     // kT's batch of produce is made with this max drift in mind
     pSchedSupport->dynamicMaxFutureDrift = (pSchedSupport->kinematicMaxFutureDrift).load();
     // DEME_DEBUG_PRINTF("dynamicMaxFutureDrift is %u", (pSchedSupport->dynamicMaxFutureDrift).load());
 
-    DEME_GPU_CALL(
-        cudaMemcpy(&(solverScratchSpace.numContacts), &nContactPairs_buffer, sizeof(size_t), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(&(solverScratchSpace.numPrimitiveContacts), &nPrimitiveContactPairs_buffer, sizeof(size_t),
+                             cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(&(solverScratchSpace.numContacts), &nPatchContactPairs_buffer, sizeof(size_t),
+                             cudaMemcpyDeviceToDevice));
     solverScratchSpace.numContacts.toHost();
+    solverScratchSpace.numPrimitiveContacts.toHost();
     // Need to resize those contact event-based arrays before usage
-    if (*solverScratchSpace.numContacts > idPrimitiveA.size() || *solverScratchSpace.numContacts > buffer_size) {
-        contactEventArraysResize(*solverScratchSpace.numContacts);
+    if (*solverScratchSpace.numPrimitiveContacts > idPrimitiveA.size()) {
+        contactPrimitivesArraysResize(*solverScratchSpace.numPrimitiveContacts);
     }
     if (*solverScratchSpace.numContacts > idPatchA.size()) {
-        meshPatchPairsResize(*solverScratchSpace.numContacts);
+        transferPatchArrayResize(*solverScratchSpace.numContacts);
     }
 
     DEME_GPU_CALL(cudaMemcpy(granData->idPrimitiveA, idPrimitiveA_buffer.data(),
-                             *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+                             *solverScratchSpace.numPrimitiveContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->idPrimitiveB, idPrimitiveB_buffer.data(),
-                             *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+                             *solverScratchSpace.numPrimitiveContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->contactType, contactType_buffer.data(),
-                             *solverScratchSpace.numContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
+                             *solverScratchSpace.numPrimitiveContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->geomToPatchMap, geomToPatchMap_buffer.data(),
+                             *solverScratchSpace.numPrimitiveContacts * sizeof(contactPairs_t),
+                             cudaMemcpyDeviceToDevice));
 
-    // NEW: Unpack separate patch IDs and mapping array
+    // Unpack separate patch ID arrays
     DEME_GPU_CALL(cudaMemcpy(granData->idPatchA, idPatchA_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->idPatchB, idPatchB_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->geomToPatchMap, geomToPatchMap_buffer.data(),
-                             *solverScratchSpace.numContacts * sizeof(contactPairs_t), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->contactTypePatch, contactTypePatch_buffer.data(),
+                             *solverScratchSpace.numContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
 
     if (!solverFlags.isHistoryless) {
         // Note we don't have to use dedicated memory space for unpacking contactMapping_buffer contents, because we

@@ -329,12 +329,13 @@ struct DEMDataDT {
     bodyID_t* idPrimitiveA;
     bodyID_t* idPrimitiveB;
     contact_t* contactType;
-    contactPairs_t* contactMapping;
+    contactPairs_t* geomToPatchMap;
 
     // NEW: Separate patch IDs and mapping array
     bodyID_t* idPatchA;
     bodyID_t* idPatchB;
-    contactPairs_t* geomToPatchMap;
+    contact_t* contactTypePatch;
+    contactPairs_t* contactMapping;
 
     // Family mask
     notStupidBool_t* familyMasks;
@@ -447,22 +448,22 @@ struct DEMDataKT {
     bodyID_t* idPatchB;
     bodyID_t* previous_idPatchA;
     bodyID_t* previous_idPatchB;
-    contact_t* patchContactType;
-    contact_t* prev_patchContactType;
+    contact_t* contactTypePatch;
+    contact_t* prev_contactTypePatch;
     contactPairs_t* geomToPatchMap;
 
     // data pointers that is kT's transfer destination
-    size_t* pDTOwnedBuffer_nContactPairs = nullptr;
-    size_t* pDTOwnedBuffer_nPatchEnabledContacts = nullptr;
+    size_t* pDTOwnedBuffer_nPrimitiveContacts = nullptr;
+    size_t* pDTOwnedBuffer_nPatchContacts = nullptr;
     bodyID_t* pDTOwnedBuffer_idPrimitiveA = nullptr;
     bodyID_t* pDTOwnedBuffer_idPrimitiveB = nullptr;
     contact_t* pDTOwnedBuffer_contactType = nullptr;
     contactPairs_t* pDTOwnedBuffer_contactMapping = nullptr;
-    patchIDPair_t* pDTOwnedBuffer_contactPatchPairs = nullptr;
 
     // NEW: Buffer pointers for separate patch arrays
     bodyID_t* pDTOwnedBuffer_idPatchA = nullptr;
     bodyID_t* pDTOwnedBuffer_idPatchB = nullptr;
+    contact_t* pDTOwnedBuffer_contactTypePatch = nullptr;
     contactPairs_t* pDTOwnedBuffer_geomToPatchMap = nullptr;
 
     // The collection of pointers to DEM template arrays such as radiiSphere, still useful when there are template info

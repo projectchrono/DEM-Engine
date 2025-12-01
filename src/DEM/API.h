@@ -319,7 +319,7 @@ class DEMSolver {
     /// @return The current update frequency.
     float GetUpdateFreq() const;
 
-    /// Set the number of threads per block in force calculation (default 256).
+    /// Set the number of threads per block in force calculation (256, 128, 64 etc.).
     void SetForceCalcThreadsPerBlock(unsigned int nTh) { dT->DT_FORCE_CALC_NTHREADS_PER_BLOCK = nTh; }
 
     /// @brief Set whether the meshes should have contacts with other meshes and analytical objects.

@@ -260,8 +260,8 @@ __global__ void markNewPatchPairGroups(deme::patchIDPair_t* sortedPatchPairs,
 // primitive in each group.
 // Note: No race condition because primitives are sorted by patch pair within each type,
 // so geomToPatchMap values change monotonically, and only one thread (the first in each group)
-// will write to each patchContactType[patchIdx] location.
-__global__ void extractPatchContactTypes(deme::contact_t* patchContactType,
+// will write to each contactTypePatch[patchIdx] location.
+__global__ void extractPatchContactTypes(deme::contact_t* contactTypePatch,
                                          deme::contact_t* primitiveContactType,
                                          deme::contactPairs_t* geomToPatchMap,
                                          size_t numPrimitiveContacts,
@@ -273,7 +273,7 @@ __global__ void extractPatchContactTypes(deme::contact_t* patchContactType,
         // (either first element, or the previous primitive has a different patch index)
         // Since primitives are sorted by patch ID pair, only one thread per patch group meets this condition
         if (myID == 0 || geomToPatchMap[myID - 1] != patchIdx) {
-            patchContactType[patchIdx] = primitiveContactType[myID];
+            contactTypePatch[patchIdx] = primitiveContactType[myID];
         }
     }
 }
@@ -283,10 +283,10 @@ __global__ void extractPatchContactTypes(deme::contact_t* patchContactType,
 // For each current contact, we use binary search to find the matching contact in the previous array.
 __global__ void buildPatchContactMapping(deme::bodyID_t* curr_idPatchA,
                                          deme::bodyID_t* curr_idPatchB,
-                                         deme::contact_t* curr_patchContactType,
+                                         deme::contact_t* curr_contactTypePatch,
                                          deme::bodyID_t* prev_idPatchA,
                                          deme::bodyID_t* prev_idPatchB,
-                                         deme::contact_t* prev_patchContactType,
+                                         deme::contact_t* prev_contactTypePatch,
                                          deme::contactPairs_t* contactMapping,
                                          size_t numCurrContacts,
                                          size_t numPrevContacts) {
@@ -294,7 +294,7 @@ __global__ void buildPatchContactMapping(deme::bodyID_t* curr_idPatchA,
     if (myID < numCurrContacts) {
         deme::bodyID_t curr_A = curr_idPatchA[myID];
         deme::bodyID_t curr_B = curr_idPatchB[myID];
-        deme::contact_t curr_type = curr_patchContactType[myID];
+        deme::contact_t curr_type = curr_contactTypePatch[myID];
 
         // Default: no match found
         deme::contactPairs_t my_partner = deme::NULL_MAPPING_PARTNER;
@@ -307,7 +307,7 @@ __global__ void buildPatchContactMapping(deme::bodyID_t* curr_idPatchA,
         size_t right = numPrevContacts;
         while (left < right) {
             size_t mid = left + (right - left) / 2;
-            if (prev_patchContactType[mid] < curr_type) {
+            if (prev_contactTypePatch[mid] < curr_type) {
                 left = mid + 1;
             } else {
                 right = mid;
@@ -321,7 +321,7 @@ __global__ void buildPatchContactMapping(deme::bodyID_t* curr_idPatchA,
         right = numPrevContacts;
         while (left < right) {
             size_t mid = left + (right - left) / 2;
-            if (prev_patchContactType[mid] <= curr_type) {
+            if (prev_contactTypePatch[mid] <= curr_type) {
                 left = mid + 1;
             } else {
                 right = mid;

@@ -198,8 +198,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       DualArray<bodyID_t>& idPatchB,
                       DualArray<bodyID_t>& previous_idPatchA,
                       DualArray<bodyID_t>& previous_idPatchB,
-                      DualArray<contact_t>& patchContactType,
-                      DualArray<contact_t>& prev_patchContactType,
+                      DualArray<contact_t>& contactTypePatch,
+                      DualArray<contact_t>& prev_contactTypePatch,
                       DualArray<contactPairs_t>& geomToPatchMap,
                       cudaStream_t& this_stream,
                       DEMSolverScratchData& scratchPad,
@@ -1278,12 +1278,12 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     scratchPad.syncDualStructDeviceToHost("numUniquePatchPairs");
                     size_t numUniqueInSegment = *scratchPad.getDualStructHost("numUniquePatchPairs");
 
-                    // Step 2: Ensure idPatchA/B and patchContactType are large enough
+                    // Step 2: Ensure idPatchA/B and contactTypePatch are large enough
                     size_t newTotalSize = totalUniquePatchPairs + numUniqueInSegment;
                     if (newTotalSize > idPatchA.size()) {
                         DEME_DUAL_ARRAY_RESIZE_NOVAL(idPatchA, newTotalSize);
                         DEME_DUAL_ARRAY_RESIZE_NOVAL(idPatchB, newTotalSize);
-                        DEME_DUAL_ARRAY_RESIZE_NOVAL(patchContactType, newTotalSize);
+                        DEME_DUAL_ARRAY_RESIZE_NOVAL(contactTypePatch, newTotalSize);
                         granData.toDevice();
                     }
 
@@ -1297,10 +1297,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                             granData->idPatchB + totalUniquePatchPairs, numUniqueInSegment);
                         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 
-                        // Set patchContactType for this segment - all have the same type (using GPU kernel)
+                        // Set contactTypePatch for this segment - all have the same type (using GPU kernel)
                         contact_t thisType = host_unique_types[i];
                         fillContactTypeArray<<<dim3(blocks_needed_for_decode), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                               this_stream>>>(granData->patchContactType + totalUniquePatchPairs,
+                                               this_stream>>>(granData->contactTypePatch + totalUniquePatchPairs,
                                                               thisType, numUniqueInSegment);
                         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                     }
@@ -1360,7 +1360,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // std::cout << "Patch contacts:" << std::endl;
             // displayDeviceArray<bodyID_t>(granData->idPatchA, *scratchPad.numContacts);
             // displayDeviceArray<bodyID_t>(granData->idPatchB, *scratchPad.numContacts);
-            // displayDeviceArray<contact_t>(granData->patchContactType, *scratchPad.numContacts);
+            // displayDeviceArray<contact_t>(granData->contactTypePatch, *scratchPad.numContacts);
             // displayDeviceArray<contactPairs_t>(granData->geomToPatchMap, *scratchPad.numPrimitiveContacts);
         }
 
@@ -1395,8 +1395,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             if (blocks_needed_for_mapping > 0) {
                 buildPatchContactMapping<<<dim3(blocks_needed_for_mapping), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
                                            this_stream>>>(
-                    granData->idPatchA, granData->idPatchB, granData->patchContactType, granData->previous_idPatchA,
-                    granData->previous_idPatchB, granData->prev_patchContactType, granData->contactMapping,
+                    granData->idPatchA, granData->idPatchB, granData->contactTypePatch, granData->previous_idPatchA,
+                    granData->previous_idPatchB, granData->prev_contactTypePatch, granData->contactMapping,
                     *scratchPad.numContacts, *scratchPad.numPrevContacts);
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
@@ -1407,14 +1407,14 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             size_t patch_id_arr_bytes = (*scratchPad.numContacts) * sizeof(bodyID_t);
             size_t patch_type_arr_bytes = (*scratchPad.numContacts) * sizeof(contact_t);
             if (*scratchPad.numContacts > previous_idPatchA.size()) {
-                patchArraysResize(*scratchPad.numContacts, previous_idPatchA, previous_idPatchB, prev_patchContactType,
+                patchArraysResize(*scratchPad.numContacts, previous_idPatchA, previous_idPatchB, prev_contactTypePatch,
                                   granData);
             }
             DEME_GPU_CALL(cudaMemcpy(granData->previous_idPatchA, granData->idPatchA, patch_id_arr_bytes,
                                      cudaMemcpyDeviceToDevice));
             DEME_GPU_CALL(cudaMemcpy(granData->previous_idPatchB, granData->idPatchB, patch_id_arr_bytes,
                                      cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(granData->prev_patchContactType, granData->patchContactType, patch_type_arr_bytes,
+            DEME_GPU_CALL(cudaMemcpy(granData->prev_contactTypePatch, granData->contactTypePatch, patch_type_arr_bytes,
                                      cudaMemcpyDeviceToDevice));
 
             // Currently only when using persistent contacts we need to store enduring primitive contact info
@@ -1445,7 +1445,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     // std::cout << "Patch Contacts: " << std::endl;
     // displayDeviceArray<bodyID_t>(granData->idPatchA, *scratchPad.numContacts);
     // displayDeviceArray<bodyID_t>(granData->idPatchB, *scratchPad.numContacts);
-    // displayDeviceArray<contact_t>(granData->patchContactType, *scratchPad.numContacts);
+    // displayDeviceArray<contact_t>(granData->contactTypePatch, *scratchPad.numContacts);
 
     // Finally, don't forget to store the number of contacts for the next iteration, even if there is 0 contacts (in
     // that case, mapping will not be constructed, but we don't have to worry b/c in the next iteration, simply no work

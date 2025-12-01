@@ -210,8 +210,8 @@ class DEMKinematicThread {
     DualArray<bodyID_t> previous_idPatchB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Contact types at patch level (corresponding to idPatchA/B arrays)
-    DualArray<contact_t> patchContactType = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<contact_t> prev_patchContactType = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<contact_t> contactTypePatch = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<contact_t> prev_contactTypePatch = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Mapping array: maps from primitive-based pair index to patch-based pair index
     // Same length as primitive pair arrays (idPrimitiveA/B). For each primitive pair,
@@ -426,9 +426,9 @@ class DEMKinematicThread {
     // Send produced data to dT-owned biffers
     void sendToTheirBuffer();
     // Resize dT's buffer arrays based on the number of contact pairs
-    inline void transferArraysResize(size_t nContactPairs);
+    inline void transferPrimitivesArraysResize(size_t nContactPairs);
     // Resize mesh patch pair array
-    inline void meshPatchPairsResize(size_t nMeshInvolvedContactPairs);
+    inline void transferPatchArrayResize(size_t nContactPairs);
     // Automatic adjustments to sim params
     void calibrateParams();
     // The kT-side allocations that can be done at initialization time
