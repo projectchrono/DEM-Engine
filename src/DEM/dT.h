@@ -208,9 +208,6 @@ class DEMDynamicThread {
     DualArray<bodyID_t> idPrimitiveB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<contact_t> contactType = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // DualArray<contactPairs_t> contactMapping;
-    // Fused mesh patch IDs for contacts involving meshes (mesh-mesh, mesh-analytical, sphere-mesh)
-    DualArray<patchIDPair_t> contactPatchPairs =
-        DualArray<patchIDPair_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // NEW: Separate patch IDs and mapping arrays (work arrays for dT)
     DualArray<bodyID_t> idPatchA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);

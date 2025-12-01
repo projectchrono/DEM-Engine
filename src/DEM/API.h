@@ -235,14 +235,25 @@ class DEMSolver {
     /// @param vel Error-out velocity.
     void SetErrorOutVelocity(float vel) { threshold_error_out_vel = vel; }
 
-    /// @brief Set the average number of contacts a sphere has, before the solver errors out. A huge number can be used
-    /// to discourage this error type. Defaulted to 100.
+    /// @brief Set the average number of contacts a primitive geometry (sphere or triangle) has, before the solver
+    /// errors out. A huge number can be used to discourage this error type. Defaulted to 100.
     /// @param num_cnts Error-out contact number.
     void SetErrorOutAvgContacts(float num_cnts) { threshold_error_out_num_cnts = num_cnts; }
 
-    /// @brief Get the current number of contacts each sphere has.
+    /// @brief Get the current number of contacts each primitive geometry (sphere or triangle) has.
     /// @return Number of contacts.
-    float GetAvgSphContacts() const { return kT->stateParams.avgCntsPerSphere; }
+    float GetAvgPrimitiveContacts() const { return kT->stateParams.avgCntsPerPrimitive; }
+
+    float GetAvgSphContacts() const {
+        if (!dT->solverFlags.meshUniversalContact) {
+            return GetAvgPrimitiveContacts();
+        } else {
+            DEME_ERROR(
+                std::string("GetAvgSphContacts is not available when meshUniversalContact is enabled. You may use "
+                            "GetAvgPrimitiveContacts instead."));
+            return -1.f;
+        }
+    }
 
     /// @brief Enable or disable the use of adaptive bin size (by default it is on).
     /// @param use Enable or disable.

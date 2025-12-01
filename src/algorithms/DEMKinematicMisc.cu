@@ -4,6 +4,22 @@
 
 #include <stdio.h>
 
+// Kernel to add a constant offset to each element of an array
+__global__ void addOffsetToArray(deme::contactPairs_t* arr, deme::contactPairs_t offset, size_t n) {
+    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        arr[myID] += offset;
+    }
+}
+
+// Kernel to fill a contact_t array with a constant value
+__global__ void fillContactTypeArray(deme::contact_t* arr, deme::contact_t val, size_t n) {
+    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        arr[myID] = val;
+    }
+}
+
 __global__ void fillRunLengthArray(deme::geoSphereTouches_t* runlength_full,
                                    deme::bodyID_t* unique_ids,
                                    deme::geoSphereTouches_t* runlength,
@@ -235,5 +251,112 @@ __global__ void markNewPatchPairGroups(deme::patchIDPair_t* sortedPatchPairs,
             // Compare with previous element - if different, it's a new group
             isNewGroup[myID] = (sortedPatchPairs[myID] != sortedPatchPairs[myID - 1]) ? 1 : 0;
         }
+    }
+}
+
+// Extract patch contact types: For each unique patch pair, extract the corresponding contact type.
+// Since primitives are sorted by contact type first, then by patch pair, all primitives in a patch
+// pair group share the same contact type. We just need to take the contact type of the first
+// primitive in each group.
+// Note: No race condition because primitives are sorted by patch pair within each type,
+// so geomToPatchMap values change monotonically, and only one thread (the first in each group)
+// will write to each patchContactType[patchIdx] location.
+__global__ void extractPatchContactTypes(deme::contact_t* patchContactType,
+                                         deme::contact_t* primitiveContactType,
+                                         deme::contactPairs_t* geomToPatchMap,
+                                         size_t numPrimitiveContacts,
+                                         size_t numContacts) {
+    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < numPrimitiveContacts) {
+        deme::contactPairs_t patchIdx = geomToPatchMap[myID];
+        // Check if this is the first primitive in this patch group
+        // (either first element, or the previous primitive has a different patch index)
+        // Since primitives are sorted by patch ID pair, only one thread per patch group meets this condition
+        if (myID == 0 || geomToPatchMap[myID - 1] != patchIdx) {
+            patchContactType[patchIdx] = primitiveContactType[myID];
+        }
+    }
+}
+
+// Build patch-based contact mapping between current and previous patch contact arrays.
+// Both arrays are sorted by contact type, then by combined patch ID pair within each type.
+// For each current contact, we use binary search to find the matching contact in the previous array.
+__global__ void buildPatchContactMapping(deme::bodyID_t* curr_idPatchA,
+                                         deme::bodyID_t* curr_idPatchB,
+                                         deme::contact_t* curr_patchContactType,
+                                         deme::bodyID_t* prev_idPatchA,
+                                         deme::bodyID_t* prev_idPatchB,
+                                         deme::contact_t* prev_patchContactType,
+                                         deme::contactPairs_t* contactMapping,
+                                         size_t numCurrContacts,
+                                         size_t numPrevContacts) {
+    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < numCurrContacts) {
+        deme::bodyID_t curr_A = curr_idPatchA[myID];
+        deme::bodyID_t curr_B = curr_idPatchB[myID];
+        deme::contact_t curr_type = curr_patchContactType[myID];
+
+        // Default: no match found
+        deme::contactPairs_t my_partner = deme::NULL_MAPPING_PARTNER;
+
+        // Find the segment in the previous array with the same contact type
+        // Since arrays are sorted by type first, we can find the type segment bounds using binary search
+
+        // Find the lower bound (first element with type >= curr_type)
+        size_t left = 0;
+        size_t right = numPrevContacts;
+        while (left < right) {
+            size_t mid = left + (right - left) / 2;
+            if (prev_patchContactType[mid] < curr_type) {
+                left = mid + 1;
+            } else {
+                right = mid;
+            }
+        }
+        size_t type_start = left;
+
+        // Find the upper bound (first element with type > curr_type)
+        // Note: we intentionally reuse 'left' from the lower_bound result (= type_start)
+        // since we know upper_bound >= lower_bound, this is an optimization
+        right = numPrevContacts;
+        while (left < right) {
+            size_t mid = left + (right - left) / 2;
+            if (prev_patchContactType[mid] <= curr_type) {
+                left = mid + 1;
+            } else {
+                right = mid;
+            }
+        }
+        size_t type_end = left;
+
+        // Within this type segment, use binary search to find the matching A/B pair
+        // The segment is sorted by the combined patch ID pair (A in high bits, B in low bits)
+        // The encoding ensures that (smaller_A, larger_B) pattern creates a sortable value
+        left = type_start;
+        right = type_end;
+        while (left < right) {
+            size_t mid = left + (right - left) / 2;
+            deme::bodyID_t prev_A = prev_idPatchA[mid];
+            deme::bodyID_t prev_B = prev_idPatchB[mid];
+
+            // Compare (A, B) pairs lexicographically
+            // Since they're sorted by patch ID pair where smaller ID is in high bits
+            if (prev_A < curr_A || (prev_A == curr_A && prev_B < curr_B)) {
+                left = mid + 1;
+            } else {
+                right = mid;
+            }
+        }
+
+        // Check if we found a match at position left
+        if (left < type_end) {
+            deme::bodyID_t prev_A = prev_idPatchA[left];
+            deme::bodyID_t prev_B = prev_idPatchB[left];
+            if (prev_A == curr_A && prev_B == curr_B) {
+                my_partner = left;
+            }
+        }
+
+        contactMapping[myID] = my_partner;
     }
 }

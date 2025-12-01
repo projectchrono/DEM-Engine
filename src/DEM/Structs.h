@@ -373,6 +373,8 @@ class DEMSolverScratchData {
     DualStruct<size_t> numPrevSpheres = DualStruct<size_t>(0);
     // Prev number of triangles
     DualStruct<size_t> numPrevTriangles = DualStruct<size_t>(0);
+    // Number of previous step's mesh patches
+    DualStruct<size_t> numPrevMeshPatches = DualStruct<size_t>(0);
 
     DEMSolverScratchData(size_t* external_host_counter = nullptr, size_t* external_device_counter = nullptr)
         : m_deviceVecPool(external_device_counter), m_dualArrPool(external_host_counter, external_device_counter) {
@@ -466,7 +468,7 @@ struct kTStateParams {
     size_t numBins = 0;
 
     // Current average num of contacts per sphere has.
-    float avgCntsPerSphere = 0.;
+    float avgCntsPerPrimitive = 0.;
 
     // float maxVel_buffer; // buffer for the current max vel sent by dT
     DualStruct<float> maxVel = DualStruct<float>(0.f);  // kT's own storage of max vel
