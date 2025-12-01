@@ -327,10 +327,13 @@ class DEMSolver {
     /// can have contacts only with clumps.
     /// @details Set to false to speedup the simulation if its involved meshes are not expected to have contacts. The
     /// default is false.
-    void SetMeshUniversalContact(bool use = true) {
-        kT->solverFlags.meshUniversalContact = use;
-        dT->solverFlags.meshUniversalContact = use;
-    }
+    void SetMeshUniversalContact(bool use = true);
+
+    /// @brief Set whether the solver should expect the user to mark certain contacts as persistent across kT updates.
+    /// @param use If true, the solver will expect the user to mark certain contacts as persistent across kT updates.
+    /// If false, all contacts are treated as non-persistent.
+    /// @details Set this to true if you later will call MarkPersistentContact series of methods.
+    void SetPersistentContact(bool use = true);
 
     /// @brief Load a clump type into the API-level cache.
     /// @return the shared ptr to the clump type just loaded.

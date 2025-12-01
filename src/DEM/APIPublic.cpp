@@ -256,6 +256,16 @@ void DEMSolver::SetContactOutputContent(const std::vector<std::string>& content)
     }
 }
 
+void DEMSolver::SetMeshUniversalContact(bool use) {
+    kT->solverFlags.meshUniversalContact = use;
+    dT->solverFlags.meshUniversalContact = use;
+}
+
+void DEMSolver::SetPersistentContact(bool use) {
+    kT->solverFlags.hasPersistentContacts = use;
+    dT->solverFlags.hasPersistentContacts = use;
+}
+
 void DEMSolver::SyncMemoryTransfer() {
     dT->syncMemoryTransfer();
     kT->syncMemoryTransfer();

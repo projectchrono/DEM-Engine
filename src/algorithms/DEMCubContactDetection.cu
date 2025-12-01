@@ -882,9 +882,14 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // might still have persistent contacts to add to the list.
         // -----------------------------------------------------------------------------------------------------------
 
-        // At user API level, persistent contacts are only supported for history-based models, and this check is totally
-        // for redundancy purpose.
-        if (solverFlags.hasPersistentContacts && !solverFlags.isHistoryless) {
+        // At user API level, persistent contacts are only supported for history-based models.
+        if (solverFlags.hasPersistentContacts) {
+            if (solverFlags.isHistoryless) {
+                DEME_ERROR(std::string(
+                    "You cannot mark persistent contacts when using a wildcard-less/history-less contact model (since "
+                    "persistency is a part of the history).\nYou can use a different force model, and if you have to "
+                    "use this one, add a placeholder wildcard."));
+            }
             // A bool array to help find what persistent contacts from the prev array need to be processed...
             // Contact persistency array is kT-only, and since the solver does not modify it, it can be seen as the
             // prev-primitive contact array's persistency info.

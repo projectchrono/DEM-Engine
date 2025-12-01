@@ -35,11 +35,10 @@ void DEMSolver::assignFamilyPersistentContact_impl(
     unsigned int N2,
     notStupidBool_t is_or_not,
     const std::function<bool(family_t, family_t, unsigned int, unsigned int)>& condition) {
-    if (kT->solverFlags.isHistoryless) {
-        DEME_ERROR(std::string(
-            "You cannot mark persistent contacts when using a wildcard-less/history-less contact model (since "
-            "persistency is a part of the history).\nYou can use a different force model, and if you have to use this "
-            "one, add a placeholder wildcard."));
+    if (!kT->solverFlags.hasPersistentContacts) {
+        DEME_ERROR(
+            std::string("You must first enable persistent contact support by calling SetPersistentContact(true) before "
+                        "marking persistent contacts."));
     }
     // Get device-major info to host first
     kT->previous_idPrimitiveA.toHost();
@@ -52,7 +51,7 @@ void DEMSolver::assignFamilyPersistentContact_impl(
 
     // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
     // as persistent but not found in CD, it will be added to the contact array.
-    for (size_t i = 0; i < *(kT->solverScratchSpace.numPrevContacts); i++) {
+    for (size_t i = 0; i < *(kT->solverScratchSpace.numPrevPrimitiveContacts); i++) {
         bodyID_t bodyA = kT->previous_idPrimitiveA[i];
         bodyID_t bodyB = kT->previous_idPrimitiveB[i];
         contact_t c_type = kT->previous_contactType[i];
@@ -67,10 +66,6 @@ void DEMSolver::assignFamilyPersistentContact_impl(
         }
     }
 
-    if (is_or_not == CONTACT_IS_PERSISTENT) {
-        kT->solverFlags.hasPersistentContacts = true;
-        dT->solverFlags.hasPersistentContacts = true;
-    }
     kT->contactPersistency.toDevice();
 }
 
@@ -94,24 +89,21 @@ void DEMSolver::assignFamilyPersistentContact(unsigned int N1, unsigned int N2, 
                                        });
 }
 void DEMSolver::assignPersistentContact(notStupidBool_t is_or_not) {
-    if (kT->solverFlags.isHistoryless) {
-        DEME_ERROR(std::string(
-            "You cannot mark persistent contacts when using a wildcard-less/history-less contact model (since "
-            "persistency is a part of the history).\nYou can use a different force model, and if you have to use this "
-            "one, add a placeholder wildcard."));
+    if (!kT->solverFlags.hasPersistentContacts) {
+        DEME_ERROR(
+            std::string("You must first enable persistent contact support by calling SetPersistentContact(true) before "
+                        "marking persistent contacts."));
     }
     kT->contactPersistency.toHost();
 
     // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
     // as persistent but not found in CD, it will be added to the contact array.
-    for (size_t i = 0; i < *(kT->solverScratchSpace.numPrevContacts); i++) {
+    // Note: contactPersistency is a part of the primitive contact building process, so it is always existent and has
+    // correct size.
+    for (size_t i = 0; i < *(kT->solverScratchSpace.numPrevPrimitiveContacts); i++) {
         kT->contactPersistency[i] = is_or_not;
     }
 
-    if (is_or_not == CONTACT_IS_PERSISTENT) {
-        kT->solverFlags.hasPersistentContacts = true;
-        dT->solverFlags.hasPersistentContacts = true;
-    }
     kT->contactPersistency.toDevice();
 }
 

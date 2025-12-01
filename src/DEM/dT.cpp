@@ -527,9 +527,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(volumeOwnerBody, nMassProperties, 0);
 
     // Arrays for contact info
-    // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is ~ 2n, and I
-    // think the max is 6n (although I can't prove it). Note the estimate should be large enough to decrease the number
-    // of reallocations in the simulation, but not too large that eats too much memory.
+    // The lengths of contact event-based arrays are just estimates.
     {
         // In any case, in this initialization process we should not make contact arrays smaller than it used to be, or
         // we may lose data. Also, if this is a new-boot, we allocate this array for at least INITIAL_CONTACT_ARRAY_SIZE
@@ -540,8 +538,6 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
         DEME_DUAL_ARRAY_RESIZE(idPrimitiveB, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
 
-        // NEW: Initialize separate patch ID arrays (sized to 0, will grow for mesh contacts)
-        // and geomToPatchMap (sized to geometry array length)
         DEME_DUAL_ARRAY_RESIZE(idPatchA, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(idPatchB, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(geomToPatchMap, cnt_arr_size, 0);
