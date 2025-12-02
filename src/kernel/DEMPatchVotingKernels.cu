@@ -3,10 +3,11 @@
 #include <DEMHelperKernels.cuh>
 
 // Kernel to compute weighted normals (normal * area) for voting
-// Also prepares the area values for reduction
+// Also prepares the area values for reduction and extracts the keys (geomToPatchMap values)
 __global__ void prepareWeightedNormalsForVoting(deme::DEMDataDT* granData,
                                                 float3* weightedNormals,
                                                 double* areas,
+                                                deme::contactPairs_t* keys,
                                                 deme::contactPairs_t startOffset,
                                                 deme::contactPairs_t count) {
     deme::contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -25,11 +26,16 @@ __global__ void prepareWeightedNormalsForVoting(deme::DEMDataDT* granData,
 
         // Store area for reduction
         areas[idx] = area;
+
+        // Extract key from geomToPatchMap
+        keys[idx] = granData->geomToPatchMap[myContactID];
     }
 }
 
-// Device function for binary search to find key index
-__device__ inline size_t binarySearchKey(deme::patchIDPair_t* keys, size_t count, deme::patchIDPair_t target) {
+// Device function for binary search to find key index (for contactPairs_t keys)
+__device__ inline size_t binarySearchKeyContactPairs(deme::contactPairs_t* keys,
+                                                     size_t count,
+                                                     deme::contactPairs_t target) {
     size_t left = 0;
     size_t right = count;
 
@@ -49,8 +55,9 @@ __device__ inline size_t binarySearchKey(deme::patchIDPair_t* keys, size_t count
 // Kernel to normalize the voted normals by dividing by total area and scatter to output
 // If total area is 0, set result to (0,0,0)
 // Assumes uniqueKeys are sorted (CUB's ReduceByKey maintains sort order)
-__global__ void normalizeAndScatterVotedNormals(deme::patchIDPair_t* originalKeys,
-                                                deme::patchIDPair_t* uniqueKeys,
+// Uses contactPairs_t keys (geomToPatchMap values) instead of patchIDPair_t
+__global__ void normalizeAndScatterVotedNormals(deme::contactPairs_t* originalKeys,
+                                                deme::contactPairs_t* uniqueKeys,
                                                 float3* votedWeightedNormals,
                                                 double* totalAreas,
                                                 float3* output,
@@ -59,12 +66,12 @@ __global__ void normalizeAndScatterVotedNormals(deme::patchIDPair_t* originalKey
                                                 deme::contactPairs_t count) {
     deme::contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
-        // Get the key for this contact
-        deme::patchIDPair_t myKey = originalKeys[idx];
+        // Get the key for this contact (already extracted in preparation step)
+        deme::contactPairs_t myKey = originalKeys[idx];
 
         // Find the corresponding unique key using binary search
         size_t numUnique = *numUniqueKeys;
-        size_t keyIdx = binarySearchKey(uniqueKeys, numUnique, myKey);
+        size_t keyIdx = binarySearchKeyContactPairs(uniqueKeys, numUnique, myKey);
 
         float3 votedNormal = make_float3(0.0f, 0.0f, 0.0f);
         if (keyIdx < numUnique) {

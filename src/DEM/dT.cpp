@@ -2293,49 +2293,70 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
             contactPairs_t startOffset = start_count.first;
             contactPairs_t count = start_count.second;
 
-            //// TODO: Rewrite voting
             // Vote for the contact direction; voting power depends on the contact area
+            // This reduce-by-key operation reduces primitive-recorded force pairs into patch/convex part-based
+            // force pairs. All elements that share the same geomToPatchMap value vote together.
             if (count > 0) {
                 // Allocate temporary arrays for the voting process
                 float3* weightedNormals =
                     (float3*)solverScratchSpace.allocateTempVector("weightedNormals", count * sizeof(float3));
                 double* areas = (double*)solverScratchSpace.allocateTempVector("areas", count * sizeof(double));
+                // Keys extracted from geomToPatchMap - these map primitives to patch pairs
+                contactPairs_t* keys =
+                    (contactPairs_t*)solverScratchSpace.allocateTempVector("votingKeys", count * sizeof(contactPairs_t));
 
-                // Allocate arrays for reduce-by-key results
-                patchIDPair_t* uniqueKeys =
-                    (patchIDPair_t*)solverScratchSpace.allocateTempVector("uniqueKeys", count * sizeof(patchIDPair_t));
+                // Allocate arrays for reduce-by-key results (uniqueKeys uses contactPairs_t, not patchIDPair_t)
+                contactPairs_t* uniqueKeys =
+                    (contactPairs_t*)solverScratchSpace.allocateTempVector("uniqueKeys", count * sizeof(contactPairs_t));
                 float3* votedWeightedNormals =
                     (float3*)solverScratchSpace.allocateTempVector("votedWeightedNormals", count * sizeof(float3));
                 double* totalAreas =
                     (double*)solverScratchSpace.allocateTempVector("totalAreas", count * sizeof(double));
                 size_t* numUniqueKeys = (size_t*)solverScratchSpace.allocateTempVector("numUniqueKeys", sizeof(size_t));
 
-                // Step 1: Prepare weighted normals and areas
+                // Step 1: Prepare weighted normals, areas, and keys
+                // The kernel extracts keys from geomToPatchMap, computes weighted normals, and stores areas
                 size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
                 patch_voting_kernels->kernel("prepareWeightedNormalsForVoting")
                     .instantiate()
                     .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-                    .launch(&granData, weightedNormals, areas, startOffset, count);
+                    .launch(&granData, weightedNormals, areas, keys, startOffset, count);
                 DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
                 // Step 2: Reduce-by-key for weighted normals (sum)
-                // Get the keys array segment for this contact type
+                // The keys are geomToPatchMap values (contactPairs_t), which group primitives by patch pair
+                cubSumReduceByKeyFloat3_ContactPairs(keys, uniqueKeys, weightedNormals, votedWeightedNormals,
+                                                     numUniqueKeys, count, streamInfo.stream, solverScratchSpace);
 
                 // Step 3: Reduce-by-key for areas (sum)
-                // Note: CUB's ReduceByKey on the same input keys produces identical uniqueKeys output,
-                // so it's safe to reuse the same uniqueKeys array. The values will be overwritten but
-                // will be identical to the first call since the input keys are the same.
+                // We need to reuse the same keys array for this reduction
+                // Note: CUB's ReduceByKey on the same input keys produces identical uniqueKeys output
+                contactPairs_t* uniqueKeys2 = (contactPairs_t*)solverScratchSpace.allocateTempVector(
+                    "uniqueKeys2", count * sizeof(contactPairs_t));
+                size_t* numUniqueKeys2 =
+                    (size_t*)solverScratchSpace.allocateTempVector("numUniqueKeys2", sizeof(size_t));
+                cubSumReduceByKeyDouble_ContactPairs(keys, uniqueKeys2, areas, totalAreas, numUniqueKeys2, count,
+                                                     streamInfo.stream, solverScratchSpace);
 
-                // Step 4: Normalize the voted normals by total area and scatter back to original positions
-                // Note: numUniqueKeys and numUniqueKeys2 should be the same
+                // Step 4: Normalize the voted normals by total area and scatter back to contactTorque_convToForce
+                // The output is stored in contactTorque_convToForce, which is already sized appropriately
+                patch_voting_kernels->kernel("normalizeAndScatterVotedNormals")
+                    .instantiate()
+                    .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+                    .launch(keys, uniqueKeys, votedWeightedNormals, totalAreas, granData->contactTorque_convToForce,
+                            numUniqueKeys, startOffset, count);
+                DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
                 // Clean up temporary arrays
                 solverScratchSpace.finishUsingTempVector("weightedNormals");
                 solverScratchSpace.finishUsingTempVector("areas");
+                solverScratchSpace.finishUsingTempVector("votingKeys");
                 solverScratchSpace.finishUsingTempVector("uniqueKeys");
+                solverScratchSpace.finishUsingTempVector("uniqueKeys2");
                 solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
                 solverScratchSpace.finishUsingTempVector("totalAreas");
                 solverScratchSpace.finishUsingTempVector("numUniqueKeys");
+                solverScratchSpace.finishUsingTempVector("numUniqueKeys2");
             }
         }
     }

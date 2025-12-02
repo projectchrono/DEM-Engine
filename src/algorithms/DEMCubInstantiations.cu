@@ -80,7 +80,7 @@ template void cubSumReduceByKey<patchIDPair_t, double>(patchIDPair_t* d_keys_in,
                                                        cudaStream_t& this_stream,
                                                        DEMSolverScratchData& scratchPad);
 
-// Special instantiation for float3 which needs custom add operator
+// Special instantiation for float3 which needs custom add operator (patchIDPair_t keys)
 void cubSumReduceByKeyFloat3(patchIDPair_t* d_keys_in,
                              patchIDPair_t* d_unique_out,
                              float3* d_vals_in,
@@ -92,6 +92,34 @@ void cubSumReduceByKeyFloat3(patchIDPair_t* d_keys_in,
     CubFloat3Add add_op;
     cubDEMReduceByKeys<patchIDPair_t, float3, CubFloat3Add>(d_keys_in, d_unique_out, d_vals_in, d_aggregates_out,
                                                             d_num_out, add_op, n, this_stream, scratchPad);
+}
+
+// Special instantiation for float3 with contactPairs_t keys (for voting)
+void cubSumReduceByKeyFloat3_ContactPairs(contactPairs_t* d_keys_in,
+                                          contactPairs_t* d_unique_out,
+                                          float3* d_vals_in,
+                                          float3* d_aggregates_out,
+                                          size_t* d_num_out,
+                                          size_t n,
+                                          cudaStream_t& this_stream,
+                                          DEMSolverScratchData& scratchPad) {
+    CubFloat3Add add_op;
+    cubDEMReduceByKeys<contactPairs_t, float3, CubFloat3Add>(d_keys_in, d_unique_out, d_vals_in, d_aggregates_out,
+                                                              d_num_out, add_op, n, this_stream, scratchPad);
+}
+
+// Special instantiation for double with contactPairs_t keys (for voting)
+void cubSumReduceByKeyDouble_ContactPairs(contactPairs_t* d_keys_in,
+                                          contactPairs_t* d_unique_out,
+                                          double* d_vals_in,
+                                          double* d_aggregates_out,
+                                          size_t* d_num_out,
+                                          size_t n,
+                                          cudaStream_t& this_stream,
+                                          DEMSolverScratchData& scratchPad) {
+    CubOpAdd<double> add_op;
+    cubDEMReduceByKeys<contactPairs_t, double, CubOpAdd<double>>(d_keys_in, d_unique_out, d_vals_in, d_aggregates_out,
+                                                                  d_num_out, add_op, n, this_stream, scratchPad);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
