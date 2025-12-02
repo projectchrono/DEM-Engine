@@ -2329,13 +2329,14 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                                      numUniqueKeys, count, streamInfo.stream, solverScratchSpace);
 
                 // Step 3: Reduce-by-key for areas (sum)
-                // We need to reuse the same keys array for this reduction
-                // Note: CUB's ReduceByKey on the same input keys produces identical uniqueKeys output
-                contactPairs_t* uniqueKeys2 = (contactPairs_t*)solverScratchSpace.allocateTempVector(
-                    "uniqueKeys2", count * sizeof(contactPairs_t));
-                size_t* numUniqueKeys2 =
-                    (size_t*)solverScratchSpace.allocateTempVector("numUniqueKeys2", sizeof(size_t));
-                cubSumReduceByKeyDouble_ContactPairs(keys, uniqueKeys2, areas, totalAreas, numUniqueKeys2, count,
+                // Note: CUB's ReduceByKey requires an output array for unique keys, but since the keys
+                // are the same as in Step 2, we just provide a dummy output array that we discard.
+                // The uniqueKeys and numUniqueKeys from Step 2 are reused in Step 4.
+                contactPairs_t* dummyUniqueKeys = (contactPairs_t*)solverScratchSpace.allocateTempVector(
+                    "dummyUniqueKeys", count * sizeof(contactPairs_t));
+                size_t* dummyNumUniqueKeys =
+                    (size_t*)solverScratchSpace.allocateTempVector("dummyNumUniqueKeys", sizeof(size_t));
+                cubSumReduceByKeyDouble_ContactPairs(keys, dummyUniqueKeys, areas, totalAreas, dummyNumUniqueKeys, count,
                                                      streamInfo.stream, solverScratchSpace);
 
                 // Step 4: Normalize the voted normals by total area and scatter back to contactTorque_convToForce
@@ -2352,11 +2353,11 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("areas");
                 solverScratchSpace.finishUsingTempVector("votingKeys");
                 solverScratchSpace.finishUsingTempVector("uniqueKeys");
-                solverScratchSpace.finishUsingTempVector("uniqueKeys2");
+                solverScratchSpace.finishUsingTempVector("dummyUniqueKeys");
                 solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
                 solverScratchSpace.finishUsingTempVector("totalAreas");
                 solverScratchSpace.finishUsingTempVector("numUniqueKeys");
-                solverScratchSpace.finishUsingTempVector("numUniqueKeys2");
+                solverScratchSpace.finishUsingTempVector("dummyNumUniqueKeys");
             }
         }
     }
