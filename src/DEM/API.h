@@ -1118,11 +1118,6 @@ class DEMSolver {
     /// of some random number)
     void EnsureKernelErrMsgLineNum(bool flag = true) { ensure_kernel_line_num = flag; }
 
-    /// Whether the force collection (acceleration calc and reduction) process should be using CUB. If true, the
-    /// acceleration array is flattened and reduced using CUB; if false, the acceleration is computed and directly
-    /// applied to each body through atomic operations.
-    void UseCubForceCollection(bool flag = true) { use_cub_to_reduce_force = flag; }
-
     /// Reduce contact forces to accelerations right after calculating them, in the same kernel. This may give some
     /// performance boost if you have only polydisperse spheres, no clumps.
     void SetCollectAccRightAfterForceCalc(bool flag = true) { collect_force_in_force_kernel = flag; }
@@ -1595,9 +1590,6 @@ class DEMSolver {
 
     // If we should ensure that when kernel jitification fails, the line number reported reflexes where error happens
     bool ensure_kernel_line_num = false;
-
-    // If we should flatten then reduce forces (true), or use atomic operation to reduce forces (false)
-    bool use_cub_to_reduce_force = false;
 
     // If the solver sees there are more spheres in a bin than a this `maximum', it errors out
     unsigned int threshold_too_many_spheres_in_bin = 32768;

@@ -207,7 +207,7 @@ class DEMDynamicThread {
     // Contact pair/location, for dT's personal use!!
     DualArray<bodyID_t> idPrimitiveA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> idPrimitiveB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<contact_t> contactType = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<contact_t> contactTypePrimitive = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // DualArray<contactPairs_t> contactMapping;
 
     // NEW: Separate patch IDs and mapping arrays (work arrays for dT)
@@ -480,8 +480,11 @@ class DEMDynamicThread {
                                  std::vector<float3>& torques,
                                  bool torque_in_local = false);
 
-    /// Get owner of contact geo B.
+    /// Get owner of contact geometry (sphere, triangle, analytical entity).
     bodyID_t getGeoOwnerID(const bodyID_t& geo, const geoType_t& type) const;
+
+    /// Get the owner of a contact patch (triangle patch, sphere, analytical entity).
+    bodyID_t getPatchOwnerID(const bodyID_t& patchID, const geoType_t& type) const;
 
     /// Let dT know that it needs a kT update, as something important may have changed, and old contact pair info is no
     /// longer valid.

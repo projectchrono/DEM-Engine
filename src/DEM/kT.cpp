@@ -229,7 +229,7 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
                              (*solverScratchSpace.numPrimitiveContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idPrimitiveB, granData->idPrimitiveB,
                              (*solverScratchSpace.numPrimitiveContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactType, granData->contactType,
+    DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactType, granData->contactTypePrimitive,
                              (*solverScratchSpace.numPrimitiveContacts) * sizeof(contact_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_geomToPatchMap, granData->geomToPatchMap,
                              (*solverScratchSpace.numPrimitiveContacts) * sizeof(contactPairs_t),
@@ -320,11 +320,11 @@ void DEMKinematicThread::workerThread() {
             // For auto-adjusting bin size, this part of code is encapsuled in an accumulative timer.
             CDAccumTimer.Begin();
             contactDetection(bin_sphere_kernels, bin_triangle_kernels, sphere_contact_kernels, sphTri_contact_kernels,
-                             granData, simParams, solverFlags, verbosity, idPrimitiveA, idPrimitiveB, contactType,
-                             previous_idPrimitiveA, previous_idPrimitiveB, previous_contactType, contactPersistency,
-                             contactMapping, idPatchA, idPatchB, previous_idPatchA, previous_idPatchB, contactTypePatch,
-                             prev_contactTypePatch, geomToPatchMap, streamInfo.stream, solverScratchSpace, timers,
-                             stateParams);
+                             granData, simParams, solverFlags, verbosity, idPrimitiveA, idPrimitiveB,
+                             contactTypePrimitive, previous_idPrimitiveA, previous_idPrimitiveB,
+                             previous_contactTypePrimitive, contactPersistency, contactMapping, idPatchA, idPatchB,
+                             previous_idPatchA, previous_idPatchB, contactTypePatch, previous_contactTypePatch,
+                             geomToPatchMap, streamInfo.stream, solverScratchSpace, timers, stateParams);
             CDAccumTimer.End();
 
             timers.GetTimer("Send to dT buffer").start();
@@ -481,11 +481,11 @@ void DEMKinematicThread::packDataPointers() {
     marginSize.bindDevicePointer(&(granData->marginSize));
     idPrimitiveA.bindDevicePointer(&(granData->idPrimitiveA));
     idPrimitiveB.bindDevicePointer(&(granData->idPrimitiveB));
-    contactType.bindDevicePointer(&(granData->contactType));
+    contactTypePrimitive.bindDevicePointer(&(granData->contactTypePrimitive));
     contactPersistency.bindDevicePointer(&(granData->contactPersistency));
     previous_idPrimitiveA.bindDevicePointer(&(granData->previous_idPrimitiveA));
     previous_idPrimitiveB.bindDevicePointer(&(granData->previous_idPrimitiveB));
-    previous_contactType.bindDevicePointer(&(granData->previous_contactType));
+    previous_contactTypePrimitive.bindDevicePointer(&(granData->previous_contactTypePrimitive));
     contactMapping.bindDevicePointer(&(granData->contactMapping));
 
     // NEW: Bind separate patch ID and mapping array pointers
@@ -494,7 +494,7 @@ void DEMKinematicThread::packDataPointers() {
     previous_idPatchA.bindDevicePointer(&(granData->previous_idPatchA));
     previous_idPatchB.bindDevicePointer(&(granData->previous_idPatchB));
     contactTypePatch.bindDevicePointer(&(granData->contactTypePatch));
-    prev_contactTypePatch.bindDevicePointer(&(granData->prev_contactTypePatch));
+    previous_contactTypePatch.bindDevicePointer(&(granData->previous_contactTypePatch));
     geomToPatchMap.bindDevicePointer(&(granData->geomToPatchMap));
 
     familyMaskMatrix.bindDevicePointer(&(granData->familyMasks));
@@ -532,16 +532,16 @@ void DEMKinematicThread::migrateDataToDevice() {
     marginSize.toDeviceAsync(streamInfo.stream);
     idPrimitiveA.toDeviceAsync(streamInfo.stream);
     idPrimitiveB.toDeviceAsync(streamInfo.stream);
-    contactType.toDeviceAsync(streamInfo.stream);
+    contactTypePrimitive.toDeviceAsync(streamInfo.stream);
     contactPersistency.toDeviceAsync(streamInfo.stream);
     previous_idPrimitiveA.toDeviceAsync(streamInfo.stream);
     previous_idPrimitiveB.toDeviceAsync(streamInfo.stream);
-    previous_contactType.toDeviceAsync(streamInfo.stream);
+    previous_contactTypePrimitive.toDeviceAsync(streamInfo.stream);
     contactMapping.toDeviceAsync(streamInfo.stream);
     previous_idPatchA.toDeviceAsync(streamInfo.stream);
     previous_idPatchB.toDeviceAsync(streamInfo.stream);
     contactTypePatch.toDeviceAsync(streamInfo.stream);
-    prev_contactTypePatch.toDeviceAsync(streamInfo.stream);
+    previous_contactTypePatch.toDeviceAsync(streamInfo.stream);
     familyMaskMatrix.toDeviceAsync(streamInfo.stream);
     familyExtraMarginSize.toDeviceAsync(streamInfo.stream);
 
@@ -753,7 +753,7 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
         size_t cnt_arr_size = DEME_MAX(*solverScratchSpace.numPrevContacts, INITIAL_CONTACT_ARRAY_SIZE);
         DEME_DUAL_ARRAY_RESIZE(idPrimitiveA, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(idPrimitiveB, cnt_arr_size, 0);
-        DEME_DUAL_ARRAY_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
+        DEME_DUAL_ARRAY_RESIZE(contactTypePrimitive, cnt_arr_size, NOT_A_CONTACT);
         DEME_DUAL_ARRAY_RESIZE(contactPersistency, cnt_arr_size, CONTACT_NOT_PERSISTENT);
 
         DEME_DUAL_ARRAY_RESIZE(idPatchA, cnt_arr_size, 0);
@@ -765,11 +765,11 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
             // No need to resize prev_primitive ID arrays: used only when persistency is enabled and that is rare
             // DEME_DUAL_ARRAY_RESIZE(previous_idPrimitiveA, cnt_arr_size, 0);
             // DEME_DUAL_ARRAY_RESIZE(previous_idPrimitiveB, cnt_arr_size, 0);
-            // DEME_DUAL_ARRAY_RESIZE(previous_contactType, cnt_arr_size, NOT_A_CONTACT);
+            // DEME_DUAL_ARRAY_RESIZE(previous_contactTypePrimitive, cnt_arr_size, NOT_A_CONTACT);
             DEME_DUAL_ARRAY_RESIZE(contactMapping, cnt_arr_size, NULL_MAPPING_PARTNER);
             DEME_DUAL_ARRAY_RESIZE(previous_idPatchA, cnt_arr_size, 0);
             DEME_DUAL_ARRAY_RESIZE(previous_idPatchB, cnt_arr_size, 0);
-            DEME_DUAL_ARRAY_RESIZE(prev_contactTypePatch, cnt_arr_size, NOT_A_CONTACT);
+            DEME_DUAL_ARRAY_RESIZE(previous_contactTypePatch, cnt_arr_size, NOT_A_CONTACT);
         }
     }
 }
@@ -949,8 +949,8 @@ void DEMKinematicThread::updatePrevContactArrays(DualStruct<DEMDataDT>& dT_data,
     // Store the incoming info in kT's arrays
     // Note kT never had the responsibility to migrate contact info to host, even at Update, as even in this case
     // its host-side update comes from dT
-    overwritePrevContactArrays(granData, dT_data, previous_idPrimitiveA, previous_idPrimitiveB, previous_contactType,
-                               simParams, contactPersistency, solverScratchSpace, streamInfo.stream, nContacts);
+    overwritePrevContactArrays(granData, dT_data, previous_idPatchA, previous_idPatchB, previous_contactTypePatch,
+                               simParams, solverScratchSpace, streamInfo.stream, nContacts);
     DEME_DEBUG_PRINTF("Number of contacts after a user-manual contact load: %zu", nContacts);
     DEME_DEBUG_PRINTF("Number of spheres after a user-manual contact load: %zu", (size_t)simParams->nSpheresGM);
 }

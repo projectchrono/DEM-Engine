@@ -51,7 +51,7 @@ __global__ void buildPersistentMap(deme::geoSphereTouches_t* new_idA_runlength_f
                 // Current contact number we are inspecting
                 deme::contactPairs_t this_contact = new_cnt_offset + i;
                 deme::bodyID_t new_idB = granData->idPrimitiveB[this_contact];
-                deme::contact_t new_cntType = granData->contactType[this_contact];
+                deme::contact_t new_cntType = granData->contactTypePrimitive[this_contact];
                 // Mark it as no matching pair found, being a new contact; modify it later
                 deme::contactPairs_t my_partner = deme::NULL_MAPPING_PARTNER;
                 // If this is a fake contact, we can move on
@@ -62,7 +62,7 @@ __global__ void buildPersistentMap(deme::geoSphereTouches_t* new_idA_runlength_f
                 // Loop through the old idB to see if there is a match
                 for (deme::geoSphereTouches_t j = 0; j < old_cnt_count; j++) {
                     deme::bodyID_t old_idB = granData->previous_idPrimitiveB[old_cnt_offset + j];
-                    deme::contact_t old_cntType = granData->previous_contactType[old_cnt_offset + j];
+                    deme::contact_t old_cntType = granData->previous_contactTypePrimitive[old_cnt_offset + j];
                     // If both idB and contact type match, then it is an enduring contact, write it to the mapping
                     // array
                     if (new_idB == old_idB && new_cntType == old_cntType) {
@@ -130,7 +130,7 @@ __global__ void setArr(deme::notStupidBool_t* arr, size_t n, deme::notStupidBool
 __global__ void markDuplicateContacts(deme::geoSphereTouches_t* idA_runlength,
                                       deme::contactPairs_t* idA_scanned_runlength,
                                       deme::bodyID_t* idB,
-                                      deme::contact_t* contactType,
+                                      deme::contact_t* contactTypePrimitive,
                                       deme::notStupidBool_t* persistency,
                                       deme::notStupidBool_t* retain_list,
                                       size_t n,
@@ -148,9 +148,9 @@ __global__ void markDuplicateContacts(deme::geoSphereTouches_t* idA_runlength,
                     deme::contactPairs_t contactA = cnt_offset + i;
                     deme::contactPairs_t contactB = cnt_offset + j;
                     deme::bodyID_t contactA_idB = idB[contactA];
-                    deme::contact_t contactA_cntType = contactType[contactA];
+                    deme::contact_t contactA_cntType = contactTypePrimitive[contactA];
                     deme::bodyID_t contactB_idB = idB[contactB];
-                    deme::contact_t contactB_cntType = contactType[contactB];
+                    deme::contact_t contactB_cntType = contactTypePrimitive[contactB];
                     deme::notStupidBool_t contactA_persistency, contactB_persistency;
                     if (persistency_affect) {
                         contactA_persistency = persistency[contactA];
@@ -182,7 +182,7 @@ __global__ void markDuplicateContacts(deme::geoSphereTouches_t* idA_runlength,
 }
 
 __global__ void extractPatchInvolvedContactPatchIDPairs(deme::patchIDPair_t* contactPatchPairs,
-                                                        deme::contact_t* contactType,
+                                                        deme::contact_t* contactTypePrimitive,
                                                         deme::bodyID_t* idPrimitiveA,
                                                         deme::bodyID_t* idPrimitiveB,
                                                         deme::bodyID_t* triPatchID,
@@ -191,7 +191,7 @@ __global__ void extractPatchInvolvedContactPatchIDPairs(deme::patchIDPair_t* con
     if (myID < nContacts) {
         deme::bodyID_t bodyA = idPrimitiveA[myID];
         deme::bodyID_t bodyB = idPrimitiveB[myID];
-        switch (contactType[myID]) {
+        switch (contactTypePrimitive[myID]) {
             case deme::SPHERE_TRIANGLE_CONTACT: {
                 deme::bodyID_t patchB = triPatchID[bodyB];
                 // For sphere-triangle contact: triangle has patch ID, sphere does not but its geoID serves the same
@@ -286,7 +286,7 @@ __global__ void buildPatchContactMapping(deme::bodyID_t* curr_idPatchA,
                                          deme::contact_t* curr_contactTypePatch,
                                          deme::bodyID_t* prev_idPatchA,
                                          deme::bodyID_t* prev_idPatchB,
-                                         deme::contact_t* prev_contactTypePatch,
+                                         deme::contact_t* previous_contactTypePatch,
                                          deme::contactPairs_t* contactMapping,
                                          size_t numCurrContacts,
                                          size_t numPrevContacts) {
@@ -307,7 +307,7 @@ __global__ void buildPatchContactMapping(deme::bodyID_t* curr_idPatchA,
         size_t right = numPrevContacts;
         while (left < right) {
             size_t mid = left + (right - left) / 2;
-            if (prev_contactTypePatch[mid] < curr_type) {
+            if (previous_contactTypePatch[mid] < curr_type) {
                 left = mid + 1;
             } else {
                 right = mid;
@@ -321,7 +321,7 @@ __global__ void buildPatchContactMapping(deme::bodyID_t* curr_idPatchA,
         right = numPrevContacts;
         while (left < right) {
             size_t mid = left + (right - left) / 2;
-            if (prev_contactTypePatch[mid] <= curr_type) {
+            if (previous_contactTypePatch[mid] <= curr_type) {
                 left = mid + 1;
             } else {
                 right = mid;

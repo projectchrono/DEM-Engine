@@ -138,7 +138,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                                                deme::bodyID_t* sphereIDsEachBinTouches,
                                                deme::bodyID_t* idGeoA,
                                                deme::bodyID_t* idGeoB,
-                                               deme::contact_t* contactType) {
+                                               deme::contact_t* contactTypePrimitive) {
     deme::bodyID_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;
     if (sphereID < simParams->nSpheresGM) {
         double3 myPosXYZ;
@@ -262,7 +262,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
             if (contact_type && overlapDepth > marginThres) {
                 idGeoA[mySphereGeoReportOffset] = sphereID;
                 idGeoB[mySphereGeoReportOffset] = (deme::bodyID_t)objB;
-                contactType[mySphereGeoReportOffset] = contact_type;
+                contactTypePrimitive[mySphereGeoReportOffset] = contact_type;
                 mySphereGeoReportOffset++;
                 if (mySphereGeoReportOffset >= mySphereGeoReportOffset_end) {
                     return;  // Don't step on the next sphere's domain
@@ -272,7 +272,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
         // In practice, I've never seen non-illed contact slots that need to be resolved this way. It's purely for ultra
         // safety.
         for (; mySphereGeoReportOffset < mySphereGeoReportOffset_end; mySphereGeoReportOffset++) {
-            contactType[mySphereGeoReportOffset] = deme::NOT_A_CONTACT;
+            contactTypePrimitive[mySphereGeoReportOffset] = deme::NOT_A_CONTACT;
         }
     }
 }

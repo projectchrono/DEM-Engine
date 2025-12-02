@@ -168,13 +168,14 @@ class DEMKinematicThread {
     // kT computed contact pair info
     DualArray<bodyID_t> idPrimitiveA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> idPrimitiveB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<contact_t> contactType = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<contact_t> contactTypePrimitive = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Contact pair info at the previous time step. This is needed by dT so enduring contacts are identified in
     // history-based models.
     DualArray<bodyID_t> previous_idPrimitiveA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> previous_idPrimitiveB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<contact_t> previous_contactType = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<contact_t> previous_contactTypePrimitive =
+        DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Records if this primitive contact is persistent and serves as kT's work array on treating their persistency.
     DualArray<notStupidBool_t> contactPersistency =
@@ -211,7 +212,8 @@ class DEMKinematicThread {
 
     // Contact types at patch level (corresponding to idPatchA/B arrays)
     DualArray<contact_t> contactTypePatch = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<contact_t> prev_contactTypePatch = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<contact_t> previous_contactTypePatch =
+        DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Mapping array: maps from primitive-based pair index to patch-based pair index
     // Same length as primitive pair arrays (idPrimitiveA/B). For each primitive pair,

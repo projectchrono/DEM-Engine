@@ -119,6 +119,13 @@ const contact_t NUM_SUPPORTED_CONTACT_TYPES = 5;
      : (type) == deme::GEO_T_ANALYTICAL ? granData->ownerAnalBody[(geo)]  \
                                         : deme::NULL_BODYID)
 
+// Device version of getting patch owner ID
+#define DEME_GET_PATCH_OWNER_ID(patchID, type)                                \
+    ((type) == deme::GEO_T_SPHERE       ? granData->ownerClumpBody[(patchID)] \
+     : (type) == deme::GEO_T_TRIANGLE   ? granData->patchOwnerMesh[(patchID)] \
+     : (type) == deme::GEO_T_ANALYTICAL ? granData->ownerAnalBody[(patchID)]  \
+                                        : deme::NULL_BODYID)
+
 // Can be seen as even finer grain type identifiers of the analytical component type
 const objType_t ANAL_OBJ_TYPE_PLANE = 0;
 const objType_t ANAL_OBJ_TYPE_PLATE = 1;
@@ -328,7 +335,7 @@ struct DEMDataDT {
 
     bodyID_t* idPrimitiveA;
     bodyID_t* idPrimitiveB;
-    contact_t* contactType;
+    contact_t* contactTypePrimitive;
     contactPairs_t* geomToPatchMap;
 
     // NEW: Separate patch IDs and mapping array
@@ -356,6 +363,7 @@ struct DEMDataDT {
     clumpComponentOffsetExt_t* clumpComponentOffsetExt;
     materialsOffset_t* sphereMaterialOffset;
     bodyID_t* triOwnerMesh;
+    bodyID_t* patchOwnerMesh;
     bodyID_t* ownerAnalBody;
     bodyID_t* triPatchID;
     float3* relPosNode1;
@@ -436,11 +444,11 @@ struct DEMDataKT {
     // kT produces contact info, and stores it, temporarily
     bodyID_t* idPrimitiveA;
     bodyID_t* idPrimitiveB;
-    contact_t* contactType;
+    contact_t* contactTypePrimitive;
     notStupidBool_t* contactPersistency;
     bodyID_t* previous_idPrimitiveA;
     bodyID_t* previous_idPrimitiveB;
-    contact_t* previous_contactType;
+    contact_t* previous_contactTypePrimitive;
     contactPairs_t* contactMapping;
 
     // NEW: Separate patch IDs and mapping array (kT work arrays)
@@ -449,7 +457,7 @@ struct DEMDataKT {
     bodyID_t* previous_idPatchA;
     bodyID_t* previous_idPatchB;
     contact_t* contactTypePatch;
-    contact_t* prev_contactTypePatch;
+    contact_t* previous_contactTypePatch;
     contactPairs_t* geomToPatchMap;
 
     // data pointers that is kT's transfer destination

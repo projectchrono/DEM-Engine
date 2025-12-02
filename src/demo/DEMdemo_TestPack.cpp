@@ -40,7 +40,6 @@ void SetSolverProp(DEMSolver& DEMSim) {
     // Testing non-jitified clump templates here in this demo...
     DEMSim.DisableJitifyClumpTemplates();
     DEMSim.DisableJitifyMassProperties();
-    DEMSim.UseCubForceCollection();
 }
 
 void EllpsiodFallingOver() {

@@ -43,9 +43,9 @@ inline __device__ void equipOwnerPosRot(deme::DEMSimParams* simParams,
 
 // Template device function for contact force calculation - will be called by 5 specialized kernels
 template <deme::contact_t CONTACT_TYPE>
-__device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* simParams,
-                                                           deme::DEMDataDT* granData,
-                                                           deme::contactPairs_t myContactID) {
+__device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSimParams* simParams,
+                                                                     deme::DEMDataDT* granData,
+                                                                     deme::contactPairs_t myContactID) {
     // Contact type is known at compile time
     deme::contact_t ContactType = CONTACT_TYPE;
     // The following quantities are always calculated, regardless of force model
@@ -388,52 +388,52 @@ __device__ __forceinline__ void calculateContactForcesImpl(deme::DEMSimParams* s
 }
 
 // 5 specialized kernels for different contact types
-__global__ void calculateContactForces_SphSph(deme::DEMSimParams* simParams,
-                                              deme::DEMDataDT* granData,
-                                              deme::contactPairs_t startOffset,
-                                              deme::contactPairs_t nContactPairs) {
+__global__ void calculatePrimitiveContactForces_SphSph(deme::DEMSimParams* simParams,
+                                                       deme::DEMDataDT* granData,
+                                                       deme::contactPairs_t startOffset,
+                                                       deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myContactID < startOffset + nContactPairs) {
-        calculateContactForcesImpl<deme::SPHERE_SPHERE_CONTACT>(simParams, granData, myContactID);
+        calculatePrimitiveContactForces_impl<deme::SPHERE_SPHERE_CONTACT>(simParams, granData, myContactID);
     }
 }
 
-__global__ void calculateContactForces_SphTri(deme::DEMSimParams* simParams,
-                                              deme::DEMDataDT* granData,
-                                              deme::contactPairs_t startOffset,
-                                              deme::contactPairs_t nContactPairs) {
+__global__ void calculatePrimitiveContactForces_SphTri(deme::DEMSimParams* simParams,
+                                                       deme::DEMDataDT* granData,
+                                                       deme::contactPairs_t startOffset,
+                                                       deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myContactID < startOffset + nContactPairs) {
-        calculateContactForcesImpl<deme::SPHERE_TRIANGLE_CONTACT>(simParams, granData, myContactID);
+        calculatePrimitiveContactForces_impl<deme::SPHERE_TRIANGLE_CONTACT>(simParams, granData, myContactID);
     }
 }
 
-__global__ void calculateContactForces_SphAnal(deme::DEMSimParams* simParams,
-                                               deme::DEMDataDT* granData,
-                                               deme::contactPairs_t startOffset,
-                                               deme::contactPairs_t nContactPairs) {
+__global__ void calculatePrimitiveContactForces_SphAnal(deme::DEMSimParams* simParams,
+                                                        deme::DEMDataDT* granData,
+                                                        deme::contactPairs_t startOffset,
+                                                        deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myContactID < startOffset + nContactPairs) {
-        calculateContactForcesImpl<deme::SPHERE_ANALYTICAL_CONTACT>(simParams, granData, myContactID);
+        calculatePrimitiveContactForces_impl<deme::SPHERE_ANALYTICAL_CONTACT>(simParams, granData, myContactID);
     }
 }
 
-__global__ void calculateContactForces_TriTri(deme::DEMSimParams* simParams,
-                                              deme::DEMDataDT* granData,
-                                              deme::contactPairs_t startOffset,
-                                              deme::contactPairs_t nContactPairs) {
+__global__ void calculatePrimitiveContactForces_TriTri(deme::DEMSimParams* simParams,
+                                                       deme::DEMDataDT* granData,
+                                                       deme::contactPairs_t startOffset,
+                                                       deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myContactID < startOffset + nContactPairs) {
-        calculateContactForcesImpl<deme::TRIANGLE_TRIANGLE_CONTACT>(simParams, granData, myContactID);
+        calculatePrimitiveContactForces_impl<deme::TRIANGLE_TRIANGLE_CONTACT>(simParams, granData, myContactID);
     }
 }
 
-__global__ void calculateContactForces_TriAnal(deme::DEMSimParams* simParams,
-                                               deme::DEMDataDT* granData,
-                                               deme::contactPairs_t startOffset,
-                                               deme::contactPairs_t nContactPairs) {
+__global__ void calculatePrimitiveContactForces_TriAnal(deme::DEMSimParams* simParams,
+                                                        deme::DEMDataDT* granData,
+                                                        deme::contactPairs_t startOffset,
+                                                        deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myContactID < startOffset + nContactPairs) {
-        calculateContactForcesImpl<deme::TRIANGLE_ANALYTICAL_CONTACT>(simParams, granData, myContactID);
+        calculatePrimitiveContactForces_impl<deme::TRIANGLE_ANALYTICAL_CONTACT>(simParams, granData, myContactID);
     }
 }

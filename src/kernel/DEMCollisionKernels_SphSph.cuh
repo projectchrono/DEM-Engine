@@ -33,11 +33,11 @@ __host__ __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
                                                         T1& overlapDepth,
                                                         T1& overlapArea) {
     T1 centerDist2 = distSquared<T1>(XA, YA, ZA, XB, YB, ZB);
-    deme::contact_t contactType;
+    deme::contact_t contactTypePrimitive;
     if (centerDist2 > (radA + radB) * (radA + radB)) {
-        contactType = deme::NOT_A_CONTACT;
+        contactTypePrimitive = deme::NOT_A_CONTACT;
     } else {
-        contactType = deme::SPHERE_SPHERE_CONTACT;
+        contactTypePrimitive = deme::SPHERE_SPHERE_CONTACT;
     }
     // If getting this far, then 2 spheres have an intersection, let's calculate the intersection point
     normalX = XA - XB;
@@ -53,7 +53,7 @@ __host__ __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
     CPX = XB + (radB - overlapDepth / (T1)2) * normalX;
     CPY = YB + (radB - overlapDepth / (T1)2) * normalY;
     CPZ = ZB + (radB - overlapDepth / (T1)2) * normalZ;
-    return contactType;
+    return contactTypePrimitive;
 }
 
 // Check whether a sphere and an analytical boundary are in contact, and gives overlap depth, contact point and contact
@@ -74,17 +74,17 @@ __host__ __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
                                                              float3& cntNormal,
                                                              T3& overlapDepth,
                                                              T3& overlapArea) {
-    deme::contact_t contactType;
+    deme::contact_t contactTypePrimitive;
     switch (typeB) {
         case (deme::ANAL_OBJ_TYPE_PLANE): {
             // Plane is directional, and the direction is given by plane rotation
             const T3 dist = planeSignedDistance<T3>(A, B, dirB);
             overlapDepth = (radA + beta4Entity - dist);
             if (overlapDepth < 0.0) {
-                contactType = deme::NOT_A_CONTACT;
+                contactTypePrimitive = deme::NOT_A_CONTACT;
                 overlapArea = 0.0;
             } else {
-                contactType = deme::SPHERE_ANALYTICAL_CONTACT;
+                contactTypePrimitive = deme::SPHERE_ANALYTICAL_CONTACT;
                 // Approximate overlap area as circle area
                 overlapArea = deme::PI * (radA * radA - (dist - beta4Entity) * (dist - beta4Entity));
             }
@@ -92,7 +92,7 @@ __host__ __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             CP = A - to_real3<float3, T1>(dirB * (dist + overlapDepth / 2.0));
             // Contact normal (B to A) is the same as plane normal
             cntNormal = dirB;
-            return contactType;
+            return contactTypePrimitive;
         }
         case (deme::ANAL_OBJ_TYPE_PLATE): {
             return deme::NOT_A_CONTACT;
@@ -102,10 +102,10 @@ __host__ __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             const T3 dist_delta_r = length(cyl2sph);
             overlapDepth = radA - abs(size1B - dist_delta_r - beta4Entity);
             if (overlapDepth <= DEME_TINY_FLOAT) {
-                contactType = deme::NOT_A_CONTACT;
+                contactTypePrimitive = deme::NOT_A_CONTACT;
                 overlapArea = 0.0;
             } else {
-                contactType = deme::SPHERE_ANALYTICAL_CONTACT;
+                contactTypePrimitive = deme::SPHERE_ANALYTICAL_CONTACT;
                 // Approximate overlap area as circle area
                 // overlapArea = deme::PI * (radA * radA - (radA - overlapDepth) * (radA - overlapDepth));
                 // Simplify it...
@@ -115,7 +115,7 @@ __host__ __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             // Also, inward normal is 1, outward is -1, so flip normal_sign for B2A vector
             cntNormal = to_real3<T1, float3>(-normal_sign / dist_delta_r * cyl2sph);
             CP = A - to_real3<float3, T1>(cntNormal * (radA - overlapDepth / 2.0));
-            return contactType;
+            return contactTypePrimitive;
         }
         default:
             return deme::NOT_A_CONTACT;

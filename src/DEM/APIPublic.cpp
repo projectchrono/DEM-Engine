@@ -277,9 +277,9 @@ std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
     std::vector<bodyID_t> geo_to_watch;               // geo IDs that need to scan
 
     // Get device-major info to host first
-    dT->idPrimitiveA.toHostAsync(dT->streamInfo.stream);
-    dT->idPrimitiveB.toHostAsync(dT->streamInfo.stream);
-    dT->contactType.toHostAsync(dT->streamInfo.stream);
+    dT->idPatchA.toHostAsync(dT->streamInfo.stream);
+    dT->idPatchB.toHostAsync(dT->streamInfo.stream);
+    dT->contactTypePatch.toHostAsync(dT->streamInfo.stream);
 
     // These arrays can't change on device
     switch (this_type) {
@@ -296,8 +296,8 @@ std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
             }
             break;
         case OWNER_T_MESH:
-            for (bodyID_t i = 0; i < nTriGM; i++) {
-                if (ownerID == dT->triOwnerMesh[i])
+            for (bodyID_t i = 0; i < nMeshPatches; i++) {
+                if (ownerID == dT->patchOwnerMesh[i])
                     geo_to_watch.push_back(i);
             }
             break;
@@ -307,39 +307,19 @@ std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
     dT->syncMemoryTransfer();
 
     std::vector<bodyID_t> clumps_in_cnt;
-    // If this is not clump, then checking idB for it is enough, b/c we are interested in clump contacts only, and if
-    // one contact entity is clump, it must be in idA
-    if (this_type != OWNER_T_CLUMP) {
-        for (size_t i = 0; i < dT->getNumContacts(); i++) {
-            auto idA = dT->idPrimitiveA[i];
-            auto idB = dT->idPrimitiveB[i];
-            if (!check_exist(geo_to_watch, idB))
-                continue;
-            auto cnt_type = dT->contactType[i];
-            // If it is a mesh facet, then contact type needs to match
-            if (this_type == OWNER_T_MESH) {
-                if (cnt_type == SPHERE_TRIANGLE_CONTACT) {
-                    clumps_in_cnt.push_back(dT->ownerClumpBody[idA]);
-                }
-            } else {  // If it is an analytical object, then contact type needs to match
-                if (cnt_type == SPHERE_ANALYTICAL_CONTACT) {
-                    clumps_in_cnt.push_back(dT->ownerClumpBody[idA]);
-                }
-            }
-        }
-    } else {  // If a clump, then both idA and idB need to be checked
-        for (size_t i = 0; i < dT->getNumContacts(); i++) {
-            auto idA = dT->idPrimitiveA[i];
-            auto idB = dT->idPrimitiveB[i];
-            auto cnt_type = dT->contactType[i];
+    for (size_t i = 0; i < dT->getNumContacts(); i++) {
+        auto idA = dT->idPatchA[i];
+        auto idB = dT->idPatchB[i];
+        auto cnt_type = dT->contactTypePatch[i];
+        // Using decode to get the A and B type
+        auto typeA = decodeTypeA(cnt_type);
+        auto typeB = decodeTypeB(cnt_type);
+        // Ensure it's a clump-related contact
+        if (typeA == GEO_T_SPHERE || typeB == GEO_T_SPHERE) {
             if (check_exist(geo_to_watch, idA)) {
-                if (cnt_type == SPHERE_SPHERE_CONTACT) {
-                    clumps_in_cnt.push_back(dT->ownerClumpBody[idB]);
-                }
+                clumps_in_cnt.push_back(dT->getPatchOwnerID(idB, typeB));
             } else if (check_exist(geo_to_watch, idB)) {
-                if (cnt_type == SPHERE_SPHERE_CONTACT) {
-                    clumps_in_cnt.push_back(dT->ownerClumpBody[idA]);
-                }
+                clumps_in_cnt.push_back(dT->getPatchOwnerID(idA, typeA));
             }
         }
     }

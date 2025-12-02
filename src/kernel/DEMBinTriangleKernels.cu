@@ -219,7 +219,7 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                                                  float3* nodeC2,
                                                  deme::bodyID_t* idGeoA,
                                                  deme::bodyID_t* idGeoB,
-                                                 deme::contact_t* contactType,
+                                                 deme::contact_t* contactTypePrimitive,
                                                  bool meshUniversalContact) {
     deme::bodyID_t triID = blockIdx.x * blockDim.x + threadIdx.x;
     if (triID < simParams->nTriGM) {
@@ -329,7 +329,7 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                 if (contact_type == deme::TRIANGLE_ANALYTICAL_CONTACT) {
                     idGeoA[myTriGeoReportOffset] = triID;
                     idGeoB[myTriGeoReportOffset] = (deme::bodyID_t)objB;
-                    contactType[myTriGeoReportOffset] = contact_type;
+                    contactTypePrimitive[myTriGeoReportOffset] = contact_type;
                     myTriGeoReportOffset++;
                     if (myTriGeoReportOffset >= myTriGeoReportOffset_end) {
                         return;  // Don't step on the next triangle's domain
@@ -338,7 +338,7 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
             }
             // Take care of potentially unfilled slots in the report
             for (; myTriGeoReportOffset < myTriGeoReportOffset_end; myTriGeoReportOffset++) {
-                contactType[myTriGeoReportOffset] = deme::NOT_A_CONTACT;
+                contactTypePrimitive[myTriGeoReportOffset] = deme::NOT_A_CONTACT;
             }
         }
     }

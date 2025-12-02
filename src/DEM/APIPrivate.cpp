@@ -30,6 +30,7 @@ void DEMSolver::assertSysNotInit(const std::string& method_name) {
     }
 }
 
+// Persistent contact is always primitive contact-based
 void DEMSolver::assignFamilyPersistentContact_impl(
     unsigned int N1,
     unsigned int N2,
@@ -43,7 +44,7 @@ void DEMSolver::assignFamilyPersistentContact_impl(
     // Get device-major info to host first
     kT->previous_idPrimitiveA.toHost();
     kT->previous_idPrimitiveB.toHost();
-    kT->previous_contactType.toHost();
+    kT->previous_contactTypePrimitive.toHost();
     kT->contactPersistency.toHost();
     if (dT->solverFlags.canFamilyChangeOnDevice) {
         dT->familyID.toHost();
@@ -54,7 +55,7 @@ void DEMSolver::assignFamilyPersistentContact_impl(
     for (size_t i = 0; i < *(kT->solverScratchSpace.numPrevPrimitiveContacts); i++) {
         bodyID_t bodyA = kT->previous_idPrimitiveA[i];
         bodyID_t bodyB = kT->previous_idPrimitiveB[i];
-        contact_t c_type = kT->previous_contactType[i];
+        contact_t c_type = kT->previous_contactTypePrimitive[i];
 
         bodyID_t ownerA = dT->getGeoOwnerID(bodyA, decodeTypeA(c_type));
         bodyID_t ownerB = dT->getGeoOwnerID(bodyB, decodeTypeB(c_type));
@@ -329,9 +330,9 @@ void DEMSolver::getContacts_impl(std::vector<bodyID_t>& idA,
     if (dT->solverFlags.canFamilyChangeOnDevice) {
         dT->familyID.toHostAsync(dT->streamInfo.stream);
     }
-    dT->idPrimitiveA.toHostAsync(dT->streamInfo.stream);
-    dT->idPrimitiveB.toHostAsync(dT->streamInfo.stream);
-    dT->contactType.toHostAsync(dT->streamInfo.stream);
+    dT->idPatchA.toHostAsync(dT->streamInfo.stream);
+    dT->idPatchB.toHostAsync(dT->streamInfo.stream);
+    dT->contactTypePatch.toHostAsync(dT->streamInfo.stream);
 
     size_t num_contacts = dT->getNumContacts();
     idA.resize(num_contacts);
@@ -344,10 +345,10 @@ void DEMSolver::getContacts_impl(std::vector<bodyID_t>& idA,
 
     size_t useful_contacts = 0;
     for (size_t i = 0; i < num_contacts; i++) {
-        contact_t this_type = dT->contactType[i];
+        contact_t this_type = dT->contactTypePatch[i];
         if (type_func(this_type)) {
-            idA[useful_contacts] = dT->getGeoOwnerID(dT->idPrimitiveA[i], decodeTypeA(this_type));
-            idB[useful_contacts] = dT->getGeoOwnerID(dT->idPrimitiveB[i], decodeTypeB(this_type));
+            idA[useful_contacts] = dT->getPatchOwnerID(dT->idPatchA[i], decodeTypeA(this_type));
+            idB[useful_contacts] = dT->getPatchOwnerID(dT->idPatchB[i], decodeTypeB(this_type));
             cnt_type[useful_contacts] = this_type;
             famA[useful_contacts] = dT->familyID[idA[useful_contacts]];
             famB[useful_contacts] = dT->familyID[idB[useful_contacts]];
@@ -1097,8 +1098,6 @@ void DEMSolver::setSolverParams() {
     dT->solverFlags.canFamilyChangeOnDevice = famnum_can_change_conditionally;
 
     // Force reduction strategy
-    kT->solverFlags.useCubForceCollect = use_cub_to_reduce_force;
-    dT->solverFlags.useCubForceCollect = use_cub_to_reduce_force;
     dT->solverFlags.useNoContactRecord = no_recording_contact_forces;
     dT->solverFlags.useForceCollectInPlace = collect_force_in_force_kernel;
 

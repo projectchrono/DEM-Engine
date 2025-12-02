@@ -294,8 +294,6 @@ struct SolverFlags {
     bool useMassJitify = true;
     // Whether meshes can have contacts with entities other than spheres
     bool meshUniversalContact = false;
-    // Whether the force collection (acceleration calc and reduction) process should be using CUB
-    bool useCubForceCollect = false;
     // Does not record contact forces, contact point etc.
     bool useNoContactRecord = false;
     // Collect force (reduce to acc) right in the force calculation kernel

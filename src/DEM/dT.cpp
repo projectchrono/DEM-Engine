@@ -52,7 +52,7 @@ void DEMDynamicThread::packDataPointers() {
     angAccSpecified.bindDevicePointer(&(granData->angAccSpecified));
     idPrimitiveA.bindDevicePointer(&(granData->idPrimitiveA));
     idPrimitiveB.bindDevicePointer(&(granData->idPrimitiveB));
-    contactType.bindDevicePointer(&(granData->contactType));
+    contactTypePrimitive.bindDevicePointer(&(granData->contactTypePrimitive));
     geomToPatchMap.bindDevicePointer(&(granData->geomToPatchMap));
 
     // NEW: Bind separate patch ID and mapping array pointers
@@ -91,6 +91,7 @@ void DEMDynamicThread::packDataPointers() {
 
     // Mesh and analytical-related
     triOwnerMesh.bindDevicePointer(&(granData->triOwnerMesh));
+    patchOwnerMesh.bindDevicePointer(&(granData->patchOwnerMesh));
     triPatchID.bindDevicePointer(&(granData->triPatchID));
     ownerAnalBody.bindDevicePointer(&(granData->ownerAnalBody));
     relPosNode1.bindDevicePointer(&(granData->relPosNode1));
@@ -139,7 +140,7 @@ void DEMDynamicThread::migrateDataToDevice() {
     // Primitive contact info
     idPrimitiveA.toDeviceAsync(streamInfo.stream);
     idPrimitiveB.toDeviceAsync(streamInfo.stream);
-    contactType.toDeviceAsync(streamInfo.stream);
+    contactTypePrimitive.toDeviceAsync(streamInfo.stream);
     geomToPatchMap.toDeviceAsync(streamInfo.stream);
 
     // Separate patch contact info
@@ -174,6 +175,7 @@ void DEMDynamicThread::migrateDataToDevice() {
     volumeOwnerBody.toDeviceAsync(streamInfo.stream);
 
     triOwnerMesh.toDeviceAsync(streamInfo.stream);
+    patchOwnerMesh.toDeviceAsync(streamInfo.stream);
     triPatchID.toDeviceAsync(streamInfo.stream);
     ownerAnalBody.toDeviceAsync(streamInfo.stream);
     relPosNode1.toDeviceAsync(streamInfo.stream);
@@ -235,7 +237,7 @@ void DEMDynamicThread::migrateContactInfoToHost() {
     // Primitive contact info
     idPrimitiveA.toHost();
     idPrimitiveB.toHost();
-    contactType.toHost();
+    contactTypePrimitive.toHost();
     geomToPatchMap.toHost();
 
     // Separate patch contact info
@@ -289,6 +291,19 @@ bodyID_t DEMDynamicThread::getGeoOwnerID(const bodyID_t& geo, const geoType_t& t
             return triOwnerMesh[geo];
         case (GEO_T_ANALYTICAL):
             return ownerAnalBody[geo];
+        default:
+            return NULL_BODYID;
+    }
+}
+
+bodyID_t DEMDynamicThread::getPatchOwnerID(const bodyID_t& patchID, const geoType_t& type) const {
+    switch (type) {
+        case (GEO_T_TRIANGLE):
+            return patchOwnerMesh[patchID];
+        case (GEO_T_SPHERE):
+            return ownerClumpBody[patchID];
+        case (GEO_T_ANALYTICAL):
+            return ownerAnalBody[patchID];
         default:
             return NULL_BODYID;
     }
@@ -555,7 +570,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
             DEME_MAX(*solverScratchSpace.numPrimitiveContacts + nExtraContacts, INITIAL_CONTACT_ARRAY_SIZE);
         DEME_DUAL_ARRAY_RESIZE(idPrimitiveA, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(idPrimitiveB, cnt_arr_size, 0);
-        DEME_DUAL_ARRAY_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
+        DEME_DUAL_ARRAY_RESIZE(contactTypePrimitive, cnt_arr_size, NOT_A_CONTACT);
         DEME_DUAL_ARRAY_RESIZE(geomToPatchMap, cnt_arr_size, 0);
 
         DEME_DUAL_ARRAY_RESIZE(idPatchA, cnt_arr_size, 0);
@@ -886,9 +901,9 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                 const auto& idPair = a_batch->contact_pairs.at(jj);
                 // idPair.first + n_processed_sp_comp can take into account the sphere components that have been loaded
                 // in previous batches, makes this loading process scalable.
-                idPrimitiveA[cnt_arr_offset] = idPair.first + n_processed_sp_comp + nExistSpheres;
-                idPrimitiveB[cnt_arr_offset] = idPair.second + n_processed_sp_comp + nExistSpheres;
-                contactType[cnt_arr_offset] = SPHERE_SPHERE_CONTACT;  // Only sph--sph cnt for now
+                idPatchA[cnt_arr_offset] = idPair.first + n_processed_sp_comp + nExistSpheres;
+                idPatchB[cnt_arr_offset] = idPair.second + n_processed_sp_comp + nExistSpheres;
+                contactTypePatch[cnt_arr_offset] = SPHERE_SPHERE_CONTACT;  // Only sph--sph cnt for now
                 unsigned int w_num = 0;
                 for (const auto& w_name : m_contact_wildcard_names) {
                     (*contactWildcards[w_num])[cnt_arr_offset] = a_batch->contact_wildcards.at(w_name).at(jj);
@@ -1693,9 +1708,9 @@ std::shared_ptr<ContactInfoContainer> DEMDynamicThread::generateContactInfo(floa
     size_t useful_cnt = 0;
     for (size_t i = 0; i < total_contacts; i++) {
         // Geos that are involved in this contact
-        auto geoA = idPrimitiveA[i];
-        auto geoB = idPrimitiveB[i];
-        auto type = contactType[i];
+        auto geoA = idPatchA[i];
+        auto geoB = idPatchB[i];
+        auto type = contactTypePatch[i];
         // We don't output fake contacts; but right now, no contact will be marked fake by kT, so no need to check that
         // if (type == NOT_A_CONTACT)
         //     continue;
@@ -1707,8 +1722,8 @@ std::shared_ptr<ContactInfoContainer> DEMDynamicThread::generateContactInfo(floa
             continue;
         }
 
-        bodyID_t ownerA = getGeoOwnerID(geoA, decodeTypeA(type));
-        bodyID_t ownerB = getGeoOwnerID(geoB, decodeTypeB(type));
+        bodyID_t ownerA = getPatchOwnerID(geoA, decodeTypeA(type));
+        bodyID_t ownerB = getPatchOwnerID(geoB, decodeTypeB(type));
 
         // Type is mapped to SS, SM and such....
         contactInfo.Get<std::string>("ContactType")[useful_cnt] = contact_type_out_name_map.at(type);
@@ -1988,7 +2003,7 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
 inline void DEMDynamicThread::contactPrimitivesArraysResize(size_t nContactPairs) {
     DEME_DUAL_ARRAY_RESIZE(idPrimitiveA, nContactPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(idPrimitiveB, nContactPairs, 0);
-    DEME_DUAL_ARRAY_RESIZE(contactType, nContactPairs, NOT_A_CONTACT);
+    DEME_DUAL_ARRAY_RESIZE(contactTypePrimitive, nContactPairs, NOT_A_CONTACT);
 
     // NEW: Resize geomToPatchMap to match geometry array size
     DEME_DUAL_ARRAY_RESIZE(geomToPatchMap, nContactPairs, 0);
@@ -2044,7 +2059,7 @@ inline void DEMDynamicThread::unpackMyBuffer() {
                              *solverScratchSpace.numPrimitiveContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->idPrimitiveB, idPrimitiveB_buffer.data(),
                              *solverScratchSpace.numPrimitiveContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->contactType, contactType_buffer.data(),
+    DEME_GPU_CALL(cudaMemcpy(granData->contactTypePrimitive, contactType_buffer.data(),
                              *solverScratchSpace.numPrimitiveContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->geomToPatchMap, geomToPatchMap_buffer.data(),
                              *solverScratchSpace.numPrimitiveContacts * sizeof(contactPairs_t),
@@ -2371,28 +2386,23 @@ void DEMDynamicThread::calculateForces() {
         dispatchPatchBasedForceCorrections(typeStartCountMap, contactTypeKernelMap);
 
         // displayDeviceFloat3(granData->contactForces, nContactPairs);
-        // displayDeviceArray<contact_t>(granData->contactType, nContactPairs);
-        // displayDeviceArray<bodyID_t>(granData->idPrimitiveA, nContactPairs);
-        // displayDeviceArray<bodyID_t>(granData->idPrimitiveB, nContactPairs);
+        // displayDeviceArray<contact_t>(granData->contactTypePatch, nContactPairs);
+        // displayDeviceArray<bodyID_t>(granData->idPatchA, nContactPairs);
+        // displayDeviceArray<bodyID_t>(granData->idPatchB, nContactPairs);
         // std::cout << "===========================" << std::endl;
         timers.GetTimer("Calculate contact forces").stop();
 
         if (!solverFlags.useForceCollectInPlace) {
             timers.GetTimer("Optional force reduction").start();
             // Reflect those body-wise forces on their owner clumps
-            if (solverFlags.useCubForceCollect) {
-                collectContactForcesThruCub(collect_force_kernels, granData, nContactPairs, simParams->nOwnerBodies,
-                                            contactPairArr_isFresh, streamInfo.stream, solverScratchSpace, timers);
-            } else {
-                size_t blocks_needed_for_contacts =
-                    (nContactPairs + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-                // This does both acc and ang acc
-                collect_force_kernels->kernel("forceToAcc")
-                    .instantiate()
-                    .configure(dim3(blocks_needed_for_contacts), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-                    .launch(&granData, nContactPairs);
-                DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-            }
+            size_t blocks_needed_for_contacts =
+                (nContactPairs + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+            // This does both acc and ang acc
+            collect_force_kernels->kernel("forceToAcc")
+                .instantiate()
+                .configure(dim3(blocks_needed_for_contacts), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+                .launch(&granData, nContactPairs);
+            DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
             // displayDeviceArray<float>(granData->aZ, simParams->nOwnerBodies);
             // displayDeviceFloat3(granData->contactForces, nContactPairs);
             // std::cout << nContactPairs << std::endl;
@@ -2454,14 +2464,15 @@ inline void DEMDynamicThread::unpack_impl() {
     // With unpacking finished, contactMapping temp array is no longer needed
     solverScratchSpace.finishUsingTempVector("contactMapping");
 
-    // On dT side, we also calculate how many (the offsets in contact arrays) contacts they are for each type
+    // On dT side, we also calculate how many (the offsets in contact arrays) contacts they are for each type.
+    // But note here we are working on primitive-based contact types, not patch-based contact types yet.
     solverScratchSpace.allocateDualStruct("numExistingTypes");
     contactPairs_t* typeCounts = (contactPairs_t*)solverScratchSpace.allocateTempVector(
         "typeCounts", (NUM_SUPPORTED_CONTACT_TYPES + 1) * sizeof(contactPairs_t));
-    cubRunLengthEncode<contact_t, contactPairs_t>(granData->contactType, existingContactTypes.device(), typeCounts,
-                                                  solverScratchSpace.getDualStructDevice("numExistingTypes"),
-                                                  *solverScratchSpace.numContacts, streamInfo.stream,
-                                                  solverScratchSpace);
+    cubRunLengthEncode<contact_t, contactPairs_t>(
+        granData->contactTypePrimitive, existingContactTypes.device(), typeCounts,
+        solverScratchSpace.getDualStructDevice("numExistingTypes"), *solverScratchSpace.numContacts, streamInfo.stream,
+        solverScratchSpace);
     solverScratchSpace.syncDualStructDeviceToHost("numExistingTypes");
     m_numExistingTypes = *solverScratchSpace.getDualStructHost("numExistingTypes");
     solverScratchSpace.finishUsingDualStruct("numExistingTypes");
@@ -2743,17 +2754,14 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     }
     // Then force calculation kernels
     {
-        cal_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMCalcForceKernels", JitHelper::KERNEL_DIR / "DEMCalcForceKernels.cu", Subs, JitifyOptions)));
+        cal_force_kernels = std::make_shared<jitify::Program>(std::move(
+            JitHelper::buildProgram("DEMCalcForceKernels_Primitive",
+                                    JitHelper::KERNEL_DIR / "DEMCalcForceKernels_Primitive.cu", Subs, JitifyOptions)));
     }
     // Then force accumulation kernels
-    if (solverFlags.useCubForceCollect) {
+    {
         collect_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMCollectForceKernels", JitHelper::KERNEL_DIR / "DEMCollectForceKernels.cu", Subs, JitifyOptions)));
-    } else {
-        collect_force_kernels = std::make_shared<jitify::Program>(std::move(
-            JitHelper::buildProgram("DEMCollectForceKernels_Compact",
-                                    JitHelper::KERNEL_DIR / "DEMCollectForceKernels_Compact.cu", Subs, JitifyOptions)));
     }
     // Patch-based voting kernels for mesh contact correction
     {
@@ -2777,16 +2785,17 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     }
 
     // For now, the contact type to kernel map is known and hard-coded after jitification
-    contactTypeKernelMap = {// Sphere-Sphere contact
-                            {SPHERE_SPHERE_CONTACT, {{cal_force_kernels, "calculateContactForces_SphSph"}}},
-                            // Sphere-Triangle contact
-                            {SPHERE_TRIANGLE_CONTACT, {{cal_force_kernels, "calculateContactForces_SphTri"}}},
-                            // Sphere-Analytical contact
-                            {SPHERE_ANALYTICAL_CONTACT, {{cal_force_kernels, "calculateContactForces_SphAnal"}}},
-                            // Triangle-Triangle contact
-                            {TRIANGLE_TRIANGLE_CONTACT, {{cal_force_kernels, "calculateContactForces_TriTri"}}},
-                            // Triangle-Analytical contact
-                            {TRIANGLE_ANALYTICAL_CONTACT, {{cal_force_kernels, "calculateContactForces_TriAnal"}}}};
+    contactTypeKernelMap = {
+        // Sphere-Sphere contact
+        {SPHERE_SPHERE_CONTACT, {{cal_force_kernels, "calculatePrimitiveContactForces_SphSph"}}},
+        // Sphere-Triangle contact
+        {SPHERE_TRIANGLE_CONTACT, {{cal_force_kernels, "calculatePrimitiveContactForces_SphTri"}}},
+        // Sphere-Analytical contact
+        {SPHERE_ANALYTICAL_CONTACT, {{cal_force_kernels, "calculatePrimitiveContactForces_SphAnal"}}},
+        // Triangle-Triangle contact
+        {TRIANGLE_TRIANGLE_CONTACT, {{cal_force_kernels, "calculatePrimitiveContactForces_TriTri"}}},
+        // Triangle-Analytical contact
+        {TRIANGLE_ANALYTICAL_CONTACT, {{cal_force_kernels, "calculatePrimitiveContactForces_TriAnal"}}}};
 }
 
 float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
@@ -3084,17 +3093,17 @@ void DEMDynamicThread::setFamilyContactWildcardValue_impl(
     // Get host updated then send all to device
     migrateFamilyToHost();
     contactWildcards[wc_num]->toHost();
-    idPrimitiveA.toHost();
-    idPrimitiveB.toHost();
-    contactType.toHost();
+    idPatchA.toHost();
+    idPatchB.toHost();
+    contactTypePatch.toHost();
 
     size_t numCnt = *solverScratchSpace.numContacts;
     for (size_t i = 0; i < numCnt; i++) {
-        contact_t typeContact = contactType[i];
-        bodyID_t geoA = idPrimitiveA[i];
-        bodyID_t ownerA = getGeoOwnerID(geoA, decodeTypeA(typeContact));
-        bodyID_t geoB = idPrimitiveB[i];
-        bodyID_t ownerB = getGeoOwnerID(geoB, decodeTypeB(typeContact));
+        contact_t typeContact = contactTypePatch[i];
+        bodyID_t geoA = idPatchA[i];
+        bodyID_t ownerA = getPatchOwnerID(geoA, decodeTypeA(typeContact));
+        bodyID_t geoB = idPatchB[i];
+        bodyID_t ownerB = getPatchOwnerID(geoB, decodeTypeB(typeContact));
 
         unsigned int famA = +(familyID[ownerA]);
         unsigned int famB = +(familyID[ownerB]);
