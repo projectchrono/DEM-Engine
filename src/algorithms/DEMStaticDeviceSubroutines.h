@@ -171,6 +171,26 @@ void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
                                      contactPairs_t count,
                                      cudaStream_t& this_stream);
 
+// Computes weighted useful penetration for each primitive contact
+// The "useful" penetration is the original penetration projected onto the voted normal
+// Each primitive's useful penetration is then weighted by its contact area
+void computeWeightedUsefulPenetration(DEMDataDT* granData,
+                                      float3* votedNormalizedNormals,
+                                      contactPairs_t* keys,
+                                      double* weightedPenetrations,
+                                      contactPairs_t startOffsetPrimitive,
+                                      contactPairs_t startOffsetPatch,
+                                      contactPairs_t count,
+                                      cudaStream_t& this_stream);
+
+// Computes total penetration per patch pair by dividing total weighted penetration by total area
+// If total area is 0, total penetration is 0
+void computeTotalPenetrationPerPatch(double* totalWeightedPenetrations,
+                                     double* totalAreas,
+                                     double* totalPenetrations,
+                                     contactPairs_t count,
+                                     cudaStream_t& this_stream);
+
 }  // namespace deme
 
 #endif

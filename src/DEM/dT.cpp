@@ -2351,26 +2351,51 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 // are the same as in Step 2.
                 cubSumReduceByKey<contactPairs_t, double>(keys, uniqueKeys, areas, totalAreas, numUniqueKeys,
                                                           countPrimitive, streamInfo.stream, solverScratchSpace);
-                solverScratchSpace.finishUsingTempVector("areas");
 
                 // Step 4: Normalize the voted normals by total area and scatter back to a temp array.
                 float3* votedNormalizedNormals = (float3*)solverScratchSpace.allocateTempVector(
                     "votedNormalizedNormals", countPatch * sizeof(float3));
                 normalizeAndScatterVotedNormals(votedWeightedNormals, totalAreas, votedNormalizedNormals, countPatch,
                                                 streamInfo.stream);
+                solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
                 // displayDeviceFloat3(votedNormalizedNormals, countPatch);
 
-                // Clean up temporary arrays
+                // Step 5: Compute weighted useful penetration for each primitive contact
+                // Reuse keys array for the reduce-by-key operation
+                double* weightedPenetrations = (double*)solverScratchSpace.allocateTempVector(
+                    "weightedPenetrations", countPrimitive * sizeof(double));
+                computeWeightedUsefulPenetration(&granData, votedNormalizedNormals, keys, weightedPenetrations,
+                                                 startOffsetPrimitive, startOffsetPatch, countPrimitive,
+                                                 streamInfo.stream);
+                solverScratchSpace.finishUsingTempVector("areas");
+                solverScratchSpace.finishUsingTempVector("votedNormalizedNormals");
+
+                // Step 6: Reduce-by-key to get total weighted penetration per patch pair
+                double* totalWeightedPenetrations = (double*)solverScratchSpace.allocateTempVector(
+                    "totalWeightedPenetrations", countPatch * sizeof(double));
+                cubSumReduceByKey<contactPairs_t, double>(keys, uniqueKeys, weightedPenetrations,
+                                                          totalWeightedPenetrations, numUniqueKeys, countPrimitive,
+                                                          streamInfo.stream, solverScratchSpace);
+                solverScratchSpace.finishUsingTempVector("weightedPenetrations");
                 solverScratchSpace.finishUsingTempVector("votingKeys");
                 solverScratchSpace.finishUsingTempVector("uniqueKeys");
-                solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
-                solverScratchSpace.finishUsingTempVector("totalAreas");
                 solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
 
-                //// TODO: Map penetration based on voted normals
+                // Step 7: Compute total penetration per patch pair by dividing by total area
+                double* totalPenetrations = (double*)solverScratchSpace.allocateTempVector(
+                    "totalPenetrations", countPatch * sizeof(double));
+                computeTotalPenetrationPerPatch(totalWeightedPenetrations, totalAreas, totalPenetrations, countPatch,
+                                                streamInfo.stream);
+                solverScratchSpace.finishUsingTempVector("totalWeightedPenetrations");
+
+                // Now we have:
+                // - totalAreas: total contact area per patch pair (countPatch elements)
+                // - totalPenetrations: total penetration depth per patch pair (countPatch elements)
+                // These can be used for subsequent force calculations
 
                 // Final clean up
-                solverScratchSpace.finishUsingTempVector("votedNormalizedNormals");
+                solverScratchSpace.finishUsingTempVector("totalAreas");
+                solverScratchSpace.finishUsingTempVector("totalPenetrations");
             }
         }
         // std::cout << "===========================" << std::endl;
