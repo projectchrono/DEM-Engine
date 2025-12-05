@@ -186,10 +186,10 @@ __global__ void normalizeAndScatterVotedNormals_impl(contactPairs_t* originalKey
         // Find the corresponding unique key using binary search
         size_t numUnique = *numUniqueKeys;
         ssize_t keyIdx = -1;
-        cuda_binary_search<contactPairs_t, ssize_t>(uniqueKeys, myKey, 0, numUnique - 1, keyIdx);
+        bool found = cuda_binary_search<contactPairs_t, ssize_t>(uniqueKeys, myKey, 0, numUnique - 1, keyIdx);
 
         float3 votedNormal = make_float3(0.0f, 0.0f, 0.0f);
-        if (keyIdx >= 0 && keyIdx < (ssize_t)numUnique) {
+        if (found && keyIdx >= 0 && keyIdx < (ssize_t)numUnique) {
             double totalArea = totalAreas[keyIdx];
             if (totalArea > 0.0) {
                 // Normalize by dividing by total area (use reciprocal multiplication for efficiency)
