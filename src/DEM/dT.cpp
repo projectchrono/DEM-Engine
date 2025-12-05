@@ -2322,24 +2322,19 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
 
                 // Step 1: Prepare weighted normals, areas, and keys
                 // The kernel extracts keys from geomToPatchMap, computes weighted normals, and stores areas
-                prepareWeightedNormalsForVoting(granData, weightedNormals, areas, keys, startOffset, count,
+                prepareWeightedNormalsForVoting(&granData, weightedNormals, areas, keys, startOffset, count,
                                                 streamInfo.stream);
 
                 // Step 2: Reduce-by-key for weighted normals (sum)
                 // The keys are geomToPatchMap values (contactPairs_t), which group primitives by patch pair
-                cubSumReduceByKeyFloat3_ContactPairs(keys, uniqueKeys, weightedNormals, votedWeightedNormals,
-                                                     numUniqueKeys, count, streamInfo.stream, solverScratchSpace);
+                cubSumReduceByKey<contactPairs_t, float3>(keys, uniqueKeys, weightedNormals, votedWeightedNormals,
+                                                          numUniqueKeys, count, streamInfo.stream, solverScratchSpace);
 
                 // Step 3: Reduce-by-key for areas (sum)
-                // Note: CUB's ReduceByKey requires an output array for unique keys, but since the keys
-                // are the same as in Step 2, we just provide a dummy output array that we discard.
-                // The uniqueKeys and numUniqueKeys from Step 2 are reused in Step 4.
-                contactPairs_t* dummyUniqueKeys = (contactPairs_t*)solverScratchSpace.allocateTempVector(
-                    "dummyUniqueKeys", count * sizeof(contactPairs_t));
-                size_t* dummyNumUniqueKeys =
-                    (size_t*)solverScratchSpace.allocateTempVector("dummyNumUniqueKeys", sizeof(size_t));
-                cubSumReduceByKeyDouble_ContactPairs(keys, dummyUniqueKeys, areas, totalAreas, dummyNumUniqueKeys,
-                                                     count, streamInfo.stream, solverScratchSpace);
+                // Note: CUB's ReduceByKey requires an output array for unique keys, and the keys
+                // are the same as in Step 2.
+                cubSumReduceByKey<contactPairs_t, double>(keys, uniqueKeys, areas, totalAreas, numUniqueKeys, count,
+                                                          streamInfo.stream, solverScratchSpace);
 
                 // Step 4: Normalize the voted normals by total area and scatter back to contactTorque_convToForce
                 // The output is stored in contactTorque_convToForce, which is adequately sized.
@@ -2352,16 +2347,17 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("areas");
                 solverScratchSpace.finishUsingTempVector("votingKeys");
                 solverScratchSpace.finishUsingTempVector("uniqueKeys");
-                solverScratchSpace.finishUsingTempVector("dummyUniqueKeys");
                 solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
                 solverScratchSpace.finishUsingTempVector("totalAreas");
                 solverScratchSpace.finishUsingTempVector("numUniqueKeys");
-                solverScratchSpace.finishUsingTempVector("dummyNumUniqueKeys");
 
-                // std::cout << "Voted normals: " << std::endl;
+                // std::cout << "For type " << +(contact_type) << ", voted normals: " << std::endl;
                 // displayDeviceFloat3(granData->contactTorque_convToForce, count);
+                // std::cout << "Normals before voting: " << std::endl;
+                // displayDeviceFloat3(weightedNormals, count);
             }
         }
+        // std::cout << "===========================" << std::endl;
     }
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
