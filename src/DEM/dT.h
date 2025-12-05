@@ -312,9 +312,11 @@ class DEMDynamicThread {
     // dT's storage of how many contact pairs of each contact type are currently present
     DualArray<contact_t> existingContactTypes;
     DualArray<contactPairs_t> typeStartOffsetsPrimitive;
+    DualArray<contactPairs_t> typeStartOffsetsPatch;
     size_t m_numExistingTypes = 0;
     // A map that records the contact <ID start, and count> for each contact type currently existing
     std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>> typeStartCountPrimitiveMap;
+    std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>> typeStartCountPatchMap;
     // A map that records the corresponding jitify program bundle and kernel name for each contact type
     std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>
         contactTypePrimitiveKernelMap;
@@ -713,7 +715,8 @@ class DEMDynamicThread {
         const std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>&
             typeKernelMap);
     inline void dispatchPatchBasedForceCorrections(
-        const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountMap,
+        const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPrimitiveMap,
+        const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
         const std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>&
             typeKernelMap);
     // Update clump-based acceleration array based on sphere-based force array

@@ -170,55 +170,37 @@ void prepareWeightedNormalsForVoting(DEMDataDT* granData,
 // If total area is 0, set result to (0,0,0)
 // Assumes uniqueKeys are sorted (CUB's ReduceByKey maintains sort order)
 // Uses contactPairs_t keys (geomToPatchMap values)
-__global__ void normalizeAndScatterVotedNormals_impl(contactPairs_t* originalKeys,
-                                                     contactPairs_t* uniqueKeys,
-                                                     float3* votedWeightedNormals,
+__global__ void normalizeAndScatterVotedNormals_impl(float3* votedWeightedNormals,
                                                      double* totalAreas,
                                                      float3* output,
-                                                     size_t* numUniqueKeys,
-                                                     contactPairs_t startOffset,
                                                      contactPairs_t count) {
     contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
-        // Get the key for this contact (already extracted in preparation step)
-        contactPairs_t myKey = originalKeys[idx];
-
-        // Find the corresponding unique key using binary search
-        size_t numUnique = *numUniqueKeys;
-        ssize_t keyIdx = -1;
-        bool found = cuda_binary_search<contactPairs_t, ssize_t>(uniqueKeys, myKey, 0, numUnique - 1, keyIdx);
-
-        float3 votedNormal = make_float3(0.0f, 0.0f, 0.0f);
-        if (found && keyIdx >= 0 && keyIdx < (ssize_t)numUnique) {
-            double totalArea = totalAreas[keyIdx];
-            if (totalArea > 0.0) {
-                // Normalize by dividing by total area (use reciprocal multiplication for efficiency)
-                double invTotalArea = 1.0 / totalArea;
-                votedNormal.x = votedWeightedNormals[keyIdx].x * invTotalArea;
-                votedNormal.y = votedWeightedNormals[keyIdx].y * invTotalArea;
-                votedNormal.z = votedWeightedNormals[keyIdx].z * invTotalArea;
-            }
-            // else: votedNormal remains (0,0,0)
+        float3 votedNormal = make_float3(0, 0, 0);
+        double totalArea = totalAreas[idx];
+        if (totalArea > 0.0) {
+            // Normalize by dividing by total area (use reciprocal multiplication for efficiency)
+            double invTotalArea = 1.0 / totalArea;
+            votedNormal.x = votedWeightedNormals[idx].x * invTotalArea;
+            votedNormal.y = votedWeightedNormals[idx].y * invTotalArea;
+            votedNormal.z = votedWeightedNormals[idx].z * invTotalArea;
         }
+        // else: votedNormal remains (0,0,0)
 
         // Write to output at the correct position
-        output[startOffset + idx] = votedNormal;
+        output[idx] = votedNormal;
     }
 }
 
-void normalizeAndScatterVotedNormals(contactPairs_t* originalKeys,
-                                     contactPairs_t* uniqueKeys,
-                                     float3* votedWeightedNormals,
+void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
                                      double* totalAreas,
                                      float3* output,
-                                     size_t* numUniqueKeys,
-                                     contactPairs_t startOffset,
                                      contactPairs_t count,
                                      cudaStream_t& this_stream) {
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         normalizeAndScatterVotedNormals_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            originalKeys, uniqueKeys, votedWeightedNormals, totalAreas, output, numUniqueKeys, startOffset, count);
+            votedWeightedNormals, totalAreas, output, count);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }

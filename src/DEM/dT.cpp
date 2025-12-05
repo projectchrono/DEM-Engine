@@ -610,6 +610,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     // existingContactTypes has a fixed size depending on how many contact types are defined
     DEME_DUAL_ARRAY_RESIZE(existingContactTypes, NUM_SUPPORTED_CONTACT_TYPES + 1, NOT_A_CONTACT);
     DEME_DUAL_ARRAY_RESIZE(typeStartOffsetsPrimitive, NUM_SUPPORTED_CONTACT_TYPES + 1, 0);
+    DEME_DUAL_ARRAY_RESIZE(typeStartOffsetsPatch, NUM_SUPPORTED_CONTACT_TYPES + 1, 0);
 
     // You know what, let's not init dT's buffers, since kT will change it when needed anyway. Besides, changing it here
     // will cause problems in the case of a re-init-ed simulation with more clumps added to system, since we may
@@ -2285,7 +2286,8 @@ inline void DEMDynamicThread::dispatchPrimitiveForceKernels(
 }
 
 inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
-    const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountMap,
+    const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPrimitiveMap,
+    const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
     const std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>&
         typeKernelMap) {
     // For each contact type that exists, check if it is patch(mesh)-related type...
@@ -2293,68 +2295,82 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
         contact_t contact_type = existingContactTypes[i];
         if (contact_type == SPHERE_ANALYTICAL_CONTACT || contact_type == TRIANGLE_TRIANGLE_CONTACT ||
             contact_type == TRIANGLE_ANALYTICAL_CONTACT) {
-            const auto& start_count = typeStartCountMap.at(contact_type);
-            // Offset and count being contactPairs_t is very important, as CUDA kernel arguments cannot safely
-            // implicitly convert type (from size_t to unsigned int, for example)
-            contactPairs_t startOffset = start_count.first;
-            contactPairs_t count = start_count.second;
+            const auto& start_count_primitive = typeStartCountPrimitiveMap.at(contact_type);
+            const auto& start_count_patch = typeStartCountPatchMap.at(contact_type);
+            contactPairs_t startOffsetPrimitive = start_count_primitive.first;
+            contactPairs_t countPrimitive = start_count_primitive.second;
+            contactPairs_t startOffsetPatch = start_count_patch.first;
+            contactPairs_t countPatch = start_count_patch.second;
 
             // Vote for the contact direction; voting power depends on the contact area
             // This reduce-by-key operation reduces primitive-recorded force pairs into patch/convex part-based
             // force pairs. All elements that share the same geomToPatchMap value vote together.
-            if (count > 0) {
+            if (countPrimitive > 0) {
                 // Allocate temporary arrays for the voting process
                 float3* weightedNormals =
-                    (float3*)solverScratchSpace.allocateTempVector("weightedNormals", count * sizeof(float3));
-                double* areas = (double*)solverScratchSpace.allocateTempVector("areas", count * sizeof(double));
+                    (float3*)solverScratchSpace.allocateTempVector("weightedNormals", countPrimitive * sizeof(float3));
+                double* areas =
+                    (double*)solverScratchSpace.allocateTempVector("areas", countPrimitive * sizeof(double));
                 // Keys extracted from geomToPatchMap - these map primitives to patch pairs
                 contactPairs_t* keys = (contactPairs_t*)solverScratchSpace.allocateTempVector(
-                    "votingKeys", count * sizeof(contactPairs_t));
+                    "votingKeys", countPrimitive * sizeof(contactPairs_t));
 
                 // Allocate arrays for reduce-by-key results (uniqueKeys uses contactPairs_t, not patchIDPair_t)
                 contactPairs_t* uniqueKeys = (contactPairs_t*)solverScratchSpace.allocateTempVector(
-                    "uniqueKeys", count * sizeof(contactPairs_t));
-                float3* votedWeightedNormals =
-                    (float3*)solverScratchSpace.allocateTempVector("votedWeightedNormals", count * sizeof(float3));
+                    "uniqueKeys", countPrimitive * sizeof(contactPairs_t));
+                float3* votedWeightedNormals = (float3*)solverScratchSpace.allocateTempVector(
+                    "votedWeightedNormals", countPrimitive * sizeof(float3));
                 double* totalAreas =
-                    (double*)solverScratchSpace.allocateTempVector("totalAreas", count * sizeof(double));
-                size_t* numUniqueKeys = (size_t*)solverScratchSpace.allocateTempVector("numUniqueKeys", sizeof(size_t));
+                    (double*)solverScratchSpace.allocateTempVector("totalAreas", countPrimitive * sizeof(double));
+                solverScratchSpace.allocateDualStruct("numUniqueKeys");
+                size_t* numUniqueKeys = solverScratchSpace.getDualStructDevice("numUniqueKeys");
 
                 // Step 1: Prepare weighted normals, areas, and keys
                 // The kernel extracts keys from geomToPatchMap, computes weighted normals, and stores areas
-                prepareWeightedNormalsForVoting(&granData, weightedNormals, areas, keys, startOffset, count,
-                                                streamInfo.stream);
+                prepareWeightedNormalsForVoting(&granData, weightedNormals, areas, keys, startOffsetPrimitive,
+                                                countPrimitive, streamInfo.stream);
 
                 // Step 2: Reduce-by-key for weighted normals (sum)
                 // The keys are geomToPatchMap values (contactPairs_t), which group primitives by patch pair
                 cubSumReduceByKey<contactPairs_t, float3>(keys, uniqueKeys, weightedNormals, votedWeightedNormals,
-                                                          numUniqueKeys, count, streamInfo.stream, solverScratchSpace);
+                                                          numUniqueKeys, countPrimitive, streamInfo.stream,
+                                                          solverScratchSpace);
+                solverScratchSpace.finishUsingTempVector("weightedNormals");
+                // For extra safety
+                solverScratchSpace.syncDualStructDeviceToHost("numUniqueKeys");
+                size_t numUniqueKeysHost = *(solverScratchSpace.getDualStructHost("numUniqueKeys"));
+                if (numUniqueKeysHost != countPatch) {
+                    DEME_ERROR(
+                        "Patch-based contact voting produced %zu unique patch pairs, but expected %zu pairs for "
+                        "contact type %d!",
+                        numUniqueKeysHost, countPatch, contact_type);
+                }
 
                 // Step 3: Reduce-by-key for areas (sum)
                 // Note: CUB's ReduceByKey requires an output array for unique keys, and the keys
                 // are the same as in Step 2.
-                cubSumReduceByKey<contactPairs_t, double>(keys, uniqueKeys, areas, totalAreas, numUniqueKeys, count,
-                                                          streamInfo.stream, solverScratchSpace);
+                cubSumReduceByKey<contactPairs_t, double>(keys, uniqueKeys, areas, totalAreas, numUniqueKeys,
+                                                          countPrimitive, streamInfo.stream, solverScratchSpace);
+                solverScratchSpace.finishUsingTempVector("areas");
 
-                // Step 4: Normalize the voted normals by total area and scatter back to contactTorque_convToForce
-                // The output is stored in contactTorque_convToForce, which is adequately sized.
-                normalizeAndScatterVotedNormals(keys, uniqueKeys, votedWeightedNormals, totalAreas,
-                                                granData->contactTorque_convToForce, numUniqueKeys, startOffset, count,
+                // Step 4: Normalize the voted normals by total area and scatter back to a temp array.
+                float3* votedNormalizedNormals = (float3*)solverScratchSpace.allocateTempVector(
+                    "votedNormalizedNormals", countPatch * sizeof(float3));
+                normalizeAndScatterVotedNormals(votedWeightedNormals, totalAreas, votedNormalizedNormals, countPatch,
                                                 streamInfo.stream);
+                // displayDeviceFloat3(votedNormalizedNormals, countPatch);
 
                 // Clean up temporary arrays
-                solverScratchSpace.finishUsingTempVector("weightedNormals");
-                solverScratchSpace.finishUsingTempVector("areas");
                 solverScratchSpace.finishUsingTempVector("votingKeys");
                 solverScratchSpace.finishUsingTempVector("uniqueKeys");
                 solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
                 solverScratchSpace.finishUsingTempVector("totalAreas");
-                solverScratchSpace.finishUsingTempVector("numUniqueKeys");
+                solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
 
-                // std::cout << "For type " << +(contact_type) << ", voted normals: " << std::endl;
-                // displayDeviceFloat3(granData->contactTorque_convToForce, count);
-                // std::cout << "Normals before voting: " << std::endl;
-                // displayDeviceFloat3(weightedNormals, count);
+                //// TODO: Map penetration based on voted normals
+
+                // Final clean up
+                solverScratchSpace.finishUsingTempVector("votedNormalizedNormals");
             }
         }
         // std::cout << "===========================" << std::endl;
@@ -2403,7 +2419,8 @@ void DEMDynamicThread::calculateForces() {
         // triangles... However, for contacts to be truely physical, sometimes such contact pairs within a patch (which
         // marks a convex component of a owner) need to vote to decide the true contact. This is where the second step
         // comes in.
-        dispatchPatchBasedForceCorrections(typeStartCountPrimitiveMap, contactTypePrimitiveKernelMap);
+        dispatchPatchBasedForceCorrections(typeStartCountPrimitiveMap, typeStartCountPatchMap,
+                                           contactTypePrimitiveKernelMap);
 
         // displayDeviceFloat3(granData->contactForces, nContactPairs);
         // displayDeviceArray<contact_t>(granData->contactTypePatch, nContactPairs);
@@ -2496,7 +2513,6 @@ inline void DEMDynamicThread::unpack_impl() {
         streamInfo.stream, solverScratchSpace);
     solverScratchSpace.syncDualStructDeviceToHost("numExistingTypes");
     m_numExistingTypes = *solverScratchSpace.getDualStructHost("numExistingTypes");
-    solverScratchSpace.finishUsingDualStruct("numExistingTypes");
     cubPrefixScan<contactPairs_t, contactPairs_t>(typeCounts, typeStartOffsetsPrimitive.device(), m_numExistingTypes,
                                                   streamInfo.stream, solverScratchSpace);
     solverScratchSpace.finishUsingTempVector("typeCounts");
@@ -2515,6 +2531,22 @@ inline void DEMDynamicThread::unpack_impl() {
     //     printf("Contact type %d starts at offset %u and has count %u\n", entry.first, entry.second.first,
     //     entry.second.second);
     // }
+
+    // Now for patch-based contacts, we do the same thing. Note the unique types herein will be the same as thosein.
+    cubRunLengthEncode<contact_t, contactPairs_t>(granData->contactTypePatch, existingContactTypes.device(), typeCounts,
+                                                  solverScratchSpace.getDualStructDevice("numExistingTypes"),
+                                                  *solverScratchSpace.numContacts, streamInfo.stream,
+                                                  solverScratchSpace);
+    cubPrefixScan<contactPairs_t, contactPairs_t>(typeCounts, typeStartOffsetsPatch.device(), m_numExistingTypes,
+                                                  streamInfo.stream, solverScratchSpace);
+    typeStartOffsetsPatch.toHost();
+    for (size_t i = 0; i < m_numExistingTypes; i++) {
+        typeStartCountPatchMap[existingContactTypes[i]] = std::make_pair(
+            typeStartOffsetsPatch[i], (i + 1 < m_numExistingTypes ? typeStartOffsetsPatch[i + 1]
+                                                                  : (contactPairs_t)*solverScratchSpace.numContacts) -
+                                          typeStartOffsetsPatch[i]);
+    }
+    solverScratchSpace.finishUsingDualStruct("numExistingTypes");
 }
 
 inline void DEMDynamicThread::ifProduceFreshThenUseIt() {

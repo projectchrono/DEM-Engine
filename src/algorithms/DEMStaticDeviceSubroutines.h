@@ -165,13 +165,9 @@ void prepareWeightedNormalsForVoting(DEMDataDT* granData,
 
 // Normalizes voted normals by total area and scatters to output
 // If total area is 0, output is (0,0,0) indicating no contact
-void normalizeAndScatterVotedNormals(contactPairs_t* originalKeys,
-                                     contactPairs_t* uniqueKeys,
-                                     float3* votedWeightedNormals,
+void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
                                      double* totalAreas,
                                      float3* output,
-                                     size_t* numUniqueKeys,
-                                     contactPairs_t startOffset,
                                      contactPairs_t count,
                                      cudaStream_t& this_stream);
 
