@@ -105,7 +105,7 @@ void cubSumReduceByKeyFloat3_ContactPairs(contactPairs_t* d_keys_in,
                                           DEMSolverScratchData& scratchPad) {
     CubFloat3Add add_op;
     cubDEMReduceByKeys<contactPairs_t, float3, CubFloat3Add>(d_keys_in, d_unique_out, d_vals_in, d_aggregates_out,
-                                                              d_num_out, add_op, n, this_stream, scratchPad);
+                                                             d_num_out, add_op, n, this_stream, scratchPad);
 }
 
 // Special instantiation for double with contactPairs_t keys (for voting)
@@ -119,7 +119,7 @@ void cubSumReduceByKeyDouble_ContactPairs(contactPairs_t* d_keys_in,
                                           DEMSolverScratchData& scratchPad) {
     CubOpAdd<double> add_op;
     cubDEMReduceByKeys<contactPairs_t, double, CubOpAdd<double>>(d_keys_in, d_unique_out, d_vals_in, d_aggregates_out,
-                                                                  d_num_out, add_op, n, this_stream, scratchPad);
+                                                                 d_num_out, add_op, n, this_stream, scratchPad);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

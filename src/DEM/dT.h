@@ -87,14 +87,14 @@ class DEMDynamicThread {
     // dT gets contact pair/location/history map info from kT
     DeviceArray<bodyID_t> idPrimitiveA_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
     DeviceArray<bodyID_t> idPrimitiveB_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
-    DeviceArray<contact_t> contactType_buffer = DeviceArray<contact_t>(&m_approxDeviceBytesUsed);
-    DeviceArray<contactPairs_t> contactMapping_buffer = DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<contact_t> contactTypePrimitive_buffer = DeviceArray<contact_t>(&m_approxDeviceBytesUsed);
 
     // NEW: Buffer arrays for separate patch IDs and their mapping to geometry arrays
     DeviceArray<bodyID_t> idPatchA_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
     DeviceArray<bodyID_t> idPatchB_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
     DeviceArray<contact_t> contactTypePatch_buffer = DeviceArray<contact_t>(&m_approxDeviceBytesUsed);
     DeviceArray<contactPairs_t> geomToPatchMap_buffer = DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<contactPairs_t> contactMapping_buffer = DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed);
 
     // Simulation params-related variables
     DualStruct<DEMSimParams> simParams = DualStruct<DEMSimParams>();
@@ -311,13 +311,13 @@ class DEMDynamicThread {
 
     // dT's storage of how many contact pairs of each contact type are currently present
     DualArray<contact_t> existingContactTypes;
-    DualArray<contactPairs_t> typeStartOffsets;
+    DualArray<contactPairs_t> typeStartOffsetsPrimitive;
     size_t m_numExistingTypes = 0;
     // A map that records the contact <ID start, and count> for each contact type currently existing
-    std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>> typeStartCountMap;
+    std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>> typeStartCountPrimitiveMap;
     // A map that records the corresponding jitify program bundle and kernel name for each contact type
     std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>
-        contactTypeKernelMap;
+        contactTypePrimitiveKernelMap;
 
     // dT's timers
     std::vector<std::string> timer_names = {"Clear force array", "Calculate contact forces", "Optional force reduction",
@@ -708,7 +708,7 @@ class DEMDynamicThread {
     inline void migrateEnduringContacts();
 
     // Impl of calculateForces
-    inline void dispatchCalcForceKernels(
+    inline void dispatchPrimitiveForceKernels(
         const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountMap,
         const std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>&
             typeKernelMap);

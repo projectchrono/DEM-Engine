@@ -24,11 +24,11 @@ inline void DEMKinematicThread::transferPrimitivesArraysResize(size_t nContactPa
     dT->primitiveBufferSize = nContactPairs;
     DEME_DEVICE_ARRAY_RESIZE(dT->idPrimitiveA_buffer, nContactPairs);
     DEME_DEVICE_ARRAY_RESIZE(dT->idPrimitiveB_buffer, nContactPairs);
-    DEME_DEVICE_ARRAY_RESIZE(dT->contactType_buffer, nContactPairs);
+    DEME_DEVICE_ARRAY_RESIZE(dT->contactTypePrimitive_buffer, nContactPairs);
     DEME_DEVICE_ARRAY_RESIZE(dT->geomToPatchMap_buffer, nContactPairs);
     granData->pDTOwnedBuffer_idPrimitiveA = dT->idPrimitiveA_buffer.data();
     granData->pDTOwnedBuffer_idPrimitiveB = dT->idPrimitiveB_buffer.data();
-    granData->pDTOwnedBuffer_contactType = dT->contactType_buffer.data();
+    granData->pDTOwnedBuffer_contactType = dT->contactTypePrimitive_buffer.data();
     granData->pDTOwnedBuffer_geomToPatchMap = dT->geomToPatchMap_buffer.data();
 
     // Unset the device change we just made
@@ -245,7 +245,7 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
 
     // DEME_MIGRATE_TO_DEVICE(dT->idPrimitiveA_buffer, dT->streamInfo.device, streamInfo.stream);
     // DEME_MIGRATE_TO_DEVICE(dT->idPrimitiveB_buffer, dT->streamInfo.device, streamInfo.stream);
-    // DEME_MIGRATE_TO_DEVICE(dT->contactType_buffer, dT->streamInfo.device, streamInfo.stream);
+    // DEME_MIGRATE_TO_DEVICE(dT->contactTypePrimitive_buffer, dT->streamInfo.device, streamInfo.stream);
     if (!solverFlags.isHistoryless) {
         DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactMapping, granData->contactMapping,
                                  (*solverScratchSpace.numContacts) * sizeof(contactPairs_t), cudaMemcpyDeviceToDevice));
@@ -580,7 +580,7 @@ void DEMKinematicThread::packTransferPointers(DEMDynamicThread*& dT) {
     granData->pDTOwnedBuffer_nPatchContacts = &(dT->nPatchContactPairs_buffer);
     granData->pDTOwnedBuffer_idPrimitiveA = dT->idPrimitiveA_buffer.data();
     granData->pDTOwnedBuffer_idPrimitiveB = dT->idPrimitiveB_buffer.data();
-    granData->pDTOwnedBuffer_contactType = dT->contactType_buffer.data();
+    granData->pDTOwnedBuffer_contactType = dT->contactTypePrimitive_buffer.data();
     granData->pDTOwnedBuffer_geomToPatchMap = dT->geomToPatchMap_buffer.data();
 
     // NEW: Set pointers for separate patch arrays

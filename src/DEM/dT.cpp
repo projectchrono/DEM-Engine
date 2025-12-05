@@ -609,7 +609,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     }
     // existingContactTypes has a fixed size depending on how many contact types are defined
     DEME_DUAL_ARRAY_RESIZE(existingContactTypes, NUM_SUPPORTED_CONTACT_TYPES + 1, NOT_A_CONTACT);
-    DEME_DUAL_ARRAY_RESIZE(typeStartOffsets, NUM_SUPPORTED_CONTACT_TYPES + 1, 0);
+    DEME_DUAL_ARRAY_RESIZE(typeStartOffsetsPrimitive, NUM_SUPPORTED_CONTACT_TYPES + 1, 0);
 
     // You know what, let's not init dT's buffers, since kT will change it when needed anyway. Besides, changing it here
     // will cause problems in the case of a re-init-ed simulation with more clumps added to system, since we may
@@ -2059,7 +2059,7 @@ inline void DEMDynamicThread::unpackMyBuffer() {
                              *solverScratchSpace.numPrimitiveContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->idPrimitiveB, idPrimitiveB_buffer.data(),
                              *solverScratchSpace.numPrimitiveContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->contactTypePrimitive, contactType_buffer.data(),
+    DEME_GPU_CALL(cudaMemcpy(granData->contactTypePrimitive, contactTypePrimitive_buffer.data(),
                              *solverScratchSpace.numPrimitiveContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->geomToPatchMap, geomToPatchMap_buffer.data(),
                              *solverScratchSpace.numPrimitiveContacts * sizeof(contactPairs_t),
@@ -2247,7 +2247,7 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
 
 // The argument is two maps: contact type -> (start offset, count), contact type -> list of [(program bundle name,
 // kernel name)]
-inline void DEMDynamicThread::dispatchCalcForceKernels(
+inline void DEMDynamicThread::dispatchPrimitiveForceKernels(
     const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountMap,
     const std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>&
         typeKernelMap) {
@@ -2262,6 +2262,12 @@ inline void DEMDynamicThread::dispatchCalcForceKernels(
 
         // For this contact type, get its list of (program bundle name, kernel name)
         if (typeKernelMap.count(contact_type) == 0) {
+            // displayDeviceArray<bodyID_t>(granData->idPrimitiveA, *solverScratchSpace.numPrimitiveContacts);
+            // displayDeviceArray<bodyID_t>(granData->idPrimitiveB, *solverScratchSpace.numPrimitiveContacts);
+            // displayDeviceArray<contact_t>(granData->contactTypePrimitive, *solverScratchSpace.numPrimitiveContacts);
+            // for (size_t j = 0; j < m_numExistingTypes; j++) {
+            //     DEME_PRINTF("existingContactTypes[%zu] = %d\n", j, existingContactTypes[j]);
+            // }
             DEME_ERROR("Contact type %d has no associated force kernel in to execute!", contact_type);
         }
         const auto& kernelList = typeKernelMap.at(contact_type);
@@ -2302,12 +2308,12 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     (float3*)solverScratchSpace.allocateTempVector("weightedNormals", count * sizeof(float3));
                 double* areas = (double*)solverScratchSpace.allocateTempVector("areas", count * sizeof(double));
                 // Keys extracted from geomToPatchMap - these map primitives to patch pairs
-                contactPairs_t* keys =
-                    (contactPairs_t*)solverScratchSpace.allocateTempVector("votingKeys", count * sizeof(contactPairs_t));
+                contactPairs_t* keys = (contactPairs_t*)solverScratchSpace.allocateTempVector(
+                    "votingKeys", count * sizeof(contactPairs_t));
 
                 // Allocate arrays for reduce-by-key results (uniqueKeys uses contactPairs_t, not patchIDPair_t)
-                contactPairs_t* uniqueKeys =
-                    (contactPairs_t*)solverScratchSpace.allocateTempVector("uniqueKeys", count * sizeof(contactPairs_t));
+                contactPairs_t* uniqueKeys = (contactPairs_t*)solverScratchSpace.allocateTempVector(
+                    "uniqueKeys", count * sizeof(contactPairs_t));
                 float3* votedWeightedNormals =
                     (float3*)solverScratchSpace.allocateTempVector("votedWeightedNormals", count * sizeof(float3));
                 double* totalAreas =
@@ -2336,11 +2342,11 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     "dummyUniqueKeys", count * sizeof(contactPairs_t));
                 size_t* dummyNumUniqueKeys =
                     (size_t*)solverScratchSpace.allocateTempVector("dummyNumUniqueKeys", sizeof(size_t));
-                cubSumReduceByKeyDouble_ContactPairs(keys, dummyUniqueKeys, areas, totalAreas, dummyNumUniqueKeys, count,
-                                                     streamInfo.stream, solverScratchSpace);
+                cubSumReduceByKeyDouble_ContactPairs(keys, dummyUniqueKeys, areas, totalAreas, dummyNumUniqueKeys,
+                                                     count, streamInfo.stream, solverScratchSpace);
 
                 // Step 4: Normalize the voted normals by total area and scatter back to contactTorque_convToForce
-                // The output is stored in contactTorque_convToForce, which is already sized appropriately
+                // The output is stored in contactTorque_convToForce, which is adequately sized.
                 patch_voting_kernels->kernel("normalizeAndScatterVotedNormals")
                     .instantiate()
                     .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
@@ -2358,6 +2364,9 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("totalAreas");
                 solverScratchSpace.finishUsingTempVector("numUniqueKeys");
                 solverScratchSpace.finishUsingTempVector("dummyNumUniqueKeys");
+
+                // std::cout << "Voted normals: " << std::endl;
+                // displayDeviceFloat3(granData->contactTorque_convToForce, count);
             }
         }
     }
@@ -2400,12 +2409,12 @@ void DEMDynamicThread::calculateForces() {
         timers.GetTimer("Calculate contact forces").start();
 
         // Call specialized kernels for each contact type that exists
-        dispatchCalcForceKernels(typeStartCountMap, contactTypeKernelMap);
-        // Note: dispatchCalcForceKernels calculates forces induced by the most basic primitives, aka spheres,
+        dispatchPrimitiveForceKernels(typeStartCountPrimitiveMap, contactTypePrimitiveKernelMap);
+        // Note: dispatchPrimitiveForceKernels calculates forces induced by the most basic primitives, aka spheres,
         // triangles... However, for contacts to be truely physical, sometimes such contact pairs within a patch (which
         // marks a convex component of a owner) need to vote to decide the true contact. This is where the second step
         // comes in.
-        dispatchPatchBasedForceCorrections(typeStartCountMap, contactTypeKernelMap);
+        dispatchPatchBasedForceCorrections(typeStartCountPrimitiveMap, contactTypePrimitiveKernelMap);
 
         // displayDeviceFloat3(granData->contactForces, nContactPairs);
         // displayDeviceArray<contact_t>(granData->contactTypePatch, nContactPairs);
@@ -2491,27 +2500,29 @@ inline void DEMDynamicThread::unpack_impl() {
     solverScratchSpace.allocateDualStruct("numExistingTypes");
     contactPairs_t* typeCounts = (contactPairs_t*)solverScratchSpace.allocateTempVector(
         "typeCounts", (NUM_SUPPORTED_CONTACT_TYPES + 1) * sizeof(contactPairs_t));
+    // Recall existingContactTypes is pre-allocated for maximum possible types
     cubRunLengthEncode<contact_t, contactPairs_t>(
         granData->contactTypePrimitive, existingContactTypes.device(), typeCounts,
-        solverScratchSpace.getDualStructDevice("numExistingTypes"), *solverScratchSpace.numContacts, streamInfo.stream,
-        solverScratchSpace);
+        solverScratchSpace.getDualStructDevice("numExistingTypes"), *solverScratchSpace.numPrimitiveContacts,
+        streamInfo.stream, solverScratchSpace);
     solverScratchSpace.syncDualStructDeviceToHost("numExistingTypes");
     m_numExistingTypes = *solverScratchSpace.getDualStructHost("numExistingTypes");
     solverScratchSpace.finishUsingDualStruct("numExistingTypes");
-    cubPrefixScan<contactPairs_t, contactPairs_t>(typeCounts, typeStartOffsets.device(), m_numExistingTypes,
+    cubPrefixScan<contactPairs_t, contactPairs_t>(typeCounts, typeStartOffsetsPrimitive.device(), m_numExistingTypes,
                                                   streamInfo.stream, solverScratchSpace);
     solverScratchSpace.finishUsingTempVector("typeCounts");
     existingContactTypes.toHost();
-    typeStartOffsets.toHost();
+    typeStartOffsetsPrimitive.toHost();
     for (size_t i = 0; i < m_numExistingTypes; i++) {
-        DEME_DEBUG_PRINTF("Contact type %d starts at offset %u", existingContactTypes[i], typeStartOffsets[i]);
-        typeStartCountMap[existingContactTypes[i]] = std::make_pair(
-            typeStartOffsets[i],
-            (i + 1 < m_numExistingTypes ? typeStartOffsets[i + 1] : (contactPairs_t)*solverScratchSpace.numContacts) -
-                typeStartOffsets[i]);
+        DEME_DEBUG_PRINTF("Contact type %d starts at offset %u", existingContactTypes[i], typeStartOffsetsPrimitive[i]);
+        typeStartCountPrimitiveMap[existingContactTypes[i]] =
+            std::make_pair(typeStartOffsetsPrimitive[i],
+                           (i + 1 < m_numExistingTypes ? typeStartOffsetsPrimitive[i + 1]
+                                                       : (contactPairs_t)*solverScratchSpace.numPrimitiveContacts) -
+                               typeStartOffsetsPrimitive[i]);
     }
     // Debug output of the map
-    // for (const auto& entry : typeStartCountMap) {
+    // for (const auto& entry : typeStartCountPrimitiveMap) {
     //     printf("Contact type %d starts at offset %u and has count %u\n", entry.first, entry.second.first,
     //     entry.second.second);
     // }
@@ -2807,7 +2818,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     }
 
     // For now, the contact type to kernel map is known and hard-coded after jitification
-    contactTypeKernelMap = {
+    contactTypePrimitiveKernelMap = {
         // Sphere-Sphere contact
         {SPHERE_SPHERE_CONTACT, {{cal_force_kernels, "calculatePrimitiveContactForces_SphSph"}}},
         // Sphere-Triangle contact
