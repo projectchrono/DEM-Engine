@@ -117,4 +117,110 @@ void getContactForcesConcerningOwners(float3* d_points,
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Patch-based voting kernels for mesh contact correction
+////////////////////////////////////////////////////////////////////////////////
+
+// Kernel to compute weighted normals (normal * area) for voting
+// Also prepares the area values for reduction and extracts the keys (geomToPatchMap values)
+__global__ void prepareWeightedNormalsForVoting_impl(DEMDataDT* granData,
+                                                     float3* weightedNormals,
+                                                     double* areas,
+                                                     contactPairs_t* keys,
+                                                     contactPairs_t startOffset,
+                                                     contactPairs_t count) {
+    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < count) {
+        contactPairs_t myContactID = startOffset + idx;
+
+        // Get the contact normal from contactForces
+        float3 normal = granData->contactForces[myContactID];
+
+        // Extract the area (double) from contactPointGeometryB (stored as float3)
+        float3 areaStorage = granData->contactPointGeometryB[myContactID];
+        double area = float3StorageToDouble(areaStorage);
+
+        // Compute weighted normal (normal * area)
+        weightedNormals[idx] = make_float3(normal.x * area, normal.y * area, normal.z * area);
+
+        // Store area for reduction
+        areas[idx] = area;
+
+        // Extract key from geomToPatchMap
+        keys[idx] = granData->geomToPatchMap[myContactID];
+    }
+}
+
+void prepareWeightedNormalsForVoting(DEMDataDT* granData,
+                                     float3* weightedNormals,
+                                     double* areas,
+                                     contactPairs_t* keys,
+                                     contactPairs_t startOffset,
+                                     contactPairs_t count,
+                                     cudaStream_t& this_stream) {
+    size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        prepareWeightedNormalsForVoting_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            granData, weightedNormals, areas, keys, startOffset, count);
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
+// Kernel to normalize the voted normals by dividing by total area and scatter to output
+// If total area is 0, set result to (0,0,0)
+// Assumes uniqueKeys are sorted (CUB's ReduceByKey maintains sort order)
+// Uses contactPairs_t keys (geomToPatchMap values)
+__global__ void normalizeAndScatterVotedNormals_impl(contactPairs_t* originalKeys,
+                                                     contactPairs_t* uniqueKeys,
+                                                     float3* votedWeightedNormals,
+                                                     double* totalAreas,
+                                                     float3* output,
+                                                     size_t* numUniqueKeys,
+                                                     contactPairs_t startOffset,
+                                                     contactPairs_t count) {
+    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < count) {
+        // Get the key for this contact (already extracted in preparation step)
+        contactPairs_t myKey = originalKeys[idx];
+
+        // Find the corresponding unique key using binary search
+        size_t numUnique = *numUniqueKeys;
+        ssize_t keyIdx = -1;
+        cuda_binary_search<contactPairs_t, ssize_t>(uniqueKeys, myKey, 0, numUnique - 1, keyIdx);
+
+        float3 votedNormal = make_float3(0.0f, 0.0f, 0.0f);
+        if (keyIdx >= 0 && keyIdx < (ssize_t)numUnique) {
+            double totalArea = totalAreas[keyIdx];
+            if (totalArea > 0.0) {
+                // Normalize by dividing by total area (use reciprocal multiplication for efficiency)
+                double invTotalArea = 1.0 / totalArea;
+                votedNormal.x = votedWeightedNormals[keyIdx].x * invTotalArea;
+                votedNormal.y = votedWeightedNormals[keyIdx].y * invTotalArea;
+                votedNormal.z = votedWeightedNormals[keyIdx].z * invTotalArea;
+            }
+            // else: votedNormal remains (0,0,0)
+        }
+
+        // Write to output at the correct position
+        output[startOffset + idx] = votedNormal;
+    }
+}
+
+void normalizeAndScatterVotedNormals(contactPairs_t* originalKeys,
+                                     contactPairs_t* uniqueKeys,
+                                     float3* votedWeightedNormals,
+                                     double* totalAreas,
+                                     float3* output,
+                                     size_t* numUniqueKeys,
+                                     contactPairs_t startOffset,
+                                     contactPairs_t count,
+                                     cudaStream_t& this_stream) {
+    size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        normalizeAndScatterVotedNormals_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            originalKeys, uniqueKeys, votedWeightedNormals, totalAreas, output, numUniqueKeys, startOffset, count);
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
 }  // namespace deme

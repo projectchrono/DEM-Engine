@@ -180,6 +180,31 @@ void getContactForcesConcerningOwners(float3* d_points,
                                       bool torque_in_local,
                                       cudaStream_t& this_stream);
 
+////////////////////////////////////////////////////////////////////////////////
+// Patch-based voting wrappers for mesh contact correction
+////////////////////////////////////////////////////////////////////////////////
+
+// Prepares weighted normals (normal * area), areas, and keys from geomToPatchMap for voting
+void prepareWeightedNormalsForVoting(DEMDataDT* granData,
+                                     float3* weightedNormals,
+                                     double* areas,
+                                     contactPairs_t* keys,
+                                     contactPairs_t startOffset,
+                                     contactPairs_t count,
+                                     cudaStream_t& this_stream);
+
+// Normalizes voted normals by total area and scatters to output
+// If total area is 0, output is (0,0,0) indicating no contact
+void normalizeAndScatterVotedNormals(contactPairs_t* originalKeys,
+                                     contactPairs_t* uniqueKeys,
+                                     float3* votedWeightedNormals,
+                                     double* totalAreas,
+                                     float3* output,
+                                     size_t* numUniqueKeys,
+                                     contactPairs_t startOffset,
+                                     contactPairs_t count,
+                                     cudaStream_t& this_stream);
+
 }  // namespace deme
 
 #endif

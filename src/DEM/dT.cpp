@@ -2322,12 +2322,8 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
 
                 // Step 1: Prepare weighted normals, areas, and keys
                 // The kernel extracts keys from geomToPatchMap, computes weighted normals, and stores areas
-                size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-                patch_voting_kernels->kernel("prepareWeightedNormalsForVoting")
-                    .instantiate()
-                    .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-                    .launch(&granData, weightedNormals, areas, keys, startOffset, count);
-                DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+                prepareWeightedNormalsForVoting(granData, weightedNormals, areas, keys, startOffset, count,
+                                                streamInfo.stream);
 
                 // Step 2: Reduce-by-key for weighted normals (sum)
                 // The keys are geomToPatchMap values (contactPairs_t), which group primitives by patch pair
@@ -2347,12 +2343,9 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
 
                 // Step 4: Normalize the voted normals by total area and scatter back to contactTorque_convToForce
                 // The output is stored in contactTorque_convToForce, which is adequately sized.
-                patch_voting_kernels->kernel("normalizeAndScatterVotedNormals")
-                    .instantiate()
-                    .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-                    .launch(keys, uniqueKeys, votedWeightedNormals, totalAreas, granData->contactTorque_convToForce,
-                            numUniqueKeys, startOffset, count);
-                DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+                normalizeAndScatterVotedNormals(keys, uniqueKeys, votedWeightedNormals, totalAreas,
+                                                granData->contactTorque_convToForce, numUniqueKeys, startOffset, count,
+                                                streamInfo.stream);
 
                 // Clean up temporary arrays
                 solverScratchSpace.finishUsingTempVector("weightedNormals");
@@ -2795,11 +2788,6 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     {
         collect_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMCollectForceKernels", JitHelper::KERNEL_DIR / "DEMCollectForceKernels.cu", Subs, JitifyOptions)));
-    }
-    // Patch-based voting kernels for mesh contact correction
-    {
-        patch_voting_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMPatchVotingKernels", JitHelper::KERNEL_DIR / "DEMPatchVotingKernels.cu", Subs, JitifyOptions)));
     }
     // Then integration kernels
     {
