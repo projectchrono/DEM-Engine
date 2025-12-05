@@ -225,6 +225,8 @@ __global__ void computeWeightedUsefulPenetration_impl(DEMDataDT* granData,
         contactPairs_t myContactID = startOffsetPrimitive + idx;
 
         // Get the patch pair index for this primitive (absolute index)
+        // Note: keys array is repopulated here for the penetration reduction step.
+        // It uses the same geomToPatchMap values as prepareWeightedNormalsForVoting.
         contactPairs_t patchIdx = granData->geomToPatchMap[myContactID];
         keys[idx] = patchIdx;
 
