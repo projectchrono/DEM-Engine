@@ -371,8 +371,10 @@ class DEMMesh : public DEMInitializer {
         this->m_face_uv_indices.clear();
         this->m_face_col_indices.clear();
         this->m_patch_ids.clear();
+        this->m_patch_locations.clear();
         this->nPatches = 1;
         this->patches_explicitly_set = false;
+        this->patch_locations_explicitly_set = false;
         this->owner = NULL_BODYID;
     }
 
@@ -545,6 +547,10 @@ class DEMMesh : public DEMInitializer {
     unsigned int nPatches = 1;
     // Whether patch information has been explicitly set (either computed or manually supplied)
     bool patches_explicitly_set = false;
+    // Relative location (to CoM) of each patch (vector of length nPatches)
+    std::vector<float3> m_patch_locations;
+    // Whether patch locations have been explicitly set
+    bool patch_locations_explicitly_set = false;
 
     /// @brief Split the mesh into convex patches based on angle threshold.
     /// @details Uses a region-growing algorithm to group adjacent triangles whose face normals differ by less than
@@ -575,6 +581,29 @@ class DEMMesh : public DEMInitializer {
     /// @return True if patches have been computed via SplitIntoConvexPatches() or set via SetPatchIDs(), false if using
     /// default (single patch).
     bool ArePatchesExplicitlySet() const { return patches_explicitly_set; }
+
+    /// @brief Set the relative location (to CoM) of each patch.
+    /// @details Allows user to manually specify the location of each patch relative to the mesh's center of mass.
+    /// @param patch_locations Vector of locations (float3), one for each patch. Must have the same length as the number
+    /// of patches in the mesh.
+    void SetPatchLocations(const std::vector<float3>& patch_locations) {
+        assertPatchLength(patch_locations.size(), "SetPatchLocations");
+        m_patch_locations = patch_locations;
+        patch_locations_explicitly_set = true;
+    }
+
+    /// @brief Get the relative location (to CoM) of each patch.
+    /// @return Vector of locations (one per patch). Will be automatically calculated at initialization if not explicitly set.
+    const std::vector<float3>& GetPatchLocations() const { return m_patch_locations; }
+
+    /// @brief Check if patch locations have been explicitly set.
+    /// @return True if locations have been set via SetPatchLocations(), false if they will be auto-calculated.
+    bool ArePatchLocationsExplicitlySet() const { return patch_locations_explicitly_set; }
+
+    /// @brief Compute patch locations relative to the implicit CoM of the mesh.
+    /// @details For single patch: returns (0,0,0). For multiple patches: returns average of triangle centroids per patch.
+    /// @return Vector of locations (one per patch).
+    std::vector<float3> ComputePatchLocations() const;
 
     ////////////////////////////////////////////////////////
     // Some geo wildcard-related stuff

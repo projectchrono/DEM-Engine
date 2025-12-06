@@ -130,6 +130,9 @@ class DEMDynamicThread {
     DualArray<float3> relPosNode2 = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<float3> relPosNode3 = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
+    // Relative position (to mesh CoM) of each mesh patch
+    DualArray<float3> relPosPatch = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+
     // External object's components may need the following arrays to store some extra defining features of them. We
     // assume there are usually not too many of them in a simulation.
     // Relative position w.r.t. the owner. For example, the following 3 arrays may hold center points for plates, or tip

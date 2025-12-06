@@ -97,6 +97,7 @@ void DEMDynamicThread::packDataPointers() {
     relPosNode1.bindDevicePointer(&(granData->relPosNode1));
     relPosNode2.bindDevicePointer(&(granData->relPosNode2));
     relPosNode3.bindDevicePointer(&(granData->relPosNode3));
+    relPosPatch.bindDevicePointer(&(granData->relPosPatch));
     patchMaterialOffset.bindDevicePointer(&(granData->patchMaterialOffset));
 
     // Template array pointers
@@ -181,6 +182,7 @@ void DEMDynamicThread::migrateDataToDevice() {
     relPosNode1.toDeviceAsync(streamInfo.stream);
     relPosNode2.toDeviceAsync(streamInfo.stream);
     relPosNode3.toDeviceAsync(streamInfo.stream);
+    relPosPatch.toDeviceAsync(streamInfo.stream);
     patchMaterialOffset.toDeviceAsync(streamInfo.stream);
 
     radiiSphere.toDeviceAsync(streamInfo.stream);
@@ -538,6 +540,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     // Resize to the number of mesh patches
     DEME_DUAL_ARRAY_RESIZE(patchOwnerMesh, nMeshPatches, 0);
     DEME_DUAL_ARRAY_RESIZE(patchMaterialOffset, nMeshPatches, 0);
+    DEME_DUAL_ARRAY_RESIZE(relPosPatch, nMeshPatches, make_float3(0));
 
     // Resize to the number of analytical geometries
     DEME_DUAL_ARRAY_RESIZE(ownerAnalBody, nAnalGM, 0);
@@ -1055,11 +1058,25 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         // mesh_patch_owner run length is the num of patches in this mesh entity
         //// TODO: This flatten-then-init approach is historical and too ugly.
         size_t this_patch_owner = mesh_patch_owner.at(p);
+        size_t p_start = p;  // Remember the starting patch index for this mesh
         for (; p < mesh_patch_owner.size(); p++) {
             if (mesh_patch_owner.at(p) != this_patch_owner)
                 break;
             patchOwnerMesh[nExistingMeshPatches + p] = owner_offset_for_mesh_obj + this_patch_owner;
             patchMaterialOffset[nExistingMeshPatches + p] = mesh_patch_materials.at(p);
+        }
+
+        // Populate patch locations for this mesh
+        // If explicitly set, use those; otherwise compute them
+        std::vector<float3> this_mesh_patch_locations;
+        if (input_mesh_objs.at(i)->patch_locations_explicitly_set) {
+            this_mesh_patch_locations = input_mesh_objs.at(i)->m_patch_locations;
+        } else {
+            this_mesh_patch_locations = input_mesh_objs.at(i)->ComputePatchLocations();
+        }
+        // Store the patch locations in the global array
+        for (size_t pp = p_start; pp < p; pp++) {
+            relPosPatch[nExistingMeshPatches + pp] = this_mesh_patch_locations[pp - p_start];
         }
 
         // Per-facet info

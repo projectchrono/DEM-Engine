@@ -369,6 +369,7 @@ struct DEMDataDT {
     float3* relPosNode1;
     float3* relPosNode2;
     float3* relPosNode3;
+    float3* relPosPatch;
     materialsOffset_t* patchMaterialOffset;
 
     // pointer to remote buffer where kinematic thread stores work-order data provided by the dynamic thread
