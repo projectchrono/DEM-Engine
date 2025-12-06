@@ -191,6 +191,37 @@ void computeTotalPenetrationPerPatch(double* totalWeightedPenetrations,
                                      contactPairs_t count,
                                      cudaStream_t& this_stream);
 
+// Extracts primitive penetrations from contactPointGeometryA for max-reduce operation
+void extractPrimitivePenetrations(DEMDataDT* granData,
+                                  contactPairs_t* keys,
+                                  double* penetrations,
+                                  contactPairs_t startOffset,
+                                  contactPairs_t count,
+                                  cudaStream_t& this_stream);
+
+// Finds the primitive with max penetration for zero-area patches and extracts its normal
+void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
+                                                   double* totalAreas,
+                                                   double* maxPenetrations,
+                                                   float3* zeroAreaNormals,
+                                                   double* zeroAreaPenetrations,
+                                                   contactPairs_t* keys,
+                                                   contactPairs_t startOffsetPrimitive,
+                                                   contactPairs_t startOffsetPatch,
+                                                   contactPairs_t countPrimitive,
+                                                   cudaStream_t& this_stream);
+
+// Finalizes patch results by combining normal voting with zero-area case handling
+void finalizePatchResults(double* totalAreas,
+                          float3* votedNormals,
+                          double* votedPenetrations,
+                          float3* zeroAreaNormals,
+                          double* zeroAreaPenetrations,
+                          float3* finalNormals,
+                          double* finalPenetrations,
+                          contactPairs_t count,
+                          cudaStream_t& this_stream);
+
 }  // namespace deme
 
 #endif

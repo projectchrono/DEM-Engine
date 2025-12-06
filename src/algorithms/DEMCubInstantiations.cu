@@ -144,6 +144,15 @@ template void cubMaxReduceByKey<notStupidBool_t, double>(notStupidBool_t* d_keys
                                                          size_t n,
                                                          cudaStream_t& this_stream,
                                                          DEMSolverScratchData& scratchPad);
+// Special instantiation for double (penetration) with contactPairs_t keys (for voting zero-area case)
+template void cubMaxReduceByKey<contactPairs_t, double>(contactPairs_t* d_keys_in,
+                                                        contactPairs_t* d_unique_out,
+                                                        double* d_vals_in,
+                                                        double* d_aggregates_out,
+                                                        size_t* d_num_out,
+                                                        size_t n,
+                                                        cudaStream_t& this_stream,
+                                                        DEMSolverScratchData& scratchPad);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Reduce::Min

@@ -2368,7 +2368,6 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                                  startOffsetPrimitive, startOffsetPatch, countPrimitive,
                                                  streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("areas");
-                solverScratchSpace.finishUsingTempVector("votedNormalizedNormals");
 
                 // Step 6: Reduce-by-key to get total weighted penetration per patch pair
                 double* totalWeightedPenetrations = (double*)solverScratchSpace.allocateTempVector(
@@ -2377,28 +2376,71 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                                           totalWeightedPenetrations, numUniqueKeys, countPrimitive,
                                                           streamInfo.stream, solverScratchSpace);
                 solverScratchSpace.finishUsingTempVector("weightedPenetrations");
-                solverScratchSpace.finishUsingTempVector("votingKeys");
-                solverScratchSpace.finishUsingTempVector("uniqueKeys");
-                solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
 
-                // Step 7: Compute total penetration per patch pair by dividing by total area
+                // Step 7: Compute total penetration per patch pair by dividing by total area (normal case)
                 double* totalPenetrations =
                     (double*)solverScratchSpace.allocateTempVector("totalPenetrations", countPatch * sizeof(double));
                 computeTotalPenetrationPerPatch(totalWeightedPenetrations, totalAreas, totalPenetrations, countPatch,
                                                 streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("totalWeightedPenetrations");
 
+                // Step 8: Handle zero-area patches (all primitive areas are 0)
+                // For these patches, we need to find the max penetration primitive and use its normal/penetration
+
+                // 8a: Extract primitive penetrations for max-reduce
+                double* primitivePenetrations = (double*)solverScratchSpace.allocateTempVector(
+                    "primitivePenetrations", countPrimitive * sizeof(double));
+                extractPrimitivePenetrations(&granData, keys, primitivePenetrations, startOffsetPrimitive,
+                                             countPrimitive, streamInfo.stream);
+
+                // 8b: Max-reduce-by-key to get max penetration per patch
+                double* maxPenetrations =
+                    (double*)solverScratchSpace.allocateTempVector("maxPenetrations", countPatch * sizeof(double));
+                cubMaxReduceByKey<contactPairs_t, double>(keys, uniqueKeys, primitivePenetrations, maxPenetrations,
+                                                          numUniqueKeys, countPrimitive, streamInfo.stream,
+                                                          solverScratchSpace);
+                solverScratchSpace.finishUsingTempVector("primitivePenetrations");
+
+                // 8c: Find max-penetration primitives for zero-area patches and extract their normals
+                float3* zeroAreaNormals =
+                    (float3*)solverScratchSpace.allocateTempVector("zeroAreaNormals", countPatch * sizeof(float3));
+                double* zeroAreaPenetrations =
+                    (double*)solverScratchSpace.allocateTempVector("zeroAreaPenetrations", countPatch * sizeof(double));
+                findMaxPenetrationPrimitiveForZeroAreaPatches(&granData, totalAreas, maxPenetrations, zeroAreaNormals,
+                                                              zeroAreaPenetrations, keys, startOffsetPrimitive,
+                                                              startOffsetPatch, countPrimitive, streamInfo.stream);
+                solverScratchSpace.finishUsingTempVector("maxPenetrations");
+
+                // Step 9: Finalize patch results by combining voting with zero-area handling
+                float3* finalNormals =
+                    (float3*)solverScratchSpace.allocateTempVector("finalNormals", countPatch * sizeof(float3));
+                double* finalPenetrations =
+                    (double*)solverScratchSpace.allocateTempVector("finalPenetrations", countPatch * sizeof(double));
+                finalizePatchResults(totalAreas, votedNormalizedNormals, totalPenetrations, zeroAreaNormals,
+                                     zeroAreaPenetrations, finalNormals, finalPenetrations, countPatch,
+                                     streamInfo.stream);
+                solverScratchSpace.finishUsingTempVector("votedNormalizedNormals");
+                solverScratchSpace.finishUsingTempVector("totalPenetrations");
+                solverScratchSpace.finishUsingTempVector("zeroAreaNormals");
+                solverScratchSpace.finishUsingTempVector("zeroAreaPenetrations");
+                solverScratchSpace.finishUsingTempVector("votingKeys");
+                solverScratchSpace.finishUsingTempVector("uniqueKeys");
+                solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
+
                 // Now we have:
                 // - totalAreas: total contact area per patch pair (countPatch elements)
-                // - totalPenetrations: total penetration depth per patch pair (countPatch elements)
+                // - finalNormals: final normal direction per patch pair (countPatch elements)
+                // - finalPenetrations: final penetration depth per patch pair (countPatch elements)
                 // These can be used for subsequent force calculations
 
                 // displayDeviceArray<double>(totalAreas, countPatch);
-                // displayDeviceArray<double>(totalPenetrations, countPatch);
+                // displayDeviceFloat3(finalNormals, countPatch);
+                // displayDeviceArray<double>(finalPenetrations, countPatch);
 
                 // Final clean up
                 solverScratchSpace.finishUsingTempVector("totalAreas");
-                solverScratchSpace.finishUsingTempVector("totalPenetrations");
+                solverScratchSpace.finishUsingTempVector("finalNormals");
+                solverScratchSpace.finishUsingTempVector("finalPenetrations");
             }
         }
         // std::cout << "===========================" << std::endl;
