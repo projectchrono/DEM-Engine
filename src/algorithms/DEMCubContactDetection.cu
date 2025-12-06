@@ -177,6 +177,23 @@ inline void sortABTypePersistencyByA(bodyID_t* idA,
                                                 scratchPad);
 }
 
+inline void sortABTypePersistencyByType(bodyID_t* idA,
+                                        bodyID_t* idB,
+                                        contact_t* types,
+                                        notStupidBool_t* persistency,
+                                        bodyID_t* idA_sorted,
+                                        bodyID_t* idB_sorted,
+                                        contact_t* type_sorted,
+                                        notStupidBool_t* persistency_sorted,
+                                        size_t numCnts,
+                                        cudaStream_t& stream,
+                                        DEMSolverScratchData& scratchPad) {
+    cubDEMSortByKeys<contact_t, bodyID_t>(types, type_sorted, idA, idA_sorted, numCnts, stream, scratchPad);
+    cubDEMSortByKeys<contact_t, bodyID_t>(types, type_sorted, idB, idB_sorted, numCnts, stream, scratchPad);
+    cubDEMSortByKeys<contact_t, notStupidBool_t>(types, type_sorted, persistency, persistency_sorted, numCnts, stream,
+                                                 scratchPad);
+}
+
 void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       std::shared_ptr<jitify::Program>& bin_triangle_kernels,
                       std::shared_ptr<jitify::Program>& sphere_contact_kernels,
@@ -1137,10 +1154,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     (bodyID_t*)scratchPad.allocateTempVector("idPrimitiveB_sorted", total_ids_bytes);
                 notStupidBool_t* contactPersistency_sorted = (notStupidBool_t*)scratchPad.allocateTempVector(
                     "contactPersistency_sorted", total_persistency_bytes);
-                sortABTypePersistencyByA(granData->idPrimitiveA, granData->idPrimitiveB, granData->contactTypePrimitive,
-                                         granData->contactPersistency, idPrimitiveA_sorted, idPrimitiveB_sorted,
-                                         contactType_sorted, contactPersistency_sorted, numTotalCnts, this_stream,
-                                         scratchPad);
+                sortABTypePersistencyByType(granData->idPrimitiveA, granData->idPrimitiveB,
+                                            granData->contactTypePrimitive, granData->contactPersistency,
+                                            idPrimitiveA_sorted, idPrimitiveB_sorted, contactType_sorted,
+                                            contactPersistency_sorted, numTotalCnts, this_stream, scratchPad);
                 // Then copy back to granData
                 DEME_GPU_CALL(
                     cudaMemcpy(granData->idPrimitiveA, idPrimitiveA_sorted, total_ids_bytes, cudaMemcpyDeviceToDevice));

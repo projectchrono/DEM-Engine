@@ -39,16 +39,6 @@ void cubSumReduceByKey(T1* d_keys_in,
                        cudaStream_t& this_stream,
                        DEMSolverScratchData& scratchPad);
 
-// Special version for float3 values
-void cubSumReduceByKeyFloat3(patchIDPair_t* d_keys_in,
-                             patchIDPair_t* d_unique_out,
-                             float3* d_vals_in,
-                             float3* d_aggregates_out,
-                             size_t* d_num_out,
-                             size_t n,
-                             cudaStream_t& this_stream,
-                             DEMSolverScratchData& scratchPad);
-
 template <typename T1>
 void cubMaxReduce(T1* d_in, T1* d_out, size_t n, cudaStream_t& this_stream, DEMSolverScratchData& scratchPad);
 template <typename T1, typename T2>
@@ -159,6 +149,77 @@ void getContactForcesConcerningOwners(float3* d_points,
                                       bool need_torque,
                                       bool torque_in_local,
                                       cudaStream_t& this_stream);
+
+////////////////////////////////////////////////////////////////////////////////
+// Patch-based voting wrappers for mesh contact correction
+////////////////////////////////////////////////////////////////////////////////
+
+// Prepares weighted normals (normal * area), areas, and keys from geomToPatchMap for voting
+void prepareWeightedNormalsForVoting(DEMDataDT* granData,
+                                     float3* weightedNormals,
+                                     double* areas,
+                                     contactPairs_t* keys,
+                                     contactPairs_t startOffset,
+                                     contactPairs_t count,
+                                     cudaStream_t& this_stream);
+
+// Normalizes voted normals by total area and scatters to output
+// If total area is 0, output is (0,0,0) indicating no contact
+void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
+                                     double* totalAreas,
+                                     float3* output,
+                                     contactPairs_t count,
+                                     cudaStream_t& this_stream);
+
+// Computes weighted useful penetration for each primitive contact
+// The "useful" penetration is the original penetration projected onto the voted normal
+// Each primitive's useful penetration is then weighted by its contact area
+void computeWeightedUsefulPenetration(DEMDataDT* granData,
+                                      float3* votedNormalizedNormals,
+                                      contactPairs_t* keys,
+                                      double* weightedPenetrations,
+                                      contactPairs_t startOffsetPrimitive,
+                                      contactPairs_t startOffsetPatch,
+                                      contactPairs_t count,
+                                      cudaStream_t& this_stream);
+
+// Computes total penetration per patch pair by dividing total weighted penetration by total area
+// If total area is 0, total penetration is 0
+void computeTotalPenetrationPerPatch(double* totalWeightedPenetrations,
+                                     double* totalAreas,
+                                     double* totalPenetrations,
+                                     contactPairs_t count,
+                                     cudaStream_t& this_stream);
+
+// Extracts primitive penetrations from contactPointGeometryA for max-reduce operation
+void extractPrimitivePenetrations(DEMDataDT* granData,
+                                  double* penetrations,
+                                  contactPairs_t startOffset,
+                                  contactPairs_t count,
+                                  cudaStream_t& this_stream);
+
+// Finds the primitive with max penetration for zero-area patches and extracts its normal
+void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
+                                                   double* totalAreas,
+                                                   double* maxPenetrations,
+                                                   float3* zeroAreaNormals,
+                                                   double* zeroAreaPenetrations,
+                                                   contactPairs_t* keys,
+                                                   contactPairs_t startOffsetPrimitive,
+                                                   contactPairs_t startOffsetPatch,
+                                                   contactPairs_t countPrimitive,
+                                                   cudaStream_t& this_stream);
+
+// Finalizes patch results by combining normal voting with zero-area case handling
+void finalizePatchResults(double* totalAreas,
+                          float3* votedNormals,
+                          double* votedPenetrations,
+                          float3* zeroAreaNormals,
+                          double* zeroAreaPenetrations,
+                          float3* finalNormals,
+                          double* finalPenetrations,
+                          contactPairs_t count,
+                          cudaStream_t& this_stream);
 
 }  // namespace deme
 

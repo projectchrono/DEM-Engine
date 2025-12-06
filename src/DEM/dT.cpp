@@ -609,7 +609,8 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     }
     // existingContactTypes has a fixed size depending on how many contact types are defined
     DEME_DUAL_ARRAY_RESIZE(existingContactTypes, NUM_SUPPORTED_CONTACT_TYPES + 1, NOT_A_CONTACT);
-    DEME_DUAL_ARRAY_RESIZE(typeStartOffsets, NUM_SUPPORTED_CONTACT_TYPES + 1, 0);
+    DEME_DUAL_ARRAY_RESIZE(typeStartOffsetsPrimitive, NUM_SUPPORTED_CONTACT_TYPES + 1, 0);
+    DEME_DUAL_ARRAY_RESIZE(typeStartOffsetsPatch, NUM_SUPPORTED_CONTACT_TYPES + 1, 0);
 
     // You know what, let's not init dT's buffers, since kT will change it when needed anyway. Besides, changing it here
     // will cause problems in the case of a re-init-ed simulation with more clumps added to system, since we may
@@ -2059,7 +2060,7 @@ inline void DEMDynamicThread::unpackMyBuffer() {
                              *solverScratchSpace.numPrimitiveContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->idPrimitiveB, idPrimitiveB_buffer.data(),
                              *solverScratchSpace.numPrimitiveContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->contactTypePrimitive, contactType_buffer.data(),
+    DEME_GPU_CALL(cudaMemcpy(granData->contactTypePrimitive, contactTypePrimitive_buffer.data(),
                              *solverScratchSpace.numPrimitiveContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->geomToPatchMap, geomToPatchMap_buffer.data(),
                              *solverScratchSpace.numPrimitiveContacts * sizeof(contactPairs_t),
@@ -2247,7 +2248,7 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
 
 // The argument is two maps: contact type -> (start offset, count), contact type -> list of [(program bundle name,
 // kernel name)]
-inline void DEMDynamicThread::dispatchCalcForceKernels(
+inline void DEMDynamicThread::dispatchPrimitiveForceKernels(
     const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountMap,
     const std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>&
         typeKernelMap) {
@@ -2262,6 +2263,12 @@ inline void DEMDynamicThread::dispatchCalcForceKernels(
 
         // For this contact type, get its list of (program bundle name, kernel name)
         if (typeKernelMap.count(contact_type) == 0) {
+            // displayDeviceArray<bodyID_t>(granData->idPrimitiveA, *solverScratchSpace.numPrimitiveContacts);
+            // displayDeviceArray<bodyID_t>(granData->idPrimitiveB, *solverScratchSpace.numPrimitiveContacts);
+            // displayDeviceArray<contact_t>(granData->contactTypePrimitive, *solverScratchSpace.numPrimitiveContacts);
+            // for (size_t j = 0; j < m_numExistingTypes; j++) {
+            //     DEME_PRINTF("existingContactTypes[%zu] = %d\n", j, existingContactTypes[j]);
+            // }
             DEME_ERROR("Contact type %d has no associated force kernel in to execute!", contact_type);
         }
         const auto& kernelList = typeKernelMap.at(contact_type);
@@ -2279,7 +2286,8 @@ inline void DEMDynamicThread::dispatchCalcForceKernels(
 }
 
 inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
-    const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountMap,
+    const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPrimitiveMap,
+    const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
     const std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>&
         typeKernelMap) {
     // For each contact type that exists, check if it is patch(mesh)-related type...
@@ -2287,57 +2295,155 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
         contact_t contact_type = existingContactTypes[i];
         if (contact_type == SPHERE_ANALYTICAL_CONTACT || contact_type == TRIANGLE_TRIANGLE_CONTACT ||
             contact_type == TRIANGLE_ANALYTICAL_CONTACT) {
-            const auto& start_count = typeStartCountMap.at(contact_type);
-            // Offset and count being contactPairs_t is very important, as CUDA kernel arguments cannot safely
-            // implicitly convert type (from size_t to unsigned int, for example)
-            contactPairs_t startOffset = start_count.first;
-            contactPairs_t count = start_count.second;
+            const auto& start_count_primitive = typeStartCountPrimitiveMap.at(contact_type);
+            const auto& start_count_patch = typeStartCountPatchMap.at(contact_type);
+            contactPairs_t startOffsetPrimitive = start_count_primitive.first;
+            contactPairs_t countPrimitive = start_count_primitive.second;
+            contactPairs_t startOffsetPatch = start_count_patch.first;
+            contactPairs_t countPatch = start_count_patch.second;
 
-            //// TODO: Rewrite voting
             // Vote for the contact direction; voting power depends on the contact area
-            if (count > 0) {
+            // This reduce-by-key operation reduces primitive-recorded force pairs into patch/convex part-based
+            // force pairs. All elements that share the same geomToPatchMap value vote together.
+            if (countPrimitive > 0) {
                 // Allocate temporary arrays for the voting process
                 float3* weightedNormals =
-                    (float3*)solverScratchSpace.allocateTempVector("weightedNormals", count * sizeof(float3));
-                double* areas = (double*)solverScratchSpace.allocateTempVector("areas", count * sizeof(double));
+                    (float3*)solverScratchSpace.allocateTempVector("weightedNormals", countPrimitive * sizeof(float3));
+                double* areas =
+                    (double*)solverScratchSpace.allocateTempVector("areas", countPrimitive * sizeof(double));
+                // Keys extracted from geomToPatchMap - these map primitives to patch pairs
+                contactPairs_t* keys = (contactPairs_t*)solverScratchSpace.allocateTempVector(
+                    "votingKeys", countPrimitive * sizeof(contactPairs_t));
 
-                // Allocate arrays for reduce-by-key results
-                patchIDPair_t* uniqueKeys =
-                    (patchIDPair_t*)solverScratchSpace.allocateTempVector("uniqueKeys", count * sizeof(patchIDPair_t));
-                float3* votedWeightedNormals =
-                    (float3*)solverScratchSpace.allocateTempVector("votedWeightedNormals", count * sizeof(float3));
+                // Allocate arrays for reduce-by-key results (uniqueKeys uses contactPairs_t, not patchIDPair_t)
+                contactPairs_t* uniqueKeys = (contactPairs_t*)solverScratchSpace.allocateTempVector(
+                    "uniqueKeys", countPrimitive * sizeof(contactPairs_t));
+                float3* votedWeightedNormals = (float3*)solverScratchSpace.allocateTempVector(
+                    "votedWeightedNormals", countPrimitive * sizeof(float3));
                 double* totalAreas =
-                    (double*)solverScratchSpace.allocateTempVector("totalAreas", count * sizeof(double));
-                size_t* numUniqueKeys = (size_t*)solverScratchSpace.allocateTempVector("numUniqueKeys", sizeof(size_t));
+                    (double*)solverScratchSpace.allocateTempVector("totalAreas", countPrimitive * sizeof(double));
+                solverScratchSpace.allocateDualStruct("numUniqueKeys");
+                size_t* numUniqueKeys = solverScratchSpace.getDualStructDevice("numUniqueKeys");
 
-                // Step 1: Prepare weighted normals and areas
-                size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-                patch_voting_kernels->kernel("prepareWeightedNormalsForVoting")
-                    .instantiate()
-                    .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-                    .launch(&granData, weightedNormals, areas, startOffset, count);
-                DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+                // Step 1: Prepare weighted normals, areas, and keys
+                // The kernel extracts keys from geomToPatchMap, computes weighted normals, and stores areas
+                prepareWeightedNormalsForVoting(&granData, weightedNormals, areas, keys, startOffsetPrimitive,
+                                                countPrimitive, streamInfo.stream);
 
                 // Step 2: Reduce-by-key for weighted normals (sum)
-                // Get the keys array segment for this contact type
+                // The keys are geomToPatchMap values (contactPairs_t), which group primitives by patch pair
+                cubSumReduceByKey<contactPairs_t, float3>(keys, uniqueKeys, weightedNormals, votedWeightedNormals,
+                                                          numUniqueKeys, countPrimitive, streamInfo.stream,
+                                                          solverScratchSpace);
+                solverScratchSpace.finishUsingTempVector("weightedNormals");
+                // For extra safety
+                solverScratchSpace.syncDualStructDeviceToHost("numUniqueKeys");
+                size_t numUniqueKeysHost = *(solverScratchSpace.getDualStructHost("numUniqueKeys"));
+                if (numUniqueKeysHost != countPatch) {
+                    DEME_ERROR(
+                        "Patch-based contact voting produced %zu unique patch pairs, but expected %zu pairs for "
+                        "contact type %d!",
+                        numUniqueKeysHost, countPatch, contact_type);
+                }
 
                 // Step 3: Reduce-by-key for areas (sum)
-                // Note: CUB's ReduceByKey on the same input keys produces identical uniqueKeys output,
-                // so it's safe to reuse the same uniqueKeys array. The values will be overwritten but
-                // will be identical to the first call since the input keys are the same.
+                // Note: CUB's ReduceByKey requires an output array for unique keys, and the keys
+                // are the same as in Step 2.
+                cubSumReduceByKey<contactPairs_t, double>(keys, uniqueKeys, areas, totalAreas, numUniqueKeys,
+                                                          countPrimitive, streamInfo.stream, solverScratchSpace);
 
-                // Step 4: Normalize the voted normals by total area and scatter back to original positions
-                // Note: numUniqueKeys and numUniqueKeys2 should be the same
-
-                // Clean up temporary arrays
-                solverScratchSpace.finishUsingTempVector("weightedNormals");
-                solverScratchSpace.finishUsingTempVector("areas");
-                solverScratchSpace.finishUsingTempVector("uniqueKeys");
+                // Step 4: Normalize the voted normals by total area and scatter back to a temp array.
+                float3* votedNormalizedNormals = (float3*)solverScratchSpace.allocateTempVector(
+                    "votedNormalizedNormals", countPatch * sizeof(float3));
+                normalizeAndScatterVotedNormals(votedWeightedNormals, totalAreas, votedNormalizedNormals, countPatch,
+                                                streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
+                // displayDeviceFloat3(votedNormalizedNormals, countPatch);
+
+                // Step 5: Compute weighted useful penetration for each primitive contact
+                // Reuse keys array for the reduce-by-key operation
+                double* weightedPenetrations = (double*)solverScratchSpace.allocateTempVector(
+                    "weightedPenetrations", countPrimitive * sizeof(double));
+                computeWeightedUsefulPenetration(&granData, votedNormalizedNormals, keys, weightedPenetrations,
+                                                 startOffsetPrimitive, startOffsetPatch, countPrimitive,
+                                                 streamInfo.stream);
+                solverScratchSpace.finishUsingTempVector("areas");
+
+                // Step 6: Reduce-by-key to get total weighted penetration per patch pair
+                double* totalWeightedPenetrations = (double*)solverScratchSpace.allocateTempVector(
+                    "totalWeightedPenetrations", countPatch * sizeof(double));
+                cubSumReduceByKey<contactPairs_t, double>(keys, uniqueKeys, weightedPenetrations,
+                                                          totalWeightedPenetrations, numUniqueKeys, countPrimitive,
+                                                          streamInfo.stream, solverScratchSpace);
+                solverScratchSpace.finishUsingTempVector("weightedPenetrations");
+
+                // Step 7: Compute total penetration per patch pair by dividing by total area (normal case)
+                double* totalPenetrations =
+                    (double*)solverScratchSpace.allocateTempVector("totalPenetrations", countPatch * sizeof(double));
+                computeTotalPenetrationPerPatch(totalWeightedPenetrations, totalAreas, totalPenetrations, countPatch,
+                                                streamInfo.stream);
+                solverScratchSpace.finishUsingTempVector("totalWeightedPenetrations");
+
+                // Step 8: Handle zero-area patches (all primitive areas are 0)
+                // For these patches, we need to find the max penetration primitive and use its normal/penetration
+
+                // 8a: Extract primitive penetrations for max-reduce
+                double* primitivePenetrations = (double*)solverScratchSpace.allocateTempVector(
+                    "primitivePenetrations", countPrimitive * sizeof(double));
+                extractPrimitivePenetrations(&granData, primitivePenetrations, startOffsetPrimitive, countPrimitive,
+                                             streamInfo.stream);
+
+                // 8b: Max-reduce-by-key to get max penetration per patch
+                double* maxPenetrations =
+                    (double*)solverScratchSpace.allocateTempVector("maxPenetrations", countPatch * sizeof(double));
+                cubMaxReduceByKey<contactPairs_t, double>(keys, uniqueKeys, primitivePenetrations, maxPenetrations,
+                                                          numUniqueKeys, countPrimitive, streamInfo.stream,
+                                                          solverScratchSpace);
+                solverScratchSpace.finishUsingTempVector("primitivePenetrations");
+
+                // 8c: Find max-penetration primitives for zero-area patches and extract their normals
+                float3* zeroAreaNormals =
+                    (float3*)solverScratchSpace.allocateTempVector("zeroAreaNormals", countPatch * sizeof(float3));
+                double* zeroAreaPenetrations =
+                    (double*)solverScratchSpace.allocateTempVector("zeroAreaPenetrations", countPatch * sizeof(double));
+                findMaxPenetrationPrimitiveForZeroAreaPatches(&granData, totalAreas, maxPenetrations, zeroAreaNormals,
+                                                              zeroAreaPenetrations, keys, startOffsetPrimitive,
+                                                              startOffsetPatch, countPrimitive, streamInfo.stream);
+                solverScratchSpace.finishUsingTempVector("maxPenetrations");
+
+                // Step 9: Finalize patch results by combining voting with zero-area handling
+                float3* finalNormals =
+                    (float3*)solverScratchSpace.allocateTempVector("finalNormals", countPatch * sizeof(float3));
+                double* finalPenetrations =
+                    (double*)solverScratchSpace.allocateTempVector("finalPenetrations", countPatch * sizeof(double));
+                finalizePatchResults(totalAreas, votedNormalizedNormals, totalPenetrations, zeroAreaNormals,
+                                     zeroAreaPenetrations, finalNormals, finalPenetrations, countPatch,
+                                     streamInfo.stream);
+                solverScratchSpace.finishUsingTempVector("votedNormalizedNormals");
+                solverScratchSpace.finishUsingTempVector("totalPenetrations");
+                solverScratchSpace.finishUsingTempVector("zeroAreaNormals");
+                solverScratchSpace.finishUsingTempVector("zeroAreaPenetrations");
+                solverScratchSpace.finishUsingTempVector("votingKeys");
+                solverScratchSpace.finishUsingTempVector("uniqueKeys");
+                solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
+
+                // Now we have:
+                // - totalAreas: total contact area per patch pair (countPatch elements)
+                // - finalNormals: final normal direction per patch pair (countPatch elements)
+                // - finalPenetrations: final penetration depth per patch pair (countPatch elements)
+                // These can be used for subsequent force calculations
+
+                // displayDeviceArray<double>(totalAreas, countPatch);
+                // displayDeviceFloat3(finalNormals, countPatch);
+                // displayDeviceArray<double>(finalPenetrations, countPatch);
+
+                // Final clean up
                 solverScratchSpace.finishUsingTempVector("totalAreas");
-                solverScratchSpace.finishUsingTempVector("numUniqueKeys");
+                solverScratchSpace.finishUsingTempVector("finalNormals");
+                solverScratchSpace.finishUsingTempVector("finalPenetrations");
             }
         }
+        // std::cout << "===========================" << std::endl;
     }
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
@@ -2378,12 +2484,13 @@ void DEMDynamicThread::calculateForces() {
         timers.GetTimer("Calculate contact forces").start();
 
         // Call specialized kernels for each contact type that exists
-        dispatchCalcForceKernels(typeStartCountMap, contactTypeKernelMap);
-        // Note: dispatchCalcForceKernels calculates forces induced by the most basic primitives, aka spheres,
+        dispatchPrimitiveForceKernels(typeStartCountPrimitiveMap, contactTypePrimitiveKernelMap);
+        // Note: dispatchPrimitiveForceKernels calculates forces induced by the most basic primitives, aka spheres,
         // triangles... However, for contacts to be truely physical, sometimes such contact pairs within a patch (which
         // marks a convex component of a owner) need to vote to decide the true contact. This is where the second step
         // comes in.
-        dispatchPatchBasedForceCorrections(typeStartCountMap, contactTypeKernelMap);
+        dispatchPatchBasedForceCorrections(typeStartCountPrimitiveMap, typeStartCountPatchMap,
+                                           contactTypePrimitiveKernelMap);
 
         // displayDeviceFloat3(granData->contactForces, nContactPairs);
         // displayDeviceArray<contact_t>(granData->contactTypePatch, nContactPairs);
@@ -2469,30 +2576,47 @@ inline void DEMDynamicThread::unpack_impl() {
     solverScratchSpace.allocateDualStruct("numExistingTypes");
     contactPairs_t* typeCounts = (contactPairs_t*)solverScratchSpace.allocateTempVector(
         "typeCounts", (NUM_SUPPORTED_CONTACT_TYPES + 1) * sizeof(contactPairs_t));
+    // Recall existingContactTypes is pre-allocated for maximum possible types
     cubRunLengthEncode<contact_t, contactPairs_t>(
         granData->contactTypePrimitive, existingContactTypes.device(), typeCounts,
-        solverScratchSpace.getDualStructDevice("numExistingTypes"), *solverScratchSpace.numContacts, streamInfo.stream,
-        solverScratchSpace);
+        solverScratchSpace.getDualStructDevice("numExistingTypes"), *solverScratchSpace.numPrimitiveContacts,
+        streamInfo.stream, solverScratchSpace);
     solverScratchSpace.syncDualStructDeviceToHost("numExistingTypes");
     m_numExistingTypes = *solverScratchSpace.getDualStructHost("numExistingTypes");
-    solverScratchSpace.finishUsingDualStruct("numExistingTypes");
-    cubPrefixScan<contactPairs_t, contactPairs_t>(typeCounts, typeStartOffsets.device(), m_numExistingTypes,
+    cubPrefixScan<contactPairs_t, contactPairs_t>(typeCounts, typeStartOffsetsPrimitive.device(), m_numExistingTypes,
                                                   streamInfo.stream, solverScratchSpace);
     solverScratchSpace.finishUsingTempVector("typeCounts");
     existingContactTypes.toHost();
-    typeStartOffsets.toHost();
+    typeStartOffsetsPrimitive.toHost();
     for (size_t i = 0; i < m_numExistingTypes; i++) {
-        DEME_DEBUG_PRINTF("Contact type %d starts at offset %u", existingContactTypes[i], typeStartOffsets[i]);
-        typeStartCountMap[existingContactTypes[i]] = std::make_pair(
-            typeStartOffsets[i],
-            (i + 1 < m_numExistingTypes ? typeStartOffsets[i + 1] : (contactPairs_t)*solverScratchSpace.numContacts) -
-                typeStartOffsets[i]);
+        DEME_DEBUG_PRINTF("Contact type %d starts at offset %u", existingContactTypes[i], typeStartOffsetsPrimitive[i]);
+        typeStartCountPrimitiveMap[existingContactTypes[i]] =
+            std::make_pair(typeStartOffsetsPrimitive[i],
+                           (i + 1 < m_numExistingTypes ? typeStartOffsetsPrimitive[i + 1]
+                                                       : (contactPairs_t)*solverScratchSpace.numPrimitiveContacts) -
+                               typeStartOffsetsPrimitive[i]);
     }
     // Debug output of the map
-    // for (const auto& entry : typeStartCountMap) {
+    // for (const auto& entry : typeStartCountPrimitiveMap) {
     //     printf("Contact type %d starts at offset %u and has count %u\n", entry.first, entry.second.first,
     //     entry.second.second);
     // }
+
+    // Now for patch-based contacts, we do the same thing. Note the unique types herein will be the same as thosein.
+    cubRunLengthEncode<contact_t, contactPairs_t>(granData->contactTypePatch, existingContactTypes.device(), typeCounts,
+                                                  solverScratchSpace.getDualStructDevice("numExistingTypes"),
+                                                  *solverScratchSpace.numContacts, streamInfo.stream,
+                                                  solverScratchSpace);
+    cubPrefixScan<contactPairs_t, contactPairs_t>(typeCounts, typeStartOffsetsPatch.device(), m_numExistingTypes,
+                                                  streamInfo.stream, solverScratchSpace);
+    typeStartOffsetsPatch.toHost();
+    for (size_t i = 0; i < m_numExistingTypes; i++) {
+        typeStartCountPatchMap[existingContactTypes[i]] = std::make_pair(
+            typeStartOffsetsPatch[i], (i + 1 < m_numExistingTypes ? typeStartOffsetsPatch[i + 1]
+                                                                  : (contactPairs_t)*solverScratchSpace.numContacts) -
+                                          typeStartOffsetsPatch[i]);
+    }
+    solverScratchSpace.finishUsingDualStruct("numExistingTypes");
 }
 
 inline void DEMDynamicThread::ifProduceFreshThenUseIt() {
@@ -2763,11 +2887,6 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
         collect_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMCollectForceKernels", JitHelper::KERNEL_DIR / "DEMCollectForceKernels.cu", Subs, JitifyOptions)));
     }
-    // Patch-based voting kernels for mesh contact correction
-    {
-        patch_voting_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMPatchVotingKernels", JitHelper::KERNEL_DIR / "DEMPatchVotingKernels.cu", Subs, JitifyOptions)));
-    }
     // Then integration kernels
     {
         integrator_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
@@ -2785,7 +2904,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     }
 
     // For now, the contact type to kernel map is known and hard-coded after jitification
-    contactTypeKernelMap = {
+    contactTypePrimitiveKernelMap = {
         // Sphere-Sphere contact
         {SPHERE_SPHERE_CONTACT, {{cal_force_kernels, "calculatePrimitiveContactForces_SphSph"}}},
         // Sphere-Triangle contact

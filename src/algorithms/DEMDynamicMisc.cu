@@ -117,4 +117,349 @@ void getContactForcesConcerningOwners(float3* d_points,
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Patch-based voting kernels for mesh contact correction
+////////////////////////////////////////////////////////////////////////////////
+
+// Kernel to compute weighted normals (normal * area) for voting
+// Also prepares the area values for reduction and extracts the keys (geomToPatchMap values)
+__global__ void prepareWeightedNormalsForVoting_impl(DEMDataDT* granData,
+                                                     float3* weightedNormals,
+                                                     double* areas,
+                                                     contactPairs_t* keys,
+                                                     contactPairs_t startOffset,
+                                                     contactPairs_t count) {
+    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < count) {
+        contactPairs_t myContactID = startOffset + idx;
+
+        // Get the contact normal from contactForces
+        float3 normal = granData->contactForces[myContactID];
+
+        // Extract the area (double) from contactPointGeometryB (stored as float3)
+        float3 areaStorage = granData->contactPointGeometryB[myContactID];
+        double area = float3StorageToDouble(areaStorage);
+
+        // Compute weighted normal (normal * area)
+        weightedNormals[idx] = make_float3(normal.x * area, normal.y * area, normal.z * area);
+
+        // Store area for reduction
+        areas[idx] = area;
+
+        // Extract key from geomToPatchMap
+        keys[idx] = granData->geomToPatchMap[myContactID];
+    }
+}
+
+void prepareWeightedNormalsForVoting(DEMDataDT* granData,
+                                     float3* weightedNormals,
+                                     double* areas,
+                                     contactPairs_t* keys,
+                                     contactPairs_t startOffset,
+                                     contactPairs_t count,
+                                     cudaStream_t& this_stream) {
+    size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        prepareWeightedNormalsForVoting_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            granData, weightedNormals, areas, keys, startOffset, count);
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
+// Kernel to normalize the voted normals by dividing by total area and scatter to output
+// If total area is 0, set result to (0,0,0)
+// Assumes uniqueKeys are sorted (CUB's ReduceByKey maintains sort order)
+// Uses contactPairs_t keys (geomToPatchMap values)
+__global__ void normalizeAndScatterVotedNormals_impl(float3* votedWeightedNormals,
+                                                     double* totalAreas,
+                                                     float3* output,
+                                                     contactPairs_t count) {
+    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < count) {
+        float3 votedNormal = make_float3(0, 0, 0);
+        double totalArea = totalAreas[idx];
+        if (totalArea > 0.0) {
+            // Normalize by dividing by total area (use reciprocal multiplication for efficiency)
+            double invTotalArea = 1.0 / totalArea;
+            votedNormal.x = votedWeightedNormals[idx].x * invTotalArea;
+            votedNormal.y = votedWeightedNormals[idx].y * invTotalArea;
+            votedNormal.z = votedWeightedNormals[idx].z * invTotalArea;
+        }
+        // else: votedNormal remains (0,0,0)
+
+        // Write to output at the correct position
+        output[idx] = votedNormal;
+    }
+}
+
+void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
+                                     double* totalAreas,
+                                     float3* output,
+                                     contactPairs_t count,
+                                     cudaStream_t& this_stream) {
+    size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        normalizeAndScatterVotedNormals_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            votedWeightedNormals, totalAreas, output, count);
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Penetration depth computation kernels for mesh contact correction
+////////////////////////////////////////////////////////////////////////////////
+
+// Kernel to compute weighted useful penetration for each primitive contact
+// The "useful" penetration is the original penetration projected onto the voted normal.
+// If the projection makes penetration negative (tangential contact), it's clamped to 0.
+// Each primitive's useful penetration is then weighted by its contact area.
+__global__ void computeWeightedUsefulPenetration_impl(DEMDataDT* granData,
+                                                      float3* votedNormalizedNormals,
+                                                      contactPairs_t* keys,
+                                                      double* weightedPenetrations,
+                                                      contactPairs_t startOffsetPrimitive,
+                                                      contactPairs_t startOffsetPatch,
+                                                      contactPairs_t count) {
+    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < count) {
+        contactPairs_t myContactID = startOffsetPrimitive + idx;
+
+        // Get the patch pair index for this primitive (absolute index)
+        contactPairs_t patchIdx = keys[idx];
+
+        // Get the voted normalized normal for this patch pair
+        // Subtract startOffsetPatch to get the local index into votedNormalizedNormals
+        contactPairs_t localPatchIdx = patchIdx - startOffsetPatch;
+        float3 votedNormal = votedNormalizedNormals[localPatchIdx];
+        // If voted normal is (0,0,0), meaning all primitive contacts agree on no contact, then the end result must be
+        // 0, no special handling needed
+
+        // Get the original contact normal (stored in contactForces during primitive force calc)
+        float3 originalNormal = granData->contactForces[myContactID];
+
+        // Get the original penetration depth from contactPointGeometryA (stored as double in float3)
+        float3 penetrationStorage = granData->contactPointGeometryA[myContactID];
+        double originalPenetration = float3StorageToDouble(penetrationStorage);
+        // Negative penetration does not participate in useful penetration
+        if (originalPenetration <= 0.0) {
+            originalPenetration = 0.0;
+        }
+
+        // Get the contact area from contactPointGeometryB (stored as double in float3)
+        float3 areaStorage = granData->contactPointGeometryB[myContactID];
+        double area = float3StorageToDouble(areaStorage);
+
+        // Compute the "useful" penetration by projecting onto the voted normal
+        // This is: originalPenetration * dot(originalNormal, votedNormal)
+        // If dot product is negative (opposite directions), useful penetration becomes negative
+        // which we clamp to 0
+        float dotProduct = dot(originalNormal, votedNormal);
+        double usefulPenetration = originalPenetration * (double)dotProduct;
+        if (usefulPenetration <= 0.0) {
+            usefulPenetration = 0.0;
+        }
+
+        // Weight the useful penetration by area
+        double weightedPenetration = usefulPenetration * area;
+        weightedPenetrations[idx] = weightedPenetration;
+
+        // printf(
+        //     "voted normal: (%f, %f, %f), original normal: (%f, %f, %f), original pen: %f, dot: %f, useful pen: %f, "
+        //     "area: %f, weighted pen: %f\n",
+        //     votedNormal.x, votedNormal.y, votedNormal.z, originalNormal.x, originalNormal.y, originalNormal.z,
+        //     originalPenetration, dotProduct, usefulPenetration, area, weightedPenetration);
+    }
+}
+
+void computeWeightedUsefulPenetration(DEMDataDT* granData,
+                                      float3* votedNormalizedNormals,
+                                      contactPairs_t* keys,
+                                      double* weightedPenetrations,
+                                      contactPairs_t startOffsetPrimitive,
+                                      contactPairs_t startOffsetPatch,
+                                      contactPairs_t count,
+                                      cudaStream_t& this_stream) {
+    size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        computeWeightedUsefulPenetration_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            granData, votedNormalizedNormals, keys, weightedPenetrations, startOffsetPrimitive, startOffsetPatch,
+            count);
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
+// Kernel to compute total penetration per patch pair by dividing by total area
+// If total area is 0, total penetration is 0
+__global__ void computeTotalPenetrationPerPatch_impl(double* totalWeightedPenetrations,
+                                                     double* totalAreas,
+                                                     double* totalPenetrations,
+                                                     contactPairs_t count) {
+    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < count) {
+        double totalArea = totalAreas[idx];
+        if (totalArea > 0.0) {
+            totalPenetrations[idx] = totalWeightedPenetrations[idx] / totalArea;
+        } else {
+            totalPenetrations[idx] = 0.0;
+        }
+    }
+}
+
+void computeTotalPenetrationPerPatch(double* totalWeightedPenetrations,
+                                     double* totalAreas,
+                                     double* totalPenetrations,
+                                     contactPairs_t count,
+                                     cudaStream_t& this_stream) {
+    size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        computeTotalPenetrationPerPatch_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            totalWeightedPenetrations, totalAreas, totalPenetrations, count);
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Special case handling: zero-area patches (no positive-penetration primitives)
+////////////////////////////////////////////////////////////////////////////////
+
+// Kernel to extract primitive penetrations for max-reduce operation
+// For zero-area case handling, we need the max (biggest/least-negative) penetration per patch
+__global__ void extractPrimitivePenetrations_impl(DEMDataDT* granData,
+                                                  double* penetrations,
+                                                  contactPairs_t startOffset,
+                                                  contactPairs_t count) {
+    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < count) {
+        contactPairs_t myContactID = startOffset + idx;
+
+        // Extract penetration from contactPointGeometryA (stored as double in float3)
+        float3 penetrationStorage = granData->contactPointGeometryA[myContactID];
+        penetrations[idx] = float3StorageToDouble(penetrationStorage);
+    }
+}
+
+void extractPrimitivePenetrations(DEMDataDT* granData,
+                                  double* penetrations,
+                                  contactPairs_t startOffset,
+                                  contactPairs_t count,
+                                  cudaStream_t& this_stream) {
+    size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        extractPrimitivePenetrations_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            granData, penetrations, startOffset, count);
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
+// Kernel to handle zero-area patches by finding the primitive with max penetration
+// and using its penetration and normal for the patch result.
+// For each primitive, check if it has the max penetration for its patch.
+// Note: Race condition when multiple primitives have the same max penetration is acceptable
+// since any of them produces a valid result.
+__global__ void findMaxPenetrationPrimitiveForZeroAreaPatches_impl(DEMDataDT* granData,
+                                                                   double* totalAreas,
+                                                                   double* maxPenetrations,
+                                                                   float3* zeroAreaNormals,
+                                                                   double* zeroAreaPenetrations,
+                                                                   contactPairs_t* keys,
+                                                                   contactPairs_t startOffsetPrimitive,
+                                                                   contactPairs_t startOffsetPatch,
+                                                                   contactPairs_t countPrimitive) {
+    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < countPrimitive) {
+        contactPairs_t myContactID = startOffsetPrimitive + idx;
+        contactPairs_t patchIdx = keys[idx];
+        contactPairs_t localPatchIdx = patchIdx - startOffsetPatch;
+
+        // Only process if this patch has zero total area
+        double totalArea = totalAreas[localPatchIdx];
+        if (totalArea > 0.0) {
+            return;  // Normal voting logic applies, skip
+        }
+
+        // Get this primitive's penetration
+        float3 penetrationStorage = granData->contactPointGeometryA[myContactID];
+        double myPenetration = float3StorageToDouble(penetrationStorage);
+
+        // Check if this primitive has the max penetration for its patch
+        // Use a relative tolerance for floating-point comparison
+        double maxPen = maxPenetrations[localPatchIdx];
+        double absTol = 1e-15;  // Absolute tolerance for very small values
+        double relTol = 1e-12;  // Relative tolerance for larger values
+        double tolerance = fmax(absTol, fabs(maxPen) * relTol);
+        if (fabs(myPenetration - maxPen) <= tolerance) {
+            // This primitive has the max penetration - use its normal
+            // Note: if multiple primitives have the same max, any one of them is fine
+            // The race condition is acceptable since all competing values are valid
+            float3 myNormal = granData->contactForces[myContactID];
+            zeroAreaNormals[localPatchIdx] = myNormal;
+            zeroAreaPenetrations[localPatchIdx] = myPenetration;
+        }
+    }
+}
+
+void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
+                                                   double* totalAreas,
+                                                   double* maxPenetrations,
+                                                   float3* zeroAreaNormals,
+                                                   double* zeroAreaPenetrations,
+                                                   contactPairs_t* keys,
+                                                   contactPairs_t startOffsetPrimitive,
+                                                   contactPairs_t startOffsetPatch,
+                                                   contactPairs_t countPrimitive,
+                                                   cudaStream_t& this_stream) {
+    size_t blocks_needed = (countPrimitive + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        findMaxPenetrationPrimitiveForZeroAreaPatches_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0,
+                                                             this_stream>>>(
+            granData, totalAreas, maxPenetrations, zeroAreaNormals, zeroAreaPenetrations, keys, startOffsetPrimitive,
+            startOffsetPatch, countPrimitive);
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
+// Kernel to finalize patch results by combining normal voting results with zero-area case handling
+// For patches with totalArea > 0: use voted normal and weighted penetration
+// For patches with totalArea == 0: use max-penetration primitive's normal and penetration
+__global__ void finalizePatchResults_impl(double* totalAreas,
+                                          float3* votedNormals,
+                                          double* votedPenetrations,
+                                          float3* zeroAreaNormals,
+                                          double* zeroAreaPenetrations,
+                                          float3* finalNormals,
+                                          double* finalPenetrations,
+                                          contactPairs_t count) {
+    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < count) {
+        double totalArea = totalAreas[idx];
+        if (totalArea > 0.0) {
+            // Normal case: use voted results
+            finalNormals[idx] = votedNormals[idx];
+            finalPenetrations[idx] = votedPenetrations[idx];
+        } else {
+            // Zero-area case: use max-penetration primitive's results
+            finalNormals[idx] = zeroAreaNormals[idx];
+            finalPenetrations[idx] = zeroAreaPenetrations[idx];
+        }
+    }
+}
+
+void finalizePatchResults(double* totalAreas,
+                          float3* votedNormals,
+                          double* votedPenetrations,
+                          float3* zeroAreaNormals,
+                          double* zeroAreaPenetrations,
+                          float3* finalNormals,
+                          double* finalPenetrations,
+                          contactPairs_t count,
+                          cudaStream_t& this_stream) {
+    size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        finalizePatchResults_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            totalAreas, votedNormals, votedPenetrations, zeroAreaNormals, zeroAreaPenetrations, finalNormals,
+            finalPenetrations, count);
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
 }  // namespace deme
