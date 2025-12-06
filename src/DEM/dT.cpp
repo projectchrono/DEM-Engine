@@ -1075,8 +1075,8 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
             this_mesh_patch_locations = input_mesh_objs.at(i)->ComputePatchLocations();
         }
         // Store the patch locations in the global array
-        for (size_t pp = p_start; pp < p; pp++) {
-            relPosPatch[nExistingMeshPatches + pp] = this_mesh_patch_locations[pp - p_start];
+        for (size_t patch_idx = p_start; patch_idx < p; patch_idx++) {
+            relPosPatch[nExistingMeshPatches + patch_idx] = this_mesh_patch_locations[patch_idx - p_start];
         }
 
         // Per-facet info

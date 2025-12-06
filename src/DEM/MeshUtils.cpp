@@ -417,10 +417,13 @@ std::vector<float3> DEMMesh::ComputePatchLocations() const {
         float3 centroid = computeTriangleCentroid(v0, v1, v2);
         patchID_t patch_id = (i < m_patch_ids.size()) ? m_patch_ids[i] : 0;
 
-        patch_locations[patch_id].x += centroid.x;
-        patch_locations[patch_id].y += centroid.y;
-        patch_locations[patch_id].z += centroid.z;
-        patch_triangle_counts[patch_id]++;
+        // Validate patch_id is within bounds
+        if (patch_id >= 0 && patch_id < static_cast<patchID_t>(nPatches)) {
+            patch_locations[patch_id].x += centroid.x;
+            patch_locations[patch_id].y += centroid.y;
+            patch_locations[patch_id].z += centroid.z;
+            patch_triangle_counts[patch_id]++;
+        }
     }
 
     // Average the accumulated centroids
