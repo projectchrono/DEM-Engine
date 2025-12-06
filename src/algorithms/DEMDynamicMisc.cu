@@ -358,7 +358,9 @@ void extractPrimitivePenetrations(DEMDataDT* granData,
 
 // Kernel to handle zero-area patches by finding the primitive with max penetration
 // and using its penetration and normal for the patch result.
-// For each primitive, atomically update if this primitive has the max penetration for its patch.
+// For each primitive, check if it has the max penetration for its patch.
+// Note: Race condition when multiple primitives have the same max penetration is acceptable
+// since any of them produces a valid result.
 __global__ void findMaxPenetrationPrimitiveForZeroAreaPatches_impl(DEMDataDT* granData,
                                                                    double* totalAreas,
                                                                    double* maxPenetrations,
@@ -385,10 +387,15 @@ __global__ void findMaxPenetrationPrimitiveForZeroAreaPatches_impl(DEMDataDT* gr
         double myPenetration = float3StorageToDouble(penetrationStorage);
 
         // Check if this primitive has the max penetration for its patch
+        // Use a relative tolerance for floating-point comparison
         double maxPen = maxPenetrations[localPatchIdx];
-        if (myPenetration == maxPen) {
+        double absTol = 1e-15;  // Absolute tolerance for very small values
+        double relTol = 1e-12;  // Relative tolerance for larger values
+        double tolerance = fmax(absTol, fabs(maxPen) * relTol);
+        if (fabs(myPenetration - maxPen) <= tolerance) {
             // This primitive has the max penetration - use its normal
             // Note: if multiple primitives have the same max, any one of them is fine
+            // The race condition is acceptable since all competing values are valid
             float3 myNormal = granData->contactForces[myContactID];
             zeroAreaNormals[localPatchIdx] = myNormal;
             zeroAreaPenetrations[localPatchIdx] = myPenetration;
