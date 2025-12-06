@@ -225,15 +225,14 @@ __global__ void computeWeightedUsefulPenetration_impl(DEMDataDT* granData,
         contactPairs_t myContactID = startOffsetPrimitive + idx;
 
         // Get the patch pair index for this primitive (absolute index)
-        // Note: keys array is repopulated here for the penetration reduction step.
-        // It uses the same geomToPatchMap values as prepareWeightedNormalsForVoting.
-        contactPairs_t patchIdx = granData->geomToPatchMap[myContactID];
-        keys[idx] = patchIdx;
+        contactPairs_t patchIdx = keys[idx];
 
         // Get the voted normalized normal for this patch pair
         // Subtract startOffsetPatch to get the local index into votedNormalizedNormals
         contactPairs_t localPatchIdx = patchIdx - startOffsetPatch;
         float3 votedNormal = votedNormalizedNormals[localPatchIdx];
+        // If voted normal is (0,0,0), meaning all primitive contacts agree on no contact, then the end result must be
+        // 0, no special handling needed
 
         // Get the original contact normal (stored in contactForces during primitive force calc)
         float3 originalNormal = granData->contactForces[myContactID];
@@ -241,6 +240,10 @@ __global__ void computeWeightedUsefulPenetration_impl(DEMDataDT* granData,
         // Get the original penetration depth from contactPointGeometryA (stored as double in float3)
         float3 penetrationStorage = granData->contactPointGeometryA[myContactID];
         double originalPenetration = float3StorageToDouble(penetrationStorage);
+        // Negative penetration does not participate in useful penetration
+        if (originalPenetration <= 0.0) {
+            originalPenetration = 0.0;
+        }
 
         // Get the contact area from contactPointGeometryB (stored as double in float3)
         float3 areaStorage = granData->contactPointGeometryB[myContactID];
@@ -252,13 +255,19 @@ __global__ void computeWeightedUsefulPenetration_impl(DEMDataDT* granData,
         // which we clamp to 0
         float dotProduct = dot(originalNormal, votedNormal);
         double usefulPenetration = originalPenetration * (double)dotProduct;
-        if (usefulPenetration < 0.0) {
+        if (usefulPenetration <= 0.0) {
             usefulPenetration = 0.0;
         }
 
         // Weight the useful penetration by area
         double weightedPenetration = usefulPenetration * area;
         weightedPenetrations[idx] = weightedPenetration;
+
+        // printf(
+        //     "voted normal: (%f, %f, %f), original normal: (%f, %f, %f), original pen: %f, dot: %f, useful pen: %f, "
+        //     "area: %f, weighted pen: %f\n",
+        //     votedNormal.x, votedNormal.y, votedNormal.z, originalNormal.x, originalNormal.y, originalNormal.z,
+        //     originalPenetration, dotProduct, usefulPenetration, area, weightedPenetration);
     }
 }
 
@@ -273,7 +282,8 @@ void computeWeightedUsefulPenetration(DEMDataDT* granData,
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         computeWeightedUsefulPenetration_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            granData, votedNormalizedNormals, keys, weightedPenetrations, startOffsetPrimitive, startOffsetPatch, count);
+            granData, votedNormalizedNormals, keys, weightedPenetrations, startOffsetPrimitive, startOffsetPatch,
+            count);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }

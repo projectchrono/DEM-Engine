@@ -2382,8 +2382,8 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
 
                 // Step 7: Compute total penetration per patch pair by dividing by total area
-                double* totalPenetrations = (double*)solverScratchSpace.allocateTempVector(
-                    "totalPenetrations", countPatch * sizeof(double));
+                double* totalPenetrations =
+                    (double*)solverScratchSpace.allocateTempVector("totalPenetrations", countPatch * sizeof(double));
                 computeTotalPenetrationPerPatch(totalWeightedPenetrations, totalAreas, totalPenetrations, countPatch,
                                                 streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("totalWeightedPenetrations");
@@ -2392,6 +2392,9 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 // - totalAreas: total contact area per patch pair (countPatch elements)
                 // - totalPenetrations: total penetration depth per patch pair (countPatch elements)
                 // These can be used for subsequent force calculations
+
+                // displayDeviceArray<double>(totalAreas, countPatch);
+                // displayDeviceArray<double>(totalPenetrations, countPatch);
 
                 // Final clean up
                 solverScratchSpace.finishUsingTempVector("totalAreas");
