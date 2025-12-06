@@ -2390,8 +2390,8 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 // 8a: Extract primitive penetrations for max-reduce
                 double* primitivePenetrations = (double*)solverScratchSpace.allocateTempVector(
                     "primitivePenetrations", countPrimitive * sizeof(double));
-                extractPrimitivePenetrations(&granData, keys, primitivePenetrations, startOffsetPrimitive,
-                                             countPrimitive, streamInfo.stream);
+                extractPrimitivePenetrations(&granData, primitivePenetrations, startOffsetPrimitive, countPrimitive,
+                                             streamInfo.stream);
 
                 // 8b: Max-reduce-by-key to get max penetration per patch
                 double* maxPenetrations =

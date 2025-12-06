@@ -193,7 +193,6 @@ void computeTotalPenetrationPerPatch(double* totalWeightedPenetrations,
 
 // Extracts primitive penetrations from contactPointGeometryA for max-reduce operation
 void extractPrimitivePenetrations(DEMDataDT* granData,
-                                  contactPairs_t* keys,
                                   double* penetrations,
                                   contactPairs_t startOffset,
                                   contactPairs_t count,
