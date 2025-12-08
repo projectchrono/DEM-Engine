@@ -2455,12 +2455,13 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 if (contactTypePatchKernelMap.count(contact_type) > 0) {
                     const auto& kernelList = contactTypePatchKernelMap.at(contact_type);
                     for (const auto& [progName, kernelName] : kernelList) {
-                        size_t blocks = (countPatch + DT_FORCE_CALC_NTHREADS_PER_BLOCK - 1) / DT_FORCE_CALC_NTHREADS_PER_BLOCK;
+                        size_t blocks =
+                            (countPatch + DT_FORCE_CALC_NTHREADS_PER_BLOCK - 1) / DT_FORCE_CALC_NTHREADS_PER_BLOCK;
                         if (blocks > 0) {
                             progName->kernel(kernelName)
                                 .instantiate()
                                 .configure(dim3(blocks), dim3(DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0, streamInfo.stream)
-                                .launch(&simParams, &granData, totalAreas, finalNormals, finalPenetrations, 
+                                .launch(&simParams, &granData, totalAreas, finalNormals, finalPenetrations,
                                         startOffsetPatch, countPatch);
                         }
                     }
