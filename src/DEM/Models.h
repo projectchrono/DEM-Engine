@@ -369,9 +369,10 @@ inline void equip_contact_wildcards(std::string& acquisition,
     for (const auto& name : names) {
         // Rigth now, supports float arrays only...
         // Getting it from global mem
-        acquisition += "float " + name + " = granData->contactWildcards[" + std::to_string(i) + "][myContactID];\n";
+        acquisition +=
+            "float " + name + " = granData->contactWildcards[" + std::to_string(i) + "][myPatchContactID];\n";
         // Write it back to global mem
-        write_back += "granData->contactWildcards[" + std::to_string(i) + "][myContactID] = " + name + ";\n";
+        write_back += "granData->contactWildcards[" + std::to_string(i) + "][myPatchContactID] = " + name + ";\n";
         // Destroy it (set to 0) if it is a fake contact
         destroy_record += name + " = 0;\n";
         i++;
