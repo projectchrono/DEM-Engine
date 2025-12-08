@@ -2451,7 +2451,20 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 // - finalPenetrations: final penetration depth per patch pair (countPatch elements)
                 // These can be used for subsequent force calculations
 
-                //// TODO: Call specialized patch-based force correction kernels here
+                // Call specialized patch-based force correction kernels here
+                if (contactTypePatchKernelMap.count(contact_type) > 0) {
+                    const auto& kernelList = contactTypePatchKernelMap.at(contact_type);
+                    for (const auto& [progName, kernelName] : kernelList) {
+                        size_t blocks = (countPatch + DT_FORCE_CALC_NTHREADS_PER_BLOCK - 1) / DT_FORCE_CALC_NTHREADS_PER_BLOCK;
+                        if (blocks > 0) {
+                            progName->kernel(kernelName)
+                                .instantiate()
+                                .configure(dim3(blocks), dim3(DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0, streamInfo.stream)
+                                .launch(&simParams, &granData, totalAreas, finalNormals, finalPenetrations, 
+                                        startOffsetPatch, countPatch);
+                        }
+                    }
+                }
 
                 // Final clean up
                 solverScratchSpace.finishUsingTempVector("totalAreas");
@@ -2898,6 +2911,12 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
             JitHelper::buildProgram("DEMCalcForceKernels_Primitive",
                                     JitHelper::KERNEL_DIR / "DEMCalcForceKernels_Primitive.cu", Subs, JitifyOptions)));
     }
+    // Then patch-based force calculation kernels
+    {
+        cal_patch_force_kernels = std::make_shared<jitify::Program>(std::move(
+            JitHelper::buildProgram("DEMCalcForceKernels_PatchBased",
+                                    JitHelper::KERNEL_DIR / "DEMCalcForceKernels_PatchBased.cu", Subs, JitifyOptions)));
+    }
     // Then force accumulation kernels
     {
         collect_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
@@ -2931,6 +2950,15 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
         {TRIANGLE_TRIANGLE_CONTACT, {{cal_force_kernels, "calculatePrimitiveContactForces_TriTri"}}},
         // Triangle-Analytical contact
         {TRIANGLE_ANALYTICAL_CONTACT, {{cal_force_kernels, "calculatePrimitiveContactForces_TriAnal"}}}};
+
+    // Patch-based force kernel map for mesh-related contacts
+    contactTypePatchKernelMap = {
+        // Sphere-Triangle contact (patch-based)
+        {SPHERE_TRIANGLE_CONTACT, {{cal_patch_force_kernels, "calculatePatchContactForces_SphTri"}}},
+        // Triangle-Triangle contact (patch-based)
+        {TRIANGLE_TRIANGLE_CONTACT, {{cal_patch_force_kernels, "calculatePatchContactForces_TriTri"}}},
+        // Triangle-Analytical contact (patch-based)
+        {TRIANGLE_ANALYTICAL_CONTACT, {{cal_patch_force_kernels, "calculatePatchContactForces_TriAnal"}}}};
 }
 
 float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
