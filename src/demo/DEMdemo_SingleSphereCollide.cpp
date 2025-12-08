@@ -26,6 +26,7 @@ int main() {
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT", "NORMAL", "TORQUE", "CNT_WILDCARD"});
     DEMSim.EnsureKernelErrMsgLineNum();
+    DEMSim.SetPersistentContact(true);
     // Note!! If you want meshes to have contacts, set this to true!!
     // If not, meshes will not have contacts with each other or analytical boundaries (but still have contacts with
     // clumps).
@@ -201,7 +202,7 @@ int main() {
         std::cout << "Particle 2 X coord is " << pos2.x << std::endl;
         std::cout << "Particle 1 family is " << fam1 << std::endl;
         std::cout << "Particle 2 family is " << fam2 << std::endl;
-        std::cout << "Average contacts each sphere has: " << DEMSim.GetAvgSphContacts() << std::endl;
+        std::cout << "Average contacts each sphere has: " << DEMSim.GetAvgPrimitiveContacts() << std::endl;
         if (points_spheres.size() == 1) {
             std::cout << "Two spheres collide, the contact is at (" << points_spheres[0].x << ", "
                       << points_spheres[0].y << ", " << points_spheres[0].z << ")." << std::endl;

@@ -78,6 +78,8 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
     if constexpr (AType == deme::GEO_T_SPHERE) {
         deme::bodyID_t sphereID = granData->idPrimitiveA[myContactID];
         deme::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
+        // Clump sphere's patch ID is just the sphereID itself
+        deme::bodyID_t myPatchID = sphereID;
 
         float3 myRelPos;
         float myRadius;
@@ -102,26 +104,25 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         equipOwnerPosRot(simParams, granData, myOwner, myRelPos, AOwnerPos, bodyAPos, AOriQ);
 
         ARadius = myRadius;
-        bodyAMatType = granData->sphereMaterialOffset[sphereID];
+        // In priciple, material is patch-associated; but in clump, for now, we don't distinguish sphere and patch
+        bodyAMatType = granData->sphereMaterialOffset[myPatchID];
         extraMarginSize = granData->familyExtraMarginSize[AOwnerFamily];
     } else if constexpr (AType == deme::GEO_T_TRIANGLE) {
-        // Geometry ID here is called sphereID, although it is not a sphere, it's more like triID. But naming it
-        // sphereID makes the acquisition process cleaner.
-        deme::bodyID_t sphereID = granData->idPrimitiveA[myContactID];
-        deme::bodyID_t myOwner = granData->triOwnerMesh[sphereID];
+        deme::bodyID_t triID = granData->idPrimitiveA[myContactID];
+        deme::bodyID_t myOwner = granData->triOwnerMesh[triID];
         //// TODO: Is this OK?
         ARadius = DEME_HUGE_FLOAT;
         // If this is a triangle then it has a patch ID
-        deme::bodyID_t myPatchID = granData->triPatchID[sphereID];
+        deme::bodyID_t myPatchID = granData->triPatchID[triID];
         bodyAMatType = granData->patchMaterialOffset[myPatchID];
 
         // As the grace margin, the distance (negative overlap) just needs to be within the grace margin. So we pick
         // the larger of the 2 familyExtraMarginSize.
         extraMarginSize = granData->familyExtraMarginSize[AOwnerFamily];
 
-        triANode1 = to_double3(granData->relPosNode1[sphereID]);
-        triANode2 = to_double3(granData->relPosNode2[sphereID]);
-        triANode3 = to_double3(granData->relPosNode3[sphereID]);
+        triANode1 = to_double3(granData->relPosNode1[triID]);
+        triANode2 = to_double3(granData->relPosNode2[triID]);
+        triANode3 = to_double3(granData->relPosNode3[triID]);
 
         // Get my mass info from either jitified arrays or global memory
         // Outputs myMass
@@ -132,7 +133,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             AOwnerMass = myMass;
         }
         _forceModelIngredientAcqForA_;
-        _forceModelGeoWildcardAcqForATri_;
+        _forceModelGeoWildcardAcqForAMeshPatch_;
 
         // bodyAPos is for a place holder for the outcome triANode1 position
         equipOwnerPosRot(simParams, granData, myOwner, triANode1, AOwnerPos, bodyAPos, AOriQ);
@@ -155,6 +156,8 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
     if constexpr (BType == deme::GEO_T_SPHERE) {
         deme::bodyID_t sphereID = granData->idPrimitiveB[myContactID];
         deme::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
+        // Clump sphere's patch ID is just the sphereID itself
+        deme::bodyID_t myPatchID = sphereID;
 
         float3 myRelPos;
         float myRadius;
@@ -177,7 +180,8 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         equipOwnerPosRot(simParams, granData, myOwner, myRelPos, BOwnerPos, bodyBPos, BOriQ);
 
         BRadius = myRadius;
-        bodyBMatType = granData->sphereMaterialOffset[sphereID];
+        // In priciple, material is patch-associated; but in clump, for now, we don't distinguish sphere and patch
+        bodyBMatType = granData->sphereMaterialOffset[myPatchID];
 
         // As the grace margin, the distance (negative overlap) just needs to be within the grace margin. So we pick
         // the larger of the 2 familyExtraMarginSize.
@@ -196,14 +200,12 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         }
 
     } else if constexpr (BType == deme::GEO_T_TRIANGLE) {
-        // Geometry ID here is called sphereID, although it is not a sphere, it's more like triID. But naming it
-        // sphereID makes the acquisition process cleaner.
-        deme::bodyID_t sphereID = granData->idPrimitiveB[myContactID];
-        deme::bodyID_t myOwner = granData->triOwnerMesh[sphereID];
+        deme::bodyID_t triID = granData->idPrimitiveB[myContactID];
+        deme::bodyID_t myOwner = granData->triOwnerMesh[triID];
         //// TODO: Is this OK?
         BRadius = DEME_HUGE_FLOAT;
         // If this is a triangle then it has a patch ID
-        deme::bodyID_t myPatchID = granData->triPatchID[sphereID];
+        deme::bodyID_t myPatchID = granData->triPatchID[triID];
         bodyBMatType = granData->patchMaterialOffset[myPatchID];
 
         // As the grace margin, the distance (negative overlap) just needs to be within the grace margin. So we pick
@@ -215,9 +217,9 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // potentially needs remote (non-contact) force calculation.
         bool needsNonContactPenetrationCalc = (extraMarginSize > 0.);
 
-        double3 triBNode1 = to_double3(granData->relPosNode1[sphereID]);
-        double3 triBNode2 = to_double3(granData->relPosNode2[sphereID]);
-        double3 triBNode3 = to_double3(granData->relPosNode3[sphereID]);
+        double3 triBNode1 = to_double3(granData->relPosNode1[triID]);
+        double3 triBNode2 = to_double3(granData->relPosNode2[triID]);
+        double3 triBNode3 = to_double3(granData->relPosNode3[triID]);
 
         // Get my mass info from either jitified arrays or global memory
         // Outputs myMass
@@ -286,20 +288,21 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         }
 
     } else if constexpr (BType == deme::GEO_T_ANALYTICAL) {
-        // Geometry ID here is called sphereID, although it is not a sphere, it's more like analyticalID. But naming
-        // it sphereID makes the acquisition process cleaner.
-        deme::objID_t sphereID = granData->idPrimitiveB[myContactID];
-        deme::bodyID_t myOwner = objOwner[sphereID];
+        deme::objID_t analyticalID = granData->idPrimitiveB[myContactID];
+        deme::bodyID_t myOwner = objOwner[analyticalID];
+        // For analytical entity, its patch ID is just its own component ID (but myPatchID is hardly used in this
+        // analytical case)
+        deme::bodyID_t myPatchID = analyticalID;
         // If B is analytical entity, its owner, relative location, material info is jitified.
-        bodyBMatType = objMaterial[sphereID];
-        BOwnerMass = objMass[sphereID];
+        bodyBMatType = objMaterial[analyticalID];
+        BOwnerMass = objMass[analyticalID];
         //// TODO: Is this OK?
         BRadius = DEME_HUGE_FLOAT;
         float3 myRelPos;
         float3 bodyBRot;
-        myRelPos.x = objRelPosX[sphereID];
-        myRelPos.y = objRelPosY[sphereID];
-        myRelPos.z = objRelPosZ[sphereID];
+        myRelPos.x = objRelPosX[analyticalID];
+        myRelPos.y = objRelPosY[analyticalID];
+        myRelPos.z = objRelPosZ[analyticalID];
         _forceModelIngredientAcqForB_;
         _forceModelGeoWildcardAcqForBAnal_;
 
@@ -312,25 +315,27 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
                               : granData->familyExtraMarginSize[BOwnerFamily];
 
         // B's orientation (such as plane normal) is rotated with its owner too
-        bodyBRot.x = objRotX[sphereID];
-        bodyBRot.y = objRotY[sphereID];
-        bodyBRot.z = objRotZ[sphereID];
+        bodyBRot.x = objRotX[analyticalID];
+        bodyBRot.y = objRotY[analyticalID];
+        bodyBRot.z = objRotZ[analyticalID];
         applyOriQToVector3<float, deme::oriQ_t>(bodyBRot.x, bodyBRot.y, bodyBRot.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
 
         // If B is an analytical entity, then A can be a sphere or a triangle.
         if constexpr (AType == deme::GEO_T_SPHERE) {
             // Note for this test on dT side we don't enlarge entities
-            checkSphereEntityOverlap<double3, float, double>(
-                bodyAPos, ARadius, objType[sphereID], bodyBPos, bodyBRot, objSize1[sphereID], objSize2[sphereID],
-                objSize3[sphereID], objNormal[sphereID], 0.0, contactPnt, B2A, overlapDepth, overlapArea);
+            checkSphereEntityOverlap<double3, float, double>(bodyAPos, ARadius, objType[analyticalID], bodyBPos,
+                                                             bodyBRot, objSize1[analyticalID], objSize2[analyticalID],
+                                                             objSize3[analyticalID], objNormal[analyticalID], 0.0,
+                                                             contactPnt, B2A, overlapDepth, overlapArea);
             // Fix ContactType if needed
             if (overlapDepth < -extraMarginSize) {
                 ContactType = deme::NOT_A_CONTACT;
             }
         } else if constexpr (AType == deme::GEO_T_TRIANGLE) {
-            calcTriEntityOverlap<double3, double>(triANode1, triANode2, triANode3, objType[sphereID], bodyBPos,
-                                                  bodyBRot, objSize1[sphereID], objSize2[sphereID], objSize3[sphereID],
-                                                  objNormal[sphereID], contactPnt, B2A, overlapDepth, overlapArea);
+            calcTriEntityOverlap<double3, double>(triANode1, triANode2, triANode3, objType[analyticalID], bodyBPos,
+                                                  bodyBRot, objSize1[analyticalID], objSize2[analyticalID],
+                                                  objSize3[analyticalID], objNormal[analyticalID], contactPnt, B2A,
+                                                  overlapDepth, overlapArea);
             // Fix ContactType if needed
             if (overlapDepth < -extraMarginSize) {
                 ContactType = deme::NOT_A_CONTACT;

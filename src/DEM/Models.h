@@ -298,9 +298,8 @@ inline void equip_force_model_ingr_acq(std::string& definition,
     }
     if (added_ingredients["AGeo"] || added_ingredients["BGeo"]) {
         definition += "deme::bodyID_t AGeo, BGeo;\n";
-        acquisition_A += "AGeo = sphereID;";
-        // BGeo can be sphere, mesh patch or analytical, but they are all named sphereID in the force kernel.
-        acquisition_B += "BGeo = sphereID;";
+        acquisition_A += "AGeo = myPatchID;";
+        acquisition_B += "BGeo = myPatchID;";
     }
     if (added_ingredients["AOwnerMOI"] || added_ingredients["BOwnerMOI"]) {
         definition += "float3 AOwnerMOI, BOwnerMOI;\n";

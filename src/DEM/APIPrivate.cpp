@@ -1567,7 +1567,7 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     strMap["_forceModelIngredientAcqForB_"] = ingredient_acquisition_B;
     // Geo wildcard acquisition is contact type-dependent.
     strMap["_forceModelGeoWildcardAcqForASph_"] = geo_wc_acquisition_A_sph;
-    strMap["_forceModelGeoWildcardAcqForATri_"] = geo_wc_acquisition_A_patch;
+    strMap["_forceModelGeoWildcardAcqForAMeshPatch_"] = geo_wc_acquisition_A_patch;
     strMap["_forceModelGeoWildcardAcqForBSph_"] = geo_wc_acquisition_B_sph;
     strMap["_forceModelGeoWildcardAcqForBMeshPatch_"] = geo_wc_acquisition_B_patch;
     strMap["_forceModelGeoWildcardAcqForBAnal_"] = geo_wc_acquisition_B_anal;

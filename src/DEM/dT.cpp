@@ -2441,6 +2441,9 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("votingKeys");
                 solverScratchSpace.finishUsingTempVector("uniqueKeys");
                 solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
+                // displayDeviceArray<double>(totalAreas, countPatch);
+                // displayDeviceFloat3(finalNormals, countPatch);
+                // displayDeviceArray<double>(finalPenetrations, countPatch);
 
                 // Now we have:
                 // - totalAreas: total contact area per patch pair (countPatch elements)
@@ -2448,9 +2451,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 // - finalPenetrations: final penetration depth per patch pair (countPatch elements)
                 // These can be used for subsequent force calculations
 
-                // displayDeviceArray<double>(totalAreas, countPatch);
-                // displayDeviceFloat3(finalNormals, countPatch);
-                // displayDeviceArray<double>(finalPenetrations, countPatch);
+                //// TODO: Call specialized patch-based force correction kernels here
 
                 // Final clean up
                 solverScratchSpace.finishUsingTempVector("totalAreas");
