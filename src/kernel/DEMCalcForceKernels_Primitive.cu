@@ -359,6 +359,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // Use contactForces, contactPointGeometryAB to store the contact info for the next
         // kernel to compute forces. contactForces is used to store the contact normal. contactPointGeometryA is used to
         // store the (double) contact penetration. contactPointGeometryB is used to store the (double) contact area
+        // contactTorque_convToForce is used to store the contact point position (cast from double3 to float3)
 
         // Store contact normal (B2A is already a float3)
         granData->contactForces[myPrimitiveContactID] = B2A;
@@ -368,6 +369,8 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // If this is not a contact, we store 0.0 in the area, so it has no voting power in the next kernel.
         granData->contactPointGeometryB[myPrimitiveContactID] =
             doubleToFloat3Storage((ContactType == deme::NOT_A_CONTACT || overlapArea <= 0.0) ? 0.0 : overlapArea);
+        // Store contact point (cast from double3 to float3)
+        granData->contactTorque_convToForce[myPrimitiveContactID] = to_float3(contactPnt);
     }
 }
 

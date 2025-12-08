@@ -2438,17 +2438,51 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("totalPenetrations");
                 solverScratchSpace.finishUsingTempVector("zeroAreaNormals");
                 solverScratchSpace.finishUsingTempVector("zeroAreaPenetrations");
-                solverScratchSpace.finishUsingTempVector("votingKeys");
-                solverScratchSpace.finishUsingTempVector("uniqueKeys");
-                solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
                 // displayDeviceArray<double>(totalAreas, countPatch);
                 // displayDeviceFloat3(finalNormals, countPatch);
                 // displayDeviceArray<double>(finalPenetrations, countPatch);
+
+                // Step 10: Compute weighted contact points for each primitive
+                // Reuse keys, uniqueKeys, and numUniqueKeys that are still allocated
+                float3* weightedContactPoints = (float3*)solverScratchSpace.allocateTempVector(
+                    "weightedContactPoints", countPrimitive * sizeof(float3));
+                double* contactWeights =
+                    (double*)solverScratchSpace.allocateTempVector("contactWeights", countPrimitive * sizeof(double));
+                computeWeightedContactPoints(&granData, keys, weightedContactPoints, contactWeights,
+                                            startOffsetPrimitive, countPrimitive, streamInfo.stream);
+
+                // Step 11: Reduce-by-key to get total weighted contact points per patch pair
+                float3* totalWeightedContactPoints = (float3*)solverScratchSpace.allocateTempVector(
+                    "totalWeightedContactPoints", countPatch * sizeof(float3));
+                double* totalContactWeights =
+                    (double*)solverScratchSpace.allocateTempVector("totalContactWeights", countPatch * sizeof(double));
+                cubSumReduceByKey<contactPairs_t, float3>(keys, uniqueKeys, weightedContactPoints,
+                                                          totalWeightedContactPoints, numUniqueKeys, countPrimitive,
+                                                          streamInfo.stream, solverScratchSpace);
+                cubSumReduceByKey<contactPairs_t, double>(keys, uniqueKeys, contactWeights, totalContactWeights,
+                                                          numUniqueKeys, countPrimitive, streamInfo.stream,
+                                                          solverScratchSpace);
+                solverScratchSpace.finishUsingTempVector("weightedContactPoints");
+                solverScratchSpace.finishUsingTempVector("contactWeights");
+
+                // Step 12: Compute final contact points per patch pair by dividing by total weight
+                float3* finalContactPoints =
+                    (float3*)solverScratchSpace.allocateTempVector("finalContactPoints", countPatch * sizeof(float3));
+                computeFinalContactPointsPerPatch(totalWeightedContactPoints, totalContactWeights, finalContactPoints,
+                                                  countPatch, streamInfo.stream);
+                solverScratchSpace.finishUsingTempVector("totalWeightedContactPoints");
+                solverScratchSpace.finishUsingTempVector("totalContactWeights");
+                
+                // Clean up keys arrays now that we're done with reductions
+                solverScratchSpace.finishUsingTempVector("votingKeys");
+                solverScratchSpace.finishUsingTempVector("uniqueKeys");
+                solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
 
                 // Now we have:
                 // - totalAreas: total contact area per patch pair (countPatch elements)
                 // - finalNormals: final normal direction per patch pair (countPatch elements)
                 // - finalPenetrations: final penetration depth per patch pair (countPatch elements)
+                // - finalContactPoints: final contact point per patch pair (countPatch elements)
                 // These can be used for subsequent force calculations
 
                 // Call specialized patch-based force correction kernels here
@@ -2462,7 +2496,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                 .instantiate()
                                 .configure(dim3(blocks), dim3(DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0, streamInfo.stream)
                                 .launch(&simParams, &granData, totalAreas, finalNormals, finalPenetrations,
-                                        startOffsetPatch, countPatch);
+                                        finalContactPoints, startOffsetPatch, countPatch);
                         }
                     }
                 }
@@ -2471,6 +2505,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("totalAreas");
                 solverScratchSpace.finishUsingTempVector("finalNormals");
                 solverScratchSpace.finishUsingTempVector("finalPenetrations");
+                solverScratchSpace.finishUsingTempVector("finalContactPoints");
             }
         }
         // std::cout << "===========================" << std::endl;

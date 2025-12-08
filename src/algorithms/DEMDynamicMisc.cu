@@ -462,4 +462,98 @@ void finalizePatchResults(double* totalAreas,
     }
 }
 
+// Kernel to compute weighted contact points for each primitive contact
+// The weight is: penetration * area
+// This prepares data for reduction to get patch-based contact points
+__global__ void computeWeightedContactPoints_impl(DEMDataDT* granData,
+                                                  contactPairs_t* keys,
+                                                  float3* weightedContactPoints,
+                                                  double* weights,
+                                                  contactPairs_t startOffsetPrimitive,
+                                                  contactPairs_t count) {
+    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < count) {
+        contactPairs_t myContactID = startOffsetPrimitive + idx;
+
+        // Get the contact point from contactTorque_convToForce (stored as float3)
+        float3 contactPoint = granData->contactTorque_convToForce[myContactID];
+
+        // Get the penetration depth from contactPointGeometryA (stored as double in float3)
+        float3 penetrationStorage = granData->contactPointGeometryA[myContactID];
+        double penetration = float3StorageToDouble(penetrationStorage);
+        // Only positive penetration contributes
+        if (penetration < 0.0) {
+            penetration = 0.0;
+        }
+
+        // Get the contact area from contactPointGeometryB (stored as double in float3)
+        float3 areaStorage = granData->contactPointGeometryB[myContactID];
+        double area = float3StorageToDouble(areaStorage);
+
+        // Compute weight = penetration * area
+        double weight = penetration * area;
+
+        // Compute weighted contact point
+        weightedContactPoints[idx] = make_float3(contactPoint.x * weight, 
+                                                 contactPoint.y * weight, 
+                                                 contactPoint.z * weight);
+
+        // Store weight for later normalization
+        weights[idx] = weight;
+
+        // Extract key from geomToPatchMap
+        keys[idx] = granData->geomToPatchMap[myContactID];
+    }
+}
+
+void computeWeightedContactPoints(DEMDataDT* granData,
+                                  contactPairs_t* keys,
+                                  float3* weightedContactPoints,
+                                  double* weights,
+                                  contactPairs_t startOffsetPrimitive,
+                                  contactPairs_t count,
+                                  cudaStream_t& this_stream) {
+    size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        computeWeightedContactPoints_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            granData, keys, weightedContactPoints, weights, startOffsetPrimitive, count);
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
+// Kernel to compute final contact points per patch by dividing by total weight
+// If total weight is 0, contact point is set to (0,0,0)
+__global__ void computeFinalContactPointsPerPatch_impl(float3* totalWeightedContactPoints,
+                                                       double* totalWeights,
+                                                       float3* finalContactPoints,
+                                                       contactPairs_t count) {
+    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < count) {
+        double totalWeight = totalWeights[idx];
+        if (totalWeight > 0.0) {
+            // Normalize by dividing by total weight
+            double invTotalWeight = 1.0 / totalWeight;
+            finalContactPoints[idx] = make_float3(totalWeightedContactPoints[idx].x * invTotalWeight,
+                                                  totalWeightedContactPoints[idx].y * invTotalWeight,
+                                                  totalWeightedContactPoints[idx].z * invTotalWeight);
+        } else {
+            // No valid contact point, set to (0,0,0)
+            finalContactPoints[idx] = make_float3(0, 0, 0);
+        }
+    }
+}
+
+void computeFinalContactPointsPerPatch(float3* totalWeightedContactPoints,
+                                       double* totalWeights,
+                                       float3* finalContactPoints,
+                                       contactPairs_t count,
+                                       cudaStream_t& this_stream) {
+    size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        computeFinalContactPointsPerPatch_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            totalWeightedContactPoints, totalWeights, finalContactPoints, count);
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
 }  // namespace deme
