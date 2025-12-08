@@ -45,13 +45,11 @@ int main() {
 
     std::cout << "\n--- Test 1: Load Mesh Template ---" << std::endl;
     // Load a mesh as a template (not yet in simulation)
-    auto mesh_template = DEMSim.LoadMeshType(
-        (GET_DATA_PATH() / "mesh/cube.obj").string(),
-        mat_type,
-        true,  // load_normals
-        false  // load_uv
+    auto mesh_template = DEMSim.LoadMeshType((GET_DATA_PATH() / "mesh/cube.obj").string(), mat_type,
+                                             true,  // load_normals
+                                             false  // load_uv
     );
-    
+
     if (mesh_template) {
         std::cout << "Successfully loaded mesh template" << std::endl;
         std::cout << "Number of triangles: " << mesh_template->GetNumTriangles() << std::endl;
@@ -69,14 +67,14 @@ int main() {
     mesh1->SetMOI(make_float3(200., 200., 200.));
     std::cout << "Created mesh instance 1 at (-1.5, 0, 0)" << std::endl;
     auto tracker1 = DEMSim.Track(mesh1);
-    
+
     auto mesh2 = DEMSim.AddMeshFromTemplate(mesh_template, make_float3(1.5, 0, 2));
     mesh2->SetFamily(0);
     mesh2->SetMass(1000.);
     mesh2->SetMOI(make_float3(200., 200., 200.));
     std::cout << "Created mesh instance 2 at (1.5, 0, 2)" << std::endl;
     auto tracker2 = DEMSim.Track(mesh2);
-    
+
     auto mesh3 = DEMSim.AddMeshFromTemplate(mesh_template, make_float3(0, 2, 1));
     mesh3->SetFamily(0);
     mesh3->SetMass(1000.);
@@ -94,7 +92,7 @@ int main() {
 
     std::cout << "\n--- Test 4: Vector-based Position Interface ---" << std::endl;
     // Test the vector-based interface
-    std::vector<float> pos = {3, 0, 1};
+    float3 pos = make_float3(3, 0, 1);
     auto mesh4 = DEMSim.AddMeshFromTemplate(mesh_template, pos);
     mesh4->SetFamily(0);
     mesh4->SetMass(1000.);
@@ -117,7 +115,7 @@ int main() {
     int frame = 0;
     int frame_step = (int)(frame_time / step_time);
     double final_time = 0.1;  // Short simulation
-    
+
     for (int i = 0; i < (int)(final_time / step_time); i++) {
         if (i % frame_step == 0) {
             frame++;
