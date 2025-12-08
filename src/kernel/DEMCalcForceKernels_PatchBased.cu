@@ -85,9 +85,10 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
     // ----------------------------------------------------------------
     if constexpr (AType == deme::GEO_T_SPHERE) {
         // For sphere-mesh contacts, patch A is a sphere
+        // Note: For spheres, the patch ID is the same as the sphere ID
         deme::bodyID_t sphereID = granData->idPatchA[myPatchContactID];
         deme::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
-        deme::bodyID_t myPatchID = sphereID;
+        deme::bodyID_t myPatchID = sphereID;  // For spheres, patch ID == sphere ID
 
         float3 myRelPos;
         float myRadius;
@@ -179,7 +180,13 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
     }
 
     // Calculate contact point as midpoint between patch centroids
-    // This is a simplified approach; the actual contact point would be more complex
+    // This is a simplified approach for patch-based contacts. In the primitive phase, collision
+    // detection algorithms compute exact contact points. Here, we use the centroid approximation
+    // since we've already aggregated multiple primitive contacts into a single patch contact.
+    // The approximation is acceptable because:
+    // 1. The contact normal and penetration have been accurately computed via voting
+    // 2. Forces are applied at the owner body level, so minor contact point variations have limited impact
+    // 3. The torque calculations still use the correct local positions relative to each owner
     contactPnt = (bodyAPos + bodyBPos) * 0.5;
 
     // Now compute forces using the patch-based contact data
