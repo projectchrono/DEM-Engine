@@ -388,4 +388,49 @@ void DEMMesh::SetPatchIDs(const std::vector<patchID_t>& patch_ids) {
     }
 }
 
+// Compute patch locations (relative to CoM, which is implicitly at 0,0,0)
+// If not explicitly set, calculates as:
+// - Single patch: (0,0,0)
+// - Multiple patches: average of triangle centroids per patch
+std::vector<float3> DEMMesh::ComputePatchLocations() const {
+    std::vector<float3> patch_locations(nPatches, make_float3(0, 0, 0));
+
+    if (nPatches == 1) {
+        // Single patch: location is just CoM (0,0,0)
+        return patch_locations;
+    }
+
+    // Multiple patches: compute average of triangle centroids per patch
+    std::vector<int> patch_triangle_counts(nPatches, 0);
+
+    for (size_t i = 0; i < nTri; ++i) {
+        const int3& face = m_face_v_indices[i];
+        const float3& v0 = m_vertices[face.x];
+        const float3& v1 = m_vertices[face.y];
+        const float3& v2 = m_vertices[face.z];
+
+        float3 centroid = triangleCentroid<float3>(v0, v1, v2);
+        patchID_t patch_id = (i < m_patch_ids.size()) ? m_patch_ids[i] : 0;
+
+        // Validate patch_id is within bounds
+        if (patch_id >= 0 && patch_id < static_cast<patchID_t>(nPatches)) {
+            patch_locations[patch_id].x += centroid.x;
+            patch_locations[patch_id].y += centroid.y;
+            patch_locations[patch_id].z += centroid.z;
+            patch_triangle_counts[patch_id]++;
+        }
+    }
+
+    // Average the accumulated centroids
+    for (unsigned int p = 0; p < nPatches; ++p) {
+        if (patch_triangle_counts[p] > 0) {
+            patch_locations[p].x /= patch_triangle_counts[p];
+            patch_locations[p].y /= patch_triangle_counts[p];
+            patch_locations[p].z /= patch_triangle_counts[p];
+        }
+    }
+
+    return patch_locations;
+}
+
 }  // end namespace deme

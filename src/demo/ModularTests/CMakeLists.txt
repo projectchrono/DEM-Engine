@@ -2,56 +2,26 @@
 # Additional include paths and libraries
 # ------------------------------------------------------------------------------
 
-# INCLUDE_DIRECTORIES(${ProjectIncludeRoot})
-
 SET(LIBRARIES
 		simulator_multi_gpu
 )
 
 # ------------------------------------------------------------------------------
-# List of all executables
+# List of all test executables
 # ------------------------------------------------------------------------------
 
-SET(DEMOS
-		DEMdemo_Repose
-		DEMdemo_Repose2D
-		DEMdemo_ContactChain
-		DEMdemo_Plow
-		DEMdemo_Sieve
-		DEMdemo_SingleSphereCollide
-		DEMdemo_MeshCollide
-		DEMdemo_MeshPatch
-		DEMdemo_BoxesFalling
-		DEMdemo_TestPack
-		DEMdemo_RotatingDrum
-		DEMdemo_Centrifuge
-		DEMdemo_GameOfLife
-		DEMdemo_BallDrop
-		DEMdemo_BallDrop2D
-		DEMdemo_Mixer
-		DEMdemo_GRCPrep_Part1
-		DEMdemo_GRCPrep_Part2
-		DEMdemo_GRCPrep_Part3
-		DEMdemo_ConePenetration
-		DEMdemo_Shake
-		DEMdemo_WheelDP
-		DEMdemo_WheelDPSimplified
-		DEMdemo_WheelSlopeSlip
-		DEMdemo_Indentation
-		DEMdemo_SolarSystem
-		DEMdemo_Electrostatic
-		DEMdemo_FlexibleMesh
-		DEMdemo_Hopper_Sphere_Cylinder
-		DEMdemo_Fracture_Box
+SET(MODULAR_TESTS
+		DEMTest_MeshTemplate
+		DEMTest_PatchLocations
 )
 
 # ------------------------------------------------------------------------------
-# Add all executables
+# Add all test executables
 # ------------------------------------------------------------------------------
 
-message(STATUS "Demo programs for DEM solver...")
+message(STATUS "Modular test programs for DEM solver...")
 
-FOREACH(PROGRAM ${DEMOS})
+FOREACH(PROGRAM ${MODULAR_TESTS})
 		
 		message(STATUS "...add ${PROGRAM}")
 
@@ -63,12 +33,6 @@ FOREACH(PROGRAM ${DEMOS})
 		)
 
 		if(WIN32)
-			# set_property(TARGET ${PROGRAM} 
-			# 	PROPERTY VS_DEBUGGER_ENVIRONMENT "PATH=$<TARGET_FILE_DIR:DEMERuntimeDataHelper_install>;%PATH%"
-			# )
-			# set_property(TARGET ${PROGRAM} 
-			# 	PROPERTY VS_DEBUGGER_ENVIRONMENT "PATH=$<TARGET_FILE_DIR:DEMERuntimeDataHelper>;%PATH%"
-			# )
 			add_custom_command(TARGET ${PROGRAM} POST_BUILD
                        COMMAND ${CMAKE_COMMAND} -E copy_if_different
                        "$<TARGET_FILE_DIR:DEMERuntimeDataHelper_install>/DEMERuntimeDataHelper_install.dll"
@@ -90,12 +54,4 @@ FOREACH(PROGRAM ${DEMOS})
 			CXX_STANDARD ${CXXSTD_SUPPORTED}
 		)
 
-		# install(TARGETS ${PROGRAM} DESTINATION ${DEME_INSTALL_DEMO})
-
 ENDFOREACH(PROGRAM)
-
-# ------------------------------------------------------------------------------
-# Add modular tests subdirectory
-# ------------------------------------------------------------------------------
-
-add_subdirectory(ModularTests)
