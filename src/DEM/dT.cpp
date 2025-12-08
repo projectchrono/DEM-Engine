@@ -1055,16 +1055,6 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         /// initialization. / For clumps, their init vel can be set via initializers because of historical reasons.
 
         // Populate patch info for this mesh
-        // mesh_patch_owner run length is the num of patches in this mesh entity
-        //// TODO: This flatten-then-init approach is historical and too ugly.
-        size_t this_patch_owner = mesh_patch_owner.at(p);
-        size_t p_start = p;  // Remember the starting patch index for this mesh
-        for (; p < mesh_patch_owner.size(); p++) {
-            if (mesh_patch_owner.at(p) != this_patch_owner)
-                break;
-            patchOwnerMesh[nExistingMeshPatches + p] = owner_offset_for_mesh_obj + this_patch_owner;
-            patchMaterialOffset[nExistingMeshPatches + p] = mesh_patch_materials.at(p);
-        }
 
         // Populate patch locations for this mesh
         // If explicitly set, use those; otherwise compute them
@@ -1074,9 +1064,17 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         } else {
             this_mesh_patch_locations = input_mesh_objs.at(i)->ComputePatchLocations();
         }
-        // Store the patch locations in the global array
-        for (size_t patch_idx = p_start; patch_idx < p; patch_idx++) {
-            relPosPatch[nExistingMeshPatches + patch_idx] = this_mesh_patch_locations[patch_idx - p_start];
+
+        // mesh_patch_owner run length is the num of patches in this mesh entity
+        //// TODO: This flatten-then-init approach is historical and too ugly.
+        size_t this_patch_owner = mesh_patch_owner.at(p);
+        size_t p_start = p;  // Record where patch ID of this run starts
+        for (; p < mesh_patch_owner.size(); p++) {
+            if (mesh_patch_owner.at(p) != this_patch_owner)
+                break;
+            patchOwnerMesh[nExistingMeshPatches + p] = owner_offset_for_mesh_obj + this_patch_owner;
+            patchMaterialOffset[nExistingMeshPatches + p] = mesh_patch_materials.at(p);
+            relPosPatch[nExistingMeshPatches + p] = this_mesh_patch_locations[p - p_start];
         }
 
         // Per-facet info

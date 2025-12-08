@@ -388,11 +388,6 @@ void DEMMesh::SetPatchIDs(const std::vector<patchID_t>& patch_ids) {
     }
 }
 
-// Helper function to compute triangle centroid
-static float3 computeTriangleCentroid(const float3& v0, const float3& v1, const float3& v2) {
-    return make_float3((v0.x + v1.x + v2.x) / 3.0f, (v0.y + v1.y + v2.y) / 3.0f, (v0.z + v1.z + v2.z) / 3.0f);
-}
-
 // Compute patch locations (relative to CoM, which is implicitly at 0,0,0)
 // If not explicitly set, calculates as:
 // - Single patch: (0,0,0)
@@ -414,7 +409,7 @@ std::vector<float3> DEMMesh::ComputePatchLocations() const {
         const float3& v1 = m_vertices[face.y];
         const float3& v2 = m_vertices[face.z];
 
-        float3 centroid = computeTriangleCentroid(v0, v1, v2);
+        float3 centroid = triangleCentroid<float3>(v0, v1, v2);
         patchID_t patch_id = (i < m_patch_ids.size()) ? m_patch_ids[i] : 0;
 
         // Validate patch_id is within bounds

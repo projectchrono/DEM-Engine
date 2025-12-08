@@ -593,7 +593,8 @@ class DEMMesh : public DEMInitializer {
     }
 
     /// @brief Get the relative location (to CoM) of each patch.
-    /// @return Vector of locations (one per patch). Will be automatically calculated at initialization if not explicitly set.
+    /// @return Vector of locations (one per patch). Will be automatically calculated at initialization if not
+    /// explicitly set.
     const std::vector<float3>& GetPatchLocations() const { return m_patch_locations; }
 
     /// @brief Check if patch locations have been explicitly set.
@@ -601,7 +602,8 @@ class DEMMesh : public DEMInitializer {
     bool ArePatchLocationsExplicitlySet() const { return patch_locations_explicitly_set; }
 
     /// @brief Compute patch locations relative to the implicit CoM of the mesh.
-    /// @details For single patch: returns (0,0,0). For multiple patches: returns average of triangle centroids per patch.
+    /// @details For single patch: returns (0,0,0). For multiple patches: returns average of triangle centroids per
+    /// patch.
     /// @return Vector of locations (one per patch).
     std::vector<float3> ComputePatchLocations() const;
 
