@@ -493,10 +493,9 @@ __global__ void computeWeightedContactPoints_impl(DEMDataDT* granData,
         // Compute weight = penetration * area
         double weight = penetration * area;
 
-        // Compute weighted contact point
-        weightedContactPoints[idx] = make_float3(contactPoint.x * weight, 
-                                                 contactPoint.y * weight, 
-                                                 contactPoint.z * weight);
+        // Compute weighted contact point (multiply each component by weight)
+        float weightF = static_cast<float>(weight);
+        weightedContactPoints[idx] = contactPoint * weightF;
 
         // Store weight for later normalization
         weights[idx] = weight;
@@ -532,13 +531,11 @@ __global__ void computeFinalContactPointsPerPatch_impl(float3* totalWeightedCont
         double totalWeight = totalWeights[idx];
         if (totalWeight > 0.0) {
             // Normalize by dividing by total weight
-            double invTotalWeight = 1.0 / totalWeight;
-            finalContactPoints[idx] = make_float3(totalWeightedContactPoints[idx].x * invTotalWeight,
-                                                  totalWeightedContactPoints[idx].y * invTotalWeight,
-                                                  totalWeightedContactPoints[idx].z * invTotalWeight);
+            float invTotalWeight = static_cast<float>(1.0 / totalWeight);
+            finalContactPoints[idx] = totalWeightedContactPoints[idx] * invTotalWeight;
         } else {
             // No valid contact point, set to (0,0,0)
-            finalContactPoints[idx] = make_float3(0, 0, 0);
+            finalContactPoints[idx] = make_float3(0.0f, 0.0f, 0.0f);
         }
     }
 }
