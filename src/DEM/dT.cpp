@@ -2354,6 +2354,10 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 // For extra safety
                 solverScratchSpace.syncDualStructDeviceToHost("numUniqueKeys");
                 size_t numUniqueKeysHost = *(solverScratchSpace.getDualStructHost("numUniqueKeys"));
+                // std::cout << "Keys:" << std::endl;
+                // displayDeviceArray<contactPairs_t>(keys, countPrimitive);
+                // std::cout << "Unique Keys:" << std::endl;
+                // displayDeviceArray<contactPairs_t>(uniqueKeys, numUniqueKeysHost);
                 if (numUniqueKeysHost != countPatch) {
                     DEME_ERROR(
                         "Patch-based contact voting produced %zu unique patch pairs, but expected %zu pairs for "
@@ -2449,7 +2453,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 double* contactWeights =
                     (double*)solverScratchSpace.allocateTempVector("contactWeights", countPrimitive * sizeof(double));
                 computeWeightedContactPoints(&granData, keys, weightedContactPoints, contactWeights,
-                                            startOffsetPrimitive, countPrimitive, streamInfo.stream);
+                                             startOffsetPrimitive, countPrimitive, streamInfo.stream);
 
                 // Step 11: Reduce-by-key to get total weighted contact points per patch pair
                 float3* totalWeightedContactPoints = (float3*)solverScratchSpace.allocateTempVector(
@@ -2472,7 +2476,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                                   countPatch, streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("totalWeightedContactPoints");
                 solverScratchSpace.finishUsingTempVector("totalContactWeights");
-                
+
                 // Clean up keys arrays now that we're done with reductions
                 solverScratchSpace.finishUsingTempVector("votingKeys");
                 solverScratchSpace.finishUsingTempVector("uniqueKeys");
@@ -2650,7 +2654,6 @@ inline void DEMDynamicThread::unpack_impl() {
     m_numExistingTypes = *solverScratchSpace.getDualStructHost("numExistingTypes");
     cubPrefixScan<contactPairs_t, contactPairs_t>(typeCounts, typeStartOffsetsPrimitive.device(), m_numExistingTypes,
                                                   streamInfo.stream, solverScratchSpace);
-    solverScratchSpace.finishUsingTempVector("typeCounts");
     existingContactTypes.toHost();
     typeStartOffsetsPrimitive.toHost();
     for (size_t i = 0; i < m_numExistingTypes; i++) {
@@ -2681,6 +2684,8 @@ inline void DEMDynamicThread::unpack_impl() {
                                                                   : (contactPairs_t)*solverScratchSpace.numContacts) -
                                           typeStartOffsetsPatch[i]);
     }
+
+    solverScratchSpace.finishUsingTempVector("typeCounts");
     solverScratchSpace.finishUsingDualStruct("numExistingTypes");
 }
 

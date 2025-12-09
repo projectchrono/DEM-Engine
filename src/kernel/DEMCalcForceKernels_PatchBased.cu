@@ -29,7 +29,8 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
     // Contact type is known at compile time
     deme::contact_t ContactType = CONTACT_TYPE;
 
-    // Calculate relative index for accessing the temp arrays (totalAreas, finalNormals, finalPenetrations, finalContactPoints)
+    // Calculate relative index for accessing the temp arrays (totalAreas, finalNormals, finalPenetrations,
+    // finalContactPoints)
     deme::contactPairs_t relativeIndex = myPatchContactID - startOffsetPatch;
 
     // The following quantities are provided from the patch voting process
@@ -145,13 +146,7 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
         _forceModelGeoWildcardAcqForBAnal_;
 
         equipOwnerPosRot(simParams, granData, myOwner, myRelPos, BOwnerPos, bodyBPos, BOriQ);
-    } else {
-        // Unsupported type
-        ContactType = deme::NOT_A_CONTACT;
     }
-
-    // Contact point has already been computed via weighted average during the voting process
-    // (weight = penetration * area). No additional calculation needed here.
 
     // Now compute forces using the patch-based contact data
     _forceModelContactWildcardAcq_;
@@ -199,8 +194,9 @@ __global__ void calculatePatchContactForces_SphTri(deme::DEMSimParams* simParams
                                                    deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myPatchContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myPatchContactID < startOffset + nContactPairs) {
-        calculatePatchContactForces_impl<deme::SPHERE_TRIANGLE_CONTACT>(
-            simParams, granData, totalAreas, finalNormals, finalPenetrations, finalContactPoints, myPatchContactID, startOffset);
+        calculatePatchContactForces_impl<deme::SPHERE_TRIANGLE_CONTACT>(simParams, granData, totalAreas, finalNormals,
+                                                                        finalPenetrations, finalContactPoints,
+                                                                        myPatchContactID, startOffset);
     }
 }
 
@@ -214,8 +210,9 @@ __global__ void calculatePatchContactForces_TriTri(deme::DEMSimParams* simParams
                                                    deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myPatchContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myPatchContactID < startOffset + nContactPairs) {
-        calculatePatchContactForces_impl<deme::TRIANGLE_TRIANGLE_CONTACT>(
-            simParams, granData, totalAreas, finalNormals, finalPenetrations, finalContactPoints, myPatchContactID, startOffset);
+        calculatePatchContactForces_impl<deme::TRIANGLE_TRIANGLE_CONTACT>(simParams, granData, totalAreas, finalNormals,
+                                                                          finalPenetrations, finalContactPoints,
+                                                                          myPatchContactID, startOffset);
     }
 }
 
@@ -230,6 +227,7 @@ __global__ void calculatePatchContactForces_TriAnal(deme::DEMSimParams* simParam
     deme::contactPairs_t myPatchContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myPatchContactID < startOffset + nContactPairs) {
         calculatePatchContactForces_impl<deme::TRIANGLE_ANALYTICAL_CONTACT>(
-            simParams, granData, totalAreas, finalNormals, finalPenetrations, finalContactPoints, myPatchContactID, startOffset);
+            simParams, granData, totalAreas, finalNormals, finalPenetrations, finalContactPoints, myPatchContactID,
+            startOffset);
     }
 }

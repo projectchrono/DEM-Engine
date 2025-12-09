@@ -195,28 +195,28 @@ __global__ void extractPatchInvolvedContactPatchIDPairs(deme::patchIDPair_t* con
             case deme::SPHERE_TRIANGLE_CONTACT: {
                 deme::bodyID_t patchB = triPatchID[bodyB];
                 // For sphere-triangle contact: triangle has patch ID, sphere does not but its geoID serves the same
-                // purpose
-                contactPatchPairs[myID] = deme::encodeContactType<deme::patchIDPair_t, deme::bodyID_t>(
+                // purpose. We ensure sphere is A.
+                contactPatchPairs[myID] = deme::encodeType<deme::patchIDPair_t, deme::bodyID_t>(
                     bodyA, patchB);  // Input bodyID_t, return patchIDPair_t
                 break;
             }
             case deme::TRIANGLE_ANALYTICAL_CONTACT: {
                 deme::bodyID_t patchA = triPatchID[bodyA];
                 // For mesh-analytical contact: mesh has patch ID, analytical object does not but its geoID serves the
-                // same purpose
-                contactPatchPairs[myID] = deme::encodeContactType<deme::patchIDPair_t, deme::bodyID_t>(patchA, bodyB);
+                // same purpose. We ensure triangle is A.
+                contactPatchPairs[myID] = deme::encodeType<deme::patchIDPair_t, deme::bodyID_t>(patchA, bodyB);
                 break;
             }
             case deme::TRIANGLE_TRIANGLE_CONTACT: {
                 deme::bodyID_t patchA = triPatchID[bodyA];
                 deme::bodyID_t patchB = triPatchID[bodyB];
-                // For triangle-triangle contact: both triangles have patch IDs
-                contactPatchPairs[myID] = deme::encodeContactType<deme::patchIDPair_t, deme::bodyID_t>(patchA, patchB);
+                // For triangle-triangle contact: both triangles have patch IDs. Keeps original order.
+                contactPatchPairs[myID] = deme::encodeType<deme::patchIDPair_t, deme::bodyID_t>(patchA, patchB);
                 break;
             }
             default:
-                // In other no-mesh cases, for now, we just use geoID as patchIDs
-                contactPatchPairs[myID] = deme::encodeContactType<deme::patchIDPair_t, deme::bodyID_t>(bodyA, bodyB);
+                // In other sph-sph and sph-anal, for now, we just use geoID as patchIDs. Keeps original order.
+                contactPatchPairs[myID] = deme::encodeType<deme::patchIDPair_t, deme::bodyID_t>(bodyA, bodyB);
                 break;
         }
     }
@@ -230,8 +230,8 @@ __global__ void decodePatchPairsToSeparateArrays(deme::patchIDPair_t* uniquePatc
     deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < numUnique) {
         deme::patchIDPair_t patchPair = uniquePatchPairs[myID];
-        // decodeTypeA returns the value stored in high bits (always the smaller of the two when encoded)
-        // decodeTypeB returns the value stored in low bits (always the larger of the two when encoded)
+        // decodeTypeA returns the value stored in high bits, and decodeTypeB returns the value stored in low bits. This
+        // decoding does not change the order as they were encoded in encodeType.
         idPatchA[myID] = deme::decodeTypeA<deme::patchIDPair_t, deme::bodyID_t>(patchPair);
         idPatchB[myID] = deme::decodeTypeB<deme::patchIDPair_t, deme::bodyID_t>(patchPair);
     }
@@ -250,30 +250,6 @@ __global__ void markNewPatchPairGroups(deme::patchIDPair_t* sortedPatchPairs,
         } else {
             // Compare with previous element - if different, it's a new group
             isNewGroup[myID] = (sortedPatchPairs[myID] != sortedPatchPairs[myID - 1]) ? 1 : 0;
-        }
-    }
-}
-
-// Extract patch contact types: For each unique patch pair, extract the corresponding contact type.
-// Since primitives are sorted by contact type first, then by patch pair, all primitives in a patch
-// pair group share the same contact type. We just need to take the contact type of the first
-// primitive in each group.
-// Note: No race condition because primitives are sorted by patch pair within each type,
-// so geomToPatchMap values change monotonically, and only one thread (the first in each group)
-// will write to each contactTypePatch[patchIdx] location.
-__global__ void extractPatchContactTypes(deme::contact_t* contactTypePatch,
-                                         deme::contact_t* primitiveContactType,
-                                         deme::contactPairs_t* geomToPatchMap,
-                                         size_t numPrimitiveContacts,
-                                         size_t numContacts) {
-    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (myID < numPrimitiveContacts) {
-        deme::contactPairs_t patchIdx = geomToPatchMap[myID];
-        // Check if this is the first primitive in this patch group
-        // (either first element, or the previous primitive has a different patch index)
-        // Since primitives are sorted by patch ID pair, only one thread per patch group meets this condition
-        if (myID == 0 || geomToPatchMap[myID - 1] != patchIdx) {
-            contactTypePatch[patchIdx] = primitiveContactType[myID];
         }
     }
 }

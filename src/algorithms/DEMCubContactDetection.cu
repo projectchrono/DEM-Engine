@@ -869,6 +869,12 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                             sandwichBNode3, *pNumActiveBinsForTri, solverFlags.meshUniversalContact);
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
+            // std::cout << "idPrimitiveA: " << std::endl;
+            // displayDeviceArray<bodyID_t>(granData->idPrimitiveA, *scratchPad.numPrimitiveContacts);
+            // std::cout << "idPrimitiveB: " << std::endl;
+            // displayDeviceArray<bodyID_t>(granData->idPrimitiveB, *scratchPad.numPrimitiveContacts);
+            // std::cout << "contactTypePrimitive: " << std::endl;
+            // displayDeviceArray<contact_t>(granData->contactTypePrimitive, *scratchPad.numPrimitiveContacts);
         }  // End of bin-wise contact detection subroutine
 
         // The following vectors are used till the end
@@ -1194,7 +1200,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // Sort contactPatchPairs within each contact type segment, so we can construct geomToPatchMap
 
             // First, identify the contact type segments using run-length encoding
-            // Maximum number of contact types (5 main types: sph-sph, sph-tri, sph-anal, tri-tri, tri-anal
+            // Maximum number of contact types (5 main types: sph-sph, sph-tri, sph-anal, tri-tri, tri-anal)
             contact_t* unique_types = (contact_t*)scratchPad.allocateTempVector(
                 "unique_types", NUM_SUPPORTED_CONTACT_TYPES * sizeof(contact_t));
             size_t* type_counts =
@@ -1335,12 +1341,17 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                                                  this_stream>>>(patchPairs_sorted + prim_offset, isNewGroup, count);
                         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                     }
+                    // std::cout << "patchPairs_sorted segment " << i << ": " << std::endl;
+                    // displayDeviceArray<patchIDPair_t>(patchPairs_sorted + prim_offset, count);
+                    // std::cout << "isNewGroup segment " << i << ": " << std::endl;
+                    // displayDeviceArray<contactPairs_t>(isNewGroup, count);
 
                     // Prefix scan on isNewGroup and write result directly to the geomToPatchMap location
                     cubDEMPrefixScan<contactPairs_t, contactPairs_t>(isNewGroup, granData->geomToPatchMap + prim_offset,
                                                                      count, this_stream, scratchPad);
 
-                    // Add the global offset (totalUniquePatchPairs) to get the final geomToPatchMap values
+                    // Add the global offset (totalUniquePatchPairs) to get the final geomToPatchMap values. Also note
+                    // this add offset operation will take care of the +1 needed at the jump of each new type.
                     if (count > 0 && totalUniquePatchPairs > 0) {
                         addOffsetToArray<<<dim3(blocks_needed_for_mark), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
                                            this_stream>>>(granData->geomToPatchMap + prim_offset,
@@ -1484,7 +1495,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     scratchPad.numPrevMeshPatches.toDevice();
 }
 
-//// TODO: Not loading primitive contacts, but directly patch contacts
 void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
                                 DualStruct<DEMDataDT>& dT_data,
                                 DualArray<bodyID_t>& previous_idPatchA,
