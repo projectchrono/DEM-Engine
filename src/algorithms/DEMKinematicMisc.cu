@@ -306,18 +306,24 @@ __global__ void buildPatchContactMapping(deme::bodyID_t* curr_idPatchA,
         size_t type_end = left;
 
         // Within this type segment, use binary search to find the matching A/B pair
-        // The segment is sorted by the combined patch ID pair (A in high bits, B in low bits)
-        // The encoding ensures that (smaller_A, larger_B) pattern creates a sortable value
+        // The segment is sorted by the encoded patch ID pair (A in high bits, B in low bits)
+        // Note: encodeType preserves the order, so arrays are sorted by (A, B) lexicographically
+        // For matching, we need to normalize to (min, max) since the same physical contact
+        // could have different A/B ordering between timesteps
+        deme::bodyID_t curr_min = (curr_A < curr_B) ? curr_A : curr_B;
+        deme::bodyID_t curr_max = (curr_A < curr_B) ? curr_B : curr_A;
+        
         left = type_start;
         right = type_end;
         while (left < right) {
             size_t mid = left + (right - left) / 2;
             deme::bodyID_t prev_A = prev_idPatchA[mid];
             deme::bodyID_t prev_B = prev_idPatchB[mid];
+            deme::bodyID_t prev_min = (prev_A < prev_B) ? prev_A : prev_B;
+            deme::bodyID_t prev_max = (prev_A < prev_B) ? prev_B : prev_A;
 
-            // Compare (A, B) pairs lexicographically
-            // Since they're sorted by patch ID pair where smaller ID is in high bits
-            if (prev_A < curr_A || (prev_A == curr_A && prev_B < curr_B)) {
+            // Compare (min, max) pairs lexicographically to find matching physical contact
+            if (prev_min < curr_min || (prev_min == curr_min && prev_max < curr_max)) {
                 left = mid + 1;
             } else {
                 right = mid;
@@ -328,7 +334,9 @@ __global__ void buildPatchContactMapping(deme::bodyID_t* curr_idPatchA,
         if (left < type_end) {
             deme::bodyID_t prev_A = prev_idPatchA[left];
             deme::bodyID_t prev_B = prev_idPatchB[left];
-            if (prev_A == curr_A && prev_B == curr_B) {
+            deme::bodyID_t prev_min = (prev_A < prev_B) ? prev_A : prev_B;
+            deme::bodyID_t prev_max = (prev_A < prev_B) ? prev_B : prev_A;
+            if (prev_min == curr_min && prev_max == curr_max) {
                 my_partner = left;
             }
         }
