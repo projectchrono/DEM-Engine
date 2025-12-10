@@ -239,6 +239,23 @@ void computeFinalContactPointsPerPatch(float3* totalWeightedContactPoints,
                                        contactPairs_t count,
                                        cudaStream_t& this_stream);
 
+////////////////////////////////////////////////////////////////////////////////
+// Prep force kernels declaration
+////////////////////////////////////////////////////////////////////////////////
+
+void prepareForceArrays(DEMSimParams* simParams,
+                        DEMDataDT* granData,
+                        size_t nPrimitiveContactPairs,
+                        cudaStream_t& this_stream);
+void prepareAccArrays(DEMSimParams* simParams, DEMDataDT* granData, bodyID_t nOwnerBodies, cudaStream_t& this_stream);
+void rearrangeContactWildcards(DEMDataDT* granData,
+                               float* wildcard,
+                               notStupidBool_t* sentry,
+                               unsigned int nWildcards,
+                               size_t nContactPairs,
+                               cudaStream_t& this_stream);
+void markAliveContacts(float* wildcard, notStupidBool_t* sentry, size_t nContactPairs, cudaStream_t& this_stream);
+
 }  // namespace deme
 
 #endif

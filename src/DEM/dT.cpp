@@ -2178,32 +2178,14 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
     size_t blocks_needed_for_rearrange;
     if (DEME_GET_VERBOSITY() >= VERBOSITY_METRIC) {
         if (*solverScratchSpace.numPrevContacts > 0) {
-            // DEME_GPU_CALL(cudaMemset(contactSentry, 0, sentry_bytes));
-            blocks_needed_for_rearrange =
-                (*solverScratchSpace.numPrevContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-            if (blocks_needed_for_rearrange > 0) {
-                prep_force_kernels->kernel("markAliveContacts")
-                    .instantiate()
-                    .configure(dim3(blocks_needed_for_rearrange), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                               streamInfo.stream)
-                    .launch(granData->contactWildcards[simParams->nContactWildcards - 1], contactSentry,
-                            *solverScratchSpace.numPrevContacts);
-                DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-            }
+            markAliveContacts(granData->contactWildcards[simParams->nContactWildcards - 1], contactSentry,
+                              *solverScratchSpace.numPrevContacts, streamInfo.stream);
         }
     }
 
     // Rearrange contact histories based on kT instruction
-    blocks_needed_for_rearrange =
-        (*solverScratchSpace.numContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-    if (blocks_needed_for_rearrange > 0) {
-        prep_force_kernels->kernel("rearrangeContactWildcards")
-            .instantiate()
-            .configure(dim3(blocks_needed_for_rearrange), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(&granData, newWildcards[0], contactSentry, simParams->nContactWildcards,
-                    *solverScratchSpace.numContacts);
-        DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-    }
+    rearrangeContactWildcards(&granData, newWildcards[0], contactSentry, simParams->nContactWildcards,
+                              *solverScratchSpace.numContacts, streamInfo.stream);
 
     // Take a look, does the sentry indicate that there is an `alive' contact got lost?
     if (DEME_GET_VERBOSITY() >= VERBOSITY_METRIC) {
@@ -2520,29 +2502,19 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
 void DEMDynamicThread::calculateForces() {
     // Reset force (acceleration) arrays for this time step
     size_t nContactPairs = *solverScratchSpace.numContacts;
+    size_t nPrimitiveContactPairs = *solverScratchSpace.numPrimitiveContacts;
 
     timers.GetTimer("Clear force array").start();
     {
-        size_t blocks_needed_for_force_prep =
-            (nContactPairs + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-        size_t blocks_needed_for_acc_prep =
-            (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-
-        prep_force_kernels->kernel("prepareAccArrays")
-            .instantiate()
-            .configure(dim3(blocks_needed_for_acc_prep), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(&simParams, &granData);
-        DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        prepareAccArrays(&simParams, &granData, simParams->nOwnerBodies, streamInfo.stream);
 
         // prepareForceArrays needs to clear contact force arrays, only if the user asks us to record contact forces. If
         // meshUniversalContact is on, then although we use these arrays, no need to initialize them to 0, because the
         // kernel will overwrite them anyway.
         if (!solverFlags.useNoContactRecord) {
-            prep_force_kernels->kernel("prepareForceArrays")
-                .instantiate()
-                .configure(dim3(blocks_needed_for_force_prep), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-                .launch(&simParams, &granData, nContactPairs);
-            DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+            // Pay attention that the force result-related arrays have nPrimitiveContactPairs elements, not
+            // nContactPairs
+            prepareForceArrays(&simParams, &granData, nPrimitiveContactPairs, streamInfo.stream);
         }
     }
     timers.GetTimer("Clear force array").stop();
@@ -2559,7 +2531,7 @@ void DEMDynamicThread::calculateForces() {
         // marks a convex component of a owner) need to vote to decide the true contact. This is where the second step
         // comes in.
         dispatchPatchBasedForceCorrections(typeStartCountPrimitiveMap, typeStartCountPatchMap,
-                                           contactTypePrimitiveKernelMap);
+                                           contactTypePatchKernelMap);
 
         // displayDeviceFloat3(granData->contactForces, nContactPairs);
         // displayDeviceArray<contact_t>(granData->contactTypePatch, nContactPairs);
@@ -2941,12 +2913,7 @@ size_t DEMDynamicThread::estimateHostMemUsage() const {
 
 void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& Subs,
                                      const std::vector<std::string>& JitifyOptions) {
-    // First one is force array preparation kernels
-    {
-        prep_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMPrepForceKernels", JitHelper::KERNEL_DIR / "DEMPrepForceKernels.cu", Subs, JitifyOptions)));
-    }
-    // Then force calculation kernels
+    // Force calculation kernels
     {
         cal_force_kernels = std::make_shared<jitify::Program>(std::move(
             JitHelper::buildProgram("DEMCalcForceKernels_Primitive",

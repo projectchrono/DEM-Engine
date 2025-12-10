@@ -768,7 +768,6 @@ class DEMDynamicThread {
         const std::function<bool(unsigned int, unsigned int, unsigned int, unsigned int)>& condition);
 
     // Just-in-time compiled kernels
-    std::shared_ptr<jitify::Program> prep_force_kernels;
     std::shared_ptr<jitify::Program> cal_force_kernels;
     std::shared_ptr<jitify::Program> cal_patch_force_kernels;
     std::shared_ptr<jitify::Program> collect_force_kernels;
