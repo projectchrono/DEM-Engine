@@ -72,11 +72,11 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
         oriQ.z = granData->oriQz[ownerID];
         // Must derive torque in local...
         if (need_torque) {
-            applyOriQToVector3<float, deme::oriQ_t>(torque.x, torque.y, torque.z, oriQ.w, -oriQ.x, -oriQ.y, -oriQ.z);
+            applyOriQToVector3<float, oriQ_t>(torque.x, torque.y, torque.z, oriQ.w, -oriQ.x, -oriQ.y, -oriQ.z);
             // Force times point...
             torque = cross(cntPnt, torque);
             if (!torque_in_local) {  // back to global if needed
-                applyOriQToVector3<float, deme::oriQ_t>(torque.x, torque.y, torque.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+                applyOriQToVector3<float, oriQ_t>(torque.x, torque.y, torque.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
             }
         }
 
@@ -458,6 +458,215 @@ void finalizePatchResults(double* totalAreas,
         finalizePatchResults_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             totalAreas, votedNormals, votedPenetrations, zeroAreaNormals, zeroAreaPenetrations, finalNormals,
             finalPenetrations, count);
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
+// Kernel to compute weighted contact points for each primitive contact
+// The weight is: penetration * area
+// This prepares data for reduction to get patch-based contact points
+__global__ void computeWeightedContactPoints_impl(DEMDataDT* granData,
+                                                  double3* weightedContactPoints,
+                                                  double* weights,
+                                                  contactPairs_t startOffsetPrimitive,
+                                                  contactPairs_t count) {
+    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < count) {
+        contactPairs_t myContactID = startOffsetPrimitive + idx;
+
+        // Get the contact point from contactTorque_convToForce (stored as float3)
+        double3 contactPoint = to_double3(granData->contactTorque_convToForce[myContactID]);
+
+        // Get the penetration depth from contactPointGeometryA (stored as double in float3)
+        float3 penetrationStorage = granData->contactPointGeometryA[myContactID];
+        double penetration = float3StorageToDouble(penetrationStorage);
+        // Only positive penetration contributes
+        if (penetration < 0.0) {
+            penetration = 0.0;
+        }
+
+        // Get the contact area from contactPointGeometryB (stored as double in float3)
+        float3 areaStorage = granData->contactPointGeometryB[myContactID];
+        double area = float3StorageToDouble(areaStorage);
+
+        // Compute weight = penetration * area
+        double weight = penetration * area;
+
+        // Compute weighted contact point (multiply each component by weight)
+        weightedContactPoints[idx] = contactPoint * weight;
+
+        // Store weight for later normalization
+        weights[idx] = weight;
+    }
+}
+
+void computeWeightedContactPoints(DEMDataDT* granData,
+                                  double3* weightedContactPoints,
+                                  double* weights,
+                                  contactPairs_t startOffsetPrimitive,
+                                  contactPairs_t count,
+                                  cudaStream_t& this_stream) {
+    size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        computeWeightedContactPoints_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            granData, weightedContactPoints, weights, startOffsetPrimitive, count);
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
+// Kernel to compute final contact points per patch by dividing by total weight
+// If total weight is 0, contact point is set to (0,0,0)
+__global__ void computeFinalContactPointsPerPatch_impl(double3* totalWeightedContactPoints,
+                                                       double* totalWeights,
+                                                       double3* finalContactPoints,
+                                                       contactPairs_t count) {
+    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < count) {
+        double totalWeight = totalWeights[idx];
+        if (totalWeight > 0.0) {
+            // Normalize by dividing by total weight
+            double invTotalWeight = (1.0 / totalWeight);
+            finalContactPoints[idx] = totalWeightedContactPoints[idx] * invTotalWeight;
+        } else {
+            // No valid contact point, set to (0,0,0)
+            finalContactPoints[idx] = make_double3(0, 0, 0);
+        }
+    }
+}
+
+void computeFinalContactPointsPerPatch(double3* totalWeightedContactPoints,
+                                       double* totalWeights,
+                                       double3* finalContactPoints,
+                                       contactPairs_t count,
+                                       cudaStream_t& this_stream) {
+    size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        computeFinalContactPointsPerPatch_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            totalWeightedContactPoints, totalWeights, finalContactPoints, count);
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Prep force kernels
+////////////////////////////////////////////////////////////////////////////////
+
+inline __device__ void cleanUpContactForces(size_t thisContact, DEMSimParams* simParams, DEMDataDT* granData) {
+    const float3 zeros = make_float3(0, 0, 0);
+    granData->contactForces[thisContact] = zeros;
+    granData->contactTorque_convToForce[thisContact] = zeros;
+}
+
+inline __device__ void cleanUpAcc(size_t thisClump, DEMSimParams* simParams, DEMDataDT* granData) {
+    // If should not clear acc arrays, then just mark it to be clear in the next ts
+    if (granData->accSpecified[thisClump]) {
+        granData->accSpecified[thisClump] = 0;
+    } else {
+        granData->aX[thisClump] = 0;
+        granData->aY[thisClump] = 0;
+        granData->aZ[thisClump] = 0;
+    }
+    if (granData->angAccSpecified[thisClump]) {
+        granData->angAccSpecified[thisClump] = 0;
+    } else {
+        granData->alphaX[thisClump] = 0;
+        granData->alphaY[thisClump] = 0;
+        granData->alphaZ[thisClump] = 0;
+    }
+}
+
+__global__ void prepareAccArrays_impl(DEMSimParams* simParams, DEMDataDT* granData) {
+    size_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < simParams->nOwnerBodies) {
+        cleanUpAcc(myID, simParams, granData);
+    }
+}
+
+__global__ void prepareForceArrays_impl(DEMSimParams* simParams, DEMDataDT* granData, size_t nContactPairs) {
+    size_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < nContactPairs) {
+        cleanUpContactForces(myID, simParams, granData);
+    }
+}
+
+void prepareForceArrays(DEMSimParams* simParams,
+                        DEMDataDT* granData,
+                        size_t nPrimitiveContactPairs,
+                        cudaStream_t& this_stream) {
+    size_t blocks_needed_for_force_prep =
+        (nPrimitiveContactPairs + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed_for_force_prep > 0) {
+        prepareForceArrays_impl<<<blocks_needed_for_force_prep, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            simParams, granData, nPrimitiveContactPairs);
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
+void prepareAccArrays(DEMSimParams* simParams, DEMDataDT* granData, bodyID_t nOwnerBodies, cudaStream_t& this_stream) {
+    size_t blocks_needed_for_acc_prep = (nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed_for_acc_prep > 0) {
+        prepareAccArrays_impl<<<blocks_needed_for_acc_prep, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(simParams,
+                                                                                                          granData);
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
+__global__ void rearrangeContactWildcards_impl(DEMDataDT* granData,
+                                               float* newWildcards,
+                                               notStupidBool_t* sentry,
+                                               unsigned int nWildcards,
+                                               size_t nContactPairs) {
+    size_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < nContactPairs) {
+        contactPairs_t map_from = granData->contactMapping[myID];
+        if (map_from == NULL_MAPPING_PARTNER) {
+            // If it is a NULL ID then kT says this contact is new. Initialize all wildcard arrays.
+            for (size_t i = 0; i < nWildcards; i++) {
+                newWildcards[nContactPairs * i + myID] = 0;
+            }
+        } else {
+            // Not a new contact, need to map it from somewhere in the old history array
+            for (size_t i = 0; i < nWildcards; i++) {
+                newWildcards[nContactPairs * i + myID] = granData->contactWildcards[i][map_from];
+            }
+            // This sentry trys to make sure that all `alive' contacts got mapped to some place
+            sentry[map_from] = 0;
+        }
+    }
+}
+
+void rearrangeContactWildcards(DEMDataDT* granData,
+                               float* wildcard,
+                               notStupidBool_t* sentry,
+                               unsigned int nWildcards,
+                               size_t nContactPairs,
+                               cudaStream_t& this_stream) {
+    size_t blocks_needed = (nContactPairs + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        rearrangeContactWildcards_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            granData, wildcard, sentry, nWildcards, nContactPairs);
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
+__global__ void markAliveContacts_impl(float* wildcard, notStupidBool_t* sentry, size_t nContactPairs) {
+    size_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < nContactPairs) {
+        float myEntry = abs(wildcard[myID]);
+        // If this is alive then mark it
+        if (myEntry > DEME_TINY_FLOAT) {
+            sentry[myID] = 1;
+        } else {
+            sentry[myID] = 0;
+        }
+    }
+}
+
+void markAliveContacts(float* wildcard, notStupidBool_t* sentry, size_t nContactPairs, cudaStream_t& this_stream) {
+    size_t blocks_needed = (nContactPairs + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        markAliveContacts_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(wildcard, sentry,
+                                                                                              nContactPairs);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }

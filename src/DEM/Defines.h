@@ -75,42 +75,40 @@ const geoType_t GEO_T_SPHERE = 1;
 const geoType_t GEO_T_TRIANGLE = 2;
 const geoType_t GEO_T_ANALYTICAL = 4;  ///< Analytical components
 
-// Templated encode function that packs two values into one
-// The smaller value is stored in the high bits, the larger in the low bits
+// Templated encode function that packs two values into one. The order matters.
 // For contact types: uses 4 bits per value (8 bits total, stored in contact_t/uint8_t)
 // For patch IDs: uses 32 bits per value (64 bits total, stored in patchIDPair_t/uint64_t)
 template <typename ReturnType = contact_t, typename InputType = geoType_t>
-inline __device__ __host__ constexpr ReturnType encodeContactType(InputType typeA, InputType typeB) {
+inline __device__ __host__ constexpr ReturnType encodeType(InputType typeA, InputType typeB) {
     constexpr size_t bits_per_value = sizeof(ReturnType) * DEME_BITS_PER_BYTE / 2;
-    return (typeA < typeB) ? static_cast<ReturnType>((static_cast<ReturnType>(typeA) << bits_per_value) |
-                                                     (static_cast<ReturnType>(typeB) &
-                                                      ((static_cast<ReturnType>(1) << bits_per_value) - 1)))
-                           : static_cast<ReturnType>((static_cast<ReturnType>(typeB) << bits_per_value) |
-                                                     (static_cast<ReturnType>(typeA) &
-                                                      ((static_cast<ReturnType>(1) << bits_per_value) - 1)));
+    return static_cast<ReturnType>(
+        (static_cast<ReturnType>(typeA) << bits_per_value) |
+        (static_cast<ReturnType>(typeB) & ((static_cast<ReturnType>(1) << bits_per_value) - 1)));
 }
 
-// Templated decode function for typeA (always the smaller of the two, in high bits)
+// Templated decode function for typeA (in high bits)
 template <typename InputType = contact_t, typename ReturnType = geoType_t>
 inline __device__ __host__ constexpr ReturnType decodeTypeA(InputType id) {
     constexpr size_t bits_per_value = sizeof(InputType) * 8 / 2;
     return static_cast<ReturnType>(id >> bits_per_value);
 }
 
-// Templated decode function for typeB (always the larger of the two, in low bits)
+// Templated decode function for typeB (in low bits)
 template <typename InputType = contact_t, typename ReturnType = geoType_t>
 inline __device__ __host__ constexpr ReturnType decodeTypeB(InputType id) {
     constexpr size_t bits_per_value = sizeof(InputType) * 8 / 2;
     return static_cast<ReturnType>(id & ((static_cast<InputType>(1) << bits_per_value) - 1));
 }
 
-const contact_t NOT_A_CONTACT = 0;
-const contact_t SPHERE_SPHERE_CONTACT = encodeContactType(GEO_T_SPHERE, GEO_T_SPHERE);
-const contact_t SPHERE_TRIANGLE_CONTACT = encodeContactType(GEO_T_SPHERE, GEO_T_TRIANGLE);
-const contact_t SPHERE_ANALYTICAL_CONTACT = encodeContactType(GEO_T_SPHERE, GEO_T_ANALYTICAL);
-const contact_t TRIANGLE_TRIANGLE_CONTACT = encodeContactType(GEO_T_TRIANGLE, GEO_T_TRIANGLE);
-const contact_t TRIANGLE_ANALYTICAL_CONTACT = encodeContactType(GEO_T_TRIANGLE, GEO_T_ANALYTICAL);
-const contact_t NUM_SUPPORTED_CONTACT_TYPES = 5;
+// If you modify this, you are responsible for updating NUM_SUPPORTED_CONTACT_TYPES accordingly, and mind the order of
+// the two types, as encodeType(GEO_T_SPHERE, GEO_T_TRIANGLE) != encodeType(GEO_T_TRIANGLE, GEO_T_SPHERE).
+constexpr contact_t NOT_A_CONTACT = 0;
+constexpr contact_t SPHERE_SPHERE_CONTACT = encodeType(GEO_T_SPHERE, GEO_T_SPHERE);
+constexpr contact_t SPHERE_TRIANGLE_CONTACT = encodeType(GEO_T_SPHERE, GEO_T_TRIANGLE);
+constexpr contact_t SPHERE_ANALYTICAL_CONTACT = encodeType(GEO_T_SPHERE, GEO_T_ANALYTICAL);
+constexpr contact_t TRIANGLE_TRIANGLE_CONTACT = encodeType(GEO_T_TRIANGLE, GEO_T_TRIANGLE);
+constexpr contact_t TRIANGLE_ANALYTICAL_CONTACT = encodeType(GEO_T_TRIANGLE, GEO_T_ANALYTICAL);
+constexpr contact_t NUM_SUPPORTED_CONTACT_TYPES = 5;
 
 // Device version of getting geo owner ID
 #define DEME_GET_GEO_OWNER_ID(geo, type)                                  \

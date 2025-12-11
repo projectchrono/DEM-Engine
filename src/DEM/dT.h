@@ -323,6 +323,8 @@ class DEMDynamicThread {
     // A map that records the corresponding jitify program bundle and kernel name for each contact type
     std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>
         contactTypePrimitiveKernelMap;
+    std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>
+        contactTypePatchKernelMap;
 
     // dT's timers
     std::vector<std::string> timer_names = {"Clear force array", "Calculate contact forces", "Optional force reduction",
@@ -766,8 +768,8 @@ class DEMDynamicThread {
         const std::function<bool(unsigned int, unsigned int, unsigned int, unsigned int)>& condition);
 
     // Just-in-time compiled kernels
-    std::shared_ptr<jitify::Program> prep_force_kernels;
     std::shared_ptr<jitify::Program> cal_force_kernels;
+    std::shared_ptr<jitify::Program> cal_patch_force_kernels;
     std::shared_ptr<jitify::Program> collect_force_kernels;
     std::shared_ptr<jitify::Program> integrator_kernels;
     // std::shared_ptr<jitify::Program> quarry_stats_kernels;

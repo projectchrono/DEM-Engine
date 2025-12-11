@@ -80,6 +80,15 @@ template void cubSumReduceByKey<contactPairs_t, float3>(contactPairs_t* d_keys_i
                                                         size_t n,
                                                         cudaStream_t& this_stream,
                                                         DEMSolverScratchData& scratchPad);
+// Special instantiation for double3 (contact points etc.) with contactPairs_t keys (for voting)
+template void cubSumReduceByKey<contactPairs_t, double3>(contactPairs_t* d_keys_in,
+                                                         contactPairs_t* d_unique_out,
+                                                         double3* d_vals_in,
+                                                         double3* d_aggregates_out,
+                                                         size_t* d_num_out,
+                                                         size_t n,
+                                                         cudaStream_t& this_stream,
+                                                         DEMSolverScratchData& scratchPad);
 // Special instantiation for double (area) with contactPairs_t keys (for voting)
 template void cubSumReduceByKey<contactPairs_t, double>(contactPairs_t* d_keys_in,
                                                         contactPairs_t* d_unique_out,

@@ -2178,32 +2178,14 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
     size_t blocks_needed_for_rearrange;
     if (DEME_GET_VERBOSITY() >= VERBOSITY_METRIC) {
         if (*solverScratchSpace.numPrevContacts > 0) {
-            // DEME_GPU_CALL(cudaMemset(contactSentry, 0, sentry_bytes));
-            blocks_needed_for_rearrange =
-                (*solverScratchSpace.numPrevContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-            if (blocks_needed_for_rearrange > 0) {
-                prep_force_kernels->kernel("markAliveContacts")
-                    .instantiate()
-                    .configure(dim3(blocks_needed_for_rearrange), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                               streamInfo.stream)
-                    .launch(granData->contactWildcards[simParams->nContactWildcards - 1], contactSentry,
-                            *solverScratchSpace.numPrevContacts);
-                DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-            }
+            markAliveContacts(granData->contactWildcards[simParams->nContactWildcards - 1], contactSentry,
+                              *solverScratchSpace.numPrevContacts, streamInfo.stream);
         }
     }
 
     // Rearrange contact histories based on kT instruction
-    blocks_needed_for_rearrange =
-        (*solverScratchSpace.numContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-    if (blocks_needed_for_rearrange > 0) {
-        prep_force_kernels->kernel("rearrangeContactWildcards")
-            .instantiate()
-            .configure(dim3(blocks_needed_for_rearrange), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(&granData, newWildcards[0], contactSentry, simParams->nContactWildcards,
-                    *solverScratchSpace.numContacts);
-        DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-    }
+    rearrangeContactWildcards(&granData, newWildcards[0], contactSentry, simParams->nContactWildcards,
+                              *solverScratchSpace.numContacts, streamInfo.stream);
 
     // Take a look, does the sentry indicate that there is an `alive' contact got lost?
     if (DEME_GET_VERBOSITY() >= VERBOSITY_METRIC) {
@@ -2354,6 +2336,10 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 // For extra safety
                 solverScratchSpace.syncDualStructDeviceToHost("numUniqueKeys");
                 size_t numUniqueKeysHost = *(solverScratchSpace.getDualStructHost("numUniqueKeys"));
+                // std::cout << "Keys:" << std::endl;
+                // displayDeviceArray<contactPairs_t>(keys, countPrimitive);
+                // std::cout << "Unique Keys:" << std::endl;
+                // displayDeviceArray<contactPairs_t>(uniqueKeys, numUniqueKeysHost);
                 if (numUniqueKeysHost != countPatch) {
                     DEME_ERROR(
                         "Patch-based contact voting produced %zu unique patch pairs, but expected %zu pairs for "
@@ -2438,25 +2424,74 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("totalPenetrations");
                 solverScratchSpace.finishUsingTempVector("zeroAreaNormals");
                 solverScratchSpace.finishUsingTempVector("zeroAreaPenetrations");
-                solverScratchSpace.finishUsingTempVector("votingKeys");
-                solverScratchSpace.finishUsingTempVector("uniqueKeys");
-                solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
                 // displayDeviceArray<double>(totalAreas, countPatch);
                 // displayDeviceFloat3(finalNormals, countPatch);
                 // displayDeviceArray<double>(finalPenetrations, countPatch);
+
+                // Step 10: Compute weighted contact points for each primitive
+                // Reuse keys, uniqueKeys, and numUniqueKeys that are still allocated
+                double3* weightedContactPoints = (double3*)solverScratchSpace.allocateTempVector(
+                    "weightedContactPoints", countPrimitive * sizeof(double3));
+                double* contactWeights =
+                    (double*)solverScratchSpace.allocateTempVector("contactWeights", countPrimitive * sizeof(double));
+                computeWeightedContactPoints(&granData, weightedContactPoints, contactWeights, startOffsetPrimitive,
+                                             countPrimitive, streamInfo.stream);
+
+                // Step 11: Reduce-by-key to get total weighted contact points per patch pair
+                double3* totalWeightedContactPoints = (double3*)solverScratchSpace.allocateTempVector(
+                    "totalWeightedContactPoints", countPatch * sizeof(double3));
+                double* totalContactWeights =
+                    (double*)solverScratchSpace.allocateTempVector("totalContactWeights", countPatch * sizeof(double));
+                cubSumReduceByKey<contactPairs_t, double3>(keys, uniqueKeys, weightedContactPoints,
+                                                           totalWeightedContactPoints, numUniqueKeys, countPrimitive,
+                                                           streamInfo.stream, solverScratchSpace);
+                cubSumReduceByKey<contactPairs_t, double>(keys, uniqueKeys, contactWeights, totalContactWeights,
+                                                          numUniqueKeys, countPrimitive, streamInfo.stream,
+                                                          solverScratchSpace);
+                solverScratchSpace.finishUsingTempVector("weightedContactPoints");
+                solverScratchSpace.finishUsingTempVector("contactWeights");
+
+                // Step 12: Compute final contact points per patch pair by dividing by total weight
+                double3* finalContactPoints =
+                    (double3*)solverScratchSpace.allocateTempVector("finalContactPoints", countPatch * sizeof(double3));
+                computeFinalContactPointsPerPatch(totalWeightedContactPoints, totalContactWeights, finalContactPoints,
+                                                  countPatch, streamInfo.stream);
+                solverScratchSpace.finishUsingTempVector("totalWeightedContactPoints");
+                solverScratchSpace.finishUsingTempVector("totalContactWeights");
+
+                // Clean up keys arrays now that we're done with reductions
+                solverScratchSpace.finishUsingTempVector("votingKeys");
+                solverScratchSpace.finishUsingTempVector("uniqueKeys");
+                solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
 
                 // Now we have:
                 // - totalAreas: total contact area per patch pair (countPatch elements)
                 // - finalNormals: final normal direction per patch pair (countPatch elements)
                 // - finalPenetrations: final penetration depth per patch pair (countPatch elements)
+                // - finalContactPoints: final contact point per patch pair (countPatch elements)
                 // These can be used for subsequent force calculations
 
-                //// TODO: Call specialized patch-based force correction kernels here
+                // Call specialized patch-based force correction kernels here
+                if (contactTypePatchKernelMap.count(contact_type) > 0) {
+                    const auto& kernelList = contactTypePatchKernelMap.at(contact_type);
+                    for (const auto& [progName, kernelName] : kernelList) {
+                        size_t blocks =
+                            (countPatch + DT_FORCE_CALC_NTHREADS_PER_BLOCK - 1) / DT_FORCE_CALC_NTHREADS_PER_BLOCK;
+                        if (blocks > 0) {
+                            progName->kernel(kernelName)
+                                .instantiate()
+                                .configure(dim3(blocks), dim3(DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0, streamInfo.stream)
+                                .launch(&simParams, &granData, totalAreas, finalNormals, finalPenetrations,
+                                        finalContactPoints, startOffsetPatch, countPatch);
+                        }
+                    }
+                }
 
                 // Final clean up
                 solverScratchSpace.finishUsingTempVector("totalAreas");
                 solverScratchSpace.finishUsingTempVector("finalNormals");
                 solverScratchSpace.finishUsingTempVector("finalPenetrations");
+                solverScratchSpace.finishUsingTempVector("finalContactPoints");
             }
         }
         // std::cout << "===========================" << std::endl;
@@ -2467,29 +2502,19 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
 void DEMDynamicThread::calculateForces() {
     // Reset force (acceleration) arrays for this time step
     size_t nContactPairs = *solverScratchSpace.numContacts;
+    size_t nPrimitiveContactPairs = *solverScratchSpace.numPrimitiveContacts;
 
     timers.GetTimer("Clear force array").start();
     {
-        size_t blocks_needed_for_force_prep =
-            (nContactPairs + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-        size_t blocks_needed_for_acc_prep =
-            (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-
-        prep_force_kernels->kernel("prepareAccArrays")
-            .instantiate()
-            .configure(dim3(blocks_needed_for_acc_prep), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(&simParams, &granData);
-        DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        prepareAccArrays(&simParams, &granData, simParams->nOwnerBodies, streamInfo.stream);
 
         // prepareForceArrays needs to clear contact force arrays, only if the user asks us to record contact forces. If
         // meshUniversalContact is on, then although we use these arrays, no need to initialize them to 0, because the
         // kernel will overwrite them anyway.
         if (!solverFlags.useNoContactRecord) {
-            prep_force_kernels->kernel("prepareForceArrays")
-                .instantiate()
-                .configure(dim3(blocks_needed_for_force_prep), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-                .launch(&simParams, &granData, nContactPairs);
-            DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+            // Pay attention that the force result-related arrays have nPrimitiveContactPairs elements, not
+            // nContactPairs
+            prepareForceArrays(&simParams, &granData, nPrimitiveContactPairs, streamInfo.stream);
         }
     }
     timers.GetTimer("Clear force array").stop();
@@ -2506,7 +2531,7 @@ void DEMDynamicThread::calculateForces() {
         // marks a convex component of a owner) need to vote to decide the true contact. This is where the second step
         // comes in.
         dispatchPatchBasedForceCorrections(typeStartCountPrimitiveMap, typeStartCountPatchMap,
-                                           contactTypePrimitiveKernelMap);
+                                           contactTypePatchKernelMap);
 
         // displayDeviceFloat3(granData->contactForces, nContactPairs);
         // displayDeviceArray<contact_t>(granData->contactTypePatch, nContactPairs);
@@ -2601,7 +2626,6 @@ inline void DEMDynamicThread::unpack_impl() {
     m_numExistingTypes = *solverScratchSpace.getDualStructHost("numExistingTypes");
     cubPrefixScan<contactPairs_t, contactPairs_t>(typeCounts, typeStartOffsetsPrimitive.device(), m_numExistingTypes,
                                                   streamInfo.stream, solverScratchSpace);
-    solverScratchSpace.finishUsingTempVector("typeCounts");
     existingContactTypes.toHost();
     typeStartOffsetsPrimitive.toHost();
     for (size_t i = 0; i < m_numExistingTypes; i++) {
@@ -2632,6 +2656,8 @@ inline void DEMDynamicThread::unpack_impl() {
                                                                   : (contactPairs_t)*solverScratchSpace.numContacts) -
                                           typeStartOffsetsPatch[i]);
     }
+
+    solverScratchSpace.finishUsingTempVector("typeCounts");
     solverScratchSpace.finishUsingDualStruct("numExistingTypes");
 }
 
@@ -2887,16 +2913,17 @@ size_t DEMDynamicThread::estimateHostMemUsage() const {
 
 void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& Subs,
                                      const std::vector<std::string>& JitifyOptions) {
-    // First one is force array preparation kernels
-    {
-        prep_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMPrepForceKernels", JitHelper::KERNEL_DIR / "DEMPrepForceKernels.cu", Subs, JitifyOptions)));
-    }
-    // Then force calculation kernels
+    // Force calculation kernels
     {
         cal_force_kernels = std::make_shared<jitify::Program>(std::move(
             JitHelper::buildProgram("DEMCalcForceKernels_Primitive",
                                     JitHelper::KERNEL_DIR / "DEMCalcForceKernels_Primitive.cu", Subs, JitifyOptions)));
+    }
+    // Then patch-based force calculation kernels
+    {
+        cal_patch_force_kernels = std::make_shared<jitify::Program>(std::move(
+            JitHelper::buildProgram("DEMCalcForceKernels_PatchBased",
+                                    JitHelper::KERNEL_DIR / "DEMCalcForceKernels_PatchBased.cu", Subs, JitifyOptions)));
     }
     // Then force accumulation kernels
     {
@@ -2931,6 +2958,15 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
         {TRIANGLE_TRIANGLE_CONTACT, {{cal_force_kernels, "calculatePrimitiveContactForces_TriTri"}}},
         // Triangle-Analytical contact
         {TRIANGLE_ANALYTICAL_CONTACT, {{cal_force_kernels, "calculatePrimitiveContactForces_TriAnal"}}}};
+
+    // Patch-based force kernel map for mesh-related contacts
+    contactTypePatchKernelMap = {
+        // Sphere-Triangle contact (patch-based)
+        {SPHERE_TRIANGLE_CONTACT, {{cal_patch_force_kernels, "calculatePatchContactForces_SphTri"}}},
+        // Triangle-Triangle contact (patch-based)
+        {TRIANGLE_TRIANGLE_CONTACT, {{cal_patch_force_kernels, "calculatePatchContactForces_TriTri"}}},
+        // Triangle-Analytical contact (patch-based)
+        {TRIANGLE_ANALYTICAL_CONTACT, {{cal_patch_force_kernels, "calculatePatchContactForces_TriAnal"}}}};
 }
 
 float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,

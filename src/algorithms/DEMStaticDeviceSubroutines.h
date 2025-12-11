@@ -221,6 +221,40 @@ void finalizePatchResults(double* totalAreas,
                           contactPairs_t count,
                           cudaStream_t& this_stream);
 
+// Computes weighted contact points for each primitive contact
+// The weight is: penetration * area
+void computeWeightedContactPoints(DEMDataDT* granData,
+                                  double3* weightedContactPoints,
+                                  double* weights,
+                                  contactPairs_t startOffsetPrimitive,
+                                  contactPairs_t count,
+                                  cudaStream_t& this_stream);
+
+// Computes final contact points per patch by dividing by total weight
+// If total weight is 0, contact point is set to (0,0,0)
+void computeFinalContactPointsPerPatch(double3* totalWeightedContactPoints,
+                                       double* totalWeights,
+                                       double3* finalContactPoints,
+                                       contactPairs_t count,
+                                       cudaStream_t& this_stream);
+
+////////////////////////////////////////////////////////////////////////////////
+// Prep force kernels declaration
+////////////////////////////////////////////////////////////////////////////////
+
+void prepareForceArrays(DEMSimParams* simParams,
+                        DEMDataDT* granData,
+                        size_t nPrimitiveContactPairs,
+                        cudaStream_t& this_stream);
+void prepareAccArrays(DEMSimParams* simParams, DEMDataDT* granData, bodyID_t nOwnerBodies, cudaStream_t& this_stream);
+void rearrangeContactWildcards(DEMDataDT* granData,
+                               float* wildcard,
+                               notStupidBool_t* sentry,
+                               unsigned int nWildcards,
+                               size_t nContactPairs,
+                               cudaStream_t& this_stream);
+void markAliveContacts(float* wildcard, notStupidBool_t* sentry, size_t nContactPairs, cudaStream_t& this_stream);
+
 }  // namespace deme
 
 #endif

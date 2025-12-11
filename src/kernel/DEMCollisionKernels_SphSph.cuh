@@ -6,6 +6,32 @@
 #include <DEM/Defines.h>
 #include <DEMHelperKernels.cuh>
 
+template <typename T1>
+inline __device__ void equipOwnerPosRot(deme::DEMSimParams* simParams,
+                                        deme::DEMDataDT* granData,
+                                        const deme::bodyID_t& myOwner,
+                                        T1& relPos,
+                                        double3& ownerPos,
+                                        double3& bodyPos,
+                                        float4& oriQ) {
+    voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
+        ownerPos.x, ownerPos.y, ownerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
+        granData->locY[myOwner], granData->locZ[myOwner], simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
+        simParams->l);
+    // Do this and we get the `true' pos...
+    ownerPos.x += simParams->LBFX;
+    ownerPos.y += simParams->LBFY;
+    ownerPos.z += simParams->LBFZ;
+    oriQ.w = granData->oriQw[myOwner];
+    oriQ.x = granData->oriQx[myOwner];
+    oriQ.y = granData->oriQy[myOwner];
+    oriQ.z = granData->oriQz[myOwner];
+    applyOriQToVector3(relPos.x, relPos.y, relPos.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+    bodyPos.x = ownerPos.x + (double)relPos.x;
+    bodyPos.y = ownerPos.y + (double)relPos.y;
+    bodyPos.z = ownerPos.z + (double)relPos.z;
+}
+
 /**
  * Template arguments:
  *   - T1: the floating point accuracy level for contact point location/penetration depth

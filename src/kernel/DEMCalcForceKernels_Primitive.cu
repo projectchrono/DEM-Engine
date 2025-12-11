@@ -16,31 +16,6 @@ _moiDefs_;
 // If the user has some utility functions, they will be included here
 _forceModelPrerequisites_;
 
-template <typename T1>
-inline __device__ void equipOwnerPosRot(deme::DEMSimParams* simParams,
-                                        deme::DEMDataDT* granData,
-                                        const deme::bodyID_t& myOwner,
-                                        T1& relPos,
-                                        double3& ownerPos,
-                                        double3& bodyPos,
-                                        float4& oriQ) {
-    voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
-        ownerPos.x, ownerPos.y, ownerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
-        granData->locY[myOwner], granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-    // Do this and we get the `true' pos...
-    ownerPos.x += simParams->LBFX;
-    ownerPos.y += simParams->LBFY;
-    ownerPos.z += simParams->LBFZ;
-    oriQ.w = granData->oriQw[myOwner];
-    oriQ.x = granData->oriQx[myOwner];
-    oriQ.y = granData->oriQy[myOwner];
-    oriQ.z = granData->oriQz[myOwner];
-    applyOriQToVector3(relPos.x, relPos.y, relPos.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
-    bodyPos.x = ownerPos.x + (double)relPos.x;
-    bodyPos.y = ownerPos.y + (double)relPos.y;
-    bodyPos.z = ownerPos.z + (double)relPos.z;
-}
-
 // Template device function for contact force calculation - will be called by 5 specialized kernels
 template <deme::contact_t CONTACT_TYPE>
 __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSimParams* simParams,
@@ -384,6 +359,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // Use contactForces, contactPointGeometryAB to store the contact info for the next
         // kernel to compute forces. contactForces is used to store the contact normal. contactPointGeometryA is used to
         // store the (double) contact penetration. contactPointGeometryB is used to store the (double) contact area
+        // contactTorque_convToForce is used to store the contact point position (cast from double3 to float3)
 
         // Store contact normal (B2A is already a float3)
         granData->contactForces[myPrimitiveContactID] = B2A;
@@ -393,6 +369,16 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // If this is not a contact, we store 0.0 in the area, so it has no voting power in the next kernel.
         granData->contactPointGeometryB[myPrimitiveContactID] =
             doubleToFloat3Storage((ContactType == deme::NOT_A_CONTACT || overlapArea <= 0.0) ? 0.0 : overlapArea);
+        // Store contact point (cast from double3 to float3)
+        // Weird thing: I found that, at least on my CUDA12.8 laptop, if not adding this check of the finiteness of
+        // contactPnt, contactPnt gives inf components. I don't know why but have to get to the bottom of it later.
+        if (!isfinite(contactPnt.x) || !isfinite(contactPnt.y) || !isfinite(contactPnt.z)) {
+            DEME_ABORT_KERNEL(
+                "Primitive contact No. %d of type %d has contact point with infinite component(s), something is "
+                "wrong.\n",
+                myPrimitiveContactID, ContactType);
+        }
+        granData->contactTorque_convToForce[myPrimitiveContactID] = to_float3(contactPnt);
     }
 }
 
