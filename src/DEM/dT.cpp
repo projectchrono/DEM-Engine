@@ -2430,21 +2430,21 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
 
                 // Step 10: Compute weighted contact points for each primitive
                 // Reuse keys, uniqueKeys, and numUniqueKeys that are still allocated
-                float3* weightedContactPoints = (float3*)solverScratchSpace.allocateTempVector(
-                    "weightedContactPoints", countPrimitive * sizeof(float3));
+                double3* weightedContactPoints = (double3*)solverScratchSpace.allocateTempVector(
+                    "weightedContactPoints", countPrimitive * sizeof(double3));
                 double* contactWeights =
                     (double*)solverScratchSpace.allocateTempVector("contactWeights", countPrimitive * sizeof(double));
-                computeWeightedContactPoints(&granData, keys, weightedContactPoints, contactWeights,
-                                             startOffsetPrimitive, countPrimitive, streamInfo.stream);
+                computeWeightedContactPoints(&granData, weightedContactPoints, contactWeights, startOffsetPrimitive,
+                                             countPrimitive, streamInfo.stream);
 
                 // Step 11: Reduce-by-key to get total weighted contact points per patch pair
-                float3* totalWeightedContactPoints = (float3*)solverScratchSpace.allocateTempVector(
-                    "totalWeightedContactPoints", countPatch * sizeof(float3));
+                double3* totalWeightedContactPoints = (double3*)solverScratchSpace.allocateTempVector(
+                    "totalWeightedContactPoints", countPatch * sizeof(double3));
                 double* totalContactWeights =
                     (double*)solverScratchSpace.allocateTempVector("totalContactWeights", countPatch * sizeof(double));
-                cubSumReduceByKey<contactPairs_t, float3>(keys, uniqueKeys, weightedContactPoints,
-                                                          totalWeightedContactPoints, numUniqueKeys, countPrimitive,
-                                                          streamInfo.stream, solverScratchSpace);
+                cubSumReduceByKey<contactPairs_t, double3>(keys, uniqueKeys, weightedContactPoints,
+                                                           totalWeightedContactPoints, numUniqueKeys, countPrimitive,
+                                                           streamInfo.stream, solverScratchSpace);
                 cubSumReduceByKey<contactPairs_t, double>(keys, uniqueKeys, contactWeights, totalContactWeights,
                                                           numUniqueKeys, countPrimitive, streamInfo.stream,
                                                           solverScratchSpace);
@@ -2452,8 +2452,8 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("contactWeights");
 
                 // Step 12: Compute final contact points per patch pair by dividing by total weight
-                float3* finalContactPoints =
-                    (float3*)solverScratchSpace.allocateTempVector("finalContactPoints", countPatch * sizeof(float3));
+                double3* finalContactPoints =
+                    (double3*)solverScratchSpace.allocateTempVector("finalContactPoints", countPatch * sizeof(double3));
                 computeFinalContactPointsPerPatch(totalWeightedContactPoints, totalContactWeights, finalContactPoints,
                                                   countPatch, streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("totalWeightedContactPoints");

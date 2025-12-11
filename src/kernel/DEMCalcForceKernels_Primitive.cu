@@ -370,6 +370,14 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         granData->contactPointGeometryB[myPrimitiveContactID] =
             doubleToFloat3Storage((ContactType == deme::NOT_A_CONTACT || overlapArea <= 0.0) ? 0.0 : overlapArea);
         // Store contact point (cast from double3 to float3)
+        // Weird thing: I found that, at least on my CUDA12.8 laptop, if not adding this check of the finiteness of
+        // contactPnt, contactPnt gives inf components. I don't know why but have to get to the bottom of it later.
+        if (!isfinite(contactPnt.x) || !isfinite(contactPnt.y) || !isfinite(contactPnt.z)) {
+            DEME_ABORT_KERNEL(
+                "Primitive contact No. %d of type %d has contact point with infinite component(s), something is "
+                "wrong.\n",
+                myPrimitiveContactID, ContactType);
+        }
         granData->contactTorque_convToForce[myPrimitiveContactID] = to_float3(contactPnt);
     }
 }

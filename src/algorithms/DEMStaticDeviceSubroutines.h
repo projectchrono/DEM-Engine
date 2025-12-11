@@ -224,8 +224,7 @@ void finalizePatchResults(double* totalAreas,
 // Computes weighted contact points for each primitive contact
 // The weight is: penetration * area
 void computeWeightedContactPoints(DEMDataDT* granData,
-                                  contactPairs_t* keys,
-                                  float3* weightedContactPoints,
+                                  double3* weightedContactPoints,
                                   double* weights,
                                   contactPairs_t startOffsetPrimitive,
                                   contactPairs_t count,
@@ -233,9 +232,9 @@ void computeWeightedContactPoints(DEMDataDT* granData,
 
 // Computes final contact points per patch by dividing by total weight
 // If total weight is 0, contact point is set to (0,0,0)
-void computeFinalContactPointsPerPatch(float3* totalWeightedContactPoints,
+void computeFinalContactPointsPerPatch(double3* totalWeightedContactPoints,
                                        double* totalWeights,
-                                       float3* finalContactPoints,
+                                       double3* finalContactPoints,
                                        contactPairs_t count,
                                        cudaStream_t& this_stream);
 

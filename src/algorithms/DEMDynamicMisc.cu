@@ -466,8 +466,7 @@ void finalizePatchResults(double* totalAreas,
 // The weight is: penetration * area
 // This prepares data for reduction to get patch-based contact points
 __global__ void computeWeightedContactPoints_impl(DEMDataDT* granData,
-                                                  contactPairs_t* keys,
-                                                  float3* weightedContactPoints,
+                                                  double3* weightedContactPoints,
                                                   double* weights,
                                                   contactPairs_t startOffsetPrimitive,
                                                   contactPairs_t count) {
@@ -476,7 +475,7 @@ __global__ void computeWeightedContactPoints_impl(DEMDataDT* granData,
         contactPairs_t myContactID = startOffsetPrimitive + idx;
 
         // Get the contact point from contactTorque_convToForce (stored as float3)
-        float3 contactPoint = granData->contactTorque_convToForce[myContactID];
+        double3 contactPoint = to_double3(granData->contactTorque_convToForce[myContactID]);
 
         // Get the penetration depth from contactPointGeometryA (stored as double in float3)
         float3 penetrationStorage = granData->contactPointGeometryA[myContactID];
@@ -494,20 +493,15 @@ __global__ void computeWeightedContactPoints_impl(DEMDataDT* granData,
         double weight = penetration * area;
 
         // Compute weighted contact point (multiply each component by weight)
-        float weightF = static_cast<float>(weight);
-        weightedContactPoints[idx] = contactPoint * weightF;
+        weightedContactPoints[idx] = contactPoint * weight;
 
         // Store weight for later normalization
         weights[idx] = weight;
-
-        // Extract key from geomToPatchMap
-        keys[idx] = granData->geomToPatchMap[myContactID];
     }
 }
 
 void computeWeightedContactPoints(DEMDataDT* granData,
-                                  contactPairs_t* keys,
-                                  float3* weightedContactPoints,
+                                  double3* weightedContactPoints,
                                   double* weights,
                                   contactPairs_t startOffsetPrimitive,
                                   contactPairs_t count,
@@ -515,34 +509,34 @@ void computeWeightedContactPoints(DEMDataDT* granData,
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         computeWeightedContactPoints_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            granData, keys, weightedContactPoints, weights, startOffsetPrimitive, count);
+            granData, weightedContactPoints, weights, startOffsetPrimitive, count);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
 // Kernel to compute final contact points per patch by dividing by total weight
 // If total weight is 0, contact point is set to (0,0,0)
-__global__ void computeFinalContactPointsPerPatch_impl(float3* totalWeightedContactPoints,
+__global__ void computeFinalContactPointsPerPatch_impl(double3* totalWeightedContactPoints,
                                                        double* totalWeights,
-                                                       float3* finalContactPoints,
+                                                       double3* finalContactPoints,
                                                        contactPairs_t count) {
     contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
         double totalWeight = totalWeights[idx];
         if (totalWeight > 0.0) {
             // Normalize by dividing by total weight
-            float invTotalWeight = static_cast<float>(1.0 / totalWeight);
+            double invTotalWeight = (1.0 / totalWeight);
             finalContactPoints[idx] = totalWeightedContactPoints[idx] * invTotalWeight;
         } else {
             // No valid contact point, set to (0,0,0)
-            finalContactPoints[idx] = make_float3(0.0f, 0.0f, 0.0f);
+            finalContactPoints[idx] = make_double3(0, 0, 0);
         }
     }
 }
 
-void computeFinalContactPointsPerPatch(float3* totalWeightedContactPoints,
+void computeFinalContactPointsPerPatch(double3* totalWeightedContactPoints,
                                        double* totalWeights,
-                                       float3* finalContactPoints,
+                                       double3* finalContactPoints,
                                        contactPairs_t count,
                                        cudaStream_t& this_stream) {
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
