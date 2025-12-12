@@ -951,7 +951,7 @@ void DEMKinematicThread::updatePrevContactArrays(DualStruct<DEMDataDT>& dT_data,
     // Note kT never had the responsibility to migrate contact info to host, even at Update, as even in this case
     // its host-side update comes from dT
     overwritePrevContactArrays(granData, dT_data, previous_idPatchA, previous_idPatchB, previous_contactTypePatch,
-                               simParams, solverScratchSpace, streamInfo.stream, nContacts);
+                               typeStartCountPatchMap, simParams, solverScratchSpace, streamInfo.stream, nContacts);
     DEME_DEBUG_PRINTF("Number of contacts after a user-manual contact load: %zu", nContacts);
     DEME_DEBUG_PRINTF("Number of spheres after a user-manual contact load: %zu", (size_t)simParams->nSpheresGM);
 }

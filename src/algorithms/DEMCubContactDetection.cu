@@ -1547,6 +1547,7 @@ void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
                                 DualArray<bodyID_t>& previous_idPatchA,
                                 DualArray<bodyID_t>& previous_idPatchB,
                                 DualArray<contact_t>& previous_contactTypePatch,
+                                ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
                                 DualStruct<DEMSimParams>& simParams,
                                 DEMSolverScratchData& scratchPad,
                                 cudaStream_t& this_stream,
@@ -1563,6 +1564,63 @@ void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
                              cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(kT_data->previous_contactTypePatch, dT_data->contactTypePatch,
                              nContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
+
+    // Derive typeStartCountPatchMap from the loaded contact arrays
+    // This is necessary for the persistent mapping process in the next contact detection step
+    if (nContacts > 0) {
+        // Use run-length encoding to identify contact type boundaries
+        size_t typeCounts_bytes = NUM_SUPPORTED_CONTACT_TYPES * sizeof(contactPairs_t);
+        contactPairs_t* typeCounts = (contactPairs_t*)scratchPad.allocateTempVector("typeCounts", typeCounts_bytes);
+        
+        size_t existingTypes_bytes = NUM_SUPPORTED_CONTACT_TYPES * sizeof(contact_t);
+        contact_t* existingTypes = (contact_t*)scratchPad.allocateTempVector("existingTypes", existingTypes_bytes);
+        
+        scratchPad.allocateDualStruct("numExistingTypes");
+        
+        // Run-length encode the contact types to find boundaries
+        cubDEMRunLengthEncode<contact_t, contactPairs_t>(
+            kT_data->previous_contactTypePatch, existingTypes, typeCounts,
+            scratchPad.getDualStructDevice("numExistingTypes"), nContacts, this_stream, scratchPad);
+        
+        scratchPad.syncDualStructDeviceToHost("numExistingTypes");
+        size_t numExistingTypes = *scratchPad.getDualStructHost("numExistingTypes");
+        
+        // Prefix scan to get start offsets
+        size_t typeOffsets_bytes = NUM_SUPPORTED_CONTACT_TYPES * sizeof(contactPairs_t);
+        contactPairs_t* typeOffsets = (contactPairs_t*)scratchPad.allocateTempVector("typeOffsets", typeOffsets_bytes);
+        
+        cubDEMPrefixScan<contactPairs_t, contactPairs_t>(typeCounts, typeOffsets, numExistingTypes, this_stream,
+                                                         scratchPad);
+        
+        // Copy results to host to populate the map
+        contact_t* host_existingTypes = new contact_t[numExistingTypes];
+        contactPairs_t* host_typeOffsets = new contactPairs_t[numExistingTypes];
+        
+        DEME_GPU_CALL(cudaMemcpy(host_existingTypes, existingTypes, numExistingTypes * sizeof(contact_t),
+                                 cudaMemcpyDeviceToHost));
+        DEME_GPU_CALL(cudaMemcpy(host_typeOffsets, typeOffsets, numExistingTypes * sizeof(contactPairs_t),
+                                 cudaMemcpyDeviceToHost));
+        
+        // Build the typeStartCountPatchMap
+        typeStartCountPatchMap.SetAll({0, 0});
+        for (size_t i = 0; i < numExistingTypes; i++) {
+            contactPairs_t startOffset = host_typeOffsets[i];
+            contactPairs_t count = (i + 1 < numExistingTypes ? host_typeOffsets[i + 1] : (contactPairs_t)nContacts) -
+                                   startOffset;
+            typeStartCountPatchMap[host_existingTypes[i]] = {startOffset, count};
+        }
+        
+        delete[] host_existingTypes;
+        delete[] host_typeOffsets;
+        
+        scratchPad.finishUsingTempVector("typeCounts");
+        scratchPad.finishUsingTempVector("existingTypes");
+        scratchPad.finishUsingTempVector("typeOffsets");
+        scratchPad.finishUsingDualStruct("numExistingTypes");
+    } else {
+        // No contacts, reset the map
+        typeStartCountPatchMap.SetAll({0, 0});
+    }
 
     *scratchPad.numPrevContacts = nContacts;
     // If nSpheresGM is updated, then it should have been taken care of in the init/populate array phase and in kT's
