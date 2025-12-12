@@ -216,7 +216,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       DualArray<bodyID_t>& previous_idPrimitiveA,
                       DualArray<bodyID_t>& previous_idPrimitiveB,
                       DualArray<contact_t>& previous_contactTypePrimitive,
-                      ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPrimitiveMap,
                       DualArray<notStupidBool_t>& contactPersistency,
                       DualArray<contactPairs_t>& contactMapping,
                       // NEW: Separate patch ID arrays and mapping
@@ -268,10 +267,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     size_t nSphereSphereContact = 0, nTriSphereContact = 0, nTriTriContact = 0, nSphereGeoContact = 0,
            nTriGeoContact = 0;
 
-    // A count start offset and count map that will be generated and then stored in the end
-    ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>> typeStartCountPrimitiveMap_thisStep;
-    typeStartCountPrimitiveMap_thisStep.SetAll({0, 0});
-    
     // Track patch contact start/count per type (for the new redesigned mapping approach)
     ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>> typeStartCountPatchMap_thisStep;
     typeStartCountPatchMap_thisStep.SetAll({0, 0});
@@ -1280,8 +1275,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 for (size_t i = 0; i < numTypes; i++) {
                     contact_t thisType = host_unique_types[i];
                     size_t count = host_type_counts[i];
-                    // Also store this for the record
-                    typeStartCountPrimitiveMap_thisStep[thisType] = std::make_pair(prim_offset, count);
 
                     if (count == 0)
                         continue;
@@ -1517,11 +1510,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                                          primitive_type_arr_bytes, cudaMemcpyDeviceToDevice));
             }
 
-            // Now typeStartCountPrimitiveMap stores the start/count info for primitive contacts for this step, and the
-            // next time it is used, effectively the previous step's info is in
-            typeStartCountPrimitiveMap = typeStartCountPrimitiveMap_thisStep;
-            
-            // Similarly, update the patch contact map for the next iteration
+            // Update the patch contact map for the next iteration
             typeStartCountPatchMap = typeStartCountPatchMap_thisStep;
 
         }  // End of history-based model mapping
