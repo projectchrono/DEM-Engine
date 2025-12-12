@@ -256,6 +256,11 @@ __global__ void markNewPatchPairGroups(deme::patchIDPair_t* sortedPatchPairs,
 
 // Set NULL_MAPPING_PARTNER for contacts of a specific type segment.
 // Used when current step has contacts of this type but previous step does not.
+//
+// Parameters:
+//   contactMapping: Output mapping array (entire array, not segment)
+//   curr_start: Starting index in current arrays for this contact type segment
+//   curr_count: Number of contacts of this type in current step
 __global__ void setNullMappingForType(deme::contactPairs_t* contactMapping,
                                       deme::contactPairs_t curr_start,
                                       deme::contactPairs_t curr_count) {
