@@ -1464,21 +1464,17 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 
                 if (prev_count == 0) {
                     // Previous step has no contacts of this type - set all to NULL_MAPPING_PARTNER
-                    if (blocks_needed > 0) {
-                        setNullMappingForType<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                                this_stream>>>(granData->contactMapping, curr_start, curr_count);
-                        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-                    }
+                    setNullMappingForType<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                            this_stream>>>(granData->contactMapping, curr_start, curr_count);
+                    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                 } else {
                     // Both steps have contacts of this type - perform mapping
-                    if (blocks_needed > 0) {
-                        buildPatchContactMappingForType<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                                          this_stream>>>(
-                            granData->idPatchA, granData->idPatchB, granData->previous_idPatchA,
-                            granData->previous_idPatchB, granData->contactMapping, curr_start, curr_count, prev_start,
-                            prev_count);
-                        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-                    }
+                    buildPatchContactMappingForType<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                                      this_stream>>>(
+                        granData->idPatchA, granData->idPatchB, granData->previous_idPatchA,
+                        granData->previous_idPatchB, granData->contactMapping, curr_start, curr_count, prev_start,
+                        prev_count);
+                    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                 }
             }
             // std::cout << "Patch contact mapping:" << std::endl;
