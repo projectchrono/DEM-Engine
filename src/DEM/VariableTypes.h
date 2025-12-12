@@ -17,14 +17,14 @@ typedef long ssize_t;
 #endif
 
 // Most simulation entities' ID type
-typedef unsigned int bodyID_t;
+typedef uint32_t bodyID_t;
 // The type used to concatenate two mesh patch IDs together (for voting contact pairs)
 typedef uint64_t patchIDPair_t;
 
 typedef uint16_t subVoxelPos_t;  ///< uint16 or uint32
 typedef uint64_t voxelID_t;
 typedef float oriQ_t;
-typedef unsigned int binID_t;
+typedef uint32_t binID_t;
 typedef uint8_t objID_t;
 typedef uint16_t materialsOffset_t;
 typedef uint16_t inertiaOffset_t;
@@ -34,29 +34,29 @@ typedef double realFine_t;
 typedef char scratch_t;  ///< Data type for DEM scratch-pad array (this should NOT be changed, MUST be 1-byte)
 
 // How many bin--sphere touch pairs can there be for one sphere, tops? This type should not need to be large.
-typedef unsigned short int binsSphereTouches_t;
+typedef uint16_t binsSphereTouches_t;
 // This type needs to be large enough to hold the result of a prefix scan of the type binsSphereTouches_t (and objID_t);
 // but normally, it should be the same magnitude as bodyID_t.
-typedef unsigned int binSphereTouchPairs_t;
+typedef uint32_t binSphereTouchPairs_t;
 // How many spheres a bin can touch, tops? We can assume it will not be too large to save GPU memory.
-typedef unsigned short int spheresBinTouches_t;
+typedef uint16_t spheresBinTouches_t;
 // How many contact pairs can there be in one bin? Sometimes, the geometry overlap is significant and there can be a
 // lot.
-typedef unsigned int binContactPairs_t;
+typedef uint32_t binContactPairs_t;
 // Need to be large enough to hold the number of total contact pairs. In general this number should be in the same
 // magnitude as bodyID_t.
-typedef unsigned int contactPairs_t;
-// How many other entities can a sphere touch, tops? It does not need to be large unless you have spheres that have
-// magnitudes of difference in size, which you should preferrably avoid.
-typedef unsigned short int geoSphereTouches_t;
+typedef uint32_t contactPairs_t;
+// How many other primitives can a primitive (sphere or triangle) touch, tops? It does not need to be large unless you
+// have primitives that have magnitudes of difference in size, which you should preferrably avoid.
+typedef uint16_t primitivesPrimTouches_t;
 
 // How many triangle--sphere touch pairs can there be for one sphere, tops? This type should not need to be large.
-typedef unsigned int binsTriangleTouches_t;
+typedef uint32_t binsTriangleTouches_t;
 // This type needs to be large enough to hold the result of a prefix scan of the type binsTriangleTouches_t (and
 // objID_t).
-typedef unsigned int binsTriangleTouchPairs_t;
+typedef uint32_t binsTriangleTouchPairs_t;
 // How many triangles a bin can touch, tops? We can assume it will not be too large to save GPU memory.
-typedef unsigned short int trianglesBinTouches_t;
+typedef uint16_t trianglesBinTouches_t;
 
 typedef uint8_t notStupidBool_t;  ///< Ad-hoc bool (array) type
 typedef uint8_t family_t;         ///< Data type for clump presecription type

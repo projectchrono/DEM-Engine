@@ -317,13 +317,11 @@ class DEMDynamicThread {
     DualArray<contactPairs_t> typeStartOffsetsPatch;
     size_t m_numExistingTypes = 0;
     // A map that records the contact <ID start, and count> for each contact type currently existing
-    std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>> typeStartCountPrimitiveMap;
-    std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>> typeStartCountPatchMap;
+    ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>> typeStartCountPrimitiveMap;
+    ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>> typeStartCountPatchMap;
     // A map that records the corresponding jitify program bundle and kernel name for each contact type
-    std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>
-        contactTypePrimitiveKernelMap;
-    std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>
-        contactTypePatchKernelMap;
+    ContactTypeMap<std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>> contactTypePrimitiveKernelMap;
+    ContactTypeMap<std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>> contactTypePatchKernelMap;
 
     // dT's timers
     std::vector<std::string> timer_names = {"Clear force array", "Calculate contact forces", "Optional force reduction",
@@ -715,14 +713,12 @@ class DEMDynamicThread {
 
     // Impl of calculateForces
     inline void dispatchPrimitiveForceKernels(
-        const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountMap,
-        const std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>&
-            typeKernelMap);
+        const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountMap,
+        const ContactTypeMap<std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>& typeKernelMap);
     inline void dispatchPatchBasedForceCorrections(
-        const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPrimitiveMap,
-        const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
-        const std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>&
-            typeKernelMap);
+        const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPrimitiveMap,
+        const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
+        const ContactTypeMap<std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>& typeKernelMap);
     // Update clump-based acceleration array based on sphere-based force array
     void calculateForces();
 

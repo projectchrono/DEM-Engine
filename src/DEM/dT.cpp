@@ -2246,9 +2246,8 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
 // The argument is two maps: contact type -> (start offset, count), contact type -> list of [(program bundle name,
 // kernel name)]
 inline void DEMDynamicThread::dispatchPrimitiveForceKernels(
-    const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountMap,
-    const std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>&
-        typeKernelMap) {
+    const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountMap,
+    const ContactTypeMap<std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>& typeKernelMap) {
     // For each contact type that exists, call its corresponding kernel(s)
     for (size_t i = 0; i < m_numExistingTypes; i++) {
         contact_t contact_type = existingContactTypes[i];
@@ -2283,10 +2282,9 @@ inline void DEMDynamicThread::dispatchPrimitiveForceKernels(
 }
 
 inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
-    const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPrimitiveMap,
-    const std::unordered_map<contact_t, std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
-    const std::unordered_map<contact_t, std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>&
-        typeKernelMap) {
+    const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPrimitiveMap,
+    const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
+    const ContactTypeMap<std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>& typeKernelMap) {
     // For each contact type that exists, check if it is patch(mesh)-related type...
     for (size_t i = 0; i < m_numExistingTypes; i++) {
         contact_t contact_type = existingContactTypes[i];
@@ -2628,6 +2626,7 @@ inline void DEMDynamicThread::unpack_impl() {
                                                   streamInfo.stream, solverScratchSpace);
     existingContactTypes.toHost();
     typeStartOffsetsPrimitive.toHost();
+    typeStartCountPrimitiveMap.SetAll({0, 0});
     for (size_t i = 0; i < m_numExistingTypes; i++) {
         DEME_DEBUG_PRINTF("Contact type %d starts at offset %u", existingContactTypes[i], typeStartOffsetsPrimitive[i]);
         typeStartCountPrimitiveMap[existingContactTypes[i]] =
@@ -2650,6 +2649,7 @@ inline void DEMDynamicThread::unpack_impl() {
     cubPrefixScan<contactPairs_t, contactPairs_t>(typeCounts, typeStartOffsetsPatch.device(), m_numExistingTypes,
                                                   streamInfo.stream, solverScratchSpace);
     typeStartOffsetsPatch.toHost();
+    typeStartCountPatchMap.SetAll({0, 0});
     for (size_t i = 0; i < m_numExistingTypes; i++) {
         typeStartCountPatchMap[existingContactTypes[i]] = std::make_pair(
             typeStartOffsetsPatch[i], (i + 1 < m_numExistingTypes ? typeStartOffsetsPatch[i + 1]
@@ -2947,26 +2947,24 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     }
 
     // For now, the contact type to kernel map is known and hard-coded after jitification
-    contactTypePrimitiveKernelMap = {
-        // Sphere-Sphere contact
-        {SPHERE_SPHERE_CONTACT, {{cal_force_kernels, "calculatePrimitiveContactForces_SphSph"}}},
-        // Sphere-Triangle contact
-        {SPHERE_TRIANGLE_CONTACT, {{cal_force_kernels, "calculatePrimitiveContactForces_SphTri"}}},
-        // Sphere-Analytical contact
-        {SPHERE_ANALYTICAL_CONTACT, {{cal_force_kernels, "calculatePrimitiveContactForces_SphAnal"}}},
-        // Triangle-Triangle contact
-        {TRIANGLE_TRIANGLE_CONTACT, {{cal_force_kernels, "calculatePrimitiveContactForces_TriTri"}}},
-        // Triangle-Analytical contact
-        {TRIANGLE_ANALYTICAL_CONTACT, {{cal_force_kernels, "calculatePrimitiveContactForces_TriAnal"}}}};
+    contactTypePrimitiveKernelMap[SPHERE_SPHERE_CONTACT] = {
+        {cal_force_kernels, "calculatePrimitiveContactForces_SphSph"}};
+    contactTypePrimitiveKernelMap[SPHERE_TRIANGLE_CONTACT] = {
+        {cal_force_kernels, "calculatePrimitiveContactForces_SphTri"}};
+    contactTypePrimitiveKernelMap[SPHERE_ANALYTICAL_CONTACT] = {
+        {cal_force_kernels, "calculatePrimitiveContactForces_SphAnal"}};
+    contactTypePrimitiveKernelMap[TRIANGLE_TRIANGLE_CONTACT] = {
+        {cal_force_kernels, "calculatePrimitiveContactForces_TriTri"}};
+    contactTypePrimitiveKernelMap[TRIANGLE_ANALYTICAL_CONTACT] = {
+        {cal_force_kernels, "calculatePrimitiveContactForces_TriAnal"}};
 
     // Patch-based force kernel map for mesh-related contacts
-    contactTypePatchKernelMap = {
-        // Sphere-Triangle contact (patch-based)
-        {SPHERE_TRIANGLE_CONTACT, {{cal_patch_force_kernels, "calculatePatchContactForces_SphTri"}}},
-        // Triangle-Triangle contact (patch-based)
-        {TRIANGLE_TRIANGLE_CONTACT, {{cal_patch_force_kernels, "calculatePatchContactForces_TriTri"}}},
-        // Triangle-Analytical contact (patch-based)
-        {TRIANGLE_ANALYTICAL_CONTACT, {{cal_patch_force_kernels, "calculatePatchContactForces_TriAnal"}}}};
+    contactTypePatchKernelMap[SPHERE_TRIANGLE_CONTACT] = {
+        {cal_patch_force_kernels, "calculatePatchContactForces_SphTri"}};
+    contactTypePatchKernelMap[TRIANGLE_TRIANGLE_CONTACT] = {
+        {cal_patch_force_kernels, "calculatePatchContactForces_TriTri"}};
+    contactTypePatchKernelMap[TRIANGLE_ANALYTICAL_CONTACT] = {
+        {cal_patch_force_kernels, "calculatePatchContactForces_TriAnal"}};
 }
 
 float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,

@@ -71,22 +71,22 @@ inline void removeDuplicateContacts(DualStruct<DEMDataKT>& granData,
                                     cudaStream_t& this_stream,
                                     DEMSolverScratchData& scratchPad) {
     // First we run-length it based on idA
-    size_t run_length_bytes = safe_entity_count * sizeof(geoSphereTouches_t);
-    geoSphereTouches_t* idA_runlength =
-        (geoSphereTouches_t*)scratchPad.allocateTempVector("idA_runlength", run_length_bytes);
+    size_t run_length_bytes = safe_entity_count * sizeof(primitivesPrimTouches_t);
+    primitivesPrimTouches_t* idA_runlength =
+        (primitivesPrimTouches_t*)scratchPad.allocateTempVector("idA_runlength", run_length_bytes);
     size_t unique_id_bytes = safe_entity_count * sizeof(bodyID_t);
     bodyID_t* unique_idA = (bodyID_t*)scratchPad.allocateTempVector("unique_idA", unique_id_bytes);
     scratchPad.allocateDualStruct("numUniqueA");
-    cubDEMRunLengthEncode<bodyID_t, geoSphereTouches_t>(idA_sorted, unique_idA, idA_runlength,
-                                                        scratchPad.getDualStructDevice("numUniqueA"), numTotalCnts,
-                                                        this_stream, scratchPad);
+    cubDEMRunLengthEncode<bodyID_t, primitivesPrimTouches_t>(idA_sorted, unique_idA, idA_runlength,
+                                                             scratchPad.getDualStructDevice("numUniqueA"), numTotalCnts,
+                                                             this_stream, scratchPad);
     scratchPad.syncDualStructDeviceToHost("numUniqueA");
     size_t* pNumUniqueA = scratchPad.getDualStructHost("numUniqueA");
     size_t scanned_runlength_bytes = (*pNumUniqueA) * sizeof(contactPairs_t);
     contactPairs_t* idA_scanned_runlength =
         (contactPairs_t*)scratchPad.allocateTempVector("idA_scanned_runlength", scanned_runlength_bytes);
-    cubDEMPrefixScan<geoSphereTouches_t, contactPairs_t>(idA_runlength, idA_scanned_runlength, *pNumUniqueA,
-                                                         this_stream, scratchPad);
+    cubDEMPrefixScan<primitivesPrimTouches_t, contactPairs_t>(idA_runlength, idA_scanned_runlength, *pNumUniqueA,
+                                                              this_stream, scratchPad);
 
     // Then each thread will take care of an id in A to mark redundency...
     size_t retain_flags_size = numTotalCnts * sizeof(notStupidBool_t);
@@ -207,6 +207,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       DualArray<bodyID_t>& previous_idPrimitiveA,
                       DualArray<bodyID_t>& previous_idPrimitiveB,
                       DualArray<contact_t>& previous_contactTypePrimitive,
+                      ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPrimitiveMap,
                       DualArray<notStupidBool_t>& contactPersistency,
                       DualArray<contactPairs_t>& contactMapping,
                       // NEW: Separate patch ID arrays and mapping
@@ -256,6 +257,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     // Contact counts
     size_t nSphereSphereContact = 0, nTriSphereContact = 0, nTriTriContact = 0, nSphereGeoContact = 0,
            nTriGeoContact = 0;
+
+    // A count start offset and count map that will be generated and then stored in the end
+    ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>> typeStartCountPrimitiveMap_thisStep;
+    typeStartCountPrimitiveMap_thisStep.SetAll({0, 0});
 
     {
         timers.GetTimer("Discretize domain").start();
@@ -1097,16 +1102,16 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             size_t nGeoSafe = DEME_MAX(simParams->nSpheresGM, simParams->nTriGM);
             // For tab-keeping: how many contacts on average a sphere has? (using primitive contacts for this stat)
             // First, identify unique idA in primitive contacts
-            size_t run_length_bytes = nGeoSafe * sizeof(geoSphereTouches_t);
-            geoSphereTouches_t* new_idA_runlength =
-                (geoSphereTouches_t*)scratchPad.allocateTempVector("new_idA_runlength", run_length_bytes);
+            size_t run_length_bytes = nGeoSafe * sizeof(primitivesPrimTouches_t);
+            primitivesPrimTouches_t* new_idA_runlength =
+                (primitivesPrimTouches_t*)scratchPad.allocateTempVector("new_idA_runlength", run_length_bytes);
             size_t unique_id_bytes = nGeoSafe * sizeof(bodyID_t);
             bodyID_t* unique_new_idA = (bodyID_t*)scratchPad.allocateTempVector("unique_new_idA", unique_id_bytes);
             scratchPad.allocateDualStruct("numUniqueNewA");
 
-            cubDEMRunLengthEncode<bodyID_t, geoSphereTouches_t>(idA, unique_new_idA, new_idA_runlength,
-                                                                scratchPad.getDualStructDevice("numUniqueNewA"),
-                                                                numTotalCnts, this_stream, scratchPad);
+            cubDEMRunLengthEncode<bodyID_t, primitivesPrimTouches_t>(idA, unique_new_idA, new_idA_runlength,
+                                                                     scratchPad.getDualStructDevice("numUniqueNewA"),
+                                                                     numTotalCnts, this_stream, scratchPad);
             scratchPad.syncDualStructDeviceToHost("numUniqueNewA");
             size_t* pNumUniqueNewA = scratchPad.getDualStructHost("numUniqueNewA");
 
@@ -1259,7 +1264,11 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
 
                 // Process each type segment separately
                 for (size_t i = 0; i < numTypes; i++) {
+                    contact_t thisType = host_unique_types[i];
                     size_t count = host_type_counts[i];
+                    // Also store this for the record
+                    typeStartCountPrimitiveMap_thisStep[thisType] = std::make_pair(prim_offset, count);
+
                     if (count == 0)
                         continue;
 
@@ -1322,7 +1331,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 
                         // Set contactTypePatch for this segment - all have the same type (using GPU kernel)
-                        contact_t thisType = host_unique_types[i];
                         fillContactTypeArray<<<dim3(blocks_needed_for_decode), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
                                                this_stream>>>(granData->contactTypePatch + totalUniquePatchPairs,
                                                               thisType, numUniqueInSegment);
@@ -1465,6 +1473,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 DEME_GPU_CALL(cudaMemcpy(granData->previous_contactTypePrimitive, granData->contactTypePrimitive,
                                          primitive_type_arr_bytes, cudaMemcpyDeviceToDevice));
             }
+
+            // Now typeStartCountPrimitiveMap stores the start/count info for primitive contacts for this step, and the
+            // next time it is used, effectively the previous step's info is in
+            typeStartCountPrimitiveMap = typeStartCountPrimitiveMap_thisStep;
 
         }  // End of history-based model mapping
 

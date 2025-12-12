@@ -20,9 +20,9 @@ __global__ void fillContactTypeArray(deme::contact_t* arr, deme::contact_t val, 
     }
 }
 
-__global__ void fillRunLengthArray(deme::geoSphereTouches_t* runlength_full,
+__global__ void fillRunLengthArray(deme::primitivesPrimTouches_t* runlength_full,
                                    deme::bodyID_t* unique_ids,
-                                   deme::geoSphereTouches_t* runlength,
+                                   deme::primitivesPrimTouches_t* runlength,
                                    size_t numUnique) {
     deme::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < numUnique) {
@@ -31,8 +31,8 @@ __global__ void fillRunLengthArray(deme::geoSphereTouches_t* runlength_full,
     }
 }
 
-__global__ void buildPersistentMap(deme::geoSphereTouches_t* new_idA_runlength_full,
-                                   deme::geoSphereTouches_t* old_idA_runlength_full,
+__global__ void buildPersistentMap(deme::primitivesPrimTouches_t* new_idA_runlength_full,
+                                   deme::primitivesPrimTouches_t* old_idA_runlength_full,
                                    deme::contactPairs_t* new_idA_scanned_runlength,
                                    deme::contactPairs_t* old_idA_scanned_runlength,
                                    deme::contactPairs_t* mapping,
@@ -40,14 +40,14 @@ __global__ void buildPersistentMap(deme::geoSphereTouches_t* new_idA_runlength_f
                                    size_t nGeoSafe) {
     deme::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nGeoSafe) {
-        deme::geoSphereTouches_t new_cnt_count = new_idA_runlength_full[myID];
-        deme::geoSphereTouches_t old_cnt_count = old_idA_runlength_full[myID];
+        deme::primitivesPrimTouches_t new_cnt_count = new_idA_runlength_full[myID];
+        deme::primitivesPrimTouches_t old_cnt_count = old_idA_runlength_full[myID];
         // If this idA has non-zero runlength in new: a potential enduring sphere
         if (new_cnt_count > 0) {
             // Where should I start looking? Grab the offset.
             deme::contactPairs_t new_cnt_offset = new_idA_scanned_runlength[myID];
             deme::contactPairs_t old_cnt_offset = old_idA_scanned_runlength[myID];
-            for (deme::geoSphereTouches_t i = 0; i < new_cnt_count; i++) {
+            for (deme::primitivesPrimTouches_t i = 0; i < new_cnt_count; i++) {
                 // Current contact number we are inspecting
                 deme::contactPairs_t this_contact = new_cnt_offset + i;
                 deme::bodyID_t new_idB = granData->idPrimitiveB[this_contact];
@@ -60,7 +60,7 @@ __global__ void buildPersistentMap(deme::geoSphereTouches_t* new_idA_runlength_f
                     continue;
                 }
                 // Loop through the old idB to see if there is a match
-                for (deme::geoSphereTouches_t j = 0; j < old_cnt_count; j++) {
+                for (deme::primitivesPrimTouches_t j = 0; j < old_cnt_count; j++) {
                     deme::bodyID_t old_idB = granData->previous_idPrimitiveB[old_cnt_offset + j];
                     deme::contact_t old_cntType = granData->previous_contactTypePrimitive[old_cnt_offset + j];
                     // If both idB and contact type match, then it is an enduring contact, write it to the mapping
@@ -127,7 +127,7 @@ __global__ void setArr(deme::notStupidBool_t* arr, size_t n, deme::notStupidBool
     }
 }
 
-__global__ void markDuplicateContacts(deme::geoSphereTouches_t* idA_runlength,
+__global__ void markDuplicateContacts(deme::primitivesPrimTouches_t* idA_runlength,
                                       deme::contactPairs_t* idA_scanned_runlength,
                                       deme::bodyID_t* idB,
                                       deme::contact_t* contactTypePrimitive,
@@ -137,13 +137,13 @@ __global__ void markDuplicateContacts(deme::geoSphereTouches_t* idA_runlength,
                                       bool persistency_affect) {
     deme::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
-        deme::geoSphereTouches_t cnt_count = idA_runlength[myID];
+        deme::primitivesPrimTouches_t cnt_count = idA_runlength[myID];
         // If this idA has non-zero runlength in new: a potential removal needed
         if (cnt_count > 0) {
             // Where should I start looking? Grab the offset.
             deme::contactPairs_t cnt_offset = idA_scanned_runlength[myID];
-            for (deme::geoSphereTouches_t i = 0; i < cnt_count - 1; i++) {
-                for (deme::geoSphereTouches_t j = i + 1; j < cnt_count; j++) {
+            for (deme::primitivesPrimTouches_t i = 0; i < cnt_count - 1; i++) {
+                for (deme::primitivesPrimTouches_t j = i + 1; j < cnt_count; j++) {
                     // Current contact numbers we are inspecting
                     deme::contactPairs_t contactA = cnt_offset + i;
                     deme::contactPairs_t contactB = cnt_offset + j;

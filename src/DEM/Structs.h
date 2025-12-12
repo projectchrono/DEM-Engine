@@ -1017,6 +1017,27 @@ class ContactInfoContainer : public DataContainer {
     unsigned int m_cnt_out_content;
 };
 
+// A map that inherents from std::unordered_map, which has pre-defined contact type keys, and can store type T data
+template <typename T>
+class ContactTypeMap : public std::unordered_map<contact_t, T> {
+  public:
+    ContactTypeMap() {
+        this->emplace(SPHERE_SPHERE_CONTACT, T());
+        this->emplace(SPHERE_TRIANGLE_CONTACT, T());
+        this->emplace(SPHERE_ANALYTICAL_CONTACT, T());
+        this->emplace(TRIANGLE_TRIANGLE_CONTACT, T());
+        this->emplace(TRIANGLE_ANALYTICAL_CONTACT, T());
+    }
+    ContactTypeMap(const T& default_value) : ContactTypeMap() { SetAll(default_value); }
+
+    // Set values of all keys
+    void SetAll(const T& value) {
+        for (auto& [key, val] : *this) {
+            val = value;
+        }
+    }
+};
+
 }  // namespace deme
 
 #endif

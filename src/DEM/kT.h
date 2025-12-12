@@ -180,6 +180,11 @@ class DEMKinematicThread {
     DualArray<notStupidBool_t> contactPersistency =
         DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
+    // Records the contact <ID start, and count> for each contact type that exists in the previous detection
+    // step. Used for persistent contact identification.
+    ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>> typeStartCountPrimitiveMap =
+        ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>({0, 0});
+
     // Sphere-related arrays
     // Owner body ID of this component
     DualArray<bodyID_t> ownerClumpBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);

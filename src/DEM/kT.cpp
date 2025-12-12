@@ -322,9 +322,10 @@ void DEMKinematicThread::workerThread() {
             contactDetection(bin_sphere_kernels, bin_triangle_kernels, sphere_contact_kernels, sphTri_contact_kernels,
                              granData, simParams, solverFlags, verbosity, idPrimitiveA, idPrimitiveB,
                              contactTypePrimitive, previous_idPrimitiveA, previous_idPrimitiveB,
-                             previous_contactTypePrimitive, contactPersistency, contactMapping, idPatchA, idPatchB,
-                             previous_idPatchA, previous_idPatchB, contactTypePatch, previous_contactTypePatch,
-                             geomToPatchMap, streamInfo.stream, solverScratchSpace, timers, stateParams);
+                             previous_contactTypePrimitive, typeStartCountPrimitiveMap, contactPersistency,
+                             contactMapping, idPatchA, idPatchB, previous_idPatchA, previous_idPatchB, contactTypePatch,
+                             previous_contactTypePatch, geomToPatchMap, streamInfo.stream, solverScratchSpace, timers,
+                             stateParams);
             CDAccumTimer.End();
 
             timers.GetTimer("Send to dT buffer").start();
