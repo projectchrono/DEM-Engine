@@ -6,7 +6,6 @@
 #include <algorithms/DEMStaticDeviceSubroutines.h>
 #include <algorithms/DEMStaticDeviceUtilities.cuh>
 
-#include <core/utils/GpuError.h>
 #include <kernel/DEMHelperKernels.cuh>
 
 namespace deme {

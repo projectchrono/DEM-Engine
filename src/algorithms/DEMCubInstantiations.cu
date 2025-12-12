@@ -6,7 +6,6 @@
 #include <cub/cub.cuh>
 #include <algorithms/DEMStaticDeviceSubroutines.h>
 
-#include <core/utils/GpuError.h>
 #include <algorithms/DEMCubWrappers.cu>
 
 namespace deme {

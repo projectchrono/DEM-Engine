@@ -30,7 +30,7 @@ int main() {
     DEMSim.SetContactOutputContent(OWNER | FORCE | CNT_WILDCARD);
 
     // This demo could lead to large numbers of per-sphere contacts, so to be safe...
-    DEMSim.SetErrorOutAvgContacts(200);
+    DEMSim.SetErrorOutAvgContacts(400);
 
     //  E, nu, CoR, mu, Crr...
     auto mat_type_container =

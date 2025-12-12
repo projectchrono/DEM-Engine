@@ -17,7 +17,6 @@
 #include "../core/utils/ThreadManager.h"
 #include "../core/utils/GpuManager.h"
 #include "../core/utils/DataMigrationHelper.hpp"
-#include "../core/utils/GpuError.h"
 #include "BdrsAndObjs.h"
 #include "Defines.h"
 #include "Structs.h"

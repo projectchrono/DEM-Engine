@@ -11,7 +11,6 @@
 #include "../core/utils/ManagedMemory.hpp"
 #include "../core/utils/csv.hpp"
 #include "../core/utils/Logger.hpp"
-#include "../core/utils/GpuError.h"
 #include "../core/utils/DataMigrationHelper.hpp"
 #include "../core/utils/Timer.hpp"
 #include "../core/utils/RuntimeData.h"
@@ -312,7 +311,7 @@ struct SolverFlags {
     // The max number of average contacts per sphere has before the solver errors out. The reason why I didn't use the
     // number of contacts for the sphere that has the most is that, well, we can have a huge sphere and it just will
     // have more contacts. But if avg cnt is high, that means probably the contact margin is out of control now.
-    float errOutAvgSphCnts = 100.;
+    float errOutAvgSphCnts = 300.;
 
     // Whether there are contacts that can never be removed.
     bool hasPersistentContacts = false;

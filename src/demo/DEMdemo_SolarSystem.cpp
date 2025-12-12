@@ -159,10 +159,6 @@ int main() {
     DEMSim.SetFamilyExtraMargin(0, 100.);
     DEMSim.SetFamilyExtraMargin(1, 100.);
 
-    // If you know your extra margin policy gonna make the average number of contacts per sphere huge, then set this so
-    // that the solver does not error out when checking it.
-    DEMSim.SetErrorOutAvgContacts(200);
-
     DEMSim.Initialize();
 
     std::filesystem::path out_dir = std::filesystem::current_path();

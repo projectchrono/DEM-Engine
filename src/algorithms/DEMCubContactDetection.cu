@@ -12,7 +12,6 @@
 #include <algorithms/DEMCubWrappers.cu>
 
 #include <DEM/utils/HostSideHelpers.hpp>
-#include <core/utils/GpuError.h>
 
 namespace deme {
 
@@ -1119,15 +1118,16 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             if (stateParams.avgCntsPerPrimitive > solverFlags.errOutAvgSphCnts) {
                 DEME_ERROR(
                     "On average a primitive (spheres, triangle facets) has %.7g contacts with other primitives, more "
-                    "than the max allowance (%.7g).\nIf you believe this is not abnormal, set the allowance high using "
-                    "SetErrorOutAvgContacts before initialization.\nIf you think this is because dT drifting too much "
+                    "than the max allowance (%.7g).\nIf you believe this number is expected with the physics you are "
+                    "simulating, set the allowance high using SetErrorOutAvgContacts before "
+                    "initialization.\nIf you think this is because dT drifting too much "
                     "ahead of kT so the contact margin added is too big, use SetCDMaxUpdateFreq to limit the max dT "
-                    "future drift.\nOtherwise, the simulation may have diverged and relaxing the physics may help, "
-                    "such as decreasing the step size and modifying material properties.\nIf this happens at the start "
-                    "of simulation, check if there are initial penetrations, a.k.a. elements initialized inside "
-                    "walls.\nIf none works and you are going to discuss this on forum "
-                    "https://groups.google.com/g/projectchrono, please include a visual rendering of the simulation "
-                    "before crash.\n",
+                    "future drift.\nOtherwise, the simulation may have diverged with unreasonable entity velocities "
+                    "and relaxing the physics may help, such as decreasing the step size and modifying material "
+                    "properties.\nIf this happens at the start of simulation, check if there are initial penetrations, "
+                    "a.k.a. elements initialized inside walls.\nIf none works and you are going to discuss this on "
+                    "forum https://groups.google.com/g/projectchrono, please include a visual rendering of the "
+                    "simulation before crash in the post.\n",
                     stateParams.avgCntsPerPrimitive, solverFlags.errOutAvgSphCnts);
             }
 

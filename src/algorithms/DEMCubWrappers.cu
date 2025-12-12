@@ -6,7 +6,6 @@
 #include <cub/cub.cuh>
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
-#include <core/utils/GpuError.h>
 
 namespace deme {
 
