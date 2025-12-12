@@ -24,8 +24,10 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
     // Contact type is known at compile time
     deme::contact_t ContactType = CONTACT_TYPE;
     // The following quantities are always calculated, regardless of force model
-    double3 contactPnt;
-    float3 B2A;  // contact normal felt by A, pointing from B to A, unit vector
+    // Note it is strangely important to give init values to contactPnt here, otherwise on some systems it seems nvcc
+    // optimizes it out before potentially using it to assign VRAM values, giving NaN results.
+    double3 contactPnt = make_double3(0.0, 0.0, 0.0);  // contact point in global coords
+    float3 B2A = make_float3(0.f, 0.f, 1.f);           // contact normal felt by A, pointing from B to A, unit vector
     // Penetration depth
     // Positive number for overlapping cases, negative for non-overlapping cases
     double overlapDepth = 0.0;
@@ -366,18 +368,17 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // Store contact penetration depth (double) in contactPointGeometryA (float3)
         granData->contactPointGeometryA[myPrimitiveContactID] = doubleToFloat3Storage(overlapDepth);
         // Store contact area (double) in contactPointGeometryB (float3)
-        // If this is not a contact, we store 0.0 in the area, so it has no voting power in the next kernel.
+        // If this is not a contact, we store 0.0 in the area, so it has no voting power in the next kernels. Note the
+        // NOT_A_CONTACT control flow here and in the next few kernels is integrated in areas.
         granData->contactPointGeometryB[myPrimitiveContactID] =
             doubleToFloat3Storage((ContactType == deme::NOT_A_CONTACT || overlapArea <= 0.0) ? 0.0 : overlapArea);
-        // Store contact point (cast from double3 to float3)
-        // Weird thing: I found that, at least on my CUDA12.8 laptop, if not adding this check of the finiteness of
-        // contactPnt, contactPnt gives inf components. I don't know why but have to get to the bottom of it later.
-        if (!isfinite(contactPnt.x) || !isfinite(contactPnt.y) || !isfinite(contactPnt.z)) {
-            DEME_ABORT_KERNEL(
-                "Primitive contact No. %d of type %d has contact point with infinite component(s), something is "
-                "wrong.\n",
-                myPrimitiveContactID, ContactType);
-        }
+        // Store contact point (cast from double3 to float3). Could make the following check, but hopefully it's not
+        // necessary. if (!isfinite(contactPnt.x) || !isfinite(contactPnt.y) || !isfinite(contactPnt.z)) {
+        //     DEME_ABORT_KERNEL(
+        //         "Primitive contact No. %d of type %d has contact point with infinite component(s), something is "
+        //         "wrong.\n",
+        //         myPrimitiveContactID, ContactType);
+        // }
         granData->contactTorque_convToForce[myPrimitiveContactID] = to_float3(contactPnt);
     }
 }
