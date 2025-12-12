@@ -324,8 +324,8 @@ void DEMKinematicThread::workerThread() {
                              contactTypePrimitive, previous_idPrimitiveA, previous_idPrimitiveB,
                              previous_contactTypePrimitive, typeStartCountPrimitiveMap, contactPersistency,
                              contactMapping, idPatchA, idPatchB, previous_idPatchA, previous_idPatchB, contactTypePatch,
-                             previous_contactTypePatch, geomToPatchMap, streamInfo.stream, solverScratchSpace, timers,
-                             stateParams);
+                             previous_contactTypePatch, typeStartCountPatchMap, geomToPatchMap, streamInfo.stream, 
+                             solverScratchSpace, timers, stateParams);
             CDAccumTimer.End();
 
             timers.GetTimer("Send to dT buffer").start();

@@ -217,6 +217,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       DualArray<bodyID_t>& previous_idPatchB,
                       DualArray<contact_t>& contactTypePatch,
                       DualArray<contact_t>& previous_contactTypePatch,
+                      ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
                       DualArray<contactPairs_t>& geomToPatchMap,
                       cudaStream_t& this_stream,
                       DEMSolverScratchData& scratchPad,
@@ -261,6 +262,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     // A count start offset and count map that will be generated and then stored in the end
     ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>> typeStartCountPrimitiveMap_thisStep;
     typeStartCountPrimitiveMap_thisStep.SetAll({0, 0});
+    
+    // Track patch contact start/count per type (for the new redesigned mapping approach)
+    ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>> typeStartCountPatchMap_thisStep;
+    typeStartCountPatchMap_thisStep.SetAll({0, 0});
 
     {
         timers.GetTimer("Discretize domain").start();
@@ -1322,6 +1327,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
 
                     // Step 3: Decode unique patch pairs into idPatchA/B at the appropriate offset
                     if (numUniqueInSegment > 0) {
+                        // Store the start/count for this type in the patch contact map
+                        typeStartCountPatchMap_thisStep[thisType] = std::make_pair(totalUniquePatchPairs, numUniqueInSegment);
+                        
                         size_t blocks_needed_for_decode =
                             (numUniqueInSegment + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
                         decodePatchPairsToSeparateArrays<<<dim3(blocks_needed_for_decode),
@@ -1425,17 +1433,52 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 granData.toDevice();
             }
 
-            // Build patch-based contact mapping using the new kernel
-            // Both current and previous patch arrays are already sorted by type, then by patch ID pair
-            size_t blocks_needed_for_mapping =
-                (*scratchPad.numContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-            if (blocks_needed_for_mapping > 0) {
-                buildPatchContactMapping<<<dim3(blocks_needed_for_mapping), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                           this_stream>>>(
-                    granData->idPatchA, granData->idPatchB, granData->contactTypePatch, granData->previous_idPatchA,
-                    granData->previous_idPatchB, granData->previous_contactTypePatch, granData->contactMapping,
-                    *scratchPad.numContacts, *scratchPad.numPrevContacts);
-                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+            // Build patch-based contact mapping using per-type kernels
+            // Iterate over all 5 contact types and launch a kernel for each type that has contacts
+            const contact_t all_contact_types[NUM_SUPPORTED_CONTACT_TYPES] = {
+                SPHERE_SPHERE_CONTACT, SPHERE_TRIANGLE_CONTACT, SPHERE_ANALYTICAL_CONTACT,
+                TRIANGLE_TRIANGLE_CONTACT, TRIANGLE_ANALYTICAL_CONTACT
+            };
+            
+            for (size_t type_idx = 0; type_idx < NUM_SUPPORTED_CONTACT_TYPES; type_idx++) {
+                contact_t thisType = all_contact_types[type_idx];
+                
+                // Get start/count for this type in the current step
+                const auto& curr_info = typeStartCountPatchMap_thisStep.at(thisType);
+                contactPairs_t curr_start = curr_info.first;
+                contactPairs_t curr_count = curr_info.second;
+                
+                // Skip if no contacts of this type in current step
+                if (curr_count == 0) {
+                    continue;
+                }
+                
+                // Get start/count for this type in the previous step
+                const auto& prev_info = typeStartCountPatchMap.at(thisType);
+                contactPairs_t prev_start = prev_info.first;
+                contactPairs_t prev_count = prev_info.second;
+                
+                // Launch appropriate kernel based on whether previous step had this type
+                size_t blocks_needed = (curr_count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+                
+                if (prev_count == 0) {
+                    // Previous step has no contacts of this type - set all to NULL_MAPPING_PARTNER
+                    if (blocks_needed > 0) {
+                        setNullMappingForType<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                                this_stream>>>(granData->contactMapping, curr_start, curr_count);
+                        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+                    }
+                } else {
+                    // Both steps have contacts of this type - perform mapping
+                    if (blocks_needed > 0) {
+                        buildPatchContactMappingForType<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                                          this_stream>>>(
+                            granData->idPatchA, granData->idPatchB, granData->previous_idPatchA,
+                            granData->previous_idPatchB, granData->contactMapping, curr_start, curr_count, prev_start,
+                            prev_count);
+                        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+                    }
+                }
             }
             // std::cout << "Patch contact mapping:" << std::endl;
             // displayDeviceArray<contactPairs_t>(granData->contactMapping, *scratchPad.numContacts);
@@ -1477,6 +1520,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // Now typeStartCountPrimitiveMap stores the start/count info for primitive contacts for this step, and the
             // next time it is used, effectively the previous step's info is in
             typeStartCountPrimitiveMap = typeStartCountPrimitiveMap_thisStep;
+            
+            // Similarly, update the patch contact map for the next iteration
+            typeStartCountPatchMap = typeStartCountPatchMap_thisStep;
 
         }  // End of history-based model mapping
 

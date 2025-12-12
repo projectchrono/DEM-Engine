@@ -184,6 +184,11 @@ class DEMKinematicThread {
     // step. Used for persistent contact identification.
     ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>> typeStartCountPrimitiveMap =
         ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>({0, 0});
+    
+    // Records the contact <ID start, and count> for each patch contact type in the previous step.
+    // Used for patch-based persistent contact mapping.
+    ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>> typeStartCountPatchMap =
+        ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>({0, 0});
 
     // Sphere-related arrays
     // Owner body ID of this component
