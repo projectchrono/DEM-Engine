@@ -83,6 +83,12 @@ void cubRunLengthEncode(T1* d_in,
 
 template <typename T1, typename T2>
 void cubPrefixScan(T1* d_in, T2* d_out, size_t n, cudaStream_t& this_stream, DEMSolverScratchData& scratchPad);
+template <typename T1, typename T2>
+inline void cubDEMInclusiveScan(T1* d_in,
+                                T2* d_out,
+                                size_t n,
+                                cudaStream_t& this_stream,
+                                DEMSolverScratchData& scratchPad);
 
 ////////////////////////////////////////////////////////////////////////////////
 // For kT and dT's private usage
@@ -103,7 +109,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       DualArray<bodyID_t>& previous_idPrimitiveA,
                       DualArray<bodyID_t>& previous_idPrimitiveB,
                       DualArray<contact_t>& previous_contactTypePrimitive,
-                      ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPrimitiveMap,
                       DualArray<notStupidBool_t>& contactPersistency,
                       DualArray<contactPairs_t>& contactMapping,
                       // NEW: Separate patch ID arrays and mapping
@@ -113,6 +118,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       DualArray<bodyID_t>& previous_idPatchB,
                       DualArray<contact_t>& contactTypePatch,
                       DualArray<contact_t>& previous_contactTypePatch,
+                      ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
                       DualArray<contactPairs_t>& geomToPatchMap,
                       cudaStream_t& this_stream,
                       DEMSolverScratchData& scratchPad,
@@ -133,6 +139,7 @@ void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
                                 DualArray<bodyID_t>& previous_idPatchA,
                                 DualArray<bodyID_t>& previous_idPatchB,
                                 DualArray<contact_t>& previous_contactTypePatch,
+                                ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
                                 DualStruct<DEMSimParams>& simParams,
                                 DEMSolverScratchData& scratchPad,
                                 cudaStream_t& this_stream,

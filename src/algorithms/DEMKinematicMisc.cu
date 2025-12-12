@@ -254,6 +254,87 @@ __global__ void markNewPatchPairGroups(deme::patchIDPair_t* sortedPatchPairs,
     }
 }
 
+// Set NULL_MAPPING_PARTNER for contacts of a specific type segment.
+// Used when current step has contacts of this type but previous step does not.
+//
+// Parameters:
+//   contactMapping: Output mapping array (entire array, not segment)
+//   curr_start: Starting index in current arrays for this contact type segment
+//   curr_count: Number of contacts of this type in current step
+__global__ void setNullMappingForType(deme::contactPairs_t* contactMapping,
+                                      deme::contactPairs_t curr_start,
+                                      deme::contactPairs_t curr_count) {
+    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < curr_count) {
+        deme::contactPairs_t curr_idx = curr_start + myID;
+        contactMapping[curr_idx] = deme::NULL_MAPPING_PARTNER;
+    }
+}
+
+// Build patch-based contact mapping for a single contact type segment.
+// This kernel operates on a specific segment of the contact arrays identified by start offsets and counts.
+// Each thread processes one current contact and searches for a match in the previous contacts of the same type.
+//
+// Parameters:
+//   curr_idPatchA, curr_idPatchB: Current step's patch contact arrays (entire arrays, not segment)
+//   prev_idPatchA, prev_idPatchB: Previous step's patch contact arrays (entire arrays, not segment)
+//   contactMapping: Output mapping array (entire array, not segment)
+//   curr_start: Starting index in current arrays for this contact type segment
+//   curr_count: Number of contacts of this type in current step
+//   prev_start: Starting index in previous arrays for this contact type segment
+//   prev_count: Number of contacts of this type in previous step
+__global__ void buildPatchContactMappingForType(deme::bodyID_t* curr_idPatchA,
+                                                deme::bodyID_t* curr_idPatchB,
+                                                deme::bodyID_t* prev_idPatchA,
+                                                deme::bodyID_t* prev_idPatchB,
+                                                deme::contactPairs_t* contactMapping,
+                                                deme::contactPairs_t curr_start,
+                                                deme::contactPairs_t curr_count,
+                                                deme::contactPairs_t prev_start,
+                                                deme::contactPairs_t prev_count) {
+    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < curr_count) {
+        // Absolute index in the full contact array
+        deme::contactPairs_t curr_idx = curr_start + myID;
+
+        deme::bodyID_t curr_A = curr_idPatchA[curr_idx];
+        deme::bodyID_t curr_B = curr_idPatchB[curr_idx];
+
+        // Default: no match found
+        deme::contactPairs_t my_partner = deme::NULL_MAPPING_PARTNER;
+
+        // Binary search within the previous type segment for the matching A/B pair
+        // The segment is sorted by the combined patch ID pair
+        deme::contactPairs_t left = 0;
+        deme::contactPairs_t right = prev_count;
+        while (left < right) {
+            deme::contactPairs_t mid = left + (right - left) / 2;
+            deme::contactPairs_t prev_idx = prev_start + mid;
+            deme::bodyID_t prev_A = prev_idPatchA[prev_idx];
+            deme::bodyID_t prev_B = prev_idPatchB[prev_idx];
+
+            // Compare (A, B) pairs lexicographically
+            if (prev_A < curr_A || (prev_A == curr_A && prev_B < curr_B)) {
+                left = mid + 1;
+            } else {
+                right = mid;
+            }
+        }
+
+        // Check if we found a match at position left
+        if (left < prev_count) {
+            deme::contactPairs_t prev_idx = prev_start + left;
+            deme::bodyID_t prev_A = prev_idPatchA[prev_idx];
+            deme::bodyID_t prev_B = prev_idPatchB[prev_idx];
+            if (prev_A == curr_A && prev_B == curr_B) {
+                my_partner = prev_idx;
+            }
+        }
+
+        contactMapping[curr_idx] = my_partner;
+    }
+}
+
 // Build patch-based contact mapping between current and previous patch contact arrays.
 // Both arrays are sorted by contact type, then by combined patch ID pair within each type.
 // For each current contact, we use binary search to find the matching contact in the previous array.

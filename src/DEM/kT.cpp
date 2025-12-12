@@ -322,9 +322,9 @@ void DEMKinematicThread::workerThread() {
             contactDetection(bin_sphere_kernels, bin_triangle_kernels, sphere_contact_kernels, sphTri_contact_kernels,
                              granData, simParams, solverFlags, verbosity, idPrimitiveA, idPrimitiveB,
                              contactTypePrimitive, previous_idPrimitiveA, previous_idPrimitiveB,
-                             previous_contactTypePrimitive, typeStartCountPrimitiveMap, contactPersistency,
-                             contactMapping, idPatchA, idPatchB, previous_idPatchA, previous_idPatchB, contactTypePatch,
-                             previous_contactTypePatch, geomToPatchMap, streamInfo.stream, solverScratchSpace, timers,
+                             previous_contactTypePrimitive, contactPersistency, contactMapping, idPatchA, idPatchB,
+                             previous_idPatchA, previous_idPatchB, contactTypePatch, previous_contactTypePatch,
+                             typeStartCountPatchMap, geomToPatchMap, streamInfo.stream, solverScratchSpace, timers,
                              stateParams);
             CDAccumTimer.End();
 
@@ -951,7 +951,7 @@ void DEMKinematicThread::updatePrevContactArrays(DualStruct<DEMDataDT>& dT_data,
     // Note kT never had the responsibility to migrate contact info to host, even at Update, as even in this case
     // its host-side update comes from dT
     overwritePrevContactArrays(granData, dT_data, previous_idPatchA, previous_idPatchB, previous_contactTypePatch,
-                               simParams, solverScratchSpace, streamInfo.stream, nContacts);
+                               typeStartCountPatchMap, simParams, solverScratchSpace, streamInfo.stream, nContacts);
     DEME_DEBUG_PRINTF("Number of contacts after a user-manual contact load: %zu", nContacts);
     DEME_DEBUG_PRINTF("Number of spheres after a user-manual contact load: %zu", (size_t)simParams->nSpheresGM);
 }

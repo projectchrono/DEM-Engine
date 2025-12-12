@@ -81,6 +81,20 @@ inline void cubDEMPrefixScan(T1* d_in,
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
+template <typename T1, typename T2>
+inline void cubDEMInclusiveScan(T1* d_in,
+                                T2* d_out,
+                                size_t n,
+                                cudaStream_t& this_stream,
+                                DEMSolverScratchData& scratchPad) {
+    size_t cub_scratch_bytes = 0;
+    cub::DeviceScan::InclusiveScan(NULL, cub_scratch_bytes, d_in, d_out, cub::Sum(), n, this_stream);
+    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
+    cub::DeviceScan::InclusiveScan(d_scratch_space, cub_scratch_bytes, d_in, d_out, cub::Sum(), n, this_stream);
+    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+}
+
 template <typename T1>
 inline void cubDEMSortKeys(T1* d_keys_in,
                            T1* d_keys_out,
