@@ -1444,20 +1444,20 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             for (size_t type_idx = 0; type_idx < NUM_SUPPORTED_CONTACT_TYPES; type_idx++) {
                 contact_t thisType = ALL_CONTACT_TYPES[type_idx];
                 
-                // Get start/count for this type in the current step
-                const auto& curr_info = typeStartCountPatchMap_thisStep.at(thisType);
+                // Get start/count for this type in the current and previous steps
+                // Using operator[] is safe here since ContactTypeMap initializes all types in constructor
+                const auto& curr_info = typeStartCountPatchMap_thisStep[thisType];
+                const auto& prev_info = typeStartCountPatchMap[thisType];
+                
                 contactPairs_t curr_start = curr_info.first;
                 contactPairs_t curr_count = curr_info.second;
+                contactPairs_t prev_start = prev_info.first;
+                contactPairs_t prev_count = prev_info.second;
                 
                 // Skip if no contacts of this type in current step
                 if (curr_count == 0) {
                     continue;
                 }
-                
-                // Get start/count for this type in the previous step
-                const auto& prev_info = typeStartCountPatchMap.at(thisType);
-                contactPairs_t prev_start = prev_info.first;
-                contactPairs_t prev_count = prev_info.second;
                 
                 // Launch appropriate kernel based on whether previous step had this type
                 size_t blocks_needed = (curr_count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
@@ -1466,7 +1466,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     // Previous step has no contacts of this type - set all to NULL_MAPPING_PARTNER
                     setNullMappingForType<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
                                             this_stream>>>(granData->contactMapping, curr_start, curr_count);
-                    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                 } else {
                     // Both steps have contacts of this type - perform mapping
                     buildPatchContactMappingForType<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
@@ -1474,9 +1473,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                         granData->idPatchA, granData->idPatchB, granData->previous_idPatchA,
                         granData->previous_idPatchB, granData->contactMapping, curr_start, curr_count, prev_start,
                         prev_count);
-                    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                 }
             }
+            // Synchronize once after all mapping kernels are launched
+            DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             // std::cout << "Patch contact mapping:" << std::endl;
             // displayDeviceArray<contactPairs_t>(granData->contactMapping, *scratchPad.numContacts);
 
