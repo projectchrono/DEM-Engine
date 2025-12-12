@@ -15,6 +15,12 @@
 
 namespace deme {
 
+// Array of all supported contact types, used for iterating during mapping construction
+static const contact_t ALL_CONTACT_TYPES[NUM_SUPPORTED_CONTACT_TYPES] = {
+    SPHERE_SPHERE_CONTACT, SPHERE_TRIANGLE_CONTACT, SPHERE_ANALYTICAL_CONTACT,
+    TRIANGLE_TRIANGLE_CONTACT, TRIANGLE_ANALYTICAL_CONTACT
+};
+
 inline void primitiveContactArraysResize(size_t nContactPairs,
                                          DualArray<bodyID_t>& idPrimitiveA,
                                          DualArray<bodyID_t>& idPrimitiveB,
@@ -1434,14 +1440,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             }
 
             // Build patch-based contact mapping using per-type kernels
-            // Iterate over all 5 contact types and launch a kernel for each type that has contacts
-            const contact_t all_contact_types[NUM_SUPPORTED_CONTACT_TYPES] = {
-                SPHERE_SPHERE_CONTACT, SPHERE_TRIANGLE_CONTACT, SPHERE_ANALYTICAL_CONTACT,
-                TRIANGLE_TRIANGLE_CONTACT, TRIANGLE_ANALYTICAL_CONTACT
-            };
-            
+            // Iterate over all supported contact types and launch a kernel for each type that has contacts
             for (size_t type_idx = 0; type_idx < NUM_SUPPORTED_CONTACT_TYPES; type_idx++) {
-                contact_t thisType = all_contact_types[type_idx];
+                contact_t thisType = ALL_CONTACT_TYPES[type_idx];
                 
                 // Get start/count for this type in the current step
                 const auto& curr_info = typeStartCountPatchMap_thisStep.at(thisType);

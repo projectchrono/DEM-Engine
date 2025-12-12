@@ -291,10 +291,10 @@ __global__ void buildPatchContactMappingForType(deme::bodyID_t* curr_idPatchA,
 
         // Binary search within the previous type segment for the matching A/B pair
         // The segment is sorted by the combined patch ID pair
-        size_t left = 0;
-        size_t right = prev_count;
+        deme::contactPairs_t left = 0;
+        deme::contactPairs_t right = prev_count;
         while (left < right) {
-            size_t mid = left + (right - left) / 2;
+            deme::contactPairs_t mid = left + (right - left) / 2;
             deme::contactPairs_t prev_idx = prev_start + mid;
             deme::bodyID_t prev_A = prev_idPatchA[prev_idx];
             deme::bodyID_t prev_B = prev_idPatchB[prev_idx];
