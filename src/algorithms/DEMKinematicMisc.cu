@@ -274,7 +274,7 @@ __global__ void setNullMappingForType(deme::contactPairs_t* contactMapping,
 // Build patch-based contact mapping for a single contact type segment.
 // This kernel operates on a specific segment of the contact arrays identified by start offsets and counts.
 // Each thread processes one current contact and searches for a match in the previous contacts of the same type.
-// 
+//
 // Parameters:
 //   curr_idPatchA, curr_idPatchB: Current step's patch contact arrays (entire arrays, not segment)
 //   prev_idPatchA, prev_idPatchB: Previous step's patch contact arrays (entire arrays, not segment)
@@ -296,7 +296,7 @@ __global__ void buildPatchContactMappingForType(deme::bodyID_t* curr_idPatchA,
     if (myID < curr_count) {
         // Absolute index in the full contact array
         deme::contactPairs_t curr_idx = curr_start + myID;
-        
+
         deme::bodyID_t curr_A = curr_idPatchA[curr_idx];
         deme::bodyID_t curr_B = curr_idPatchB[curr_idx];
 

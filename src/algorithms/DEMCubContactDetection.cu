@@ -18,11 +18,9 @@ namespace deme {
 // Array of all supported contact types, used for iterating during mapping construction
 // Note: If you add a new contact type, you must update this array and NUM_SUPPORTED_CONTACT_TYPES
 static const contact_t ALL_CONTACT_TYPES[NUM_SUPPORTED_CONTACT_TYPES] = {
-    SPHERE_SPHERE_CONTACT, SPHERE_TRIANGLE_CONTACT, SPHERE_ANALYTICAL_CONTACT,
-    TRIANGLE_TRIANGLE_CONTACT, TRIANGLE_ANALYTICAL_CONTACT
-};
-static_assert(NUM_SUPPORTED_CONTACT_TYPES == 5, 
-              "ALL_CONTACT_TYPES array size must match NUM_SUPPORTED_CONTACT_TYPES");
+    SPHERE_SPHERE_CONTACT, SPHERE_TRIANGLE_CONTACT, SPHERE_ANALYTICAL_CONTACT, TRIANGLE_TRIANGLE_CONTACT,
+    TRIANGLE_ANALYTICAL_CONTACT};
+static_assert(NUM_SUPPORTED_CONTACT_TYPES == 5, "ALL_CONTACT_TYPES array size must match NUM_SUPPORTED_CONTACT_TYPES");
 
 inline void primitiveContactArraysResize(size_t nContactPairs,
                                          DualArray<bodyID_t>& idPrimitiveA,
@@ -1331,7 +1329,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     if (numUniqueInSegment > 0) {
                         // Store the start/count for this type in the patch contact map
                         typeStartCountPatchMap_thisStep[thisType] = {totalUniquePatchPairs, numUniqueInSegment};
-                        
+
                         size_t blocks_needed_for_decode =
                             (numUniqueInSegment + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
                         decodePatchPairsToSeparateArrays<<<dim3(blocks_needed_for_decode),
@@ -1364,9 +1362,11 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     // std::cout << "isNewGroup segment " << i << ": " << std::endl;
                     // displayDeviceArray<contactPairs_t>(isNewGroup, count);
 
-                    // Prefix scan on isNewGroup and write result directly to the geomToPatchMap location
-                    cubDEMPrefixScan<contactPairs_t, contactPairs_t>(isNewGroup, granData->geomToPatchMap + prim_offset,
-                                                                     count, this_stream, scratchPad);
+                    // Prefix scan on isNewGroup and write result directly to the geomToPatchMap location. Note in
+                    // isNewGroup, first element is 0, then with a jump, element is marked 1, so inclusive scan is
+                    // needed to count the number of uniques.
+                    cubDEMInclusiveScan<contactPairs_t, contactPairs_t>(
+                        isNewGroup, granData->geomToPatchMap + prim_offset, count, this_stream, scratchPad);
 
                     // Add the global offset (totalUniquePatchPairs) to get the final geomToPatchMap values. Also note
                     // this add offset operation will take care of the +1 needed at the jump of each new type.
@@ -1439,29 +1439,29 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // Iterate over all supported contact types and launch a kernel for each type that has contacts
             for (size_t type_idx = 0; type_idx < NUM_SUPPORTED_CONTACT_TYPES; type_idx++) {
                 contact_t thisType = ALL_CONTACT_TYPES[type_idx];
-                
+
                 // Get start/count for this type in the current and previous steps
                 // Using operator[] is safe here since ContactTypeMap initializes all types in constructor
                 const auto& curr_info = typeStartCountPatchMap_thisStep[thisType];
                 const auto& prev_info = typeStartCountPatchMap[thisType];
-                
+
                 contactPairs_t curr_start = curr_info.first;
                 contactPairs_t curr_count = curr_info.second;
                 contactPairs_t prev_start = prev_info.first;
                 contactPairs_t prev_count = prev_info.second;
-                
+
                 // Skip if no contacts of this type in current step
                 if (curr_count == 0) {
                     continue;
                 }
-                
+
                 // Launch appropriate kernel based on whether previous step had this type
                 size_t blocks_needed = (curr_count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-                
+
                 if (prev_count == 0) {
                     // Previous step has no contacts of this type - set all to NULL_MAPPING_PARTNER
-                    setNullMappingForType<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                            this_stream>>>(granData->contactMapping, curr_start, curr_count);
+                    setNullMappingForType<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+                        granData->contactMapping, curr_start, curr_count);
                 } else {
                     // Both steps have contacts of this type - perform mapping
                     buildPatchContactMappingForType<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,

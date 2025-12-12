@@ -83,6 +83,12 @@ void cubRunLengthEncode(T1* d_in,
 
 template <typename T1, typename T2>
 void cubPrefixScan(T1* d_in, T2* d_out, size_t n, cudaStream_t& this_stream, DEMSolverScratchData& scratchPad);
+template <typename T1, typename T2>
+inline void cubDEMInclusiveScan(T1* d_in,
+                                T2* d_out,
+                                size_t n,
+                                cudaStream_t& this_stream,
+                                DEMSolverScratchData& scratchPad);
 
 ////////////////////////////////////////////////////////////////////////////////
 // For kT and dT's private usage
