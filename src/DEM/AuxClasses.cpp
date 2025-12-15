@@ -184,6 +184,12 @@ float* DEMInspector::dT_GetValue() {
     return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
 }
 
+float* DEMInspector::dT_GetDeviceValue() {
+    // assertInit(); // This one the user should not use
+    // This returns a device pointer instead of a host pointer
+    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, true);
+}
+
 void DEMInspector::assertInit() {
     if (!initialized) {
         Initialize(sys->GetJitStringSubs(), sys->GetJitifyOptions());
