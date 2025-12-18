@@ -418,7 +418,8 @@ void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
 }
 
 // Kernel to check if any primitive in each patch satisfies SAT (for tri-tri contacts)
-// Uses atomic CAS to safely set patchHasSAT[patchIdx] = 1 if any primitive has contactSATSatisfied = 1
+// Uses simple idempotent writes to set patchHasSAT[patchIdx] = 1 if any primitive has contactSATSatisfied = 1
+// Since we only transition from 0 to 1, and the array is pre-initialized to 0, multiple threads writing 1 is safe
 __global__ void checkPatchHasSATSatisfyingPrimitive_impl(DEMDataDT* granData,
                                                          notStupidBool_t* patchHasSAT,
                                                          contactPairs_t* keys,
@@ -476,6 +477,7 @@ __global__ void finalizePatchResults_impl(double* totalAreas,
     contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
         double totalArea = totalAreas[idx];
+        // Default to 1 (SAT satisfied) for non-triangle-triangle contacts where patchHasSAT is null
         notStupidBool_t hasSAT = (patchHasSAT != nullptr) ? patchHasSAT[idx] : 1;
         
         // Use voted results only if totalArea > 0 AND at least one primitive satisfies SAT
