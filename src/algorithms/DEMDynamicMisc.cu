@@ -431,10 +431,10 @@ __global__ void checkPatchHasSATSatisfyingPrimitive_impl(DEMDataDT* granData,
         contactPairs_t myContactID = startOffsetPrimitive + idx;
         contactPairs_t patchIdx = keys[idx];
         contactPairs_t localPatchIdx = patchIdx - startOffsetPatch;
-        
+
         // Check if this primitive satisfies SAT
         notStupidBool_t satisfiesSAT = granData->contactSATSatisfied[myContactID];
-        
+
         // If this primitive satisfies SAT, mark the patch as having at least one SAT-satisfying primitive
         // Since we only need to set 0 -> 1, a simple write is safe (multiple threads writing 1 is idempotent)
         if (satisfiesSAT) {
@@ -444,16 +444,16 @@ __global__ void checkPatchHasSATSatisfyingPrimitive_impl(DEMDataDT* granData,
 }
 
 void checkPatchHasSATSatisfyingPrimitive(DEMDataDT* granData,
-                                        notStupidBool_t* patchHasSAT,
-                                        contactPairs_t* keys,
-                                        contactPairs_t startOffsetPrimitive,
-                                        contactPairs_t startOffsetPatch,
-                                        contactPairs_t countPrimitive,
-                                        contactPairs_t countPatch,
-                                        cudaStream_t& this_stream) {
+                                         notStupidBool_t* patchHasSAT,
+                                         contactPairs_t* keys,
+                                         contactPairs_t startOffsetPrimitive,
+                                         contactPairs_t startOffsetPatch,
+                                         contactPairs_t countPrimitive,
+                                         contactPairs_t countPatch,
+                                         cudaStream_t& this_stream) {
     // Initialize patchHasSAT to 0
     DEME_GPU_CALL(cudaMemsetAsync(patchHasSAT, 0, countPatch * sizeof(notStupidBool_t), this_stream));
-    
+
     size_t blocks_needed = (countPrimitive + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         checkPatchHasSATSatisfyingPrimitive_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
@@ -464,7 +464,8 @@ void checkPatchHasSATSatisfyingPrimitive(DEMDataDT* granData,
 
 // Kernel to finalize patch results by combining normal voting results with zero-area case handling
 // For patches with totalArea > 0 AND patchHasSAT = 1: use voted normal and weighted penetration
-// For patches with totalArea == 0 OR patchHasSAT = 0: use max-penetration primitive's normal and penetration (Step 8 fallback)
+// For patches with totalArea == 0 OR patchHasSAT = 0: use max-penetration primitive's normal and penetration (Step 8
+// fallback)
 __global__ void finalizePatchResults_impl(double* totalAreas,
                                           float3* votedNormals,
                                           double* votedPenetrations,
@@ -479,7 +480,7 @@ __global__ void finalizePatchResults_impl(double* totalAreas,
         double totalArea = totalAreas[idx];
         // Default to 1 (SAT satisfied) for non-triangle-triangle contacts where patchHasSAT is null
         notStupidBool_t hasSAT = (patchHasSAT != nullptr) ? patchHasSAT[idx] : 1;
-        
+
         // Use voted results only if totalArea > 0 AND at least one primitive satisfies SAT
         if (totalArea > 0.0 && hasSAT) {
             // Normal case: use voted results

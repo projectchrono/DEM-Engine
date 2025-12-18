@@ -570,12 +570,16 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
         // In any case, in this initialization process we should not make contact arrays smaller than it used to be, or
         // we may lose data. Also, if this is a new-boot, we allocate this array for at least INITIAL_CONTACT_ARRAY_SIZE
         // elements.
+        //// TODO: Resizing contact arrays at initialization is a must and almost like a liability at this point. If you
+        ///forget one of them, then if the sim entity number is small, you are likely to get segfault when you use them
+        ///because some of them may never experienced resizing. This is not a good design.
         size_t cnt_arr_size =
             DEME_MAX(*solverScratchSpace.numPrimitiveContacts + nExtraContacts, INITIAL_CONTACT_ARRAY_SIZE);
         DEME_DUAL_ARRAY_RESIZE(idPrimitiveA, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(idPrimitiveB, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(contactTypePrimitive, cnt_arr_size, NOT_A_CONTACT);
         DEME_DUAL_ARRAY_RESIZE(geomToPatchMap, cnt_arr_size, 0);
+        DEME_DUAL_ARRAY_RESIZE(contactSATSatisfied, cnt_arr_size, 0);
 
         DEME_DUAL_ARRAY_RESIZE(idPatchA, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(idPatchB, cnt_arr_size, 0);
@@ -2417,7 +2421,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                                               zeroAreaPenetrations, keys, startOffsetPrimitive,
                                                               startOffsetPatch, countPrimitive, streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("maxPenetrations");
-                
+
                 // Step 8d: Check if each patch has any SAT-satisfying primitive (for tri-tri contacts)
                 // If no primitive satisfies SAT, the patch contact is non-physical and should use Step 8 fallback
                 notStupidBool_t* patchHasSAT = nullptr;
