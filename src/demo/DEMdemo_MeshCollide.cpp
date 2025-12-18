@@ -87,6 +87,8 @@ int main() {
             // Test if family changer works
             float3 pos1 = tracker1->Pos();
             float3 pos2 = tracker2->Pos();
+            float3 angvel1 = tracker1->AngVelGlobal();
+            float3 angvel2 = tracker2->AngVelGlobal();
 
             // Test getting all contact force pairs concerning different trackers
             std::vector<float3> forces_mesh, points_mesh;
@@ -99,6 +101,8 @@ int main() {
             std::cout << "----------------------------------------" << std::endl;
             std::cout << "Particle 1 Z coord is " << pos1.z << std::endl;
             std::cout << "Particle 2 Z coord is " << pos2.z << std::endl;
+            std::cout << "Particle 1 ang vel is " << angvel1.x << ", " << angvel1.y << ", " << angvel1.z << std::endl;
+            std::cout << "Particle 2 ang vel is " << angvel2.x << ", " << angvel2.y << ", " << angvel2.z << std::endl;
             if (points_mesh.size() > 0) {
                 std::cout << "Two meshes collide, one contact is at (" << points_mesh[0].x << ", " << points_mesh[0].y
                           << ", " << points_mesh[0].z << ")." << std::endl;

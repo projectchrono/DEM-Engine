@@ -96,9 +96,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // If this is a triangle then it has a patch ID
         deme::bodyID_t myPatchID = granData->triPatchID[triID];
         bodyAMatType = granData->patchMaterialOffset[myPatchID];
-
-        // As the grace margin, the distance (negative overlap) just needs to be within the grace margin. So we pick
-        // the larger of the 2 familyExtraMarginSize.
         extraMarginSize = granData->familyExtraMarginSize[AOwnerFamily];
 
         triANode1 = to_double3(granData->relPosNode1[triID]);
@@ -194,9 +191,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         extraMarginSize = (extraMarginSize > granData->familyExtraMarginSize[BOwnerFamily])
                               ? extraMarginSize
                               : granData->familyExtraMarginSize[BOwnerFamily];
-        // extraMarginSize here is purely family-based extra margin, so it can be used to determine if the user
-        // potentially needs remote (non-contact) force calculation.
-        bool needsNonContactPenetrationCalc = (extraMarginSize > 0.);
 
         double3 triBNode1 = to_double3(granData->relPosNode1[triID]);
         double3 triBNode2 = to_double3(granData->relPosNode2[triID]);
@@ -238,11 +232,8 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
 
             // If the solver says in contact, we do not question it
             if (!in_contact) {
-                // Sphere--triangle is a bit tricky. Extra margin should only take effect when it comes from the
-                // positive direction of the mesh facet (aka excluding the too-far-away cases). Then if the solver says
-                // no contact and we got overlapDepth > 0, that is by design a flag telling the process exited early
-                // with no contact (in sph-tri case it should never happen tho).
-                if ((overlapDepth < -extraMarginSize) || (overlapDepth > 0.)) {
+                // Extra margin takes effect
+                if (overlapDepth < -extraMarginSize) {
                     ContactType = deme::NOT_A_CONTACT;
                 }
             }
@@ -250,11 +241,9 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         } else if constexpr (AType == deme::GEO_T_TRIANGLE) {
             // Triangle--triangle contact, a bit more complex...
             double3 contact_normal;
-            // The contact solver might notify us that it thinks this contact may be true, but it's redundant to include
-            bool shouldDropContact = false;
-            bool in_contact = checkTriangleTriangleOverlap<double3, double>(
-                triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3, contact_normal, overlapDepth,
-                overlapArea, contactPnt, needsNonContactPenetrationCalc);
+            bool in_contact = checkTriangleTriangleOverlap<double3, double>(triANode1, triANode2, triANode3, triBNode1,
+                                                                            triBNode2, triBNode3, contact_normal,
+                                                                            overlapDepth, overlapArea, contactPnt);
             B2A = to_float3(contact_normal);
 
             // Record whether this tri-tri primitive contact satisfies SAT (is in physical contact)
@@ -268,10 +257,8 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             // Fix ContactType if needed
             // If the solver says in contact, we do not question it
             if (!in_contact) {
-                // Then, if we have extra margin, we check that if the distance is within the extra margin.
-                // Or, if the solver says no contact and we got overlapDepth > 0, that is by design a flag telling the
-                // process exited early with no contact.
-                if ((overlapDepth < -extraMarginSize) || (overlapDepth > 0.)) {
+                // Then, if we have extra margin, we check that if the distance is within the extra margin
+                if (overlapDepth < -extraMarginSize) {
                     ContactType = deme::NOT_A_CONTACT;
                 }
             }
@@ -335,33 +322,39 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
 
     if constexpr (CONTACT_TYPE == deme::SPHERE_SPHERE_CONTACT || CONTACT_TYPE == deme::SPHERE_ANALYTICAL_CONTACT) {
         _forceModelContactWildcardAcq_;
+
+        // Essentials for storing and calculating contact info
+        float3 force = make_float3(0, 0, 0);
+        float3 torque_only_force = make_float3(0, 0, 0);
+        // Local position of the contact point is always a piece of info we require... regardless of force model
+        float3 locCPA = to_float3(contactPnt - AOwnerPos);
+        float3 locCPB = to_float3(contactPnt - BOwnerPos);
+        // Now map this contact point location to bodies' local ref
+        applyOriQToVector3<float, deme::oriQ_t>(locCPA.x, locCPA.y, locCPA.z, AOriQ.w, -AOriQ.x, -AOriQ.y, -AOriQ.z);
+        applyOriQToVector3<float, deme::oriQ_t>(locCPB.x, locCPB.y, locCPB.z, BOriQ.w, -BOriQ.x, -BOriQ.y, -BOriQ.z);
+
         if (ContactType != deme::NOT_A_CONTACT) {
-            float3 force = make_float3(0, 0, 0);
-            float3 torque_only_force = make_float3(0, 0, 0);
-            // Local position of the contact point is always a piece of info we require... regardless of force model
-            float3 locCPA = to_float3(contactPnt - AOwnerPos);
-            float3 locCPB = to_float3(contactPnt - BOwnerPos);
-            // Now map this contact point location to bodies' local ref
-            applyOriQToVector3<float, deme::oriQ_t>(locCPA.x, locCPA.y, locCPA.z, AOriQ.w, -AOriQ.x, -AOriQ.y,
-                                                    -AOriQ.z);
-            applyOriQToVector3<float, deme::oriQ_t>(locCPB.x, locCPB.y, locCPB.z, BOriQ.w, -BOriQ.x, -BOriQ.y,
-                                                    -BOriQ.z);
             // The following part, the force model, is user-specifiable
             // NOTE!! "force" and all wildcards must be properly set by this piece of code
             { _DEMForceModel_; }
 
-            // Write contact location values back to global memory
-            _contactInfoWrite_;
-
             // If force model modifies owner wildcards, write them back here
             _forceModelOwnerWildcardWrite_;
-
-            // Optionally, the forces can be reduced to acc right here (may be faster)
-            _forceCollectInPlaceStrat_;
         } else {
             // The contact is no longer active, so we need to destroy its contact history recording
             _forceModelContactWildcardDestroy_;
         }
+
+        // Note in DEME3, we do not clear force array anymore in each timestep, so always writing back force and contact
+        // points, even for zero-force non-contacts, is needed (unless of course, the user instructed no force record).
+        // This design has implications in our new two-step patch-based force calculation algorithm, as we re-use some
+        // force-storing arrays for intermediate values.
+
+        // Write contact location values back to global memory
+        _contactInfoWrite_;
+
+        // Optionally, the forces can be reduced to acc right here (may be faster)
+        _forceCollectInPlaceStrat_;
 
         // Updated contact wildcards need to be write back to global mem. It is here because contact wildcard may need
         // to be destroyed for non-contact, so it has to go last.

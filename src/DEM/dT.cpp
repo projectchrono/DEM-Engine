@@ -571,8 +571,8 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
         // we may lose data. Also, if this is a new-boot, we allocate this array for at least INITIAL_CONTACT_ARRAY_SIZE
         // elements.
         //// TODO: Resizing contact arrays at initialization is a must and almost like a liability at this point. If you
-        ///forget one of them, then if the sim entity number is small, you are likely to get segfault when you use them
-        ///because some of them may never experienced resizing. This is not a good design.
+        /// forget one of them, then if the sim entity number is small, you are likely to get segfault when you use them
+        /// because some of them may never experienced resizing. This is not a good design.
         size_t cnt_arr_size =
             DEME_MAX(*solverScratchSpace.numPrimitiveContacts + nExtraContacts, INITIAL_CONTACT_ARRAY_SIZE);
         DEME_DUAL_ARRAY_RESIZE(idPrimitiveA, cnt_arr_size, 0);
@@ -2410,6 +2410,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 cubMaxReduceByKey<contactPairs_t, double>(keys, uniqueKeys, primitivePenetrations, maxPenetrations,
                                                           numUniqueKeys, countPrimitive, streamInfo.stream,
                                                           solverScratchSpace);
+                //// TODO: Should find max negative, excluding max positive pens
                 solverScratchSpace.finishUsingTempVector("primitivePenetrations");
 
                 // 8c: Find max-penetration primitives for zero-area patches and extract their normals
@@ -2510,6 +2511,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                         }
                     }
                 }
+                DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
                 // Final clean up
                 solverScratchSpace.finishUsingTempVector("totalAreas");
@@ -2520,7 +2522,6 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
         }
         // std::cout << "===========================" << std::endl;
     }
-    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
 void DEMDynamicThread::calculateForces() {
@@ -2532,14 +2533,12 @@ void DEMDynamicThread::calculateForces() {
     {
         prepareAccArrays(&simParams, &granData, simParams->nOwnerBodies, streamInfo.stream);
 
-        // prepareForceArrays needs to clear contact force arrays, only if the user asks us to record contact forces. If
-        // meshUniversalContact is on, then although we use these arrays, no need to initialize them to 0, because the
-        // kernel will overwrite them anyway.
-        if (!solverFlags.useNoContactRecord) {
-            // Pay attention that the force result-related arrays have nPrimitiveContactPairs elements, not
-            // nContactPairs
-            prepareForceArrays(&simParams, &granData, nPrimitiveContactPairs, streamInfo.stream);
-        }
+        // prepareForceArrays is no longer needed
+        // if (!solverFlags.useNoContactRecord) {
+        //     // Pay attention that the force result-related arrays have nPrimitiveContactPairs elements, not
+        //     // nContactPairs
+        //     prepareForceArrays(&simParams, &granData, nPrimitiveContactPairs, streamInfo.stream);
+        // }
     }
     timers.GetTimer("Clear force array").stop();
 

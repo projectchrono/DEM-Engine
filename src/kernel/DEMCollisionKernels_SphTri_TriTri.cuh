@@ -1046,11 +1046,10 @@ __device__ bool checkTriangleTriangleOverlap(
     const T1& A2,
     const T1& B2,
     const T1& C2,
-    T1& normal,                      ///< contact normal (B2A direction)
-    T2& depth,                       ///< penetration (positive if in contact)
-    T2& projectedArea,               ///< projected area of clipping polygon (optional output)
-    T1& point,                       ///< contact point
-    bool outputNoContact = false) {  ///< output info even when no contact
+    T1& normal,         ///< contact normal (B2A direction)
+    T2& depth,          ///< penetration (positive if in contact)
+    T2& projectedArea,  ///< projected area of clipping polygon (optional output)
+    T1& point) {        ///< contact point
     // Triangle A vertices (tri1)
     const T1 triA[3] = {A1, B1, C1};
     // Triangle B vertices (tri2)
@@ -1094,26 +1093,23 @@ __device__ bool checkTriangleTriangleOverlap(
     bool inContact = contactBA || contactAB;
 
     if (!inContact) {
-        // No contact detected
-        if (outputNoContact) {
-            // Provide separation info
-            T1 centA = (triA[0] + triA[1] + triA[2]) / 3.0;
-            T1 centB = (triB[0] + triB[1] + triB[2]) / 3.0;
-            T1 sep = centA - centB;
-            T2 sepLen2 = dot(sep, sep);
+        // No contact detected, Provide separation info
+        T1 centA = (triA[0] + triA[1] + triA[2]) / 3.0;
+        T1 centB = (triB[0] + triB[1] + triB[2]) / 3.0;
+        T1 sep = centA - centB;
+        T2 sepLen2 = dot(sep, sep);
 
-            if (sepLen2 > (DEME_TINY_FLOAT * DEME_TINY_FLOAT)) {
-                T2 sepLen = sqrt(sepLen2);
-                normal = sep / sepLen;
-                depth = -sepLen;  // Negative for separation
-                point = (centA + centB) * 0.5;
-            } else {
-                normal = nA;
-                depth = -DEME_HUGE_FLOAT;
-                point = centA;
-            }
-            projectedArea = 0.0;
+        if (sepLen2 > (DEME_TINY_FLOAT * DEME_TINY_FLOAT)) {
+            T2 sepLen = sqrt(sepLen2);
+            normal = sep / sepLen;
+            depth = -sepLen;  // Negative for separation
+            point = (centA + centB) * 0.5;
+        } else {
+            normal = nA;
+            depth = -DEME_TINY_FLOAT;
+            point = centA;
         }
+        projectedArea = 0.0;
         return false;
     }
 
