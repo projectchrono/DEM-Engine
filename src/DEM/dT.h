@@ -230,6 +230,8 @@ class DEMDynamicThread {
     // Local position of contact point of contact w.r.t. the reference frame of body A and B
     DualArray<float3> contactPointGeometryA = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<float3> contactPointGeometryB = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // Array to record whether a triangle-triangle primitive contact satisfies SAT (is in physical contact)
+    DualArray<notStupidBool_t> contactSATSatisfied = DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // Wildcard (extra property) arrays associated with contacts and owners
     std::vector<std::unique_ptr<DualArray<float>>> contactWildcards;
     std::vector<std::unique_ptr<DualArray<float>>> ownerWildcards;

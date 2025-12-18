@@ -417,26 +417,72 @@ void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
     }
 }
 
+// Kernel to check if any primitive in each patch satisfies SAT (for tri-tri contacts)
+// Uses atomic OR to set patchHasSAT[patchIdx] = 1 if any primitive has contactSATSatisfied = 1
+__global__ void checkPatchHasSATSatisfyingPrimitive_impl(DEMDataDT* granData,
+                                                         notStupidBool_t* patchHasSAT,
+                                                         contactPairs_t* keys,
+                                                         contactPairs_t startOffsetPrimitive,
+                                                         contactPairs_t startOffsetPatch,
+                                                         contactPairs_t countPrimitive) {
+    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < countPrimitive) {
+        contactPairs_t myContactID = startOffsetPrimitive + idx;
+        contactPairs_t patchIdx = keys[idx];
+        contactPairs_t localPatchIdx = patchIdx - startOffsetPatch;
+        
+        // Check if this primitive satisfies SAT
+        notStupidBool_t satisfiesSAT = granData->contactSATSatisfied[myContactID];
+        
+        // If this primitive satisfies SAT, mark the patch as having at least one SAT-satisfying primitive
+        if (satisfiesSAT) {
+            atomicOr(&patchHasSAT[localPatchIdx], 1);
+        }
+    }
+}
+
+void checkPatchHasSATSatisfyingPrimitive(DEMDataDT* granData,
+                                        notStupidBool_t* patchHasSAT,
+                                        contactPairs_t* keys,
+                                        contactPairs_t startOffsetPrimitive,
+                                        contactPairs_t countPrimitive,
+                                        contactPairs_t countPatch,
+                                        cudaStream_t& this_stream) {
+    // Initialize patchHasSAT to 0
+    DEME_GPU_CALL(cudaMemsetAsync(patchHasSAT, 0, countPatch * sizeof(notStupidBool_t), this_stream));
+    
+    size_t blocks_needed = (countPrimitive + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        checkPatchHasSATSatisfyingPrimitive_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            granData, patchHasSAT, keys, startOffsetPrimitive, startOffsetPatch, countPrimitive);
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
 // Kernel to finalize patch results by combining normal voting results with zero-area case handling
-// For patches with totalArea > 0: use voted normal and weighted penetration
-// For patches with totalArea == 0: use max-penetration primitive's normal and penetration
+// For patches with totalArea > 0 AND patchHasSAT = 1: use voted normal and weighted penetration
+// For patches with totalArea == 0 OR patchHasSAT = 0: use max-penetration primitive's normal and penetration (Step 8 fallback)
 __global__ void finalizePatchResults_impl(double* totalAreas,
                                           float3* votedNormals,
                                           double* votedPenetrations,
                                           float3* zeroAreaNormals,
                                           double* zeroAreaPenetrations,
+                                          notStupidBool_t* patchHasSAT,
                                           float3* finalNormals,
                                           double* finalPenetrations,
                                           contactPairs_t count) {
     contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
         double totalArea = totalAreas[idx];
-        if (totalArea > 0.0) {
+        notStupidBool_t hasSAT = (patchHasSAT != nullptr) ? patchHasSAT[idx] : 1;
+        
+        // Use voted results only if totalArea > 0 AND at least one primitive satisfies SAT
+        if (totalArea > 0.0 && hasSAT) {
             // Normal case: use voted results
             finalNormals[idx] = votedNormals[idx];
             finalPenetrations[idx] = votedPenetrations[idx];
         } else {
-            // Zero-area case: use max-penetration primitive's results
+            // Zero-area case OR no SAT-satisfying primitives: use max-penetration primitive's results (Step 8 fallback)
             finalNormals[idx] = zeroAreaNormals[idx];
             finalPenetrations[idx] = zeroAreaPenetrations[idx];
         }
@@ -448,6 +494,7 @@ void finalizePatchResults(double* totalAreas,
                           double* votedPenetrations,
                           float3* zeroAreaNormals,
                           double* zeroAreaPenetrations,
+                          notStupidBool_t* patchHasSAT,
                           float3* finalNormals,
                           double* finalPenetrations,
                           contactPairs_t count,
@@ -455,8 +502,8 @@ void finalizePatchResults(double* totalAreas,
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         finalizePatchResults_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            totalAreas, votedNormals, votedPenetrations, zeroAreaNormals, zeroAreaPenetrations, finalNormals,
-            finalPenetrations, count);
+            totalAreas, votedNormals, votedPenetrations, zeroAreaNormals, zeroAreaPenetrations, patchHasSAT,
+            finalNormals, finalPenetrations, count);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }

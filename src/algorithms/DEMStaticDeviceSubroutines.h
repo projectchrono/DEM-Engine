@@ -218,12 +218,23 @@ void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
                                                    contactPairs_t countPrimitive,
                                                    cudaStream_t& this_stream);
 
+// Checks if any primitive in each patch satisfies SAT (for tri-tri contacts)
+// Outputs a flag per patch: 1 if at least one SAT-satisfying primitive exists, 0 otherwise
+void checkPatchHasSATSatisfyingPrimitive(DEMDataDT* granData,
+                                        notStupidBool_t* patchHasSAT,
+                                        contactPairs_t* keys,
+                                        contactPairs_t startOffsetPrimitive,
+                                        contactPairs_t countPrimitive,
+                                        contactPairs_t countPatch,
+                                        cudaStream_t& this_stream);
+
 // Finalizes patch results by combining normal voting with zero-area case handling
 void finalizePatchResults(double* totalAreas,
                           float3* votedNormals,
                           double* votedPenetrations,
                           float3* zeroAreaNormals,
                           double* zeroAreaPenetrations,
+                          notStupidBool_t* patchHasSAT,
                           float3* finalNormals,
                           double* finalPenetrations,
                           contactPairs_t count,

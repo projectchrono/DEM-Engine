@@ -67,6 +67,7 @@ void DEMDynamicThread::packDataPointers() {
     contactTorque_convToForce.bindDevicePointer(&(granData->contactTorque_convToForce));
     contactPointGeometryA.bindDevicePointer(&(granData->contactPointGeometryA));
     contactPointGeometryB.bindDevicePointer(&(granData->contactPointGeometryB));
+    contactSATSatisfied.bindDevicePointer(&(granData->contactSATSatisfied));
     // granData->contactHistory = contactHistory.data();
     // granData->contactDuration = contactDuration.data();
 
@@ -2035,6 +2036,8 @@ inline void DEMDynamicThread::contactPrimitivesArraysResize(size_t nContactPairs
         DEME_DUAL_ARRAY_RESIZE(contactTorque_convToForce, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryB, nContactPairs, make_float3(0));
+        // NEW: Resize SAT satisfaction array for tracking tri-tri physical contact
+        DEME_DUAL_ARRAY_RESIZE(contactSATSatisfied, nContactPairs, 0);
     }
 
     // Re-packing pointers now is automatic
@@ -2414,6 +2417,16 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                                               zeroAreaPenetrations, keys, startOffsetPrimitive,
                                                               startOffsetPatch, countPrimitive, streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("maxPenetrations");
+                
+                // Step 8d: Check if each patch has any SAT-satisfying primitive (for tri-tri contacts)
+                // If no primitive satisfies SAT, the patch contact is non-physical and should use Step 8 fallback
+                notStupidBool_t* patchHasSAT = nullptr;
+                if (contact_type == TRIANGLE_TRIANGLE_CONTACT) {
+                    patchHasSAT = (notStupidBool_t*)solverScratchSpace.allocateTempVector(
+                        "patchHasSAT", countPatch * sizeof(notStupidBool_t));
+                    checkPatchHasSATSatisfyingPrimitive(&granData, patchHasSAT, keys, startOffsetPrimitive,
+                                                        countPrimitive, countPatch, streamInfo.stream);
+                }
 
                 // Step 9: Finalize patch results by combining voting with zero-area handling
                 float3* finalNormals =
@@ -2421,12 +2434,15 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 double* finalPenetrations =
                     (double*)solverScratchSpace.allocateTempVector("finalPenetrations", countPatch * sizeof(double));
                 finalizePatchResults(totalAreas, votedNormalizedNormals, totalPenetrations, zeroAreaNormals,
-                                     zeroAreaPenetrations, finalNormals, finalPenetrations, countPatch,
+                                     zeroAreaPenetrations, patchHasSAT, finalNormals, finalPenetrations, countPatch,
                                      streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("votedNormalizedNormals");
                 solverScratchSpace.finishUsingTempVector("totalPenetrations");
                 solverScratchSpace.finishUsingTempVector("zeroAreaNormals");
                 solverScratchSpace.finishUsingTempVector("zeroAreaPenetrations");
+                if (patchHasSAT != nullptr) {
+                    solverScratchSpace.finishUsingTempVector("patchHasSAT");
+                }
                 // displayDeviceArray<double>(totalAreas, countPatch);
                 // displayDeviceFloat3(finalNormals, countPatch);
                 // displayDeviceArray<double>(finalPenetrations, countPatch);
