@@ -224,6 +224,7 @@ void checkPatchHasSATSatisfyingPrimitive(DEMDataDT* granData,
                                         notStupidBool_t* patchHasSAT,
                                         contactPairs_t* keys,
                                         contactPairs_t startOffsetPrimitive,
+                                        contactPairs_t startOffsetPatch,
                                         contactPairs_t countPrimitive,
                                         contactPairs_t countPatch,
                                         cudaStream_t& this_stream);

@@ -2425,7 +2425,8 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     patchHasSAT = (notStupidBool_t*)solverScratchSpace.allocateTempVector(
                         "patchHasSAT", countPatch * sizeof(notStupidBool_t));
                     checkPatchHasSATSatisfyingPrimitive(&granData, patchHasSAT, keys, startOffsetPrimitive,
-                                                        countPrimitive, countPatch, streamInfo.stream);
+                                                        startOffsetPatch, countPrimitive, countPatch,
+                                                        streamInfo.stream);
                 }
 
                 // Step 9: Finalize patch results by combining voting with zero-area handling
