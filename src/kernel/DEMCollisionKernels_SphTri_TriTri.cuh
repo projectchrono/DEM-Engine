@@ -884,6 +884,155 @@ __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
     return true;
 }
 
+/// Lightweight SAT check for triangle-triangle contact (physical contact only)
+/// Returns true if triangles are in physical contact (no separating axis found), false otherwise
+/// This is a simplified version that only performs the SAT test without computing contact details
+template <typename T1, typename T2>
+__device__ bool checkTriangleTriangleSAT(const T1& A1,
+                                        const T1& B1,
+                                        const T1& C1,
+                                        const T1& A2,
+                                        const T1& B2,
+                                        const T1& C2) {
+    // Triangle A vertices (tri1)
+    const T1 triA[3] = {A1, B1, C1};
+    // Triangle B vertices (tri2)
+    const T1 triB[3] = {A2, B2, C2};
+
+    // Compute face normals
+    T1 nA_unnorm = cross(B1 - A1, C1 - A1);
+    T1 nB_unnorm = cross(B2 - A2, C2 - A2);
+
+    T2 lenA2 = dot(nA_unnorm, nA_unnorm);
+    T2 lenB2 = dot(nB_unnorm, nB_unnorm);
+
+    // Check for degenerate triangles
+    if (lenA2 <= DEME_TINY_FLOAT * DEME_TINY_FLOAT || lenB2 <= DEME_TINY_FLOAT * DEME_TINY_FLOAT) {
+        return false;
+    }
+
+    T1 nA = nA_unnorm * rsqrt(lenA2);
+    T1 nB = nB_unnorm * rsqrt(lenB2);
+
+    // Edge vectors
+    T1 edges1[3] = {triA[1] - triA[0], triA[2] - triA[1], triA[0] - triA[2]};
+    T1 edges2[3] = {triB[1] - triB[0], triB[2] - triB[1], triB[0] - triB[2]};
+
+    // Test face normal of triangle A
+    {
+        T1 axis = nA;
+
+        // Project triangle A vertices
+        T2 min1 = dot(triA[0], axis);
+        T2 max1 = min1;
+#pragma unroll
+        for (int i = 1; i < 3; ++i) {
+            T2 proj = dot(triA[i], axis);
+            if (proj < min1)
+                min1 = proj;
+            if (proj > max1)
+                max1 = proj;
+        }
+
+        // Project triangle B vertices
+        T2 min2 = dot(triB[0], axis);
+        T2 max2 = min2;
+#pragma unroll
+        for (int i = 1; i < 3; ++i) {
+            T2 proj = dot(triB[i], axis);
+            if (proj < min2)
+                min2 = proj;
+            if (proj > max2)
+                max2 = proj;
+        }
+
+        // Check for separation
+        if (max1 < min2 || max2 < min1) {
+            return false;  // Separating axis found
+        }
+    }
+
+    // Test face normal of triangle B
+    {
+        T1 axis = nB;
+
+        // Project triangle A vertices
+        T2 min1 = dot(triA[0], axis);
+        T2 max1 = min1;
+#pragma unroll
+        for (int i = 1; i < 3; ++i) {
+            T2 proj = dot(triA[i], axis);
+            if (proj < min1)
+                min1 = proj;
+            if (proj > max1)
+                max1 = proj;
+        }
+
+        // Project triangle B vertices
+        T2 min2 = dot(triB[0], axis);
+        T2 max2 = min2;
+#pragma unroll
+        for (int i = 1; i < 3; ++i) {
+            T2 proj = dot(triB[i], axis);
+            if (proj < min2)
+                min2 = proj;
+            if (proj > max2)
+                max2 = proj;
+        }
+
+        // Check for separation
+        if (max1 < min2 || max2 < min1) {
+            return false;  // Separating axis found
+        }
+    }
+
+    // Test 9 edge-edge cross products
+#pragma unroll
+    for (int i = 0; i < 3; ++i) {
+#pragma unroll
+        for (int j = 0; j < 3; ++j) {
+            T1 axis = cross(edges1[i], edges2[j]);
+            T2 len2 = dot(axis, axis);
+
+            if (len2 > DEME_TINY_FLOAT) {
+                axis = axis * rsqrt(len2);
+
+                // Project triangle A vertices
+                T2 min1 = dot(triA[0], axis);
+                T2 max1 = min1;
+#pragma unroll
+                for (int k = 1; k < 3; ++k) {
+                    T2 proj = dot(triA[k], axis);
+                    if (proj < min1)
+                        min1 = proj;
+                    if (proj > max1)
+                        max1 = proj;
+                }
+
+                // Project triangle B vertices
+                T2 min2 = dot(triB[0], axis);
+                T2 max2 = min2;
+#pragma unroll
+                for (int k = 1; k < 3; ++k) {
+                    T2 proj = dot(triB[k], axis);
+                    if (proj < min2)
+                        min2 = proj;
+                    if (proj > max2)
+                        max2 = proj;
+                }
+
+                // Check for separation
+                if (max1 < min2 || max2 < min1) {
+                    return false;  // Separating axis found
+                }
+            }
+        }
+    }
+
+    // No separating axis found - triangles are in contact
+    return true;
+}
+
 /// Triangle-triangle contact detection using projection-based approach:
 /// 1. Project triangle A onto triangle B's plane and clip against B's edges
 /// 2. Project triangle B onto triangle A's plane and clip against A's edges
