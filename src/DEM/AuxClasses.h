@@ -82,8 +82,11 @@ class DEMInspector {
     /// Get the value (as a vector) of the quantity that you wish to inspect
     // std::vector<float> GetVector();
 
-    /// Get value directly within dT
+    /// Get value directly within dT (returns host pointer by default)
     float* dT_GetValue();
+
+    /// Get value directly within dT (returns device pointer)
+    float* dT_GetDeviceValue();
 };
 
 // A struct to get or set tracked owner entities, mainly for co-simulation

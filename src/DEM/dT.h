@@ -680,7 +680,8 @@ class DEMDynamicThread {
                        const std::string& kernel_name,
                        INSPECT_ENTITY_TYPE thing_to_insp,
                        CUB_REDUCE_FLAVOR reduce_flavor,
-                       bool all_domain);
+                       bool all_domain,
+                       bool return_device_ptr = false);
 
   private:
     // Name for this class
@@ -699,7 +700,7 @@ class DEMDynamicThread {
     unsigned int nTrackersProcessed = 0;
 
     // A pointer that points to the location that holds the current max_vel info, which will soon be transferred to kT
-    float* pCycleMaxVel;
+    float* pCycleVel;
 
     // The inspector for calculating max vel for this cycle
     std::shared_ptr<DEMInspector> approxMaxVelFunc;
