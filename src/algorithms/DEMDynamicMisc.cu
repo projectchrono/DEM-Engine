@@ -418,7 +418,7 @@ void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
 }
 
 // Kernel to check if any primitive in each patch satisfies SAT (for tri-tri contacts)
-// Uses atomic OR to set patchHasSAT[patchIdx] = 1 if any primitive has contactSATSatisfied = 1
+// Uses atomicMax to set patchHasSAT[patchIdx] = 1 if any primitive has contactSATSatisfied = 1
 __global__ void checkPatchHasSATSatisfyingPrimitive_impl(DEMDataDT* granData,
                                                          notStupidBool_t* patchHasSAT,
                                                          contactPairs_t* keys,
@@ -435,8 +435,9 @@ __global__ void checkPatchHasSATSatisfyingPrimitive_impl(DEMDataDT* granData,
         notStupidBool_t satisfiesSAT = granData->contactSATSatisfied[myContactID];
         
         // If this primitive satisfies SAT, mark the patch as having at least one SAT-satisfying primitive
+        // Use atomicMax to set value to 1 if any thread has satisfiesSAT = 1
         if (satisfiesSAT) {
-            atomicOr(&patchHasSAT[localPatchIdx], 1);
+            atomicMax((unsigned int*)&patchHasSAT[localPatchIdx], 1u);
         }
     }
 }
