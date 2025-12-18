@@ -2409,9 +2409,9 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 // Positive values are treated as very negative to indicate invalid/non-physical state
                 double* maxPenetrations =
                     (double*)solverScratchSpace.allocateTempVector("maxPenetrations", countPatch * sizeof(double));
-                cubMaxNegativeReduceByKey<contactPairs_t, double>(keys, uniqueKeys, primitivePenetrations, maxPenetrations,
-                                                                  numUniqueKeys, countPrimitive, streamInfo.stream,
-                                                                  solverScratchSpace);
+                cubMaxNegativeReduceByKey<contactPairs_t, double>(keys, uniqueKeys, primitivePenetrations,
+                                                                  maxPenetrations, numUniqueKeys, countPrimitive,
+                                                                  streamInfo.stream, solverScratchSpace);
                 solverScratchSpace.finishUsingTempVector("primitivePenetrations");
 
                 // 8c: Find max-penetration primitives for zero-area patches and extract their normals

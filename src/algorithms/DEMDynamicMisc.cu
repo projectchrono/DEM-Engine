@@ -392,7 +392,12 @@ __global__ void findMaxPenetrationPrimitiveForZeroAreaPatches_impl(DEMDataDT* gr
             // The race condition is acceptable since all competing values are valid
             float3 myNormal = granData->contactForces[myContactID];
             zeroAreaNormals[localPatchIdx] = myNormal;
-            zeroAreaPenetrations[localPatchIdx] = myPenetration;
+            zeroAreaPenetrations[localPatchIdx] = myPenetration < 0.0 ? myPenetration : -DEME_HUGE_FLOAT;
+            // This zeroAreaPenetrations should store a negative number, as when it is needed, it's usually the
+            // separation case (all zero-area primitives). But for the no-SAT case, which can resemble cross-particle
+            // errotic detection, we could have a positive max here (search for CubOpMaxNegative to understand how this
+            // max is derived). In that case, give it a very negative number, so in the patch-based force calculation,
+            // this one is considered a non-contact.
         }
     }
 }
