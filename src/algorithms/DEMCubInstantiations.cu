@@ -163,6 +163,33 @@ template void cubMaxReduceByKey<contactPairs_t, double>(contactPairs_t* d_keys_i
                                                         DEMSolverScratchData& scratchPad);
 
 ////////////////////////////////////////////////////////////////////////////////
+// Reduce::MaxNegative (finds largest negative value, treats positives as very negative)
+////////////////////////////////////////////////////////////////////////////////
+
+template <typename T1, typename T2>
+void cubMaxNegativeReduceByKey(T1* d_keys_in,
+                               T1* d_unique_out,
+                               T2* d_vals_in,
+                               T2* d_aggregates_out,
+                               size_t* d_num_out,
+                               size_t n,
+                               cudaStream_t& this_stream,
+                               DEMSolverScratchData& scratchPad) {
+    CubOpMaxNegative<T2> max_negative_op;
+    cubDEMReduceByKeys<T1, T2, CubOpMaxNegative<T2>>(d_keys_in, d_unique_out, d_vals_in, d_aggregates_out, d_num_out,
+                                                     max_negative_op, n, this_stream, scratchPad);
+}
+// Special instantiation for double (penetration) with contactPairs_t keys (for finding max negative penetration)
+template void cubMaxNegativeReduceByKey<contactPairs_t, double>(contactPairs_t* d_keys_in,
+                                                                contactPairs_t* d_unique_out,
+                                                                double* d_vals_in,
+                                                                double* d_aggregates_out,
+                                                                size_t* d_num_out,
+                                                                size_t n,
+                                                                cudaStream_t& this_stream,
+                                                                DEMSolverScratchData& scratchPad);
+
+////////////////////////////////////////////////////////////////////////////////
 // Reduce::Min
 ////////////////////////////////////////////////////////////////////////////////
 

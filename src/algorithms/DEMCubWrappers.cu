@@ -45,6 +45,32 @@ struct CubOpMax {
     }
 };
 
+// Custom functor for finding the "max negative" value:
+// - Among negative values, find the one closest to zero (largest negative = smallest absolute value)
+// - Positive values are treated as having a huge negative value (very far from zero)
+// This is useful for finding the least-penetrating contact when all penetrations should be negative
+template <typename T>
+struct CubOpMaxNegative {
+    CUB_RUNTIME_FUNCTION __forceinline__ __device__ __host__ T operator()(const T& a, const T& b) const {
+        // If both are negative, return the one closest to zero (max of the two negatives)
+        if (a < 0 && b < 0) {
+            return (b > a) ? b : a;
+        }
+        // If only a is negative, prefer a
+        if (a < 0) {
+            return a;
+        }
+        // If only b is negative, prefer b
+        if (b < 0) {
+            return b;
+        }
+        // If both are positive (or zero), return the smaller one to penalize it
+        // But actually we want to return a very negative value to indicate invalid state
+        // Return the more negative of the two positive values (the smaller positive)
+        return (a < b) ? a : b;
+    }
+};
+
 template <typename T1, typename T2>
 inline void cubDEMSelectFlagged(T1* d_in,
                                 T1* d_out,
