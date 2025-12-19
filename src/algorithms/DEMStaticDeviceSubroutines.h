@@ -193,7 +193,7 @@ void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
 // The "useful" penetration is the original penetration projected onto the voted normal
 // Each primitive's useful penetration is then weighted by its contact area
 void computeWeightedUsefulPenetration(DEMDataDT* granData,
-                                      float3* votedNormalizedNormals,
+                                      float3* votedNormals,
                                       contactPairs_t* keys,
                                       double* weightedPenetrations,
                                       contactPairs_t startOffsetPrimitive,

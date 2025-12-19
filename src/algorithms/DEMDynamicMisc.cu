@@ -213,7 +213,7 @@ void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
 // If the projection makes penetration negative (tangential contact), it's clamped to 0.
 // Each primitive's useful penetration is then weighted by its contact area.
 __global__ void computeWeightedUsefulPenetration_impl(DEMDataDT* granData,
-                                                      float3* votedNormalizedNormals,
+                                                      float3* votedNormals,
                                                       contactPairs_t* keys,
                                                       double* weightedPenetrations,
                                                       contactPairs_t startOffsetPrimitive,
@@ -227,9 +227,9 @@ __global__ void computeWeightedUsefulPenetration_impl(DEMDataDT* granData,
         contactPairs_t patchIdx = keys[idx];
 
         // Get the voted normalized normal for this patch pair
-        // Subtract startOffsetPatch to get the local index into votedNormalizedNormals
+        // Subtract startOffsetPatch to get the local index into votedNormals
         contactPairs_t localPatchIdx = patchIdx - startOffsetPatch;
-        float3 votedNormal = votedNormalizedNormals[localPatchIdx];
+        float3 votedNormal = votedNormals[localPatchIdx];
         // If voted normal is (0,0,0), meaning all primitive contacts agree on no contact, then the end result must be
         // 0, no special handling needed
 
@@ -271,7 +271,7 @@ __global__ void computeWeightedUsefulPenetration_impl(DEMDataDT* granData,
 }
 
 void computeWeightedUsefulPenetration(DEMDataDT* granData,
-                                      float3* votedNormalizedNormals,
+                                      float3* votedNormals,
                                       contactPairs_t* keys,
                                       double* weightedPenetrations,
                                       contactPairs_t startOffsetPrimitive,
@@ -281,8 +281,7 @@ void computeWeightedUsefulPenetration(DEMDataDT* granData,
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         computeWeightedUsefulPenetration_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            granData, votedNormalizedNormals, keys, weightedPenetrations, startOffsetPrimitive, startOffsetPatch,
-            count);
+            granData, votedNormals, keys, weightedPenetrations, startOffsetPrimitive, startOffsetPatch, count);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
@@ -370,11 +369,8 @@ __global__ void findMaxPenetrationPrimitiveForZeroAreaPatches_impl(DEMDataDT* gr
         contactPairs_t patchIdx = keys[idx];
         contactPairs_t localPatchIdx = patchIdx - startOffsetPatch;
 
-        // Only process if this patch has zero total area
-        double totalArea = totalAreas[localPatchIdx];
-        if (totalArea > 0.0) {
-            return;  // Normal voting logic applies, skip
-        }
+        // In fact, we just need to proceed if area is zero or the SAT check failed. But these no-contact cases are so
+        // common, that we don't do an early termination here.
 
         // Get this primitive's penetration
         float3 penetrationStorage = granData->contactPointGeometryA[myContactID];

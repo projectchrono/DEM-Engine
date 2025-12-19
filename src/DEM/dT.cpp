@@ -2364,18 +2364,18 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                                           countPrimitive, streamInfo.stream, solverScratchSpace);
 
                 // Step 4: Normalize the voted normals by total area and scatter back to a temp array.
-                float3* votedNormalizedNormals = (float3*)solverScratchSpace.allocateTempVector(
-                    "votedNormalizedNormals", countPatch * sizeof(float3));
-                normalizeAndScatterVotedNormals(votedWeightedNormals, totalAreas, votedNormalizedNormals, countPatch,
+                float3* votedNormals =
+                    (float3*)solverScratchSpace.allocateTempVector("votedNormals", countPatch * sizeof(float3));
+                normalizeAndScatterVotedNormals(votedWeightedNormals, totalAreas, votedNormals, countPatch,
                                                 streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
-                // displayDeviceFloat3(votedNormalizedNormals, countPatch);
+                // displayDeviceFloat3(votedNormals, countPatch);
 
                 // Step 5: Compute weighted useful penetration for each primitive contact
                 // Reuse keys array for the reduce-by-key operation
                 double* weightedPenetrations = (double*)solverScratchSpace.allocateTempVector(
                     "weightedPenetrations", countPrimitive * sizeof(double));
-                computeWeightedUsefulPenetration(&granData, votedNormalizedNormals, keys, weightedPenetrations,
+                computeWeightedUsefulPenetration(&granData, votedNormals, keys, weightedPenetrations,
                                                  startOffsetPrimitive, startOffsetPatch, countPrimitive,
                                                  streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("areas");
@@ -2440,10 +2440,9 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     (float3*)solverScratchSpace.allocateTempVector("finalNormals", countPatch * sizeof(float3));
                 double* finalPenetrations =
                     (double*)solverScratchSpace.allocateTempVector("finalPenetrations", countPatch * sizeof(double));
-                finalizePatchResults(totalAreas, votedNormalizedNormals, totalPenetrations, zeroAreaNormals,
-                                     zeroAreaPenetrations, patchHasSAT, finalNormals, finalPenetrations, countPatch,
-                                     streamInfo.stream);
-                solverScratchSpace.finishUsingTempVector("votedNormalizedNormals");
+                finalizePatchResults(totalAreas, votedNormals, totalPenetrations, zeroAreaNormals, zeroAreaPenetrations,
+                                     patchHasSAT, finalNormals, finalPenetrations, countPatch, streamInfo.stream);
+                solverScratchSpace.finishUsingTempVector("votedNormals");
                 solverScratchSpace.finishUsingTempVector("totalPenetrations");
                 solverScratchSpace.finishUsingTempVector("zeroAreaNormals");
                 solverScratchSpace.finishUsingTempVector("zeroAreaPenetrations");
