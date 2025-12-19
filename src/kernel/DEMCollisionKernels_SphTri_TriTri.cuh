@@ -1075,10 +1075,6 @@ __device__ bool checkTriangleTriangleOverlap(
     // and clip using Sutherland-Hodgman algorithm
     // ========================================================================
 
-    // Calculate reference triangle areas for axis hygiene check
-    T2 areaRefA = 0.5 * sqrt(lenA2);
-    T2 areaRefB = 0.5 * sqrt(lenB2);
-
     // Project triangle B onto triangle A's plane and clip against A
     T2 depthBA, areaBA;
     T1 centroidBA;

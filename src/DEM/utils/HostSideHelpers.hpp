@@ -78,9 +78,10 @@ inline void displayDeviceArray(T1* arr, size_t n) {
     std::cout << std::endl;
 }
 
-inline void displayDeviceFloat3(float3* arr, size_t n) {
-    std::vector<float3> tmp(n);
-    DEME_GPU_CALL(cudaMemcpy(tmp.data(), arr, n * sizeof(float3), cudaMemcpyDeviceToHost));
+template <typename T1 = float3>
+inline void displayDeviceFloat3(T1* arr, size_t n) {
+    std::vector<T1> tmp(n);
+    DEME_GPU_CALL(cudaMemcpy(tmp.data(), arr, n * sizeof(T1), cudaMemcpyDeviceToHost));
     for (size_t i = 0; i < n; i++) {
         std::cout << "(" << +(tmp[i].x) << ", " << +(tmp[i].y) << ", " << +(tmp[i].z) << "), ";
     }

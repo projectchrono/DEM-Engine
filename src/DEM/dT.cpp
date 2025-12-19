@@ -1104,10 +1104,12 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         // Cached initial values for wildcards of this mesh is not needed anymore
         m_meshes.back()->ClearWildcards();
 
-        DEME_DEBUG_PRINTF("dT just loaded a mesh in family %u", +(this_family_num));
-        DEME_DEBUG_PRINTF("This mesh is owner %zu", (i + owner_offset_for_mesh_obj));
-        DEME_DEBUG_PRINTF("Number of triangle facets loaded thus far: %zu", k);
+        // DEME_DEBUG_PRINTF("dT just loaded a mesh in family %u", +(this_family_num));
+        // DEME_DEBUG_PRINTF("This mesh is owner %zu", (i + owner_offset_for_mesh_obj));
     }
+    DEME_DEBUG_PRINTF("Number of meshes loaded this time: %zu", input_mesh_objs.size());
+    DEME_DEBUG_PRINTF("Number of mesh patches loaded this time: %zu", p);
+    DEME_DEBUG_PRINTF("Number of triangle facets loaded this time: %zu", k);
 }
 
 void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
@@ -2446,12 +2448,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("totalPenetrations");
                 solverScratchSpace.finishUsingTempVector("zeroAreaNormals");
                 solverScratchSpace.finishUsingTempVector("zeroAreaPenetrations");
-                if (patchHasSAT != nullptr) {
-                    solverScratchSpace.finishUsingTempVector("patchHasSAT");
-                }
-                // displayDeviceArray<double>(totalAreas, countPatch);
-                // displayDeviceFloat3(finalNormals, countPatch);
-                // displayDeviceArray<double>(finalPenetrations, countPatch);
+                solverScratchSpace.finishUsingTempVector("patchHasSAT");
 
                 // Step 10: Compute weighted contact points for each primitive
                 // Reuse keys, uniqueKeys, and numUniqueKeys that are still allocated
@@ -2495,6 +2492,12 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 // - finalPenetrations: final penetration depth per patch pair (countPatch elements)
                 // - finalContactPoints: final contact point per patch pair (countPatch elements)
                 // These can be used for subsequent force calculations
+                // std::cout << "Patch-based contact penetration, area, normal, contact point for contact type "
+                //           << (int)contact_type << ":" << std::endl;
+                // displayDeviceArray<double>(finalPenetrations, countPatch);
+                // displayDeviceArray<double>(totalAreas, countPatch);
+                // displayDeviceFloat3(finalNormals, countPatch);
+                // displayDeviceFloat3<double3>(finalContactPoints, countPatch);
 
                 // Call specialized patch-based force correction kernels here
                 if (contactTypePatchKernelMap.count(contact_type) > 0) {
@@ -2520,8 +2523,8 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("finalContactPoints");
             }
         }
-        // std::cout << "===========================" << std::endl;
     }
+    // std::cout << "===========================" << std::endl;
 }
 
 void DEMDynamicThread::calculateForces() {

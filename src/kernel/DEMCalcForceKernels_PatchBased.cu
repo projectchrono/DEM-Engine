@@ -103,6 +103,7 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
         _forceModelIngredientAcqForA_;
         _forceModelGeoWildcardAcqForAMeshPatch_;
 
+        // In mesh case, bodyAPos is the patch position (not necessarily needed in the force model though)
         equipOwnerPosRot(simParams, granData, myOwner, myRelPos, AOwnerPos, bodyAPos, AOriQ);
         extraMarginSize = granData->familyExtraMarginSize[AOwnerFamily];
     } else {
@@ -131,6 +132,7 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
         _forceModelIngredientAcqForB_;
         _forceModelGeoWildcardAcqForBMeshPatch_;
 
+        // In mesh case, bodyBPos is the patch position (not necessarily needed in the force model though)
         equipOwnerPosRot(simParams, granData, myOwner, myRelPos, BOwnerPos, bodyBPos, BOriQ);
 
         // As the grace margin, the distance (negative overlap) just needs to be within the grace margin. So we pick

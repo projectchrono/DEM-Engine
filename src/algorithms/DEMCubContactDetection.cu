@@ -15,13 +15,6 @@
 
 namespace deme {
 
-// Array of all supported contact types, used for iterating during mapping construction
-// Note: If you add a new contact type, you must update this array and NUM_SUPPORTED_CONTACT_TYPES
-static const contact_t ALL_CONTACT_TYPES[NUM_SUPPORTED_CONTACT_TYPES] = {
-    SPHERE_SPHERE_CONTACT, SPHERE_TRIANGLE_CONTACT, SPHERE_ANALYTICAL_CONTACT, TRIANGLE_TRIANGLE_CONTACT,
-    TRIANGLE_ANALYTICAL_CONTACT};
-static_assert(NUM_SUPPORTED_CONTACT_TYPES == 5, "ALL_CONTACT_TYPES array size must match NUM_SUPPORTED_CONTACT_TYPES");
-
 inline void primitiveContactArraysResize(size_t nContactPairs,
                                          DualArray<bodyID_t>& idPrimitiveA,
                                          DualArray<bodyID_t>& idPrimitiveB,

@@ -87,6 +87,8 @@ int main() {
             // Test if family changer works
             float3 pos1 = tracker1->Pos();
             float3 pos2 = tracker2->Pos();
+            float3 vel1 = tracker1->Vel();
+            float3 vel2 = tracker2->Vel();
             float3 angvel1 = tracker1->AngVelGlobal();
             float3 angvel2 = tracker2->AngVelGlobal();
 
