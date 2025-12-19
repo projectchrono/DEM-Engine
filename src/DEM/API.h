@@ -1559,6 +1559,10 @@ class DEMSolver {
     float m_approx_max_vel = DEME_HUGE_FLOAT;
     // The inspector that will be used for querying system max velocity
     std::shared_ptr<DEMInspector> m_approx_max_vel_func;
+    // The inspectors that will be used for querying system angular velocity components
+    std::shared_ptr<DEMInspector> m_approx_angvel_x_func;
+    std::shared_ptr<DEMInspector> m_approx_angvel_y_func;
+    std::shared_ptr<DEMInspector> m_approx_angvel_z_func;
 
     // The number of user-estimated (max) number of owners that will be present in the simulation. If 0, then the arrays
     // will just be resized at intialization based on the input size.

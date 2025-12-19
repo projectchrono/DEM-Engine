@@ -697,6 +697,9 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
         DEME_DEVICE_ARRAY_RESIZE(oriQ2_buffer, nOwnerBodies);
         DEME_DEVICE_ARRAY_RESIZE(oriQ3_buffer, nOwnerBodies);
         DEME_DEVICE_ARRAY_RESIZE(absVel_buffer, nOwnerBodies);
+        DEME_DEVICE_ARRAY_RESIZE(absAngVelX_buffer, nOwnerBodies);
+        DEME_DEVICE_ARRAY_RESIZE(absAngVelY_buffer, nOwnerBodies);
+        DEME_DEVICE_ARRAY_RESIZE(absAngVelZ_buffer, nOwnerBodies);
         // DEME_ADVISE_DEVICE(voxelID_buffer, dT->streamInfo.device);
         // DEME_ADVISE_DEVICE(locX_buffer, dT->streamInfo.device);
         // DEME_ADVISE_DEVICE(locY_buffer, dT->streamInfo.device);

@@ -60,6 +60,27 @@ const std::string INSP_CODE_EVERYTHING_ABSV = R"V0G0N(
     quantity[myOwner] = myABSV;
 )V0G0N";
 
+const std::string INSP_CODE_EVERYTHING_ABSANGVEL = R"V0G0N(
+    double myOmegaX = granData->omgBarX[myOwner];
+    double myOmegaY = granData->omgBarY[myOwner];
+    double myOmegaZ = granData->omgBarZ[myOwner];
+    double myABSANGVEL = sqrt(myOmegaX * myOmegaX + myOmegaY * myOmegaY + myOmegaZ * myOmegaZ);
+
+    quantity[myOwner] = myABSANGVEL;
+)V0G0N";
+
+const std::string INSP_CODE_ANGVEL_X = R"V0G0N(
+    quantity[myOwner] = granData->omgBarX[myOwner];
+)V0G0N";
+
+const std::string INSP_CODE_ANGVEL_Y = R"V0G0N(
+    quantity[myOwner] = granData->omgBarY[myOwner];
+)V0G0N";
+
+const std::string INSP_CODE_ANGVEL_Z = R"V0G0N(
+    quantity[myOwner] = granData->omgBarZ[myOwner];
+)V0G0N";
+
 const std::string INSP_CODE_CLUMP_KE = R"V0G0N(
     // First lin energy
     double myVX = granData->vX[myOwner];
@@ -143,6 +164,27 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
             break;
         case ("absv"_):
             inspection_code = INSP_CODE_EVERYTHING_ABSV;
+            reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
+            index_name = "myOwner";
+            break;
+        case ("absangvelx"_):
+            inspection_code = INSP_CODE_ANGVEL_X;
+            reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
+            index_name = "myOwner";
+            break;
+        case ("absangvely"_):
+            inspection_code = INSP_CODE_ANGVEL_Y;
+            reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
+            index_name = "myOwner";
+            break;
+        case ("absangvelz"_):
+            inspection_code = INSP_CODE_ANGVEL_Z;
             reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
             kernel_name = "inspectOwnerProperty";
             thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;

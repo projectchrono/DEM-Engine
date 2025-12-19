@@ -316,6 +316,9 @@ bodyID_t DEMDynamicThread::getPatchOwnerID(const bodyID_t& patchID, const geoTyp
 void DEMDynamicThread::packTransferPointers(DEMKinematicThread*& kT) {
     // These are the pointers for sending data to dT
     granData->pKTOwnedBuffer_absVel = kT->absVel_buffer.data();
+    granData->pKTOwnedBuffer_absAngVelX = kT->absAngVelX_buffer.data();
+    granData->pKTOwnedBuffer_absAngVelY = kT->absAngVelY_buffer.data();
+    granData->pKTOwnedBuffer_absAngVelZ = kT->absAngVelZ_buffer.data();
     granData->pKTOwnedBuffer_voxelID = kT->voxelID_buffer.data();
     granData->pKTOwnedBuffer_locX = kT->locX_buffer.data();
     granData->pKTOwnedBuffer_locY = kT->locY_buffer.data();
@@ -2137,6 +2140,12 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
                              cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_absVel, pCycleVel, simParams->nOwnerBodies * sizeof(float),
                              cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_absAngVelX, pCycleAngVelX, simParams->nOwnerBodies * sizeof(float),
+                             cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_absAngVelY, pCycleAngVelY, simParams->nOwnerBodies * sizeof(float),
+                             cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_absAngVelZ, pCycleAngVelZ, simParams->nOwnerBodies * sizeof(float),
+                             cudaMemcpyDeviceToDevice));
 
     // Send simulation metrics for kT's reference.
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_ts, &(simParams->h), sizeof(float), cudaMemcpyHostToDevice));
@@ -2608,7 +2617,13 @@ inline void DEMDynamicThread::routineChecks() {
 }
 
 inline float* DEMDynamicThread::determineSysVel() {
-    return approxMaxVelFunc->dT_GetDeviceValue();
+    // Get linear velocity
+    pCycleVel = approxMaxVelFunc->dT_GetDeviceValue();
+    // Get angular velocity components
+    pCycleAngVelX = approxAngVelXFunc->dT_GetDeviceValue();
+    pCycleAngVelY = approxAngVelYFunc->dT_GetDeviceValue();
+    pCycleAngVelZ = approxAngVelZFunc->dT_GetDeviceValue();
+    return pCycleVel;
 }
 
 inline void DEMDynamicThread::unpack_impl() {

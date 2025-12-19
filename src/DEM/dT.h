@@ -704,9 +704,17 @@ class DEMDynamicThread {
 
     // A pointer that points to the location that holds the current max_vel info, which will soon be transferred to kT
     float* pCycleVel;
+    // Pointers that point to the locations that hold the current angular velocity info, which will soon be transferred to kT
+    float* pCycleAngVelX;
+    float* pCycleAngVelY;
+    float* pCycleAngVelZ;
 
     // The inspector for calculating max vel for this cycle
     std::shared_ptr<DEMInspector> approxMaxVelFunc;
+    // The inspectors for calculating angular velocity components for this cycle
+    std::shared_ptr<DEMInspector> approxAngVelXFunc;
+    std::shared_ptr<DEMInspector> approxAngVelYFunc;
+    std::shared_ptr<DEMInspector> approxAngVelZFunc;
 
     // Some private arrays that can be used to store inspection results, ready to be passed somewhere else
     DualArray<scratch_t> m_reduceResArr = DualArray<scratch_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
