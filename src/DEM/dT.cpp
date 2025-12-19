@@ -67,6 +67,7 @@ void DEMDynamicThread::packDataPointers() {
     contactTorque_convToForce.bindDevicePointer(&(granData->contactTorque_convToForce));
     contactPointGeometryA.bindDevicePointer(&(granData->contactPointGeometryA));
     contactPointGeometryB.bindDevicePointer(&(granData->contactPointGeometryB));
+    contactSATSatisfied.bindDevicePointer(&(granData->contactSATSatisfied));
     // granData->contactHistory = contactHistory.data();
     // granData->contactDuration = contactDuration.data();
 
@@ -569,12 +570,16 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
         // In any case, in this initialization process we should not make contact arrays smaller than it used to be, or
         // we may lose data. Also, if this is a new-boot, we allocate this array for at least INITIAL_CONTACT_ARRAY_SIZE
         // elements.
+        //// TODO: Resizing contact arrays at initialization is a must and almost like a liability at this point. If you
+        /// forget one of them, then if the sim entity number is small, you are likely to get segfault when you use them
+        /// because some of them may never experienced resizing. This is not a good design.
         size_t cnt_arr_size =
             DEME_MAX(*solverScratchSpace.numPrimitiveContacts + nExtraContacts, INITIAL_CONTACT_ARRAY_SIZE);
         DEME_DUAL_ARRAY_RESIZE(idPrimitiveA, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(idPrimitiveB, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(contactTypePrimitive, cnt_arr_size, NOT_A_CONTACT);
         DEME_DUAL_ARRAY_RESIZE(geomToPatchMap, cnt_arr_size, 0);
+        DEME_DUAL_ARRAY_RESIZE(contactSATSatisfied, cnt_arr_size, 0);
 
         DEME_DUAL_ARRAY_RESIZE(idPatchA, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(idPatchB, cnt_arr_size, 0);
@@ -2035,6 +2040,8 @@ inline void DEMDynamicThread::contactPrimitivesArraysResize(size_t nContactPairs
         DEME_DUAL_ARRAY_RESIZE(contactTorque_convToForce, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryB, nContactPairs, make_float3(0));
+        // NEW: Resize SAT satisfaction array for tracking tri-tri physical contact
+        DEME_DUAL_ARRAY_RESIZE(contactSATSatisfied, nContactPairs, 0);
     }
 
     // Re-packing pointers now is automatic
@@ -2357,18 +2364,18 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                                           countPrimitive, streamInfo.stream, solverScratchSpace);
 
                 // Step 4: Normalize the voted normals by total area and scatter back to a temp array.
-                float3* votedNormalizedNormals = (float3*)solverScratchSpace.allocateTempVector(
-                    "votedNormalizedNormals", countPatch * sizeof(float3));
-                normalizeAndScatterVotedNormals(votedWeightedNormals, totalAreas, votedNormalizedNormals, countPatch,
+                float3* votedNormals =
+                    (float3*)solverScratchSpace.allocateTempVector("votedNormals", countPatch * sizeof(float3));
+                normalizeAndScatterVotedNormals(votedWeightedNormals, totalAreas, votedNormals, countPatch,
                                                 streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
-                // displayDeviceFloat3(votedNormalizedNormals, countPatch);
+                // displayDeviceFloat3(votedNormals, countPatch);
 
                 // Step 5: Compute weighted useful penetration for each primitive contact
                 // Reuse keys array for the reduce-by-key operation
                 double* weightedPenetrations = (double*)solverScratchSpace.allocateTempVector(
                     "weightedPenetrations", countPrimitive * sizeof(double));
-                computeWeightedUsefulPenetration(&granData, votedNormalizedNormals, keys, weightedPenetrations,
+                computeWeightedUsefulPenetration(&granData, votedNormals, keys, weightedPenetrations,
                                                  startOffsetPrimitive, startOffsetPatch, countPrimitive,
                                                  streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("areas");
@@ -2397,12 +2404,14 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 extractPrimitivePenetrations(&granData, primitivePenetrations, startOffsetPrimitive, countPrimitive,
                                              streamInfo.stream);
 
-                // 8b: Max-reduce-by-key to get max penetration per patch
+                // 8b: Max-negative-reduce-by-key to get max negative penetration per patch
+                // This finds the largest negative value (smallest absolute value among negatives)
+                // Positive values are treated as very negative to indicate invalid/non-physical state
                 double* maxPenetrations =
                     (double*)solverScratchSpace.allocateTempVector("maxPenetrations", countPatch * sizeof(double));
-                cubMaxReduceByKey<contactPairs_t, double>(keys, uniqueKeys, primitivePenetrations, maxPenetrations,
-                                                          numUniqueKeys, countPrimitive, streamInfo.stream,
-                                                          solverScratchSpace);
+                cubMaxNegativeReduceByKey<contactPairs_t, double>(keys, uniqueKeys, primitivePenetrations,
+                                                                  maxPenetrations, numUniqueKeys, countPrimitive,
+                                                                  streamInfo.stream, solverScratchSpace);
                 solverScratchSpace.finishUsingTempVector("primitivePenetrations");
 
                 // 8c: Find max-penetration primitives for zero-area patches and extract their normals
@@ -2415,18 +2424,31 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                                               startOffsetPatch, countPrimitive, streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("maxPenetrations");
 
+                // Step 8d: Check if each patch has any SAT-satisfying primitive (for tri-tri contacts)
+                // If no primitive satisfies SAT, the patch contact is non-physical and should use Step 8 fallback
+                notStupidBool_t* patchHasSAT = nullptr;
+                if (contact_type == TRIANGLE_TRIANGLE_CONTACT) {
+                    patchHasSAT = (notStupidBool_t*)solverScratchSpace.allocateTempVector(
+                        "patchHasSAT", countPatch * sizeof(notStupidBool_t));
+                    checkPatchHasSATSatisfyingPrimitive(&granData, patchHasSAT, keys, startOffsetPrimitive,
+                                                        startOffsetPatch, countPrimitive, countPatch,
+                                                        streamInfo.stream);
+                }
+
                 // Step 9: Finalize patch results by combining voting with zero-area handling
                 float3* finalNormals =
                     (float3*)solverScratchSpace.allocateTempVector("finalNormals", countPatch * sizeof(float3));
                 double* finalPenetrations =
                     (double*)solverScratchSpace.allocateTempVector("finalPenetrations", countPatch * sizeof(double));
-                finalizePatchResults(totalAreas, votedNormalizedNormals, totalPenetrations, zeroAreaNormals,
-                                     zeroAreaPenetrations, finalNormals, finalPenetrations, countPatch,
-                                     streamInfo.stream);
-                solverScratchSpace.finishUsingTempVector("votedNormalizedNormals");
+                finalizePatchResults(totalAreas, votedNormals, totalPenetrations, zeroAreaNormals, zeroAreaPenetrations,
+                                     patchHasSAT, finalNormals, finalPenetrations, countPatch, streamInfo.stream);
+                solverScratchSpace.finishUsingTempVector("votedNormals");
                 solverScratchSpace.finishUsingTempVector("totalPenetrations");
                 solverScratchSpace.finishUsingTempVector("zeroAreaNormals");
                 solverScratchSpace.finishUsingTempVector("zeroAreaPenetrations");
+                if (patchHasSAT != nullptr) {
+                    solverScratchSpace.finishUsingTempVector("patchHasSAT");
+                }
                 // displayDeviceArray<double>(totalAreas, countPatch);
                 // displayDeviceFloat3(finalNormals, countPatch);
                 // displayDeviceArray<double>(finalPenetrations, countPatch);
@@ -2489,6 +2511,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                         }
                     }
                 }
+                DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
                 // Final clean up
                 solverScratchSpace.finishUsingTempVector("totalAreas");
@@ -2499,7 +2522,6 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
         }
         // std::cout << "===========================" << std::endl;
     }
-    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
 void DEMDynamicThread::calculateForces() {
@@ -2511,14 +2533,12 @@ void DEMDynamicThread::calculateForces() {
     {
         prepareAccArrays(&simParams, &granData, simParams->nOwnerBodies, streamInfo.stream);
 
-        // prepareForceArrays needs to clear contact force arrays, only if the user asks us to record contact forces. If
-        // meshUniversalContact is on, then although we use these arrays, no need to initialize them to 0, because the
-        // kernel will overwrite them anyway.
-        if (!solverFlags.useNoContactRecord) {
-            // Pay attention that the force result-related arrays have nPrimitiveContactPairs elements, not
-            // nContactPairs
-            prepareForceArrays(&simParams, &granData, nPrimitiveContactPairs, streamInfo.stream);
-        }
+        // prepareForceArrays is no longer needed
+        // if (!solverFlags.useNoContactRecord) {
+        //     // Pay attention that the force result-related arrays have nPrimitiveContactPairs elements, not
+        //     // nContactPairs
+        //     prepareForceArrays(&simParams, &granData, nPrimitiveContactPairs, streamInfo.stream);
+        // }
     }
     timers.GetTimer("Clear force array").stop();
 

@@ -51,6 +51,16 @@ void cubMaxReduceByKey(T1* d_keys_in,
                        cudaStream_t& this_stream,
                        DEMSolverScratchData& scratchPad);
 
+template <typename T1, typename T2>
+void cubMaxNegativeReduceByKey(T1* d_keys_in,
+                               T1* d_unique_out,
+                               T2* d_vals_in,
+                               T2* d_aggregates_out,
+                               size_t* d_num_out,
+                               size_t n,
+                               cudaStream_t& this_stream,
+                               DEMSolverScratchData& scratchPad);
+
 template <typename T1>
 void cubMinReduce(T1* d_in, T1* d_out, size_t n, cudaStream_t& this_stream, DEMSolverScratchData& scratchPad);
 template <typename T1, typename T2>
@@ -183,7 +193,7 @@ void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
 // The "useful" penetration is the original penetration projected onto the voted normal
 // Each primitive's useful penetration is then weighted by its contact area
 void computeWeightedUsefulPenetration(DEMDataDT* granData,
-                                      float3* votedNormalizedNormals,
+                                      float3* votedNormals,
                                       contactPairs_t* keys,
                                       double* weightedPenetrations,
                                       contactPairs_t startOffsetPrimitive,
@@ -218,12 +228,24 @@ void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
                                                    contactPairs_t countPrimitive,
                                                    cudaStream_t& this_stream);
 
+// Checks if any primitive in each patch satisfies SAT (for tri-tri contacts)
+// Outputs a flag per patch: 1 if at least one SAT-satisfying primitive exists, 0 otherwise
+void checkPatchHasSATSatisfyingPrimitive(DEMDataDT* granData,
+                                         notStupidBool_t* patchHasSAT,
+                                         contactPairs_t* keys,
+                                         contactPairs_t startOffsetPrimitive,
+                                         contactPairs_t startOffsetPatch,
+                                         contactPairs_t countPrimitive,
+                                         contactPairs_t countPatch,
+                                         cudaStream_t& this_stream);
+
 // Finalizes patch results by combining normal voting with zero-area case handling
 void finalizePatchResults(double* totalAreas,
                           float3* votedNormals,
                           double* votedPenetrations,
                           float3* zeroAreaNormals,
                           double* zeroAreaPenetrations,
+                          notStupidBool_t* patchHasSAT,
                           float3* finalNormals,
                           double* finalPenetrations,
                           contactPairs_t count,

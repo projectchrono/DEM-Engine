@@ -352,6 +352,8 @@ struct DEMDataDT {
     float3* contactTorque_convToForce;
     float3* contactPointGeometryA;
     float3* contactPointGeometryB;
+    // Array to record whether a triangle-triangle primitive contact satisfies SAT (is in physical contact)
+    notStupidBool_t* contactSATSatisfied;
     // float3* contactHistory;
     // float* contactDuration;
 
