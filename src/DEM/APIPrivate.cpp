@@ -315,13 +315,9 @@ void DEMSolver::jitifyKernels() {
         // completes init).
         m_approx_max_vel_func->Initialize(m_subs, m_jitify_options, true);
         dT->approxMaxVelFunc = m_approx_max_vel_func;
-        // Initialize angular velocity inspectors
-        m_approx_angvel_x_func->Initialize(m_subs, m_jitify_options, true);
-        m_approx_angvel_y_func->Initialize(m_subs, m_jitify_options, true);
-        m_approx_angvel_z_func->Initialize(m_subs, m_jitify_options, true);
-        dT->approxAngVelXFunc = m_approx_angvel_x_func;
-        dT->approxAngVelYFunc = m_approx_angvel_y_func;
-        dT->approxAngVelZFunc = m_approx_angvel_z_func;
+        // Initialize angular velocity magnitude inspector
+        m_approx_angvel_func->Initialize(m_subs, m_jitify_options, true);
+        dT->approxAngVelFunc = m_approx_angvel_func;
     });
     kT_build.join();
     dT_build.join();
@@ -576,13 +572,11 @@ void DEMSolver::decideCDMarginStrat() {
         case (MARGIN_FINDER_TYPE::DEFAULT):
             // Default strategy is to use an inspector
             m_approx_max_vel_func = this->CreateInspector("absv");
+            // Also create inspector for angular velocity magnitude
+            m_approx_angvel_func = this->CreateInspector("absangvel");
             m_max_v_finder_type = MARGIN_FINDER_TYPE::DEM_INSPECTOR;
             break;
     }
-    // Also create inspectors for angular velocity components
-    m_approx_angvel_x_func = this->CreateInspector("absangvelx");
-    m_approx_angvel_y_func = this->CreateInspector("absangvely");
-    m_approx_angvel_z_func = this->CreateInspector("absangvelz");
 }
 
 void DEMSolver::reportInitStats() const {

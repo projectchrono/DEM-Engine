@@ -169,6 +169,13 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
             thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
             index_name = "myOwner";
             break;
+        case ("absangvel"_):
+            inspection_code = INSP_CODE_EVERYTHING_ABSANGVEL;
+            reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
+            index_name = "myOwner";
+            break;
         case ("absangvelx"_):
             inspection_code = INSP_CODE_ANGVEL_X;
             reduce_flavor = CUB_REDUCE_FLAVOR::NONE;

@@ -93,10 +93,8 @@ class DEMKinematicThread {
     DeviceArray<float3> relPosNode3_buffer = DeviceArray<float3>(&m_approxDeviceBytesUsed);
     // Vel of entities
     DeviceArray<float> absVel_buffer = DeviceArray<float>(&m_approxDeviceBytesUsed);
-    // Angular velocity of entities (3 components)
-    DeviceArray<float> absAngVelX_buffer = DeviceArray<float>(&m_approxDeviceBytesUsed);
-    DeviceArray<float> absAngVelY_buffer = DeviceArray<float>(&m_approxDeviceBytesUsed);
-    DeviceArray<float> absAngVelZ_buffer = DeviceArray<float>(&m_approxDeviceBytesUsed);
+    // Angular velocity magnitude of entities
+    DeviceArray<float> absAngVel_buffer = DeviceArray<float>(&m_approxDeviceBytesUsed);
 
     // kT's copy of family map
     // std::unordered_map<unsigned int, family_t> familyUserImplMap;

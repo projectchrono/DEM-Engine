@@ -2314,13 +2314,9 @@ void DEMSolver::UpdateSimParams() {
         // Jitify max vel finder, in case the policy there changed
         m_approx_max_vel_func->Initialize(m_subs, m_jitify_options, true);
         dT->approxMaxVelFunc = m_approx_max_vel_func;
-        // Jitify angular velocity finders
-        m_approx_angvel_x_func->Initialize(m_subs, m_jitify_options, true);
-        m_approx_angvel_y_func->Initialize(m_subs, m_jitify_options, true);
-        m_approx_angvel_z_func->Initialize(m_subs, m_jitify_options, true);
-        dT->approxAngVelXFunc = m_approx_angvel_x_func;
-        dT->approxAngVelYFunc = m_approx_angvel_y_func;
-        dT->approxAngVelZFunc = m_approx_angvel_z_func;
+        // Jitify angular velocity magnitude finder
+        m_approx_angvel_func->Initialize(m_subs, m_jitify_options, true);
+        dT->approxAngVelFunc = m_approx_angvel_func;
         // Updating sim environment is critical
         dT->announceCritical();
     });
