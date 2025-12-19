@@ -4,114 +4,28 @@
 
 #include <stdio.h>
 
+namespace deme {
+
 // Kernel to add a constant offset to each element of an array
-__global__ void addOffsetToArray(deme::contactPairs_t* arr, deme::contactPairs_t offset, size_t n) {
-    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void addOffsetToArray(contactPairs_t* arr, contactPairs_t offset, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
         arr[myID] += offset;
     }
 }
 
 // Kernel to fill a contact_t array with a constant value
-__global__ void fillContactTypeArray(deme::contact_t* arr, deme::contact_t val, size_t n) {
-    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void fillContactTypeArray(contact_t* arr, contact_t val, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
         arr[myID] = val;
     }
 }
 
-__global__ void fillRunLengthArray(deme::primitivesPrimTouches_t* runlength_full,
-                                   deme::bodyID_t* unique_ids,
-                                   deme::primitivesPrimTouches_t* runlength,
-                                   size_t numUnique) {
-    deme::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (myID < numUnique) {
-        deme::bodyID_t i = unique_ids[myID];
-        runlength_full[i] = runlength[myID];
-    }
-}
-
-__global__ void buildPersistentMap(deme::primitivesPrimTouches_t* new_idA_runlength_full,
-                                   deme::primitivesPrimTouches_t* old_idA_runlength_full,
-                                   deme::contactPairs_t* new_idA_scanned_runlength,
-                                   deme::contactPairs_t* old_idA_scanned_runlength,
-                                   deme::contactPairs_t* mapping,
-                                   deme::DEMDataKT* granData,
-                                   size_t nGeoSafe) {
-    deme::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (myID < nGeoSafe) {
-        deme::primitivesPrimTouches_t new_cnt_count = new_idA_runlength_full[myID];
-        deme::primitivesPrimTouches_t old_cnt_count = old_idA_runlength_full[myID];
-        // If this idA has non-zero runlength in new: a potential enduring sphere
-        if (new_cnt_count > 0) {
-            // Where should I start looking? Grab the offset.
-            deme::contactPairs_t new_cnt_offset = new_idA_scanned_runlength[myID];
-            deme::contactPairs_t old_cnt_offset = old_idA_scanned_runlength[myID];
-            for (deme::primitivesPrimTouches_t i = 0; i < new_cnt_count; i++) {
-                // Current contact number we are inspecting
-                deme::contactPairs_t this_contact = new_cnt_offset + i;
-                deme::bodyID_t new_idB = granData->idPrimitiveB[this_contact];
-                deme::contact_t new_cntType = granData->contactTypePrimitive[this_contact];
-                // Mark it as no matching pair found, being a new contact; modify it later
-                deme::contactPairs_t my_partner = deme::NULL_MAPPING_PARTNER;
-                // If this is a fake contact, we can move on
-                if (new_cntType == deme::NOT_A_CONTACT) {
-                    mapping[this_contact] = my_partner;
-                    continue;
-                }
-                // Loop through the old idB to see if there is a match
-                for (deme::primitivesPrimTouches_t j = 0; j < old_cnt_count; j++) {
-                    deme::bodyID_t old_idB = granData->previous_idPrimitiveB[old_cnt_offset + j];
-                    deme::contact_t old_cntType = granData->previous_contactTypePrimitive[old_cnt_offset + j];
-                    // If both idB and contact type match, then it is an enduring contact, write it to the mapping
-                    // array
-                    if (new_idB == old_idB && new_cntType == old_cntType) {
-                        my_partner = old_cnt_offset + j;
-                        break;
-                    }
-                }
-                // If old_cnt_count == 0, it is automatically NULL_MAPPING_PARTNER
-                mapping[this_contact] = my_partner;
-            }
-        }
-    }
-}
-
-__global__ void lineNumbers(deme::contactPairs_t* arr, size_t n) {
-    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void markBoolIf(notStupidBool_t* bool_arr, notStupidBool_t* value_arr, notStupidBool_t val, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
-        arr[myID] = myID;
-    }
-}
-
-__global__ void convertToAndFrom(deme::contactPairs_t* old_arr_unsort_to_sort_map,
-                                 deme::contactPairs_t* converted_map,
-                                 size_t n) {
-    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (myID < n) {
-        deme::contactPairs_t map_from = old_arr_unsort_to_sort_map[myID];
-        converted_map[map_from] = myID;
-    }
-}
-
-__global__ void rearrangeMapping(deme::contactPairs_t* map_sorted,
-                                 deme::contactPairs_t* old_arr_unsort_to_sort_map,
-                                 size_t n) {
-    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (myID < n) {
-        deme::contactPairs_t map_to = map_sorted[myID];
-        if (map_to != deme::NULL_MAPPING_PARTNER)
-            map_sorted[myID] = old_arr_unsort_to_sort_map[map_to];
-    }
-}
-
-__global__ void markBoolIf(deme::notStupidBool_t* bool_arr,
-                           deme::notStupidBool_t* value_arr,
-                           deme::notStupidBool_t val,
-                           size_t n) {
-    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (myID < n) {
-        deme::notStupidBool_t my_val = value_arr[myID];
+        notStupidBool_t my_val = value_arr[myID];
         if (my_val == val) {
             bool_arr[myID] = 1;
         } else {
@@ -120,38 +34,38 @@ __global__ void markBoolIf(deme::notStupidBool_t* bool_arr,
     }
 }
 
-__global__ void setArr(deme::notStupidBool_t* arr, size_t n, deme::notStupidBool_t val) {
-    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void setArr(notStupidBool_t* arr, size_t n, notStupidBool_t val) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
         arr[myID] = val;
     }
 }
 
-__global__ void markDuplicateContacts(deme::primitivesPrimTouches_t* idA_runlength,
-                                      deme::contactPairs_t* idA_scanned_runlength,
-                                      deme::bodyID_t* idB,
-                                      deme::contact_t* contactTypePrimitive,
-                                      deme::notStupidBool_t* persistency,
-                                      deme::notStupidBool_t* retain_list,
+__global__ void markDuplicateContacts(primitivesPrimTouches_t* idA_runlength,
+                                      contactPairs_t* idA_scanned_runlength,
+                                      bodyID_t* idB,
+                                      contact_t* contactTypePrimitive,
+                                      notStupidBool_t* persistency,
+                                      notStupidBool_t* retain_list,
                                       size_t n,
                                       bool persistency_affect) {
-    deme::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
-        deme::primitivesPrimTouches_t cnt_count = idA_runlength[myID];
+        primitivesPrimTouches_t cnt_count = idA_runlength[myID];
         // If this idA has non-zero runlength in new: a potential removal needed
         if (cnt_count > 0) {
             // Where should I start looking? Grab the offset.
-            deme::contactPairs_t cnt_offset = idA_scanned_runlength[myID];
-            for (deme::primitivesPrimTouches_t i = 0; i < cnt_count - 1; i++) {
-                for (deme::primitivesPrimTouches_t j = i + 1; j < cnt_count; j++) {
+            contactPairs_t cnt_offset = idA_scanned_runlength[myID];
+            for (primitivesPrimTouches_t i = 0; i < cnt_count - 1; i++) {
+                for (primitivesPrimTouches_t j = i + 1; j < cnt_count; j++) {
                     // Current contact numbers we are inspecting
-                    deme::contactPairs_t contactA = cnt_offset + i;
-                    deme::contactPairs_t contactB = cnt_offset + j;
-                    deme::bodyID_t contactA_idB = idB[contactA];
-                    deme::contact_t contactA_cntType = contactTypePrimitive[contactA];
-                    deme::bodyID_t contactB_idB = idB[contactB];
-                    deme::contact_t contactB_cntType = contactTypePrimitive[contactB];
-                    deme::notStupidBool_t contactA_persistency, contactB_persistency;
+                    contactPairs_t contactA = cnt_offset + i;
+                    contactPairs_t contactB = cnt_offset + j;
+                    bodyID_t contactA_idB = idB[contactA];
+                    contact_t contactA_cntType = contactTypePrimitive[contactA];
+                    bodyID_t contactB_idB = idB[contactB];
+                    contact_t contactB_cntType = contactTypePrimitive[contactB];
+                    notStupidBool_t contactA_persistency, contactB_persistency;
                     if (persistency_affect) {
                         contactA_persistency = persistency[contactA];
                         contactB_persistency = persistency[contactB];
@@ -168,7 +82,7 @@ __global__ void markDuplicateContacts(deme::primitivesPrimTouches_t* idA_runleng
                                 // If both are persistent or both are non-persistent, we remove the one with bigger
                                 // index, in case there are 3-way duplicates
                                 retain_list[contactB] = 0;
-                            } else if (contactB_persistency == deme::CONTACT_NOT_PERSISTENT) {
+                            } else if (contactB_persistency == CONTACT_NOT_PERSISTENT) {
                                 retain_list[contactB] = 0;
                             } else {
                                 retain_list[contactA] = 0;
@@ -181,69 +95,67 @@ __global__ void markDuplicateContacts(deme::primitivesPrimTouches_t* idA_runleng
     }
 }
 
-__global__ void extractPatchInvolvedContactPatchIDPairs(deme::patchIDPair_t* contactPatchPairs,
-                                                        deme::contact_t* contactTypePrimitive,
-                                                        deme::bodyID_t* idPrimitiveA,
-                                                        deme::bodyID_t* idPrimitiveB,
-                                                        deme::bodyID_t* triPatchID,
+__global__ void extractPatchInvolvedContactPatchIDPairs(patchIDPair_t* contactPatchPairs,
+                                                        contact_t* contactTypePrimitive,
+                                                        bodyID_t* idPrimitiveA,
+                                                        bodyID_t* idPrimitiveB,
+                                                        bodyID_t* triPatchID,
                                                         size_t nContacts) {
-    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContacts) {
-        deme::bodyID_t bodyA = idPrimitiveA[myID];
-        deme::bodyID_t bodyB = idPrimitiveB[myID];
+        bodyID_t bodyA = idPrimitiveA[myID];
+        bodyID_t bodyB = idPrimitiveB[myID];
         switch (contactTypePrimitive[myID]) {
-            case deme::SPHERE_TRIANGLE_CONTACT: {
-                deme::bodyID_t patchB = triPatchID[bodyB];
+            case SPHERE_TRIANGLE_CONTACT: {
+                bodyID_t patchB = triPatchID[bodyB];
                 // For sphere-triangle contact: triangle has patch ID, sphere does not but its geoID serves the same
                 // purpose. We ensure sphere is A.
-                contactPatchPairs[myID] = deme::encodeType<deme::patchIDPair_t, deme::bodyID_t>(
-                    bodyA, patchB);  // Input bodyID_t, return patchIDPair_t
+                contactPatchPairs[myID] =
+                    encodeType<patchIDPair_t, bodyID_t>(bodyA, patchB);  // Input bodyID_t, return patchIDPair_t
                 break;
             }
-            case deme::TRIANGLE_ANALYTICAL_CONTACT: {
-                deme::bodyID_t patchA = triPatchID[bodyA];
+            case TRIANGLE_ANALYTICAL_CONTACT: {
+                bodyID_t patchA = triPatchID[bodyA];
                 // For mesh-analytical contact: mesh has patch ID, analytical object does not but its geoID serves the
                 // same purpose. We ensure triangle is A.
-                contactPatchPairs[myID] = deme::encodeType<deme::patchIDPair_t, deme::bodyID_t>(patchA, bodyB);
+                contactPatchPairs[myID] = encodeType<patchIDPair_t, bodyID_t>(patchA, bodyB);
                 break;
             }
-            case deme::TRIANGLE_TRIANGLE_CONTACT: {
-                deme::bodyID_t patchA = triPatchID[bodyA];
-                deme::bodyID_t patchB = triPatchID[bodyB];
+            case TRIANGLE_TRIANGLE_CONTACT: {
+                bodyID_t patchA = triPatchID[bodyA];
+                bodyID_t patchB = triPatchID[bodyB];
                 // For triangle-triangle contact: both triangles have patch IDs. Keeps original order.
-                contactPatchPairs[myID] = deme::encodeType<deme::patchIDPair_t, deme::bodyID_t>(patchA, patchB);
+                contactPatchPairs[myID] = encodeType<patchIDPair_t, bodyID_t>(patchA, patchB);
                 break;
             }
             default:
                 // In other sph-sph and sph-anal, for now, we just use geoID as patchIDs. Keeps original order.
-                contactPatchPairs[myID] = deme::encodeType<deme::patchIDPair_t, deme::bodyID_t>(bodyA, bodyB);
+                contactPatchPairs[myID] = encodeType<patchIDPair_t, bodyID_t>(bodyA, bodyB);
                 break;
         }
     }
 }
 
 // Decode unique patch pairs into separate idPatchA/idPatchB arrays
-__global__ void decodePatchPairsToSeparateArrays(deme::patchIDPair_t* uniquePatchPairs,
-                                                 deme::bodyID_t* idPatchA,
-                                                 deme::bodyID_t* idPatchB,
+__global__ void decodePatchPairsToSeparateArrays(patchIDPair_t* uniquePatchPairs,
+                                                 bodyID_t* idPatchA,
+                                                 bodyID_t* idPatchB,
                                                  size_t numUnique) {
-    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < numUnique) {
-        deme::patchIDPair_t patchPair = uniquePatchPairs[myID];
+        patchIDPair_t patchPair = uniquePatchPairs[myID];
         // decodeTypeA returns the value stored in high bits, and decodeTypeB returns the value stored in low bits. This
         // decoding does not change the order as they were encoded in encodeType.
-        idPatchA[myID] = deme::decodeTypeA<deme::patchIDPair_t, deme::bodyID_t>(patchPair);
-        idPatchB[myID] = deme::decodeTypeB<deme::patchIDPair_t, deme::bodyID_t>(patchPair);
+        idPatchA[myID] = decodeTypeA<patchIDPair_t, bodyID_t>(patchPair);
+        idPatchB[myID] = decodeTypeB<patchIDPair_t, bodyID_t>(patchPair);
     }
 }
 
 // Build geomToPatchMap by detecting boundaries of unique patch pairs in sorted array
 // and using prefix scan on "is first of group" flags.
 // For sorted patch pairs, mark 1 at each position where a new unique value starts, then prefix scan.
-__global__ void markNewPatchPairGroups(deme::patchIDPair_t* sortedPatchPairs,
-                                       deme::contactPairs_t* isNewGroup,
-                                       size_t n) {
-    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void markNewPatchPairGroups(patchIDPair_t* sortedPatchPairs, contactPairs_t* isNewGroup, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
         if (myID == 0) {
             isNewGroup[myID] = 0;
@@ -261,13 +173,13 @@ __global__ void markNewPatchPairGroups(deme::patchIDPair_t* sortedPatchPairs,
 //   contactMapping: Output mapping array (entire array, not segment)
 //   curr_start: Starting index in current arrays for this contact type segment
 //   curr_count: Number of contacts of this type in current step
-__global__ void setNullMappingForType(deme::contactPairs_t* contactMapping,
-                                      deme::contactPairs_t curr_start,
-                                      deme::contactPairs_t curr_count) {
-    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void setNullMappingForType(contactPairs_t* contactMapping,
+                                      contactPairs_t curr_start,
+                                      contactPairs_t curr_count) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < curr_count) {
-        deme::contactPairs_t curr_idx = curr_start + myID;
-        contactMapping[curr_idx] = deme::NULL_MAPPING_PARTNER;
+        contactPairs_t curr_idx = curr_start + myID;
+        contactMapping[curr_idx] = NULL_MAPPING_PARTNER;
     }
 }
 
@@ -283,35 +195,35 @@ __global__ void setNullMappingForType(deme::contactPairs_t* contactMapping,
 //   curr_count: Number of contacts of this type in current step
 //   prev_start: Starting index in previous arrays for this contact type segment
 //   prev_count: Number of contacts of this type in previous step
-__global__ void buildPatchContactMappingForType(deme::bodyID_t* curr_idPatchA,
-                                                deme::bodyID_t* curr_idPatchB,
-                                                deme::bodyID_t* prev_idPatchA,
-                                                deme::bodyID_t* prev_idPatchB,
-                                                deme::contactPairs_t* contactMapping,
-                                                deme::contactPairs_t curr_start,
-                                                deme::contactPairs_t curr_count,
-                                                deme::contactPairs_t prev_start,
-                                                deme::contactPairs_t prev_count) {
-    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void buildPatchContactMappingForType(bodyID_t* curr_idPatchA,
+                                                bodyID_t* curr_idPatchB,
+                                                bodyID_t* prev_idPatchA,
+                                                bodyID_t* prev_idPatchB,
+                                                contactPairs_t* contactMapping,
+                                                contactPairs_t curr_start,
+                                                contactPairs_t curr_count,
+                                                contactPairs_t prev_start,
+                                                contactPairs_t prev_count) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < curr_count) {
         // Absolute index in the full contact array
-        deme::contactPairs_t curr_idx = curr_start + myID;
+        contactPairs_t curr_idx = curr_start + myID;
 
-        deme::bodyID_t curr_A = curr_idPatchA[curr_idx];
-        deme::bodyID_t curr_B = curr_idPatchB[curr_idx];
+        bodyID_t curr_A = curr_idPatchA[curr_idx];
+        bodyID_t curr_B = curr_idPatchB[curr_idx];
 
         // Default: no match found
-        deme::contactPairs_t my_partner = deme::NULL_MAPPING_PARTNER;
+        contactPairs_t my_partner = NULL_MAPPING_PARTNER;
 
         // Binary search within the previous type segment for the matching A/B pair
         // The segment is sorted by the combined patch ID pair
-        deme::contactPairs_t left = 0;
-        deme::contactPairs_t right = prev_count;
+        contactPairs_t left = 0;
+        contactPairs_t right = prev_count;
         while (left < right) {
-            deme::contactPairs_t mid = left + (right - left) / 2;
-            deme::contactPairs_t prev_idx = prev_start + mid;
-            deme::bodyID_t prev_A = prev_idPatchA[prev_idx];
-            deme::bodyID_t prev_B = prev_idPatchB[prev_idx];
+            contactPairs_t mid = left + (right - left) / 2;
+            contactPairs_t prev_idx = prev_start + mid;
+            bodyID_t prev_A = prev_idPatchA[prev_idx];
+            bodyID_t prev_B = prev_idPatchB[prev_idx];
 
             // Compare (A, B) pairs lexicographically
             if (prev_A < curr_A || (prev_A == curr_A && prev_B < curr_B)) {
@@ -323,9 +235,9 @@ __global__ void buildPatchContactMappingForType(deme::bodyID_t* curr_idPatchA,
 
         // Check if we found a match at position left
         if (left < prev_count) {
-            deme::contactPairs_t prev_idx = prev_start + left;
-            deme::bodyID_t prev_A = prev_idPatchA[prev_idx];
-            deme::bodyID_t prev_B = prev_idPatchB[prev_idx];
+            contactPairs_t prev_idx = prev_start + left;
+            bodyID_t prev_A = prev_idPatchA[prev_idx];
+            bodyID_t prev_B = prev_idPatchB[prev_idx];
             if (prev_A == curr_A && prev_B == curr_B) {
                 my_partner = prev_idx;
             }
@@ -338,23 +250,23 @@ __global__ void buildPatchContactMappingForType(deme::bodyID_t* curr_idPatchA,
 // Build patch-based contact mapping between current and previous patch contact arrays.
 // Both arrays are sorted by contact type, then by combined patch ID pair within each type.
 // For each current contact, we use binary search to find the matching contact in the previous array.
-__global__ void buildPatchContactMapping(deme::bodyID_t* curr_idPatchA,
-                                         deme::bodyID_t* curr_idPatchB,
-                                         deme::contact_t* curr_contactTypePatch,
-                                         deme::bodyID_t* prev_idPatchA,
-                                         deme::bodyID_t* prev_idPatchB,
-                                         deme::contact_t* previous_contactTypePatch,
-                                         deme::contactPairs_t* contactMapping,
+__global__ void buildPatchContactMapping(bodyID_t* curr_idPatchA,
+                                         bodyID_t* curr_idPatchB,
+                                         contact_t* curr_contactTypePatch,
+                                         bodyID_t* prev_idPatchA,
+                                         bodyID_t* prev_idPatchB,
+                                         contact_t* previous_contactTypePatch,
+                                         contactPairs_t* contactMapping,
                                          size_t numCurrContacts,
                                          size_t numPrevContacts) {
-    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < numCurrContacts) {
-        deme::bodyID_t curr_A = curr_idPatchA[myID];
-        deme::bodyID_t curr_B = curr_idPatchB[myID];
-        deme::contact_t curr_type = curr_contactTypePatch[myID];
+        bodyID_t curr_A = curr_idPatchA[myID];
+        bodyID_t curr_B = curr_idPatchB[myID];
+        contact_t curr_type = curr_contactTypePatch[myID];
 
         // Default: no match found
-        deme::contactPairs_t my_partner = deme::NULL_MAPPING_PARTNER;
+        contactPairs_t my_partner = NULL_MAPPING_PARTNER;
 
         // Find the segment in the previous array with the same contact type
         // Since arrays are sorted by type first, we can find the type segment bounds using binary search
@@ -393,8 +305,8 @@ __global__ void buildPatchContactMapping(deme::bodyID_t* curr_idPatchA,
         right = type_end;
         while (left < right) {
             size_t mid = left + (right - left) / 2;
-            deme::bodyID_t prev_A = prev_idPatchA[mid];
-            deme::bodyID_t prev_B = prev_idPatchB[mid];
+            bodyID_t prev_A = prev_idPatchA[mid];
+            bodyID_t prev_B = prev_idPatchB[mid];
 
             // Compare (A, B) pairs lexicographically
             // Since they're sorted by patch ID pair where smaller ID is in high bits
@@ -407,8 +319,8 @@ __global__ void buildPatchContactMapping(deme::bodyID_t* curr_idPatchA,
 
         // Check if we found a match at position left
         if (left < type_end) {
-            deme::bodyID_t prev_A = prev_idPatchA[left];
-            deme::bodyID_t prev_B = prev_idPatchB[left];
+            bodyID_t prev_A = prev_idPatchA[left];
+            bodyID_t prev_B = prev_idPatchB[left];
             if (prev_A == curr_A && prev_B == curr_B) {
                 my_partner = left;
             }
@@ -417,3 +329,93 @@ __global__ void buildPatchContactMapping(deme::bodyID_t* curr_idPatchA,
         contactMapping[myID] = my_partner;
     }
 }
+
+// The rest are old kernels only used in DEME2.x for primitive-primitive contact mapping
+/*
+__global__ void fillRunLengthArray(primitivesPrimTouches_t* runlength_full,
+                                   bodyID_t* unique_ids,
+                                   primitivesPrimTouches_t* runlength,
+                                   size_t numUnique) {
+    bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < numUnique) {
+        bodyID_t i = unique_ids[myID];
+        runlength_full[i] = runlength[myID];
+    }
+}
+
+__global__ void buildPersistentMap(primitivesPrimTouches_t* new_idA_runlength_full,
+                                   primitivesPrimTouches_t* old_idA_runlength_full,
+                                   contactPairs_t* new_idA_scanned_runlength,
+                                   contactPairs_t* old_idA_scanned_runlength,
+                                   contactPairs_t* mapping,
+                                   DEMDataKT* granData,
+                                   size_t nGeoSafe) {
+    bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < nGeoSafe) {
+        primitivesPrimTouches_t new_cnt_count = new_idA_runlength_full[myID];
+        primitivesPrimTouches_t old_cnt_count = old_idA_runlength_full[myID];
+        // If this idA has non-zero runlength in new: a potential enduring sphere
+        if (new_cnt_count > 0) {
+            // Where should I start looking? Grab the offset.
+            contactPairs_t new_cnt_offset = new_idA_scanned_runlength[myID];
+            contactPairs_t old_cnt_offset = old_idA_scanned_runlength[myID];
+            for (primitivesPrimTouches_t i = 0; i < new_cnt_count; i++) {
+                // Current contact number we are inspecting
+                contactPairs_t this_contact = new_cnt_offset + i;
+                bodyID_t new_idB = granData->idPrimitiveB[this_contact];
+                contact_t new_cntType = granData->contactTypePrimitive[this_contact];
+                // Mark it as no matching pair found, being a new contact; modify it later
+                contactPairs_t my_partner = NULL_MAPPING_PARTNER;
+                // If this is a fake contact, we can move on
+                if (new_cntType == NOT_A_CONTACT) {
+                    mapping[this_contact] = my_partner;
+                    continue;
+                }
+                // Loop through the old idB to see if there is a match
+                for (primitivesPrimTouches_t j = 0; j < old_cnt_count; j++) {
+                    bodyID_t old_idB = granData->previous_idPrimitiveB[old_cnt_offset + j];
+                    contact_t old_cntType = granData->previous_contactTypePrimitive[old_cnt_offset + j];
+                    // If both idB and contact type match, then it is an enduring contact, write it to the mapping
+                    // array
+                    if (new_idB == old_idB && new_cntType == old_cntType) {
+                        my_partner = old_cnt_offset + j;
+                        break;
+                    }
+                }
+                // If old_cnt_count == 0, it is automatically NULL_MAPPING_PARTNER
+                mapping[this_contact] = my_partner;
+            }
+        }
+    }
+}
+
+__global__ void lineNumbers(contactPairs_t* arr, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        arr[myID] = myID;
+    }
+}
+
+__global__ void convertToAndFrom(contactPairs_t* old_arr_unsort_to_sort_map,
+                                 contactPairs_t* converted_map,
+                                 size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        contactPairs_t map_from = old_arr_unsort_to_sort_map[myID];
+        converted_map[map_from] = myID;
+    }
+}
+
+__global__ void rearrangeMapping(contactPairs_t* map_sorted,
+                                 contactPairs_t* old_arr_unsort_to_sort_map,
+                                 size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        contactPairs_t map_to = map_sorted[myID];
+        if (map_to != NULL_MAPPING_PARTNER)
+            map_sorted[myID] = old_arr_unsort_to_sort_map[map_to];
+    }
+}
+*/
+
+}  // namespace deme

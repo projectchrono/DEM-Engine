@@ -20,7 +20,6 @@ SET(DEMOS
 		DEMdemo_Sieve
 		DEMdemo_SingleSphereCollide
 		DEMdemo_MeshCollide
-		DEMdemo_MeshPatch
 		DEMdemo_BoxesFalling
 		DEMdemo_TestPack
 		DEMdemo_RotatingDrum

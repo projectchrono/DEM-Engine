@@ -1271,36 +1271,21 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                         continue;
 
                     // Step 1a: Sort this type segment by patch ID pairs
-                    if (count > 1) {
-                        // Sort idPrimitiveA with contactPatchPairs
-                        cubDEMSortByKeys<patchIDPair_t, bodyID_t>(
-                            contactPatchPairs + prim_offset, patchPairs_sorted + prim_offset,
-                            granData->idPrimitiveA + prim_offset, idA_sorted + prim_offset, count, this_stream,
-                            scratchPad);
+                    // Sort idPrimitiveA with contactPatchPairs
+                    cubDEMSortByKeys<patchIDPair_t, bodyID_t>(
+                        contactPatchPairs + prim_offset, patchPairs_sorted + prim_offset,
+                        granData->idPrimitiveA + prim_offset, idA_sorted + prim_offset, count, this_stream, scratchPad);
 
-                        // Sort idPrimitiveB with contactPatchPairs
-                        cubDEMSortByKeys<patchIDPair_t, bodyID_t>(
-                            contactPatchPairs + prim_offset, patchPairs_sorted + prim_offset,
-                            granData->idPrimitiveB + prim_offset, idB_sorted + prim_offset, count, this_stream,
-                            scratchPad);
+                    // Sort idPrimitiveB with contactPatchPairs
+                    cubDEMSortByKeys<patchIDPair_t, bodyID_t>(
+                        contactPatchPairs + prim_offset, patchPairs_sorted + prim_offset,
+                        granData->idPrimitiveB + prim_offset, idB_sorted + prim_offset, count, this_stream, scratchPad);
 
-                        // Sort contactTypePrimitive with contactPatchPairs
-                        cubDEMSortByKeys<patchIDPair_t, contact_t>(
-                            contactPatchPairs + prim_offset, patchPairs_sorted + prim_offset,
-                            granData->contactTypePrimitive + prim_offset, contactType_sorted + prim_offset, count,
-                            this_stream, scratchPad);
-                    } else {
-                        // Just copy single elements (no sorting needed)
-                        DEME_GPU_CALL(cudaMemcpy(patchPairs_sorted + prim_offset, contactPatchPairs + prim_offset,
-                                                 sizeof(patchIDPair_t), cudaMemcpyDeviceToDevice));
-                        DEME_GPU_CALL(cudaMemcpy(idA_sorted + prim_offset, granData->idPrimitiveA + prim_offset,
-                                                 sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-                        DEME_GPU_CALL(cudaMemcpy(idB_sorted + prim_offset, granData->idPrimitiveB + prim_offset,
-                                                 sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-                        DEME_GPU_CALL(cudaMemcpy(contactType_sorted + prim_offset,
-                                                 granData->contactTypePrimitive + prim_offset, sizeof(contact_t),
-                                                 cudaMemcpyDeviceToDevice));
-                    }
+                    // Sort contactTypePrimitive with contactPatchPairs
+                    cubDEMSortByKeys<patchIDPair_t, contact_t>(
+                        contactPatchPairs + prim_offset, patchPairs_sorted + prim_offset,
+                        granData->contactTypePrimitive + prim_offset, contactType_sorted + prim_offset, count,
+                        this_stream, scratchPad);
 
                     // Step 1b: Run-length encode to find unique patch pairs WITHIN this type segment
                     cubDEMRunLengthEncode<patchIDPair_t, contactPairs_t>(

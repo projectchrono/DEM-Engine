@@ -20,10 +20,10 @@ __global__ void forceToAcc(deme::DEMDataDT* granData, size_t n) {
         {
             float myMass;
             float3 myMOI;
-            const deme::bodyID_t idGeo = granData->idPrimitiveA[myID];
+            const deme::bodyID_t idPatch = granData->idPatchA[myID];
             const float3 myCntPnt = granData->contactPointGeometryA[myID];
 
-            const deme::bodyID_t myOwner = DEME_GET_GEO_OWNER_ID(idGeo, deme::decodeTypeA(thisCntType));
+            const deme::bodyID_t myOwner = DEME_GET_PATCH_OWNER_ID(idPatch, deme::decodeTypeA(thisCntType));
             // Get my mass info from either jitified arrays or global memory
             // Outputs myMass
             // Use an input named exactly `myOwner' which is the id of this owner
@@ -57,10 +57,10 @@ __global__ void forceToAcc(deme::DEMDataDT* granData, size_t n) {
         {
             float myMass;
             float3 myMOI;
-            const deme::bodyID_t idGeo = granData->idPrimitiveB[myID];
+            const deme::bodyID_t idPatch = granData->idPatchB[myID];
             const float3 myCntPnt = granData->contactPointGeometryB[myID];
 
-            deme::bodyID_t myOwner = DEME_GET_GEO_OWNER_ID(idGeo, deme::decodeTypeB(thisCntType));
+            deme::bodyID_t myOwner = DEME_GET_PATCH_OWNER_ID(idPatch, deme::decodeTypeB(thisCntType));
 
             // Get my mass info from either jitified arrays or global memory
             // Outputs myMass
