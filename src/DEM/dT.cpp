@@ -419,23 +419,12 @@ void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const 
     notStupidBool_t* idBool = (notStupidBool_t*)solverScratchSpace.allocateTempVector("idBool", idBoolSize);
     DEME_GPU_CALL(cudaMemset(idBool, 0, idBoolSize));
     float* ownerFactors = (float*)solverScratchSpace.allocateTempVector("ownerFactors", ownerFactorSize);
-    size_t blocks_needed_for_marking = (IDs.size() + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
 
     // Mark on the bool array those owners that need a change
-    misc_kernels->kernel("markOwnerToChange")
-        .instantiate()
-        .configure(dim3(blocks_needed_for_marking), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(idBool, ownerFactors, dIDs, dFactors, (size_t)IDs.size());
-    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    markOwnerToChange(idBool, ownerFactors, dIDs, dFactors, (size_t)IDs.size(), streamInfo.stream);
 
     // Change the size of the sphere components in question
-    size_t blocks_needed_for_changing =
-        (simParams->nSpheresGM + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-    misc_kernels->kernel("modifyComponents")
-        .instantiate("deme::DEMDataDT")
-        .configure(dim3(blocks_needed_for_changing), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(&granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM);
-    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    modifyComponents(&granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM, streamInfo.stream);
 
     solverScratchSpace.finishUsingTempVector("dIDs");
     solverScratchSpace.finishUsingTempVector("dFactors");
@@ -2974,11 +2963,6 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     if (solverFlags.canFamilyChangeOnDevice) {
         mod_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMModeratorKernels", JitHelper::KERNEL_DIR / "DEMModeratorKernels.cu", Subs, JitifyOptions)));
-    }
-    // Then misc kernels
-    {
-        misc_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMMiscKernels", JitHelper::KERNEL_DIR / "DEMMiscKernels.cu", Subs, JitifyOptions)));
     }
 
     // For now, the contact type to kernel map is known and hard-coded after jitification

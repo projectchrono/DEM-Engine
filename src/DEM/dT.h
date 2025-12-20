@@ -778,7 +778,6 @@ class DEMDynamicThread {
     std::shared_ptr<jitify::Program> integrator_kernels;
     // std::shared_ptr<jitify::Program> quarry_stats_kernels;
     std::shared_ptr<jitify::Program> mod_kernels;
-    std::shared_ptr<jitify::Program> misc_kernels;
 
     // Adjuster for update freq
     class AccumStepUpdater {

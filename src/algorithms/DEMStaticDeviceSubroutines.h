@@ -285,6 +285,38 @@ void rearrangeContactWildcards(DEMDataDT* granData,
                                cudaStream_t& this_stream);
 void markAliveContacts(float* wildcard, notStupidBool_t* sentry, size_t nContactPairs, cudaStream_t& this_stream);
 
+////////////////////////////////////////////////////////////////////////////////
+// Misc kernels declarations
+////////////////////////////////////////////////////////////////////////////////
+
+void markOwnerToChange(notStupidBool_t* idBool,
+                       float* ownerFactors,
+                       bodyID_t* dIDs,
+                       float* dFactors,
+                       size_t n,
+                       cudaStream_t& this_stream);
+
+void modifyComponents(DEMDataDT* granData,
+                      notStupidBool_t* idBool,
+                      float* factors,
+                      size_t n,
+                      cudaStream_t& this_stream);
+
+void modifyComponents(DEMDataKT* granData,
+                      notStupidBool_t* idBool,
+                      float* factors,
+                      size_t n,
+                      cudaStream_t& this_stream);
+
+void computeMarginFromAbsv(DEMSimParams* simParams,
+                           DEMDataKT* granData,
+                           float* ts,
+                           unsigned int* maxDrift,
+                           size_t n,
+                           cudaStream_t& this_stream);
+
+void fillMarginValues(DEMSimParams* simParams, DEMDataKT* granData, size_t n, cudaStream_t& this_stream);
+
 }  // namespace deme
 
 #endif
