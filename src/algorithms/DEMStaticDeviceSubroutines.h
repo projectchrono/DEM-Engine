@@ -296,17 +296,8 @@ void markOwnerToChange(notStupidBool_t* idBool,
                        size_t n,
                        cudaStream_t& this_stream);
 
-void modifyComponents(DEMDataDT* granData,
-                      notStupidBool_t* idBool,
-                      float* factors,
-                      size_t n,
-                      cudaStream_t& this_stream);
-
-void modifyComponents(DEMDataKT* granData,
-                      notStupidBool_t* idBool,
-                      float* factors,
-                      size_t n,
-                      cudaStream_t& this_stream);
+template <typename DEMData>
+void modifyComponents(DEMData* granData, notStupidBool_t* idBool, float* factors, size_t n, cudaStream_t& this_stream);
 
 void computeMarginFromAbsv(DEMSimParams* simParams,
                            DEMDataKT* granData,

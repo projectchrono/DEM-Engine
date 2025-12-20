@@ -36,6 +36,7 @@ set(algorithms_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubWrappers.cu 
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMContactDetectionKernels.cu
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMDynamicMisc.cu
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMMiscKernels.cu
 )
 
 target_sources(

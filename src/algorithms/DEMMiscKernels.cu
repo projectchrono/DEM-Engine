@@ -36,17 +36,14 @@ void markOwnerToChange(notStupidBool_t* idBool,
                        cudaStream_t& this_stream) {
     size_t blocks_needed = (n + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
-        markOwnerToChange_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            idBool, ownerFactors, dIDs, dFactors, n);
+        markOwnerToChange_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(idBool, ownerFactors,
+                                                                                              dIDs, dFactors, n);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
 template <typename DEMData>
-__global__ void modifyComponents_impl(DEMData* granData,
-                                      notStupidBool_t* idBool,
-                                      float* factors,
-                                      size_t n) {
+__global__ void modifyComponents_impl(DEMData* granData, notStupidBool_t* idBool, float* factors, size_t n) {
     size_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;
     if (sphereID < n) {
         // Get my owner ID
@@ -63,31 +60,25 @@ __global__ void modifyComponents_impl(DEMData* granData,
     }
 }
 
-void modifyComponents(DEMDataDT* granData,
-                      notStupidBool_t* idBool,
-                      float* factors,
-                      size_t n,
-                      cudaStream_t& this_stream) {
+template <typename DEMData>
+void modifyComponents(DEMData* granData, notStupidBool_t* idBool, float* factors, size_t n, cudaStream_t& this_stream) {
     size_t blocks_needed = (n + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
-        modifyComponents_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            granData, idBool, factors, n);
+        modifyComponents_impl<DEMData>
+            <<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(granData, idBool, factors, n);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
-
-void modifyComponents(DEMDataKT* granData,
-                      notStupidBool_t* idBool,
-                      float* factors,
-                      size_t n,
-                      cudaStream_t& this_stream) {
-    size_t blocks_needed = (n + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-    if (blocks_needed > 0) {
-        modifyComponents_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            granData, idBool, factors, n);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-    }
-}
+template void modifyComponents<DEMDataDT>(DEMDataDT* granData,
+                                          notStupidBool_t* idBool,
+                                          float* factors,
+                                          size_t n,
+                                          cudaStream_t& this_stream);
+template void modifyComponents<DEMDataKT>(DEMDataKT* granData,
+                                          notStupidBool_t* idBool,
+                                          float* factors,
+                                          size_t n,
+                                          cudaStream_t& this_stream);
 
 __global__ void computeMarginFromAbsv_impl(DEMSimParams* simParams,
                                            DEMDataKT* granData,
@@ -126,8 +117,8 @@ void computeMarginFromAbsv(DEMSimParams* simParams,
                            cudaStream_t& this_stream) {
     size_t blocks_needed = (n + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
-        computeMarginFromAbsv_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            simParams, granData, ts, maxDrift, n);
+        computeMarginFromAbsv_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(simParams, granData,
+                                                                                                  ts, maxDrift, n);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }

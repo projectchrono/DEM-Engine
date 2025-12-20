@@ -424,7 +424,7 @@ void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const 
     markOwnerToChange(idBool, ownerFactors, dIDs, dFactors, (size_t)IDs.size(), streamInfo.stream);
 
     // Change the size of the sphere components in question
-    modifyComponents(&granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM, streamInfo.stream);
+    modifyComponents<DEMDataDT>(&granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM, streamInfo.stream);
 
     solverScratchSpace.finishUsingTempVector("dIDs");
     solverScratchSpace.finishUsingTempVector("dFactors");
