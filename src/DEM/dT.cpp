@@ -2599,12 +2599,11 @@ inline void DEMDynamicThread::routineChecks() {
     }
 }
 
-inline float* DEMDynamicThread::determineSysVel() {
+inline void DEMDynamicThread::determineSysVel() {
     // Get linear velocity
     pCycleVel = approxMaxVelFunc->dT_GetDeviceValue();
     // Get angular velocity magnitude
     pCycleAngVel = approxAngVelFunc->dT_GetDeviceValue();
-    return pCycleVel;
 }
 
 inline void DEMDynamicThread::unpack_impl() {
@@ -2693,7 +2692,7 @@ inline void DEMDynamicThread::ifProduceFreshThenUseIt() {
 
 inline void DEMDynamicThread::calibrateParams() {
     // Unpacking is done; now we can use temp arrays again to derive max velocity and send to kT
-    pCycleVel = determineSysVel();
+    determineSysVel();  // This will set pCycleVel and pCycleAngVel
 
     if (solverFlags.autoUpdateFreq) {
         unsigned int comfortable_drift;
@@ -2789,7 +2788,7 @@ void DEMDynamicThread::workerThread() {
             // In this `new-boot' case, we send kT a work order, b/c dT needs results from CD to proceed. After this one
             // instance, kT and dT may work in an async fashion.
             {
-                pCycleVel = determineSysVel();
+                determineSysVel();  // This will set pCycleVel and pCycleAngVel
                 std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
                 sendToTheirBuffer();
             }

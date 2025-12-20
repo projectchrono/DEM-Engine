@@ -742,8 +742,8 @@ class DEMDynamicThread {
     // Change sim params based on dT's experience, if needed
     inline void calibrateParams();
 
-    // Determine the max vel for this cycle, kT needs it
-    inline float* determineSysVel();
+    // Determine the vel info for this cycle, kT needs it
+    inline void determineSysVel();
 
     // Some per-step checks/modification, done before integration, but after force calculation (thus sort of in the
     // mid-step stage)

@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef DEME_INSPECTOR_HPP
-#define DEME_INSPECTOR_HPP
+#ifndef DEME_AUX_CLASSES_HPP
+#define DEME_AUX_CLASSES_HPP
 
 #include <unordered_map>
 
