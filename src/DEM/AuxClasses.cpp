@@ -228,13 +228,20 @@ float* DEMInspector::dT_GetValue() {
     // assertInit(); // This one the user should not use
     // Also, this call breaks the chain-that-bind, but I'm not too worried, as it's used in dT's workerThread only,
     // meaning the device number is well-defined.
-    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, false,
+                           &m_reduceResArr, &m_reduceRes);
 }
 
 float* DEMInspector::dT_GetDeviceValue() {
     // assertInit(); // This one the user should not use
     // This returns a device pointer instead of a host pointer
-    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, true);
+    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, true, 
+                           &m_reduceResArr, &m_reduceRes);
+}
+
+void DEMInspector::releaseData() {
+    m_reduceResArr.free();
+    m_reduceRes.free();
 }
 
 void DEMInspector::assertInit() {

@@ -684,7 +684,9 @@ class DEMDynamicThread {
                        INSPECT_ENTITY_TYPE thing_to_insp,
                        CUB_REDUCE_FLAVOR reduce_flavor,
                        bool all_domain,
-                       bool return_device_ptr = false);
+                       bool return_device_ptr = false,
+                       DualArray<scratch_t>* reduceResArr = nullptr,
+                       DualArray<scratch_t>* reduceRes = nullptr);
 
   private:
     // Name for this class
@@ -712,10 +714,6 @@ class DEMDynamicThread {
     std::shared_ptr<DEMInspector> approxMaxVelFunc;
     // The inspector for calculating angular velocity magnitude for this cycle
     std::shared_ptr<DEMInspector> approxAngVelFunc;
-
-    // Some private arrays that can be used to store inspection results, ready to be passed somewhere else
-    DualArray<scratch_t> m_reduceResArr = DualArray<scratch_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<scratch_t> m_reduceRes = DualArray<scratch_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Migrate contact history to fit the structure of the newly received contact array
     inline void migrateEnduringContacts();

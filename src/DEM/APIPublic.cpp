@@ -2526,7 +2526,11 @@ float DEMSolver::dTInspectReduce(const std::shared_ptr<jitify::Program>& inspect
                                  bool all_domain) {
     // Note they are currently running in the device associated with the main, but it's not a big issue
     //// TODO: Think about the implication on using more than 2 GPUs
-    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+    // Create temporary storage for this inspection (legacy API path)
+    static thread_local DualArray<scratch_t> temp_reduceResArr;
+    static thread_local DualArray<scratch_t> temp_reduceRes;
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, false,
+                                   &temp_reduceResArr, &temp_reduceRes);
     return (float)(*pRes);
 }
 
@@ -2537,7 +2541,11 @@ float* DEMSolver::dTInspectNoReduce(const std::shared_ptr<jitify::Program>& insp
                                     bool all_domain) {
     // Note they are currently running in the device associated with the main, but it's not a big issue
     //// TODO: Think about the implication on using more than 2 GPUs
-    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+    // Create temporary storage for this inspection (legacy API path)
+    static thread_local DualArray<scratch_t> temp_reduceResArr;
+    static thread_local DualArray<scratch_t> temp_reduceRes;
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, false,
+                                   &temp_reduceResArr, &temp_reduceRes);
     return pRes;
 }
 
