@@ -704,7 +704,8 @@ class DEMDynamicThread {
 
     // A pointer that points to the location that holds the current max_vel info, which will soon be transferred to kT
     float* pCycleVel;
-    // Pointer that points to the location that holds the current angular velocity magnitude info, which will soon be transferred to kT
+    // Pointer that points to the location that holds the current angular velocity magnitude info, which will soon be
+    // transferred to kT
     float* pCycleAngVel;
 
     // The inspector for calculating max vel for this cycle
