@@ -212,16 +212,18 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
 
 float DEMInspector::GetValue() {
     assertInit();
-    float reduce_result =
-        sys->dTInspectReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
-    return reduce_result;
+    // Use inspector's own arrays instead of static thread_local storage
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, false,
+                                   &m_reduceResArr, &m_reduceRes);
+    return (float)(*pRes);
 }
 
 float* DEMInspector::GetValues() {
     assertInit();
-    float* reduce_result =
-        sys->dTInspectNoReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
-    return reduce_result;
+    // Use inspector's own arrays instead of static thread_local storage
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, false,
+                                   &m_reduceResArr, &m_reduceRes);
+    return pRes;
 }
 
 float* DEMInspector::dT_GetValue() {
