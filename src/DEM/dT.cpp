@@ -2294,7 +2294,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
     // For each contact type that exists, check if it is patch(mesh)-related type...
     for (size_t i = 0; i < m_numExistingTypes; i++) {
         contact_t contact_type = existingContactTypes[i];
-        if (contact_type == SPHERE_ANALYTICAL_CONTACT || contact_type == TRIANGLE_TRIANGLE_CONTACT ||
+        if (contact_type == SPHERE_TRIANGLE_CONTACT || contact_type == TRIANGLE_TRIANGLE_CONTACT ||
             contact_type == TRIANGLE_ANALYTICAL_CONTACT) {
             const auto& start_count_primitive = typeStartCountPrimitiveMap.at(contact_type);
             const auto& start_count_patch = typeStartCountPatchMap.at(contact_type);
