@@ -2990,14 +2990,9 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
                                      INSPECT_ENTITY_TYPE thing_to_insp,
                                      CUB_REDUCE_FLAVOR reduce_flavor,
                                      bool all_domain,
-                                     bool return_device_ptr,
-                                     DualArray<scratch_t>* reduceResArr,
-                                     DualArray<scratch_t>* reduceRes) {
-    // Arrays must be provided now that m_reduceResArr and m_reduceRes are removed from dT
-    if (!reduceResArr || !reduceRes) {
-        DEME_ERROR("inspectCall requires reduceResArr and reduceRes arrays to be provided");
-    }
-    
+                                     DualArray<scratch_t>& reduceResArr,
+                                     DualArray<scratch_t>& reduceRes,
+                                     bool return_device_ptr) {
     size_t n;
     ownerType_t owner_type = 0;
     switch (thing_to_insp) {
@@ -3020,8 +3015,8 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
 
     // We can use temp vectors as we please
     size_t quarryTempSize = n * sizeof(float);
-    DEME_DUAL_ARRAY_RESIZE_NOVAL(*reduceResArr, quarryTempSize);
-    float* resArr = (float*)reduceResArr->device();
+    DEME_DUAL_ARRAY_RESIZE_NOVAL(reduceResArr, quarryTempSize);
+    float* resArr = (float*)reduceResArr.device();
     size_t regionTempSize = n * sizeof(notStupidBool_t);
     // If this boolArrExclude is 1 at an element, that means this element is exluded in the reduction
     notStupidBool_t* boolArrExclude =
@@ -3030,8 +3025,8 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
 
     // We may actually have 2 reduced returns: in regional reduction, key 0 and 1 give one return each.
     size_t returnSize = sizeof(float) * 2;
-    DEME_DUAL_ARRAY_RESIZE_NOVAL(*reduceRes, returnSize);
-    float* res = (float*)reduceRes->device();
+    DEME_DUAL_ARRAY_RESIZE_NOVAL(reduceRes, returnSize);
+    float* res = (float*)reduceRes.device();
     size_t blocks_needed = (n + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     inspection_kernel->kernel(kernel_name)
         .instantiate()
@@ -3053,10 +3048,10 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
             case (CUB_REDUCE_FLAVOR::NONE):
                 solverScratchSpace.finishUsingTempVector("boolArrExclude");
                 if (return_device_ptr) {
-                    return (float*)reduceResArr->device();
+                    return (float*)reduceResArr.device();
                 } else {
-                    reduceResArr->toHost();
-                    return (float*)reduceResArr->host();
+                    reduceResArr.toHost();
+                    return (float*)reduceResArr.host();
                 }
         }
         // If this inspection is comfined in a region, then boolArrExclude and resArr need to be sorted and reduce by
@@ -3095,10 +3090,10 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
                 solverScratchSpace.finishUsingTempVector("resArr_sorted");
                 solverScratchSpace.finishUsingTempVector("num_unique_out");
                 if (return_device_ptr) {
-                    return (float*)reduceResArr->device();
+                    return (float*)reduceResArr.device();
                 } else {
-                    reduceResArr->toHost();
-                    return (float*)reduceResArr->host();
+                    reduceResArr.toHost();
+                    return (float*)reduceResArr.host();
                 }
         }
     }
@@ -3108,10 +3103,10 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     solverScratchSpace.finishUsingTempVector("resArr_sorted");
     solverScratchSpace.finishUsingTempVector("num_unique_out");
     if (return_device_ptr) {
-        return (float*)reduceRes->device();
+        return (float*)reduceRes.device();
     } else {
-        reduceRes->toHost();
-        return (float*)reduceRes->host();
+        reduceRes.toHost();
+        return (float*)reduceRes.host();
     }
 }
 

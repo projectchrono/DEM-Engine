@@ -68,9 +68,7 @@ class DEMInspector {
         all_domain = false;
     }
     //// TODO: Another overload for region definition
-    ~DEMInspector() {
-        releaseData();
-    }
+    ~DEMInspector() { ReleaseData(); }
 
     void SetInspectionCode(const std::string& code) { inspection_code = code; }
 
@@ -101,7 +99,7 @@ class DEMInspector {
     float* dT_GetDeviceValue();
 
     /// Manually release the data arrays
-    void releaseData();
+    void ReleaseData();
 };
 
 // A struct to get or set tracked owner entities, mainly for co-simulation

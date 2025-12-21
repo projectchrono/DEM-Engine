@@ -684,9 +684,9 @@ class DEMDynamicThread {
                        INSPECT_ENTITY_TYPE thing_to_insp,
                        CUB_REDUCE_FLAVOR reduce_flavor,
                        bool all_domain,
-                       bool return_device_ptr = false,
-                       DualArray<scratch_t>* reduceResArr = nullptr,
-                       DualArray<scratch_t>* reduceRes = nullptr);
+                       DualArray<scratch_t>& reduceResArr,
+                       DualArray<scratch_t>& reduceRes,
+                       bool return_device_ptr = false);
 
   private:
     // Name for this class

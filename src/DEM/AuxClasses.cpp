@@ -212,33 +212,29 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
 
 float DEMInspector::GetValue() {
     assertInit();
-    float reduce_result =
-        sys->dTInspectReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
-                             &m_reduceResArr, &m_reduceRes);
+    float reduce_result = sys->dTInspectReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
+                                               m_reduceResArr, m_reduceRes);
     return reduce_result;
 }
 
 float* DEMInspector::GetValues() {
     assertInit();
-    float* reduce_result =
-        sys->dTInspectNoReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
-                               &m_reduceResArr, &m_reduceRes);
+    float* reduce_result = sys->dTInspectNoReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor,
+                                                  all_domain, m_reduceResArr, m_reduceRes);
     return reduce_result;
 }
 
 float DEMInspector::GetDeviceValue() {
     assertInit();
-    float reduce_result =
-        sys->dTInspectReduceDevice(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
-                                   &m_reduceResArr, &m_reduceRes);
+    float reduce_result = sys->dTInspectReduceDevice(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor,
+                                                     all_domain, m_reduceResArr, m_reduceRes);
     return reduce_result;
 }
 
 float* DEMInspector::GetDeviceValues() {
     assertInit();
-    float* reduce_result =
-        sys->dTInspectNoReduceDevice(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
-                                     &m_reduceResArr, &m_reduceRes);
+    float* reduce_result = sys->dTInspectNoReduceDevice(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor,
+                                                        all_domain, m_reduceResArr, m_reduceRes);
     return reduce_result;
 }
 
@@ -246,18 +242,18 @@ float* DEMInspector::dT_GetValue() {
     // assertInit(); // This one the user should not use
     // Also, this call breaks the chain-that-bind, but I'm not too worried, as it's used in dT's workerThread only,
     // meaning the device number is well-defined.
-    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, false,
-                           &m_reduceResArr, &m_reduceRes);
+    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, m_reduceResArr,
+                           m_reduceRes, false);
 }
 
 float* DEMInspector::dT_GetDeviceValue() {
     // assertInit(); // This one the user should not use
     // This returns a device pointer instead of a host pointer
-    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, true, 
-                           &m_reduceResArr, &m_reduceRes);
+    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, m_reduceResArr,
+                           m_reduceRes, true);
 }
 
-void DEMInspector::releaseData() {
+void DEMInspector::ReleaseData() {
     m_reduceResArr.free();
     m_reduceRes.free();
 }
