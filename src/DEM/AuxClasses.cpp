@@ -228,18 +228,18 @@ float* DEMInspector::GetValues() {
 
 float DEMInspector::GetDeviceValue() {
     assertInit();
-    // Use dT directly for device pointer (bypassing command chain as needed for performance)
-    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, true,
+    float reduce_result =
+        sys->dTInspectReduceDevice(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
                                    &m_reduceResArr, &m_reduceRes);
-    return (float)(*pRes);
+    return reduce_result;
 }
 
 float* DEMInspector::GetDeviceValues() {
     assertInit();
-    // Use dT directly for device pointer (bypassing command chain as needed for performance)
-    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, true,
-                                   &m_reduceResArr, &m_reduceRes);
-    return pRes;
+    float* reduce_result =
+        sys->dTInspectNoReduceDevice(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
+                                     &m_reduceResArr, &m_reduceRes);
+    return reduce_result;
 }
 
 float* DEMInspector::dT_GetValue() {
