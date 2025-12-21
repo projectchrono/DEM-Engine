@@ -1444,12 +1444,30 @@ class DEMSolver {
                           const std::string& kernel_name,
                           INSPECT_ENTITY_TYPE thing_to_insp,
                           CUB_REDUCE_FLAVOR reduce_flavor,
-                          bool all_domain);
+                          bool all_domain,
+                          DualArray<scratch_t>& reduceResArr,
+                          DualArray<scratch_t>& reduceRes);
     float* dTInspectNoReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
                              const std::string& kernel_name,
                              INSPECT_ENTITY_TYPE thing_to_insp,
                              CUB_REDUCE_FLAVOR reduce_flavor,
-                             bool all_domain);
+                             bool all_domain,
+                             DualArray<scratch_t>& reduceResArr,
+                             DualArray<scratch_t>& reduceRes);
+    float dTInspectReduceDevice(const std::shared_ptr<jitify::Program>& inspection_kernel,
+                                const std::string& kernel_name,
+                                INSPECT_ENTITY_TYPE thing_to_insp,
+                                CUB_REDUCE_FLAVOR reduce_flavor,
+                                bool all_domain,
+                                DualArray<scratch_t>& reduceResArr,
+                                DualArray<scratch_t>& reduceRes);
+    float* dTInspectNoReduceDevice(const std::shared_ptr<jitify::Program>& inspection_kernel,
+                                   const std::string& kernel_name,
+                                   INSPECT_ENTITY_TYPE thing_to_insp,
+                                   CUB_REDUCE_FLAVOR reduce_flavor,
+                                   bool all_domain,
+                                   DualArray<scratch_t>& reduceResArr,
+                                   DualArray<scratch_t>& reduceRes);
 
   private:
     ////////////////////////////////////////////////////////////////////////////////
@@ -1559,6 +1577,8 @@ class DEMSolver {
     float m_approx_max_vel = DEME_HUGE_FLOAT;
     // The inspector that will be used for querying system max velocity
     std::shared_ptr<DEMInspector> m_approx_max_vel_func;
+    // The inspector that will be used for querying system angular velocity magnitude
+    std::shared_ptr<DEMInspector> m_approx_angvel_func;
 
     // The number of user-estimated (max) number of owners that will be present in the simulation. If 0, then the arrays
     // will just be resized at intialization based on the input size.

@@ -684,6 +684,8 @@ class DEMDynamicThread {
                        INSPECT_ENTITY_TYPE thing_to_insp,
                        CUB_REDUCE_FLAVOR reduce_flavor,
                        bool all_domain,
+                       DualArray<scratch_t>& reduceResArr,
+                       DualArray<scratch_t>& reduceRes,
                        bool return_device_ptr = false);
 
   private:
@@ -704,13 +706,14 @@ class DEMDynamicThread {
 
     // A pointer that points to the location that holds the current max_vel info, which will soon be transferred to kT
     float* pCycleVel;
+    // Pointer that points to the location that holds the current angular velocity magnitude info, which will soon be
+    // transferred to kT
+    float* pCycleAngVel;
 
     // The inspector for calculating max vel for this cycle
     std::shared_ptr<DEMInspector> approxMaxVelFunc;
-
-    // Some private arrays that can be used to store inspection results, ready to be passed somewhere else
-    DualArray<scratch_t> m_reduceResArr = DualArray<scratch_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<scratch_t> m_reduceRes = DualArray<scratch_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // The inspector for calculating angular velocity magnitude for this cycle
+    std::shared_ptr<DEMInspector> approxAngVelFunc;
 
     // Migrate contact history to fit the structure of the newly received contact array
     inline void migrateEnduringContacts();
@@ -737,8 +740,8 @@ class DEMDynamicThread {
     // Change sim params based on dT's experience, if needed
     inline void calibrateParams();
 
-    // Determine the max vel for this cycle, kT needs it
-    inline float* determineSysVel();
+    // Determine the vel info for this cycle, kT needs it
+    inline void determineSysVel();
 
     // Some per-step checks/modification, done before integration, but after force calculation (thus sort of in the
     // mid-step stage)
@@ -773,7 +776,6 @@ class DEMDynamicThread {
     std::shared_ptr<jitify::Program> integrator_kernels;
     // std::shared_ptr<jitify::Program> quarry_stats_kernels;
     std::shared_ptr<jitify::Program> mod_kernels;
-    std::shared_ptr<jitify::Program> misc_kernels;
 
     // Adjuster for update freq
     class AccumStepUpdater {

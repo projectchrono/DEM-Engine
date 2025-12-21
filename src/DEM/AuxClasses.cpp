@@ -60,6 +60,27 @@ const std::string INSP_CODE_EVERYTHING_ABSV = R"V0G0N(
     quantity[myOwner] = myABSV;
 )V0G0N";
 
+const std::string INSP_CODE_EVERYTHING_ABSANGVEL = R"V0G0N(
+    double myOmegaX = granData->omgBarX[myOwner];
+    double myOmegaY = granData->omgBarY[myOwner];
+    double myOmegaZ = granData->omgBarZ[myOwner];
+    double myABSANGVEL = sqrt(myOmegaX * myOmegaX + myOmegaY * myOmegaY + myOmegaZ * myOmegaZ);
+
+    quantity[myOwner] = myABSANGVEL;
+)V0G0N";
+
+const std::string INSP_CODE_ANGVEL_X = R"V0G0N(
+    quantity[myOwner] = granData->omgBarX[myOwner];
+)V0G0N";
+
+const std::string INSP_CODE_ANGVEL_Y = R"V0G0N(
+    quantity[myOwner] = granData->omgBarY[myOwner];
+)V0G0N";
+
+const std::string INSP_CODE_ANGVEL_Z = R"V0G0N(
+    quantity[myOwner] = granData->omgBarZ[myOwner];
+)V0G0N";
+
 const std::string INSP_CODE_CLUMP_KE = R"V0G0N(
     // First lin energy
     double myVX = granData->vX[myOwner];
@@ -148,6 +169,34 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
             thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
             index_name = "myOwner";
             break;
+        case ("absangvel"_):
+            inspection_code = INSP_CODE_EVERYTHING_ABSANGVEL;
+            reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
+            index_name = "myOwner";
+            break;
+        case ("absangvelx"_):
+            inspection_code = INSP_CODE_ANGVEL_X;
+            reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
+            index_name = "myOwner";
+            break;
+        case ("absangvely"_):
+            inspection_code = INSP_CODE_ANGVEL_Y;
+            reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
+            index_name = "myOwner";
+            break;
+        case ("absangvelz"_):
+            inspection_code = INSP_CODE_ANGVEL_Z;
+            reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
+            index_name = "myOwner";
+            break;
         case ("clump_kinetic_energy"_):
             inspection_code = INSP_CODE_CLUMP_KE;
             reduce_flavor = CUB_REDUCE_FLAVOR::SUM;
@@ -163,15 +212,29 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
 
 float DEMInspector::GetValue() {
     assertInit();
-    float reduce_result =
-        sys->dTInspectReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+    float reduce_result = sys->dTInspectReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
+                                               m_reduceResArr, m_reduceRes);
     return reduce_result;
 }
 
 float* DEMInspector::GetValues() {
     assertInit();
-    float* reduce_result =
-        sys->dTInspectNoReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+    float* reduce_result = sys->dTInspectNoReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor,
+                                                  all_domain, m_reduceResArr, m_reduceRes);
+    return reduce_result;
+}
+
+float DEMInspector::GetDeviceValue() {
+    assertInit();
+    float reduce_result = sys->dTInspectReduceDevice(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor,
+                                                     all_domain, m_reduceResArr, m_reduceRes);
+    return reduce_result;
+}
+
+float* DEMInspector::GetDeviceValues() {
+    assertInit();
+    float* reduce_result = sys->dTInspectNoReduceDevice(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor,
+                                                        all_domain, m_reduceResArr, m_reduceRes);
     return reduce_result;
 }
 
@@ -179,13 +242,20 @@ float* DEMInspector::dT_GetValue() {
     // assertInit(); // This one the user should not use
     // Also, this call breaks the chain-that-bind, but I'm not too worried, as it's used in dT's workerThread only,
     // meaning the device number is well-defined.
-    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, m_reduceResArr,
+                           m_reduceRes, false);
 }
 
 float* DEMInspector::dT_GetDeviceValue() {
     // assertInit(); // This one the user should not use
     // This returns a device pointer instead of a host pointer
-    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, true);
+    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, m_reduceResArr,
+                           m_reduceRes, true);
+}
+
+void DEMInspector::ReleaseData() {
+    m_reduceResArr.free();
+    m_reduceRes.free();
 }
 
 void DEMInspector::assertInit() {

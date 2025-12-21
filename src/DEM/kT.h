@@ -93,6 +93,8 @@ class DEMKinematicThread {
     DeviceArray<float3> relPosNode3_buffer = DeviceArray<float3>(&m_approxDeviceBytesUsed);
     // Vel of entities
     DeviceArray<float> absVel_buffer = DeviceArray<float>(&m_approxDeviceBytesUsed);
+    // Angular velocity magnitude of entities
+    DeviceArray<float> absAngVel_buffer = DeviceArray<float>(&m_approxDeviceBytesUsed);
 
     // kT's copy of family map
     // std::unordered_map<unsigned int, family_t> familyUserImplMap;
@@ -448,7 +450,6 @@ class DEMKinematicThread {
     std::shared_ptr<jitify::Program> bin_triangle_kernels;
     std::shared_ptr<jitify::Program> sphTri_contact_kernels;
     std::shared_ptr<jitify::Program> sphere_contact_kernels;
-    std::shared_ptr<jitify::Program> misc_kernels;
 
     // Adjuster for bin size
     class AccumTimer {

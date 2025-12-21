@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef DEME_INSPECTOR_HPP
-#define DEME_INSPECTOR_HPP
+#ifndef DEME_AUX_CLASSES_HPP
+#define DEME_AUX_CLASSES_HPP
 
 #include <unordered_map>
 
@@ -43,6 +43,10 @@ class DEMInspector {
     DEMSolver* sys;
     DEMDynamicThread* dT;
 
+    // Result storage arrays (moved from dT to make inspector self-contained and thread-safe)
+    DualArray<scratch_t> m_reduceResArr;
+    DualArray<scratch_t> m_reduceRes;
+
     // Based on user input...
     void switch_quantity_type(const std::string& quantity);
 
@@ -64,7 +68,7 @@ class DEMInspector {
         all_domain = false;
     }
     //// TODO: Another overload for region definition
-    ~DEMInspector() {}
+    ~DEMInspector() { ReleaseData(); }
 
     void SetInspectionCode(const std::string& code) { inspection_code = code; }
 
@@ -79,6 +83,12 @@ class DEMInspector {
     /// Get the values of the quantity that you wish to inspect (for non-reduced inspections).
     float* GetValues();
 
+    /// Get the reduce value of the quantity that you wish to inspect (returns device pointer).
+    float GetDeviceValue();
+
+    /// Get the values of the quantity that you wish to inspect (for non-reduced inspections, returns device pointer).
+    float* GetDeviceValues();
+
     /// Get the value (as a vector) of the quantity that you wish to inspect
     // std::vector<float> GetVector();
 
@@ -87,6 +97,9 @@ class DEMInspector {
 
     /// Get value directly within dT (returns device pointer)
     float* dT_GetDeviceValue();
+
+    /// Manually release the data arrays
+    void ReleaseData();
 };
 
 // A struct to get or set tracked owner entities, mainly for co-simulation

@@ -1967,14 +1967,12 @@ std::shared_ptr<DEMMesh> DEMSolver::AddMeshFromTemplate(const std::shared_ptr<DE
 }
 
 std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity) {
-    DEMInspector insp(this, this->dT, quantity);
-    m_inspectors.push_back(std::make_shared<DEMInspector>(std::move(insp)));
+    m_inspectors.push_back(std::make_shared<DEMInspector>(this, this->dT, quantity));
     return m_inspectors.back();
 }
 
 std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity, const std::string& region) {
-    DEMInspector insp(this, this->dT, quantity, region);
-    m_inspectors.push_back(std::make_shared<DEMInspector>(std::move(insp)));
+    m_inspectors.push_back(std::make_shared<DEMInspector>(this, this->dT, quantity, region));
     return m_inspectors.back();
 }
 
@@ -2314,6 +2312,9 @@ void DEMSolver::UpdateSimParams() {
         // Jitify max vel finder, in case the policy there changed
         m_approx_max_vel_func->Initialize(m_subs, m_jitify_options, true);
         dT->approxMaxVelFunc = m_approx_max_vel_func;
+        // Jitify angular velocity magnitude finder
+        m_approx_angvel_func->Initialize(m_subs, m_jitify_options, true);
+        dT->approxAngVelFunc = m_approx_angvel_func;
         // Updating sim environment is critical
         dT->announceCritical();
     });
@@ -2520,10 +2521,13 @@ float DEMSolver::dTInspectReduce(const std::shared_ptr<jitify::Program>& inspect
                                  const std::string& kernel_name,
                                  INSPECT_ENTITY_TYPE thing_to_insp,
                                  CUB_REDUCE_FLAVOR reduce_flavor,
-                                 bool all_domain) {
+                                 bool all_domain,
+                                 DualArray<scratch_t>& reduceResArr,
+                                 DualArray<scratch_t>& reduceRes) {
     // Note they are currently running in the device associated with the main, but it's not a big issue
     //// TODO: Think about the implication on using more than 2 GPUs
-    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
+                                  reduceResArr, reduceRes, false);
     return (float)(*pRes);
 }
 
@@ -2531,10 +2535,41 @@ float* DEMSolver::dTInspectNoReduce(const std::shared_ptr<jitify::Program>& insp
                                     const std::string& kernel_name,
                                     INSPECT_ENTITY_TYPE thing_to_insp,
                                     CUB_REDUCE_FLAVOR reduce_flavor,
-                                    bool all_domain) {
+                                    bool all_domain,
+                                    DualArray<scratch_t>& reduceResArr,
+                                    DualArray<scratch_t>& reduceRes) {
     // Note they are currently running in the device associated with the main, but it's not a big issue
     //// TODO: Think about the implication on using more than 2 GPUs
-    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
+                                  reduceResArr, reduceRes, false);
+    return pRes;
+}
+
+float DEMSolver::dTInspectReduceDevice(const std::shared_ptr<jitify::Program>& inspection_kernel,
+                                       const std::string& kernel_name,
+                                       INSPECT_ENTITY_TYPE thing_to_insp,
+                                       CUB_REDUCE_FLAVOR reduce_flavor,
+                                       bool all_domain,
+                                       DualArray<scratch_t>& reduceResArr,
+                                       DualArray<scratch_t>& reduceRes) {
+    // Note they are currently running in the device associated with the main, but it's not a big issue
+    //// TODO: Think about the implication on using more than 2 GPUs
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
+                                  reduceResArr, reduceRes, true);
+    return (float)(*pRes);
+}
+
+float* DEMSolver::dTInspectNoReduceDevice(const std::shared_ptr<jitify::Program>& inspection_kernel,
+                                          const std::string& kernel_name,
+                                          INSPECT_ENTITY_TYPE thing_to_insp,
+                                          CUB_REDUCE_FLAVOR reduce_flavor,
+                                          bool all_domain,
+                                          DualArray<scratch_t>& reduceResArr,
+                                          DualArray<scratch_t>& reduceRes) {
+    // Note they are currently running in the device associated with the main, but it's not a big issue
+    //// TODO: Think about the implication on using more than 2 GPUs
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
+                                  reduceResArr, reduceRes, true);
     return pRes;
 }
 

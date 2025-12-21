@@ -315,6 +315,9 @@ void DEMSolver::jitifyKernels() {
         // completes init).
         m_approx_max_vel_func->Initialize(m_subs, m_jitify_options, true);
         dT->approxMaxVelFunc = m_approx_max_vel_func;
+        // Initialize angular velocity magnitude inspector
+        m_approx_angvel_func->Initialize(m_subs, m_jitify_options, true);
+        dT->approxAngVelFunc = m_approx_angvel_func;
     });
     kT_build.join();
     dT_build.join();
@@ -569,6 +572,8 @@ void DEMSolver::decideCDMarginStrat() {
         case (MARGIN_FINDER_TYPE::DEFAULT):
             // Default strategy is to use an inspector
             m_approx_max_vel_func = this->CreateInspector("absv");
+            // Also create inspector for angular velocity magnitude
+            m_approx_angvel_func = this->CreateInspector("absangvel");
             m_max_v_finder_type = MARGIN_FINDER_TYPE::DEM_INSPECTOR;
             break;
     }

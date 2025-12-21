@@ -8,7 +8,7 @@
 
 #include <algorithms/DEMStaticDeviceSubroutines.h>
 #include <algorithms/DEMStaticDeviceUtilities.cuh>
-#include <algorithms/DEMKinematicMisc.cu>
+#include <algorithms/DEMContactDetectionKernels.cu>
 #include <algorithms/DEMCubWrappers.cu>
 
 #include <DEM/utils/HostSideHelpers.hpp>

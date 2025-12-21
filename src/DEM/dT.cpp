@@ -316,6 +316,7 @@ bodyID_t DEMDynamicThread::getPatchOwnerID(const bodyID_t& patchID, const geoTyp
 void DEMDynamicThread::packTransferPointers(DEMKinematicThread*& kT) {
     // These are the pointers for sending data to dT
     granData->pKTOwnedBuffer_absVel = kT->absVel_buffer.data();
+    granData->pKTOwnedBuffer_absAngVel = kT->absAngVel_buffer.data();
     granData->pKTOwnedBuffer_voxelID = kT->voxelID_buffer.data();
     granData->pKTOwnedBuffer_locX = kT->locX_buffer.data();
     granData->pKTOwnedBuffer_locY = kT->locY_buffer.data();
@@ -418,23 +419,12 @@ void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const 
     notStupidBool_t* idBool = (notStupidBool_t*)solverScratchSpace.allocateTempVector("idBool", idBoolSize);
     DEME_GPU_CALL(cudaMemset(idBool, 0, idBoolSize));
     float* ownerFactors = (float*)solverScratchSpace.allocateTempVector("ownerFactors", ownerFactorSize);
-    size_t blocks_needed_for_marking = (IDs.size() + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
 
     // Mark on the bool array those owners that need a change
-    misc_kernels->kernel("markOwnerToChange")
-        .instantiate()
-        .configure(dim3(blocks_needed_for_marking), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(idBool, ownerFactors, dIDs, dFactors, (size_t)IDs.size());
-    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    markOwnerToChange(idBool, ownerFactors, dIDs, dFactors, (size_t)IDs.size(), streamInfo.stream);
 
     // Change the size of the sphere components in question
-    size_t blocks_needed_for_changing =
-        (simParams->nSpheresGM + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-    misc_kernels->kernel("modifyComponents")
-        .instantiate("deme::DEMDataDT")
-        .configure(dim3(blocks_needed_for_changing), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(&granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM);
-    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    modifyComponents<DEMDataDT>(&granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM, streamInfo.stream);
 
     solverScratchSpace.finishUsingTempVector("dIDs");
     solverScratchSpace.finishUsingTempVector("dFactors");
@@ -2137,6 +2127,8 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
                              cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_absVel, pCycleVel, simParams->nOwnerBodies * sizeof(float),
                              cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_absAngVel, pCycleAngVel, simParams->nOwnerBodies * sizeof(float),
+                             cudaMemcpyDeviceToDevice));
 
     // Send simulation metrics for kT's reference.
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_ts, &(simParams->h), sizeof(float), cudaMemcpyHostToDevice));
@@ -2607,8 +2599,11 @@ inline void DEMDynamicThread::routineChecks() {
     }
 }
 
-inline float* DEMDynamicThread::determineSysVel() {
-    return approxMaxVelFunc->dT_GetDeviceValue();
+inline void DEMDynamicThread::determineSysVel() {
+    // Get linear velocity
+    pCycleVel = approxMaxVelFunc->dT_GetDeviceValue();
+    // Get angular velocity magnitude
+    pCycleAngVel = approxAngVelFunc->dT_GetDeviceValue();
 }
 
 inline void DEMDynamicThread::unpack_impl() {
@@ -2697,7 +2692,7 @@ inline void DEMDynamicThread::ifProduceFreshThenUseIt() {
 
 inline void DEMDynamicThread::calibrateParams() {
     // Unpacking is done; now we can use temp arrays again to derive max velocity and send to kT
-    pCycleVel = determineSysVel();
+    determineSysVel();  // This will set pCycleVel and pCycleAngVel
 
     if (solverFlags.autoUpdateFreq) {
         unsigned int comfortable_drift;
@@ -2793,7 +2788,7 @@ void DEMDynamicThread::workerThread() {
             // In this `new-boot' case, we send kT a work order, b/c dT needs results from CD to proceed. After this one
             // instance, kT and dT may work in an async fashion.
             {
-                pCycleVel = determineSysVel();
+                determineSysVel();  // This will set pCycleVel and pCycleAngVel
                 std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
                 sendToTheirBuffer();
             }
@@ -2968,11 +2963,6 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
         mod_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMModeratorKernels", JitHelper::KERNEL_DIR / "DEMModeratorKernels.cu", Subs, JitifyOptions)));
     }
-    // Then misc kernels
-    {
-        misc_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMMiscKernels", JitHelper::KERNEL_DIR / "DEMMiscKernels.cu", Subs, JitifyOptions)));
-    }
 
     // For now, the contact type to kernel map is known and hard-coded after jitification
     contactTypePrimitiveKernelMap[SPHERE_SPHERE_CONTACT] = {
@@ -3000,6 +2990,8 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
                                      INSPECT_ENTITY_TYPE thing_to_insp,
                                      CUB_REDUCE_FLAVOR reduce_flavor,
                                      bool all_domain,
+                                     DualArray<scratch_t>& reduceResArr,
+                                     DualArray<scratch_t>& reduceRes,
                                      bool return_device_ptr) {
     size_t n;
     ownerType_t owner_type = 0;
@@ -3023,8 +3015,8 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
 
     // We can use temp vectors as we please
     size_t quarryTempSize = n * sizeof(float);
-    DEME_DUAL_ARRAY_RESIZE_NOVAL(m_reduceResArr, quarryTempSize);
-    float* resArr = (float*)m_reduceResArr.device();
+    DEME_DUAL_ARRAY_RESIZE_NOVAL(reduceResArr, quarryTempSize);
+    float* resArr = (float*)reduceResArr.device();
     size_t regionTempSize = n * sizeof(notStupidBool_t);
     // If this boolArrExclude is 1 at an element, that means this element is exluded in the reduction
     notStupidBool_t* boolArrExclude =
@@ -3033,8 +3025,8 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
 
     // We may actually have 2 reduced returns: in regional reduction, key 0 and 1 give one return each.
     size_t returnSize = sizeof(float) * 2;
-    DEME_DUAL_ARRAY_RESIZE_NOVAL(m_reduceRes, returnSize);
-    float* res = (float*)m_reduceRes.device();
+    DEME_DUAL_ARRAY_RESIZE_NOVAL(reduceRes, returnSize);
+    float* res = (float*)reduceRes.device();
     size_t blocks_needed = (n + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     inspection_kernel->kernel(kernel_name)
         .instantiate()
@@ -3056,10 +3048,10 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
             case (CUB_REDUCE_FLAVOR::NONE):
                 solverScratchSpace.finishUsingTempVector("boolArrExclude");
                 if (return_device_ptr) {
-                    return (float*)m_reduceResArr.device();
+                    return (float*)reduceResArr.device();
                 } else {
-                    m_reduceResArr.toHost();
-                    return (float*)m_reduceResArr.host();
+                    reduceResArr.toHost();
+                    return (float*)reduceResArr.host();
                 }
         }
         // If this inspection is comfined in a region, then boolArrExclude and resArr need to be sorted and reduce by
@@ -3098,10 +3090,10 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
                 solverScratchSpace.finishUsingTempVector("resArr_sorted");
                 solverScratchSpace.finishUsingTempVector("num_unique_out");
                 if (return_device_ptr) {
-                    return (float*)m_reduceResArr.device();
+                    return (float*)reduceResArr.device();
                 } else {
-                    m_reduceResArr.toHost();
-                    return (float*)m_reduceResArr.host();
+                    reduceResArr.toHost();
+                    return (float*)reduceResArr.host();
                 }
         }
     }
@@ -3111,10 +3103,10 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     solverScratchSpace.finishUsingTempVector("resArr_sorted");
     solverScratchSpace.finishUsingTempVector("num_unique_out");
     if (return_device_ptr) {
-        return (float*)m_reduceRes.device();
+        return (float*)reduceRes.device();
     } else {
-        m_reduceRes.toHost();
-        return (float*)m_reduceRes.host();
+        reduceRes.toHost();
+        return (float*)reduceRes.host();
     }
 }
 

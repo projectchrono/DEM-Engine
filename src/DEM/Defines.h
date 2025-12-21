@@ -378,6 +378,7 @@ struct DEMDataDT {
     // pointer to remote buffer where kinematic thread stores work-order data provided by the dynamic thread
     unsigned int* pKTOwnedBuffer_maxDrift = nullptr;
     float* pKTOwnedBuffer_absVel = nullptr;
+    float* pKTOwnedBuffer_absAngVel = nullptr;
     float* pKTOwnedBuffer_ts = nullptr;
     voxelID_t* pKTOwnedBuffer_voxelID = nullptr;
     subVoxelPos_t* pKTOwnedBuffer_locX = nullptr;

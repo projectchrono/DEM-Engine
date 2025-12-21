@@ -171,20 +171,10 @@ inline void DEMKinematicThread::unpackMyBuffer() {
     if (!solverFlags.isExpandFactorFixed) {
         // This kernel will turn absv to marginSize, and if a vel is over max, it will clamp it.
         // Converting to size_t is SUPER important... CUDA kernel call basically does not have type conversion.
-        size_t blocks_needed = (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-        misc_kernels->kernel("computeMarginFromAbsv")
-            .instantiate()
-            .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(&simParams, &granData, &(stateParams.ts), &(stateParams.maxDrift),
-                    (size_t)(simParams->nOwnerBodies));
-        DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        computeMarginFromAbsv(&simParams, &granData, &(stateParams.ts), &(stateParams.maxDrift),
+                              (size_t)(simParams->nOwnerBodies), streamInfo.stream);
     } else {  // If isExpandFactorFixed, then just fill in that constant array.
-        size_t blocks_needed = (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-        misc_kernels->kernel("fillMarginValues")
-            .instantiate()
-            .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(&simParams, &granData, (size_t)(simParams->nOwnerBodies));
-        DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        fillMarginValues(&simParams, &granData, (size_t)(simParams->nOwnerBodies), streamInfo.stream);
     }
 
     DEME_DEBUG_PRINTF("kT received a velocity update: %.6g", *(stateParams.maxVel));
@@ -398,23 +388,12 @@ void DEMKinematicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, cons
     notStupidBool_t* idBool = (notStupidBool_t*)solverScratchSpace.allocateTempVector("idBool", idBoolSize);
     DEME_GPU_CALL(cudaMemset(idBool, 0, idBoolSize));
     float* ownerFactors = (float*)solverScratchSpace.allocateTempVector("ownerFactors", ownerFactorSize);
-    size_t blocks_needed_for_marking = (IDs.size() + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
 
     // Mark on the bool array those owners that need a change
-    misc_kernels->kernel("markOwnerToChange")
-        .instantiate()
-        .configure(dim3(blocks_needed_for_marking), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(idBool, ownerFactors, dIDs, dFactors, (size_t)IDs.size());
-    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    markOwnerToChange(idBool, ownerFactors, dIDs, dFactors, (size_t)IDs.size(), streamInfo.stream);
 
     // Change the size of the sphere components in question
-    size_t blocks_needed_for_changing =
-        (simParams->nSpheresGM + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-    misc_kernels->kernel("modifyComponents")
-        .instantiate("deme::DEMDataKT")
-        .configure(dim3(blocks_needed_for_changing), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(&granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM);
-    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    modifyComponents<DEMDataKT>(&granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM, streamInfo.stream);
 
     solverScratchSpace.finishUsingTempVector("dIDs");
     solverScratchSpace.finishUsingTempVector("dFactors");
@@ -697,6 +676,7 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
         DEME_DEVICE_ARRAY_RESIZE(oriQ2_buffer, nOwnerBodies);
         DEME_DEVICE_ARRAY_RESIZE(oriQ3_buffer, nOwnerBodies);
         DEME_DEVICE_ARRAY_RESIZE(absVel_buffer, nOwnerBodies);
+        DEME_DEVICE_ARRAY_RESIZE(absAngVel_buffer, nOwnerBodies);
         // DEME_ADVISE_DEVICE(voxelID_buffer, dT->streamInfo.device);
         // DEME_ADVISE_DEVICE(locX_buffer, dT->streamInfo.device);
         // DEME_ADVISE_DEVICE(locY_buffer, dT->streamInfo.device);
@@ -979,11 +959,6 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
         sphTri_contact_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMContactKernels_SphTri_TriTri", JitHelper::KERNEL_DIR / "DEMContactKernels_SphTri_TriTri.cu", Subs,
             JitifyOptions)));
-    }
-    // Then misc kernels
-    {
-        misc_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMMiscKernels", JitHelper::KERNEL_DIR / "DEMMiscKernels.cu", Subs, JitifyOptions)));
     }
 }
 
