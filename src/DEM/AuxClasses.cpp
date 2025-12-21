@@ -212,16 +212,32 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
 
 float DEMInspector::GetValue() {
     assertInit();
-    // Use inspector's own arrays instead of static thread_local storage
-    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, false,
-                                   &m_reduceResArr, &m_reduceRes);
-    return (float)(*pRes);
+    float reduce_result =
+        sys->dTInspectReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
+                             &m_reduceResArr, &m_reduceRes);
+    return reduce_result;
 }
 
 float* DEMInspector::GetValues() {
     assertInit();
-    // Use inspector's own arrays instead of static thread_local storage
-    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, false,
+    float* reduce_result =
+        sys->dTInspectNoReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
+                               &m_reduceResArr, &m_reduceRes);
+    return reduce_result;
+}
+
+float DEMInspector::GetDeviceValue() {
+    assertInit();
+    // Use dT directly for device pointer (bypassing command chain as needed for performance)
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, true,
+                                   &m_reduceResArr, &m_reduceRes);
+    return (float)(*pRes);
+}
+
+float* DEMInspector::GetDeviceValues() {
+    assertInit();
+    // Use dT directly for device pointer (bypassing command chain as needed for performance)
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, true,
                                    &m_reduceResArr, &m_reduceRes);
     return pRes;
 }

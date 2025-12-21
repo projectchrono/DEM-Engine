@@ -1444,12 +1444,16 @@ class DEMSolver {
                           const std::string& kernel_name,
                           INSPECT_ENTITY_TYPE thing_to_insp,
                           CUB_REDUCE_FLAVOR reduce_flavor,
-                          bool all_domain);
+                          bool all_domain,
+                          DualArray<scratch_t>* reduceResArr,
+                          DualArray<scratch_t>* reduceRes);
     float* dTInspectNoReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
                              const std::string& kernel_name,
                              INSPECT_ENTITY_TYPE thing_to_insp,
                              CUB_REDUCE_FLAVOR reduce_flavor,
-                             bool all_domain);
+                             bool all_domain,
+                             DualArray<scratch_t>* reduceResArr,
+                             DualArray<scratch_t>* reduceRes);
 
   private:
     ////////////////////////////////////////////////////////////////////////////////

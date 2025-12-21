@@ -2523,14 +2523,13 @@ float DEMSolver::dTInspectReduce(const std::shared_ptr<jitify::Program>& inspect
                                  const std::string& kernel_name,
                                  INSPECT_ENTITY_TYPE thing_to_insp,
                                  CUB_REDUCE_FLAVOR reduce_flavor,
-                                 bool all_domain) {
+                                 bool all_domain,
+                                 DualArray<scratch_t>* reduceResArr,
+                                 DualArray<scratch_t>* reduceRes) {
     // Note they are currently running in the device associated with the main, but it's not a big issue
     //// TODO: Think about the implication on using more than 2 GPUs
-    // Create temporary storage for this inspection (legacy API path)
-    static thread_local DualArray<scratch_t> temp_reduceResArr;
-    static thread_local DualArray<scratch_t> temp_reduceRes;
     float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, false,
-                                   &temp_reduceResArr, &temp_reduceRes);
+                                   reduceResArr, reduceRes);
     return (float)(*pRes);
 }
 
@@ -2538,14 +2537,13 @@ float* DEMSolver::dTInspectNoReduce(const std::shared_ptr<jitify::Program>& insp
                                     const std::string& kernel_name,
                                     INSPECT_ENTITY_TYPE thing_to_insp,
                                     CUB_REDUCE_FLAVOR reduce_flavor,
-                                    bool all_domain) {
+                                    bool all_domain,
+                                    DualArray<scratch_t>* reduceResArr,
+                                    DualArray<scratch_t>* reduceRes) {
     // Note they are currently running in the device associated with the main, but it's not a big issue
     //// TODO: Think about the implication on using more than 2 GPUs
-    // Create temporary storage for this inspection (legacy API path)
-    static thread_local DualArray<scratch_t> temp_reduceResArr;
-    static thread_local DualArray<scratch_t> temp_reduceRes;
     float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, false,
-                                   &temp_reduceResArr, &temp_reduceRes);
+                                   reduceResArr, reduceRes);
     return pRes;
 }
 

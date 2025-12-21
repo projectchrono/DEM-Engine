@@ -85,6 +85,12 @@ class DEMInspector {
     /// Get the values of the quantity that you wish to inspect (for non-reduced inspections).
     float* GetValues();
 
+    /// Get the reduce value of the quantity that you wish to inspect (returns device pointer).
+    float GetDeviceValue();
+
+    /// Get the values of the quantity that you wish to inspect (for non-reduced inspections, returns device pointer).
+    float* GetDeviceValues();
+
     /// Get the value (as a vector) of the quantity that you wish to inspect
     // std::vector<float> GetVector();
 
