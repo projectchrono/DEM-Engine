@@ -90,7 +90,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         extraMarginSize = granData->familyExtraMarginSize[AOwnerFamily];
     } else if constexpr (AType == deme::GEO_T_TRIANGLE) {
         deme::bodyID_t triID = granData->idPrimitiveA[myPrimitiveContactID];
-        deme::bodyID_t myOwner = granData->triOwnerMesh[triID];
+        deme::bodyID_t myOwner = granData->ownerTriMesh[triID];
         //// TODO: Is this OK?
         ARadius = DEME_HUGE_FLOAT;
         // If this is a triangle then it has a patch ID
@@ -179,7 +179,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
 
     } else if constexpr (BType == deme::GEO_T_TRIANGLE) {
         deme::bodyID_t triID = granData->idPrimitiveB[myPrimitiveContactID];
-        deme::bodyID_t myOwner = granData->triOwnerMesh[triID];
+        deme::bodyID_t myOwner = granData->ownerTriMesh[triID];
         //// TODO: Is this OK?
         BRadius = DEME_HUGE_FLOAT;
         // If this is a triangle then it has a patch ID

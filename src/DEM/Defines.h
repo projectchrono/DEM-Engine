@@ -116,14 +116,14 @@ constexpr contact_t ALL_CONTACT_TYPES[NUM_SUPPORTED_CONTACT_TYPES] = {
 // Device version of getting geo owner ID
 #define DEME_GET_GEO_OWNER_ID(geo, type)                                  \
     ((type) == deme::GEO_T_SPHERE       ? granData->ownerClumpBody[(geo)] \
-     : (type) == deme::GEO_T_TRIANGLE   ? granData->triOwnerMesh[(geo)]   \
+     : (type) == deme::GEO_T_TRIANGLE   ? granData->ownerTriMesh[(geo)]   \
      : (type) == deme::GEO_T_ANALYTICAL ? granData->ownerAnalBody[(geo)]  \
                                         : deme::NULL_BODYID)
 
 // Device version of getting patch owner ID
 #define DEME_GET_PATCH_OWNER_ID(patchID, type)                                \
     ((type) == deme::GEO_T_SPHERE       ? granData->ownerClumpBody[(patchID)] \
-     : (type) == deme::GEO_T_TRIANGLE   ? granData->patchOwnerMesh[(patchID)] \
+     : (type) == deme::GEO_T_TRIANGLE   ? granData->ownerPatchMesh[(patchID)] \
      : (type) == deme::GEO_T_ANALYTICAL ? granData->ownerAnalBody[(patchID)]  \
                                         : deme::NULL_BODYID)
 
@@ -289,6 +289,8 @@ struct DEMSimParams {
 
     // The max vel at which the solver errors out
     float errOutVel = DEME_HUGE_FLOAT;
+    // The max ang vel at which the solver errors out
+    float errOutAngVel = DEME_HUGE_FLOAT;
     // The max num of spheres per bin before solver errors out
     unsigned int errOutBinSphNum = 32768;
     // The max num of triangles per bin before solver errors out
@@ -365,8 +367,8 @@ struct DEMDataDT {
     clumpComponentOffset_t* clumpComponentOffset;
     clumpComponentOffsetExt_t* clumpComponentOffsetExt;
     materialsOffset_t* sphereMaterialOffset;
-    bodyID_t* triOwnerMesh;
-    bodyID_t* patchOwnerMesh;
+    bodyID_t* ownerTriMesh;
+    bodyID_t* ownerPatchMesh;
     bodyID_t* ownerAnalBody;
     bodyID_t* triPatchID;
     float3* relPosNode1;
@@ -427,8 +429,10 @@ struct DEMDataKT {
     oriQ_t* oriQx;
     oriQ_t* oriQy;
     oriQ_t* oriQz;
-    // Derived from absv which is for determining contact margin size.
-    float* marginSize;
+    // Derived from absv which is for determining contact margin size. Each type of primitive geometry has its own size.
+    float* marginSizeSphere;
+    float* marginSizeAnalytical;
+    float* marginSizeTriangle;
 
     // Family mask
     notStupidBool_t* familyMasks;
@@ -439,7 +443,7 @@ struct DEMDataKT {
     bodyID_t* ownerClumpBody;
     clumpComponentOffset_t* clumpComponentOffset;
     clumpComponentOffsetExt_t* clumpComponentOffsetExt;
-    bodyID_t* triOwnerMesh;
+    bodyID_t* ownerTriMesh;
     bodyID_t* ownerAnalBody;
     bodyID_t* triPatchID;
     float3* relPosNode1;

@@ -116,6 +116,35 @@ void DEMKinematicThread::calibrateParams() {
     simParams.toDevice();
 }
 
+inline void DEMKinematicThread::computeMarginFromAbsv(float* absVel_owner, float* absAngVel_owner) {
+    size_t blocks_needed;
+    blocks_needed = (simParams->nSpheresGM + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        misc_kernels->kernel("computeMarginFromAbsv_implSph")
+            .instantiate()
+            .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+            .launch(&simParams, &granData, absVel_owner, absAngVel_owner, &(stateParams.ts), &(stateParams.maxDrift),
+                    (size_t)simParams->nSpheresGM);
+    }
+    blocks_needed = (simParams->nTriGM + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        misc_kernels->kernel("computeMarginFromAbsv_implTri")
+            .instantiate()
+            .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+            .launch(&simParams, &granData, absVel_owner, absAngVel_owner, &(stateParams.ts), &(stateParams.maxDrift),
+                    (size_t)simParams->nTriGM);
+    }
+    blocks_needed = (simParams->nAnalGM + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        misc_kernels->kernel("computeMarginFromAbsv_implAnal")
+            .instantiate()
+            .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+            .launch(&simParams, &granData, absVel_owner, absAngVel_owner, &(stateParams.ts), &(stateParams.maxDrift),
+                    (size_t)simParams->nAnalGM);
+    }
+    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+}
+
 inline void DEMKinematicThread::unpackMyBuffer() {
     DEME_GPU_CALL(cudaMemcpy(granData->voxelID, voxelID_buffer.data(), simParams->nOwnerBodies * sizeof(voxelID_t),
                              cudaMemcpyDeviceToDevice));
@@ -133,52 +162,53 @@ inline void DEMKinematicThread::unpackMyBuffer() {
                              cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->oriQz, oriQ3_buffer.data(), simParams->nOwnerBodies * sizeof(oriQ_t),
                              cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->marginSize, absVel_buffer.data(), simParams->nOwnerBodies * sizeof(float),
-                             cudaMemcpyDeviceToDevice));
-
     DEME_GPU_CALL(cudaMemcpy(&(stateParams.ts), &(stateParams.ts_buffer), sizeof(float), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(&(stateParams.maxDrift), &(stateParams.maxDrift_buffer), sizeof(unsigned int),
                              cudaMemcpyDeviceToDevice));
+    // Use two temp arrays to store absVel and absAngVel's buffer
+    float* absVel_owner =
+        (float*)solverScratchSpace.allocateTempVector("absVel_owner", simParams->nOwnerBodies * sizeof(float));
+    float* absAngVel_owner =
+        (float*)solverScratchSpace.allocateTempVector("absAngVel_owner", simParams->nOwnerBodies * sizeof(float));
+    DEME_GPU_CALL(cudaMemcpy(absVel_owner, absVel_buffer.data(), simParams->nOwnerBodies * sizeof(float),
+                             cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(absAngVel_owner, absAngVel_buffer.data(), simParams->nOwnerBodies * sizeof(float),
+                             cudaMemcpyDeviceToDevice));
 
-    // Whatever drift value dT says, kT listens; unless kinematicMaxFutureDrift is negative in which case the user
-    // explicitly said not caring the future drift.
-    stateParams.maxDrift.toHost();
-    pSchedSupport->kinematicMaxFutureDrift = (pSchedSupport->kinematicMaxFutureDrift.load() < 0.)
-                                                 ? pSchedSupport->kinematicMaxFutureDrift.load()
-                                                 : *(stateParams.maxDrift);
-
-    // Need to reduce to check if max velocity is exceeded (right now, array marginSize is still storing absv...)
-    cubMaxReduce<float>(granData->marginSize, &(stateParams.maxVel), simParams->nOwnerBodies, streamInfo.stream,
+    // Make sure we don't have velocity that is too high
+    cubMaxReduce<float>(absVel_owner, &(stateParams.maxVel), simParams->nOwnerBodies, streamInfo.stream,
+                        solverScratchSpace);
+    cubMaxReduce<float>(absAngVel_owner, &(stateParams.maxAngVel), simParams->nOwnerBodies, streamInfo.stream,
                         solverScratchSpace);
     // Get the reduced maxVel value
     stateParams.maxVel.toHost();
-    if (*(stateParams.maxVel) > simParams->errOutVel || (!std::isfinite(*(stateParams.maxVel)))) {
+    stateParams.maxAngVel.toHost();
+    if (*stateParams.maxVel > simParams->errOutVel || !std::isfinite(*stateParams.maxVel) ||
+        *stateParams.maxAngVel > simParams->errOutAngVel || !std::isfinite(*stateParams.maxAngVel)) {
         DEME_ERROR(
-            "System max velocity is %.7g, exceeded max allowance (%.7g).\nIf this velocity is not abnormal and you "
+            "System max velocity/angular velocity is %.7g/%.7g, exceeded max allowance (%.7g/%.7g).\nIf this velocity "
+            "is not abnormal and you "
             "want to increase this allowance, use SetErrorOutVelocity before initializing simulation.\nOtherwise, the "
             "simulation may have diverged and relaxing the physics may help, such as decreasing the step size and "
             "modifying material properties.\nIf this happens at the start of simulation, check if there are initial "
             "penetrations, a.k.a. elements initialized inside walls.",
-            *(stateParams.maxVel), simParams->errOutVel);
-    } else if (*(stateParams.maxVel) >
-               simParams->approxMaxVel) {  // If maxVel is larger than the user estimation, that is an anomaly
+            *(stateParams.maxVel), *(stateParams.maxAngVel), simParams->errOutVel, simParams->errOutAngVel);
+    }
+    if (*stateParams.maxVel >
+        simParams->approxMaxVel) {  // If maxVel is larger than the user estimation, that is an anomaly
         // This prints when verbosity higher than METRIC
         DEME_STATUS("OVER_MAX_VEL", "Simulation entity velocity reached %.6g, over the user-estimated %.6g",
-                    *(stateParams.maxVel), simParams->approxMaxVel);
+                    *stateParams.maxVel, simParams->approxMaxVel);
     }
+    DEME_DEBUG_PRINTF("kT received an update, max vel: %.6g", *stateParams.maxVel);
+    DEME_DEBUG_PRINTF("kT received an update, max ang vel: %.6g", *stateParams.maxAngVel);
 
-    // kT will need to derive the thickness of the CD margin, based on dT's info on system vel.
-    if (!solverFlags.isExpandFactorFixed) {
-        // This kernel will turn absv to marginSize, and if a vel is over max, it will clamp it.
-        // Converting to size_t is SUPER important... CUDA kernel call basically does not have type conversion.
-        computeMarginFromAbsv(&simParams, &granData, &(stateParams.ts), &(stateParams.maxDrift),
-                              (size_t)(simParams->nOwnerBodies), streamInfo.stream);
-    } else {  // If isExpandFactorFixed, then just fill in that constant array.
-        fillMarginValues(&simParams, &granData, (size_t)(simParams->nOwnerBodies), streamInfo.stream);
-    }
-
-    DEME_DEBUG_PRINTF("kT received a velocity update: %.6g", *(stateParams.maxVel));
-    // DEME_DEBUG_PRINTF("A margin of thickness %.6g is added", simParams->beta);
+    // Now update the future drift info. Whatever drift value dT says, kT listens; unless kinematicMaxFutureDrift is
+    // negative in which case the user explicitly said not caring the future drift.
+    stateParams.maxDrift.toHost();
+    pSchedSupport->kinematicMaxFutureDrift = (pSchedSupport->kinematicMaxFutureDrift.load() < 0.)
+                                                 ? pSchedSupport->kinematicMaxFutureDrift.load()
+                                                 : *(stateParams.maxDrift);
 
     // Family number is a typical changable quantity on-the-fly. If this flag is on, kT received changes from dT.
     if (solverFlags.canFamilyChangeOnDevice) {
@@ -197,6 +227,20 @@ inline void DEMKinematicThread::unpackMyBuffer() {
         // dT won't be sending if kT is loading, so it is safe
         solverFlags.willMeshDeform = false;
     }
+
+    // kT will need to derive the thickness of the CD margin, based on dT's info on system vel.
+    if (!solverFlags.isExpandFactorFixed) {
+        // This kernel will turn absv to marginSize, and if a vel is over max, it will clamp it.
+        // Converting to size_t is SUPER important... CUDA kernel call basically does not have type conversion.
+        computeMarginFromAbsv(absVel_owner, absAngVel_owner);
+    } else {  // If isExpandFactorFixed, then just fill in that constant array.
+        // This one is statically compiled, unlike the other branch
+        fillMarginValues(&simParams, &granData, (size_t)(simParams->nSpheresGM), (size_t)(simParams->nTriGM),
+                         (size_t)(simParams->nAnalGM), streamInfo.stream);
+    }
+
+    solverScratchSpace.finishUsingTempVector("absVel_owner");
+    solverScratchSpace.finishUsingTempVector("absAngVel_owner");
 }
 
 //// TODO: Fix the transfer; is primitive transfer needed at all?
@@ -458,7 +502,9 @@ void DEMKinematicThread::packDataPointers() {
     oriQx.bindDevicePointer(&(granData->oriQx));
     oriQy.bindDevicePointer(&(granData->oriQy));
     oriQz.bindDevicePointer(&(granData->oriQz));
-    marginSize.bindDevicePointer(&(granData->marginSize));
+    marginSizeSphere.bindDevicePointer(&(granData->marginSizeSphere));
+    marginSizeTriangle.bindDevicePointer(&(granData->marginSizeTriangle));
+    marginSizeAnalytical.bindDevicePointer(&(granData->marginSizeAnalytical));
     idPrimitiveA.bindDevicePointer(&(granData->idPrimitiveA));
     idPrimitiveB.bindDevicePointer(&(granData->idPrimitiveB));
     contactTypePrimitive.bindDevicePointer(&(granData->contactTypePrimitive));
@@ -484,9 +530,10 @@ void DEMKinematicThread::packDataPointers() {
     ownerClumpBody.bindDevicePointer(&(granData->ownerClumpBody));
     clumpComponentOffset.bindDevicePointer(&(granData->clumpComponentOffset));
     clumpComponentOffsetExt.bindDevicePointer(&(granData->clumpComponentOffsetExt));
+    ownerAnalBody.bindDevicePointer(&(granData->ownerAnalBody));
 
     // Mesh-related
-    triOwnerMesh.bindDevicePointer(&(granData->triOwnerMesh));
+    ownerTriMesh.bindDevicePointer(&(granData->ownerTriMesh));
     triPatchID.bindDevicePointer(&(granData->triPatchID));
     relPosNode1.bindDevicePointer(&(granData->relPosNode1));
     relPosNode2.bindDevicePointer(&(granData->relPosNode2));
@@ -509,7 +556,6 @@ void DEMKinematicThread::migrateDataToDevice() {
     oriQx.toDeviceAsync(streamInfo.stream);
     oriQy.toDeviceAsync(streamInfo.stream);
     oriQz.toDeviceAsync(streamInfo.stream);
-    marginSize.toDeviceAsync(streamInfo.stream);
     idPrimitiveA.toDeviceAsync(streamInfo.stream);
     idPrimitiveB.toDeviceAsync(streamInfo.stream);
     contactTypePrimitive.toDeviceAsync(streamInfo.stream);
@@ -528,8 +574,9 @@ void DEMKinematicThread::migrateDataToDevice() {
     ownerClumpBody.toDeviceAsync(streamInfo.stream);
     clumpComponentOffset.toDeviceAsync(streamInfo.stream);
     clumpComponentOffsetExt.toDeviceAsync(streamInfo.stream);
+    ownerAnalBody.toDeviceAsync(streamInfo.stream);
 
-    triOwnerMesh.toDeviceAsync(streamInfo.stream);
+    ownerTriMesh.toDeviceAsync(streamInfo.stream);
     triPatchID.toDeviceAsync(streamInfo.stream);
     relPosNode1.toDeviceAsync(streamInfo.stream);
     relPosNode2.toDeviceAsync(streamInfo.stream);
@@ -660,7 +707,9 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(oriQx, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(oriQy, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(oriQz, nOwnerBodies, 0);
-    DEME_DUAL_ARRAY_RESIZE(marginSize, nOwnerBodies, 0);
+    DEME_DEVICE_ARRAY_RESIZE(marginSizeSphere, nSpheresGM);
+    DEME_DEVICE_ARRAY_RESIZE(marginSizeAnalytical, nAnalGM);
+    DEME_DEVICE_ARRAY_RESIZE(marginSizeTriangle, nTriGM);
 
     // Transfer buffer arrays
     // It is cudaMalloc-ed memory, not on host, because we want explicit locality control of buffers
@@ -703,11 +752,14 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(ownerClumpBody, nSpheresGM, 0);
 
     // Resize to the number of triangle facets
-    DEME_DUAL_ARRAY_RESIZE(triOwnerMesh, nTriGM, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerTriMesh, nTriGM, 0);
     DEME_DUAL_ARRAY_RESIZE(triPatchID, nTriGM, 0);
     DEME_DUAL_ARRAY_RESIZE(relPosNode1, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(relPosNode2, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(relPosNode3, nTriGM, make_float3(0));
+
+    // And analytical geometry owner array
+    DEME_DUAL_ARRAY_RESIZE(ownerAnalBody, nAnalGM, 0);
 
     if (solverFlags.useClumpJitify) {
         DEME_DUAL_ARRAY_RESIZE(clumpComponentOffset, nSpheresGM, 0);
@@ -768,6 +820,7 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
                                               const std::vector<bodyID_t>& input_mesh_facet_patch,
                                               const std::vector<DEMTriangle>& input_mesh_facets,
                                               const ClumpTemplateFlatten& clump_templates,
+                                              const std::vector<unsigned int>& ext_obj_comp_num,
                                               size_t nExistOwners,
                                               size_t nExistSpheres,
                                               size_t nExistingFacets,
@@ -856,8 +909,15 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
     }
 
     // Analytical objs
+    k = 0;
     size_t owner_offset_for_ext_obj = nExistOwners + input_clump_types.size();
     for (size_t i = 0; i < input_ext_obj_family.size(); i++) {
+        // For each analytical geometry component of this obj, it needs to know its owner number
+        for (size_t j = 0; j < ext_obj_comp_num.at(i); j++) {
+            ownerAnalBody[k] = i + owner_offset_for_ext_obj;
+            k++;
+        }
+
         family_t this_family_num = input_ext_obj_family.at(i);
         familyID[i + owner_offset_for_ext_obj] = this_family_num;
     }
@@ -873,7 +933,7 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
             // input_mesh_facet_owner run length is the num of facets in this mesh entity
             if (input_mesh_facet_owner.at(k) != this_facet_owner)
                 break;
-            triOwnerMesh[nExistingFacets + k] = owner_offset_for_mesh_obj + this_facet_owner;
+            ownerTriMesh[nExistingFacets + k] = owner_offset_for_mesh_obj + this_facet_owner;
             triPatchID[nExistingFacets + k] = nExistingMeshPatches + input_mesh_facet_patch.at(k);
             DEMTriangle this_tri = input_mesh_facets.at(k);
             relPosNode1[nExistingFacets + k] = this_tri.p1;
@@ -894,6 +954,7 @@ void DEMKinematicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClum
                                        const std::vector<unsigned int>& input_mesh_facet_owner,
                                        const std::vector<bodyID_t>& input_mesh_facet_patch,
                                        const std::vector<DEMTriangle>& input_mesh_facets,
+                                       const std::vector<unsigned int>& ext_obj_comp_num,
                                        const std::vector<notStupidBool_t>& family_mask_matrix,
                                        const ClumpTemplateFlatten& clump_templates) {
     // Get the info into the GPU memory from the host side. Can this process be more efficient? Maybe, but it's
@@ -902,7 +963,7 @@ void DEMKinematicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClum
     registerPolicies(family_mask_matrix);
 
     populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, input_mesh_facet_owner,
-                         input_mesh_facet_patch, input_mesh_facets, clump_templates, 0, 0, 0, 0);
+                         input_mesh_facet_patch, input_mesh_facets, clump_templates, ext_obj_comp_num, 0, 0, 0, 0);
 }
 
 void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
@@ -911,6 +972,7 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
                                                const std::vector<unsigned int>& input_mesh_facet_owner,
                                                const std::vector<bodyID_t>& input_mesh_facet_patch,
                                                const std::vector<DEMTriangle>& input_mesh_facets,
+                                               const std::vector<unsigned int>& ext_obj_comp_num,
                                                const std::vector<notStupidBool_t>& family_mask_matrix,
                                                const ClumpTemplateFlatten& clump_templates,
                                                size_t nExistingOwners,
@@ -922,8 +984,8 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
                                                unsigned int nExistingObj,
                                                unsigned int nExistingAnalGM) {
     populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, input_mesh_facet_owner,
-                         input_mesh_facet_patch, input_mesh_facets, clump_templates, nExistingOwners, nExistingSpheres,
-                         nExistingFacets, nExistingPatches);
+                         input_mesh_facet_patch, input_mesh_facets, clump_templates, ext_obj_comp_num, nExistingOwners,
+                         nExistingSpheres, nExistingFacets, nExistingPatches);
 }
 
 void DEMKinematicThread::updatePrevContactArrays(DualStruct<DEMDataDT>& dT_data, size_t nContacts) {
@@ -959,6 +1021,11 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
         sphTri_contact_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMContactKernels_SphTri_TriTri", JitHelper::KERNEL_DIR / "DEMContactKernels_SphTri_TriTri.cu", Subs,
             JitifyOptions)));
+    }
+    // Then misc.
+    {
+        misc_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMKinematicMisc", JitHelper::KERNEL_DIR / "DEMKinematicMisc.cu", Subs, JitifyOptions)));
     }
 }
 

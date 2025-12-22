@@ -37,9 +37,10 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
     // Use an input named exactly `sphereID' which is the id of this sphere component
     {
         _componentAcqStrat_;
-        myRadius += granData->marginSize[ownerID];
+        myRadius += granData->marginSizeSphere[sphereID];
     }
 
+    // These locations does not include the LBF offset
     voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
         ownerX, ownerY, ownerZ, granData->voxelID[ownerID], granData->locX[ownerID], granData->locY[ownerID],
         granData->locZ[ownerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);

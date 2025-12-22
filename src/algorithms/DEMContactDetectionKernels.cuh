@@ -1,4 +1,8 @@
 // DEM history mapping related custom kernels
+
+#ifndef DEME_CD_KERNELS_CUH
+#define DEME_CD_KERNELS_CUH
+
 #include <DEM/Defines.h>
 #include <kernel/DEMHelperKernels.cuh>
 
@@ -419,3 +423,5 @@ __global__ void rearrangeMapping(contactPairs_t* map_sorted,
 */
 
 }  // namespace deme
+
+#endif

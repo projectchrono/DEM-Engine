@@ -151,8 +151,10 @@ class DEMKinematicThread {
     DualArray<oriQ_t> oriQy = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<oriQ_t> oriQz = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
-    // marginSize includes both the velocity-induced margin and family-prescribed margin.
-    DualArray<float> marginSize = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // marginSizes include both the velocity-induced margin and family-prescribed margin.
+    DeviceArray<float> marginSizeSphere = DeviceArray<float>(&m_approxDeviceBytesUsed);
+    DeviceArray<float> marginSizeAnalytical = DeviceArray<float>(&m_approxDeviceBytesUsed);
+    DeviceArray<float> marginSizeTriangle = DeviceArray<float>(&m_approxDeviceBytesUsed);
 
     // Clump's family identification code. Used in determining whether they can be contacts between two families, and
     // whether a family has prescribed motions.
@@ -190,7 +192,8 @@ class DEMKinematicThread {
     // Sphere-related arrays
     // Owner body ID of this component
     DualArray<bodyID_t> ownerClumpBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<bodyID_t> triOwnerMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> ownerTriMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> ownerAnalBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Mesh patch information: each facet belongs to a patch
     // Patch ID for each triangle facet (maps facet to patch)
@@ -319,6 +322,7 @@ class DEMKinematicThread {
                               const std::vector<bodyID_t>& input_mesh_facet_patch,
                               const std::vector<DEMTriangle>& input_mesh_facets,
                               const ClumpTemplateFlatten& clump_templates,
+                              const std::vector<unsigned int>& ext_obj_comp_num,
                               size_t nExistOwners,
                               size_t nExistSpheres,
                               size_t nExistingFacets,
@@ -331,6 +335,7 @@ class DEMKinematicThread {
                        const std::vector<unsigned int>& input_mesh_facet_owner,
                        const std::vector<bodyID_t>& input_mesh_facet_patch,
                        const std::vector<DEMTriangle>& input_mesh_facets,
+                       const std::vector<unsigned int>& ext_obj_comp_num,
                        const std::vector<notStupidBool_t>& family_mask_matrix,
                        const ClumpTemplateFlatten& clump_templates);
 
@@ -342,6 +347,7 @@ class DEMKinematicThread {
                                const std::vector<unsigned int>& input_mesh_facet_owner,
                                const std::vector<bodyID_t>& input_mesh_facet_patch,
                                const std::vector<DEMTriangle>& input_mesh_facets,
+                               const std::vector<unsigned int>& ext_obj_comp_num,
                                const std::vector<notStupidBool_t>& family_mask_matrix,
                                const ClumpTemplateFlatten& clump_templates,
                                size_t nExistingOwners,
@@ -431,6 +437,8 @@ class DEMKinematicThread {
 
     // Bring kT buffer array data to its working arrays
     inline void unpackMyBuffer();
+    // Compute margin sizes from absolute velocities
+    inline void computeMarginFromAbsv(float* absVel_owner, float* absAngVel_owner);
     // Send produced data to dT-owned biffers
     void sendToTheirBuffer();
     // Resize dT's buffer arrays based on the number of contact pairs
@@ -450,6 +458,7 @@ class DEMKinematicThread {
     std::shared_ptr<jitify::Program> bin_triangle_kernels;
     std::shared_ptr<jitify::Program> sphTri_contact_kernels;
     std::shared_ptr<jitify::Program> sphere_contact_kernels;
+    std::shared_ptr<jitify::Program> misc_kernels;
 
     // Adjuster for bin size
     class AccumTimer {

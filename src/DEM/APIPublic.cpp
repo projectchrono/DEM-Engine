@@ -297,7 +297,7 @@ std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
             break;
         case OWNER_T_MESH:
             for (bodyID_t i = 0; i < nMeshPatches; i++) {
-                if (ownerID == dT->patchOwnerMesh[i])
+                if (ownerID == dT->ownerPatchMesh[i])
                     geo_to_watch.push_back(i);
             }
             break;
@@ -2310,8 +2310,8 @@ void DEMSolver::UpdateSimParams() {
     std::thread dT_build([&]() {
         DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
         // Jitify max vel finder, in case the policy there changed
-        m_approx_max_vel_func->Initialize(m_subs, m_jitify_options, true);
-        dT->approxMaxVelFunc = m_approx_max_vel_func;
+        m_approx_vel_func->Initialize(m_subs, m_jitify_options, true);
+        dT->approxVelFunc = m_approx_vel_func;
         // Jitify angular velocity magnitude finder
         m_approx_angvel_func->Initialize(m_subs, m_jitify_options, true);
         dT->approxAngVelFunc = m_approx_angvel_func;

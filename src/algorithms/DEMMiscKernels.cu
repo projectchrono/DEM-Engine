@@ -80,63 +80,41 @@ template void modifyComponents<DEMDataKT>(DEMDataKT* granData,
                                           size_t n,
                                           cudaStream_t& this_stream);
 
-__global__ void computeMarginFromAbsv_impl(DEMSimParams* simParams,
-                                           DEMDataKT* granData,
-                                           float* ts,
-                                           unsigned int* maxDrift,
-                                           size_t n) {
-    size_t ownerID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (ownerID < n) {
-        float absv = granData->marginSize[ownerID];
+__global__ void fillMarginValues_impl(DEMSimParams* simParams,
+                                      DEMDataKT* granData,
+                                      float* marginSizeArr,
+                                      bodyID_t* ownerIDArr,
+                                      size_t n) {
+    size_t ID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (ID < n) {
+        bodyID_t ownerID = ownerIDArr[ID];
         unsigned int my_family = granData->familyID[ownerID];
-        if (!isfinite(absv)) {
-            // May produce messy error messages, but it's still good to know what entities went wrong
-            DEME_ABORT_KERNEL(
-                "Absolute velocity for ownerID %llu is infinite (and it's a worse version of "
-                "max-velocity-exceeded-allowance).\n",
-                static_cast<unsigned long long>(ownerID));
-        }
-        if (absv > simParams->approxMaxVel) {
-            absv = simParams->approxMaxVel;
-        }
-        // User-specified extra margin also needs to be added here. This marginSize is used for bin--sph or bin--tri
-        // contacts but not entirely the same as the one used for sph--sph or sph--tri contacts, since the latter is
-        // stricter.
-        granData->marginSize[ownerID] =
-            (double)(absv * simParams->expSafetyMulti + simParams->expSafetyAdder) * (*ts) * (*maxDrift) +
-            // Temp artificial margin for mesh contact
-            0.05 + granData->familyExtraMarginSize[my_family];
+        marginSizeArr[ID] = simParams->beta + granData->familyExtraMarginSize[my_family];
     }
 }
 
-void computeMarginFromAbsv(DEMSimParams* simParams,
-                           DEMDataKT* granData,
-                           float* ts,
-                           unsigned int* maxDrift,
-                           size_t n,
-                           cudaStream_t& this_stream) {
-    size_t blocks_needed = (n + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+void fillMarginValues(DEMSimParams* simParams,
+                      DEMDataKT* granData,
+                      size_t nSphere,
+                      size_t nTri,
+                      size_t nAnal,
+                      cudaStream_t& this_stream) {
+    size_t blocks_needed = (nSphere + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
-        computeMarginFromAbsv_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(simParams, granData,
-                                                                                                  ts, maxDrift, n);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+        fillMarginValues_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            simParams, granData, granData->marginSizeSphere, granData->ownerClumpBody, nSphere);
     }
-}
-
-__global__ void fillMarginValues_impl(DEMSimParams* simParams, DEMDataKT* granData, size_t n) {
-    size_t ownerID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (ownerID < n) {
-        unsigned int my_family = granData->familyID[ownerID];
-        granData->marginSize[ownerID] = simParams->beta + granData->familyExtraMarginSize[my_family];
-    }
-}
-
-void fillMarginValues(DEMSimParams* simParams, DEMDataKT* granData, size_t n, cudaStream_t& this_stream) {
-    size_t blocks_needed = (n + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    blocks_needed = (nTri + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
-        fillMarginValues_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(simParams, granData, n);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+        fillMarginValues_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            simParams, granData, granData->marginSizeTriangle, granData->ownerTriMesh, nTri);
     }
+    blocks_needed = (nAnal + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        fillMarginValues_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            simParams, granData, granData->marginSizeAnalytical, granData->ownerAnalBody, nAnal);
+    }
+    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
 }  // namespace deme

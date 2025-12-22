@@ -88,7 +88,7 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
     } else if constexpr (AType == deme::GEO_T_TRIANGLE) {
         // For mesh-mesh or mesh-analytical contacts, patch A is a mesh patch
         deme::bodyID_t myPatchID = granData->idPatchA[myPatchContactID];
-        deme::bodyID_t myOwner = granData->patchOwnerMesh[myPatchID];
+        deme::bodyID_t myOwner = granData->ownerPatchMesh[myPatchID];
         ARadius = DEME_HUGE_FLOAT;
         bodyAMatType = granData->patchMaterialOffset[myPatchID];
 
@@ -117,7 +117,7 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
     if constexpr (BType == deme::GEO_T_TRIANGLE) {
         // For mesh-related contacts, patch B is a mesh patch
         deme::bodyID_t myPatchID = granData->idPatchB[myPatchContactID];
-        deme::bodyID_t myOwner = granData->patchOwnerMesh[myPatchID];
+        deme::bodyID_t myOwner = granData->ownerPatchMesh[myPatchID];
         BRadius = DEME_HUGE_FLOAT;
         bodyBMatType = granData->patchMaterialOffset[myPatchID];
 

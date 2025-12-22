@@ -198,8 +198,11 @@ class DEMSolver {
     /// larger than max_vel for determining the margin thickness; if `force' is set to true, the solver will not
     /// calculate maximum system velocity and will always use max_vel to calculate the margin thickness.
 
-    /// @brief Set the maximum expected particle velocity. The solver will not use a velocity larger than this for
-    /// determining the margin thickness, and velocity larger than this will be considered a system anomaly.
+    /// @brief Set the maximum expected simulation velocity. Note this call is not necessarily required; the solver can
+    /// automatically derive the maximum velocity. The velocity here means the magnitude of velocity of primtive
+    /// geometries (spheres and triangles).
+    /// @details Additionally, the solver will not use a velocity larger than this for determining the margin thickness,
+    /// and velocity larger than this will be considered a system anomaly.
     /// @param max_vel Expected max velocity.
     void SetMaxVelocity(float max_vel);
     /// @brief Set the method this solver uses to derive current system velocity (for safety purposes in contact
@@ -208,7 +211,7 @@ class DEMSolver {
     void SetExpandSafetyType(const std::string& insp_type);
     // void SetExpandSafetyType(const std::shared_ptr<DEMInspector>& insp) {
     //     m_max_v_finder_type = MARGIN_FINDER_TYPE::DEM_INSPECTOR;
-    //     m_approx_max_vel_func = insp;
+    //     m_approx_vel_func = insp;
     // }
 
     /// Assign a multiplier to our estimated maximum system velocity, when deriving the thinckness of the contact
@@ -231,9 +234,13 @@ class DEMSolver {
     void SetMaxTriangleInBin(unsigned int max_tri) { threshold_too_many_tri_in_bin = max_tri; }
 
     /// @brief Set the velocity which when exceeded, the solver errors out. A huge number can be used to discourage this
-    /// error type. Defaulted to 5e4.
+    /// error type. Defaulted to 1e3.
     /// @param vel Error-out velocity.
     void SetErrorOutVelocity(float vel) { threshold_error_out_vel = vel; }
+    /// @brief Set the angular velocity which when exceeded, the solver errors out. A huge number can be used to
+    /// discourage this error type. Defaulted to 1e4.
+    /// @param ang_vel Error-out angular velocity.
+    void SetErrorOutAngularVelocity(float ang_vel) { threshold_error_out_angvel = ang_vel; }
 
     /// @brief Set the average number of contacts a primitive geometry (sphere or triangle) has, before the solver
     /// errors out. A huge number can be used to discourage this error type. Defaulted to 100.
@@ -1576,7 +1583,7 @@ class DEMSolver {
     // User-instructed approximate maximum velocity (of any point on a body in the simulation)
     float m_approx_max_vel = DEME_HUGE_FLOAT;
     // The inspector that will be used for querying system max velocity
-    std::shared_ptr<DEMInspector> m_approx_max_vel_func;
+    std::shared_ptr<DEMInspector> m_approx_vel_func;
     // The inspector that will be used for querying system angular velocity magnitude
     std::shared_ptr<DEMInspector> m_approx_angvel_func;
 
@@ -1617,6 +1624,8 @@ class DEMSolver {
     unsigned int threshold_too_many_tri_in_bin = 32768;
     // The max velocity at which the simulation should error out
     float threshold_error_out_vel = 1e3;
+    // The max angular velocity at which the simulation should error out
+    float threshold_error_out_angvel = 1e4;
     // Num of steps that kT takes average before making a conclusion on the performance of this bin size
     unsigned int auto_adjust_observe_steps = 25;
     // See corresponding method for those...

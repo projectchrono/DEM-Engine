@@ -682,6 +682,7 @@ class DeviceArray : private NonCopyable {
         DevicePtrDealloc(m_data);
 
         m_data = new_device_ptr;
+        updateBoundDevicePointer();
 
         updateMemCounter(static_cast<ssize_t>(n * sizeof(T)));
         m_capacity = n;
@@ -692,7 +693,14 @@ class DeviceArray : private NonCopyable {
         updateMemCounter(-(ssize_t)(m_capacity * sizeof(T)));
         m_data = nullptr;
         m_capacity = 0;
+        updateBoundDevicePointer();
     }
+
+    void bindDevicePointer(T** external_ptr_to_ptr) {
+        m_bound_device_ptr = external_ptr_to_ptr;
+        updateBoundDevicePointer();
+    }
+    void unbindDevicePointer() { m_bound_device_ptr = nullptr; }
 
     size_t size() const { return m_capacity; }
 
@@ -707,8 +715,14 @@ class DeviceArray : private NonCopyable {
 
   private:
     T* m_data = nullptr;
+    T** m_bound_device_ptr = nullptr;
     size_t m_capacity = 0;
     size_t* m_mem_counter = nullptr;
+
+    void updateBoundDevicePointer() {
+        if (m_bound_device_ptr)
+            *m_bound_device_ptr = m_data;
+    }
 
     void updateMemCounter(ssize_t delta) {
         if (m_mem_counter)

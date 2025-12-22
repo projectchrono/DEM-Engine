@@ -103,7 +103,7 @@ struct DEMDataDT {
 #### Array Initialization:
 ```cpp
 // Resize to the number of mesh patches
-DEME_DUAL_ARRAY_RESIZE(patchOwnerMesh, nMeshPatches, 0);
+DEME_DUAL_ARRAY_RESIZE(ownerPatchMesh, nMeshPatches, 0);
 DEME_DUAL_ARRAY_RESIZE(patchMaterialOffset, nMeshPatches, 0);
 DEME_DUAL_ARRAY_RESIZE(relPosPatch, nMeshPatches, make_float3(0));  // NEW
 ```

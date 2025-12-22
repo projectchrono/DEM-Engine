@@ -299,14 +299,12 @@ void markOwnerToChange(notStupidBool_t* idBool,
 template <typename DEMData>
 void modifyComponents(DEMData* granData, notStupidBool_t* idBool, float* factors, size_t n, cudaStream_t& this_stream);
 
-void computeMarginFromAbsv(DEMSimParams* simParams,
-                           DEMDataKT* granData,
-                           float* ts,
-                           unsigned int* maxDrift,
-                           size_t n,
-                           cudaStream_t& this_stream);
-
-void fillMarginValues(DEMSimParams* simParams, DEMDataKT* granData, size_t n, cudaStream_t& this_stream);
+void fillMarginValues(DEMSimParams* simParams,
+                      DEMDataKT* granData,
+                      size_t nSphere,
+                      size_t nTri,
+                      size_t nAnal,
+                      cudaStream_t& this_stream);
 
 }  // namespace deme
 

@@ -32,7 +32,7 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
             // Use an input named exactly `sphereID' which is the id of this sphere component
             {
                 _componentAcqStrat_;
-                myRadius += granData->marginSize[myOwnerID];
+                myRadius += granData->marginSizeSphere[sphereID];
             }
 
             {
@@ -113,8 +113,8 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                 float3 cntNorm;  // cntNorm is placeholder too
                 contact_type = checkSphereEntityOverlap<double3, float, double>(
                     myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner],
-                    cntPnt, cntNorm, overlapDepth, overlapArea);
+                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
+                    granData->marginSizeAnalytical[objB], cntPnt, cntNorm, overlapDepth, overlapArea);
             }
             // overlapDepth (which has both entities' full margins) needs to be larger than the smaller one of the two
             // added margin to be considered in-contact.
@@ -157,7 +157,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
             // Use an input named exactly `sphereID' which is the id of this sphere component
             {
                 _componentAcqStrat_;
-                myRadius += granData->marginSize[myOwnerID];
+                myRadius += granData->marginSizeSphere[sphereID];
             }
 
             // Get the offset of my spot where I should start writing back to the global bin--sphere pair registration
@@ -250,8 +250,8 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                 float3 cntNorm;  // cntNorm is placeholder too
                 contact_type = checkSphereEntityOverlap<double3, float, double>(
                     myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner],
-                    cntPnt, cntNorm, overlapDepth, overlapArea);
+                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
+                    granData->marginSizeAnalytical[objB], cntPnt, cntNorm, overlapDepth, overlapArea);
             }
             // overlapDepth (which has both entities' full margins) needs to be larger than the smaller one of the two
             // added margin to be considered in-contact.

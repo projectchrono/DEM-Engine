@@ -1,4 +1,4 @@
-// DEM kernels that does some wildcard stuff, such as modifying the system as per user instruction
+// DEM kernels that does things such as modifying the system as per user instruction
 #include <DEMHelperKernels.cuh>
 #include <DEM/Defines.h>
 _kernelIncludes_;

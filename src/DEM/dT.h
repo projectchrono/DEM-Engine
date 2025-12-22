@@ -274,13 +274,13 @@ class DEMDynamicThread {
     // Template-related arrays
     // Belonged-body ID
     DualArray<bodyID_t> ownerClumpBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<bodyID_t> triOwnerMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> ownerTriMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> ownerAnalBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // Mesh patch information: each facet belongs to a patch, and each patch has material properties
     // Patch ID for each triangle facet (maps facet to patch)
     DualArray<bodyID_t> triPatchID = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // Mesh patch owner IDs (one per patch, flattened across all meshes)
-    DualArray<bodyID_t> patchOwnerMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> ownerPatchMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The ID that maps this sphere component's geometry-defining parameters, when this component is jitified
     DualArray<clumpComponentOffset_t> clumpComponentOffset =
@@ -711,7 +711,7 @@ class DEMDynamicThread {
     float* pCycleAngVel;
 
     // The inspector for calculating max vel for this cycle
-    std::shared_ptr<DEMInspector> approxMaxVelFunc;
+    std::shared_ptr<DEMInspector> approxVelFunc;
     // The inspector for calculating angular velocity magnitude for this cycle
     std::shared_ptr<DEMInspector> approxAngVelFunc;
 

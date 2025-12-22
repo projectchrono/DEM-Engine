@@ -313,8 +313,8 @@ void DEMSolver::jitifyKernels() {
         // Solver system's own max vel inspector should be init-ed. Don't bother init-ing it while using, because it is
         // called at high frequency, let's save an if check. Forced initialization (since doing it before system
         // completes init).
-        m_approx_max_vel_func->Initialize(m_subs, m_jitify_options, true);
-        dT->approxMaxVelFunc = m_approx_max_vel_func;
+        m_approx_vel_func->Initialize(m_subs, m_jitify_options, true);
+        dT->approxVelFunc = m_approx_vel_func;
         // Initialize angular velocity magnitude inspector
         m_approx_angvel_func->Initialize(m_subs, m_jitify_options, true);
         dT->approxAngVelFunc = m_approx_angvel_func;
@@ -571,7 +571,7 @@ void DEMSolver::decideCDMarginStrat() {
             break;
         case (MARGIN_FINDER_TYPE::DEFAULT):
             // Default strategy is to use an inspector
-            m_approx_max_vel_func = this->CreateInspector("absv");
+            m_approx_vel_func = this->CreateInspector("absv");
             // Also create inspector for angular velocity magnitude
             m_approx_angvel_func = this->CreateInspector("absangvel");
             m_max_v_finder_type = MARGIN_FINDER_TYPE::DEM_INSPECTOR;
@@ -1120,7 +1120,9 @@ void DEMSolver::setSolverParams() {
     kT->simParams->errOutBinTriNum = threshold_too_many_tri_in_bin;
     dT->simParams->errOutBinTriNum = threshold_too_many_tri_in_bin;
     kT->simParams->errOutVel = threshold_error_out_vel;
+    kT->simParams->errOutAngVel = threshold_error_out_angvel;
     dT->simParams->errOutVel = threshold_error_out_vel;
+    dT->simParams->errOutAngVel = threshold_error_out_angvel;
 
     // Whether the solver should auto-update bin sizes
     kT->solverFlags.autoBinSize = auto_adjust_bin_size;
@@ -1249,6 +1251,8 @@ void DEMSolver::initializeGPUArrays() {
         m_input_ext_obj_family,
         // Meshed objects' initial stats
         m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facets,
+        // Analytical obj physics properties
+        m_ext_obj_comp_num,
         // Family mask
         m_family_mask_matrix,
         // Templates and misc.
@@ -1299,6 +1303,8 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         m_input_ext_obj_family,
         // Meshed objects' initial stats
         m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facets,
+        // Analytical obj physics properties
+        m_ext_obj_comp_num,
         // Family mask
         m_family_mask_matrix,
         // Templates and misc.

@@ -91,8 +91,8 @@ void DEMDynamicThread::packDataPointers() {
     volumeOwnerBody.bindDevicePointer(&(granData->volumeOwnerBody));
 
     // Mesh and analytical-related
-    triOwnerMesh.bindDevicePointer(&(granData->triOwnerMesh));
-    patchOwnerMesh.bindDevicePointer(&(granData->patchOwnerMesh));
+    ownerTriMesh.bindDevicePointer(&(granData->ownerTriMesh));
+    ownerPatchMesh.bindDevicePointer(&(granData->ownerPatchMesh));
     triPatchID.bindDevicePointer(&(granData->triPatchID));
     ownerAnalBody.bindDevicePointer(&(granData->ownerAnalBody));
     relPosNode1.bindDevicePointer(&(granData->relPosNode1));
@@ -176,8 +176,8 @@ void DEMDynamicThread::migrateDataToDevice() {
     sphereMaterialOffset.toDeviceAsync(streamInfo.stream);
     volumeOwnerBody.toDeviceAsync(streamInfo.stream);
 
-    triOwnerMesh.toDeviceAsync(streamInfo.stream);
-    patchOwnerMesh.toDeviceAsync(streamInfo.stream);
+    ownerTriMesh.toDeviceAsync(streamInfo.stream);
+    ownerPatchMesh.toDeviceAsync(streamInfo.stream);
     triPatchID.toDeviceAsync(streamInfo.stream);
     ownerAnalBody.toDeviceAsync(streamInfo.stream);
     relPosNode1.toDeviceAsync(streamInfo.stream);
@@ -291,7 +291,7 @@ bodyID_t DEMDynamicThread::getGeoOwnerID(const bodyID_t& geo, const geoType_t& t
         case (GEO_T_SPHERE):
             return ownerClumpBody[geo];
         case (GEO_T_TRIANGLE):
-            return triOwnerMesh[geo];
+            return ownerTriMesh[geo];
         case (GEO_T_ANALYTICAL):
             return ownerAnalBody[geo];
         default:
@@ -302,7 +302,7 @@ bodyID_t DEMDynamicThread::getGeoOwnerID(const bodyID_t& geo, const geoType_t& t
 bodyID_t DEMDynamicThread::getPatchOwnerID(const bodyID_t& patchID, const geoType_t& type) const {
     switch (type) {
         case (GEO_T_TRIANGLE):
-            return patchOwnerMesh[patchID];
+            return ownerPatchMesh[patchID];
         case (GEO_T_SPHERE):
             return ownerClumpBody[patchID];
         case (GEO_T_ANALYTICAL):
@@ -522,14 +522,14 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     }
 
     // Resize to the number of triangle facets
-    DEME_DUAL_ARRAY_RESIZE(triOwnerMesh, nTriGM, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerTriMesh, nTriGM, 0);
     DEME_DUAL_ARRAY_RESIZE(relPosNode1, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(relPosNode2, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(relPosNode3, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(triPatchID, nTriGM, 0);
 
     // Resize to the number of mesh patches
-    DEME_DUAL_ARRAY_RESIZE(patchOwnerMesh, nMeshPatches, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerPatchMesh, nMeshPatches, 0);
     DEME_DUAL_ARRAY_RESIZE(patchMaterialOffset, nMeshPatches, 0);
     DEME_DUAL_ARRAY_RESIZE(relPosPatch, nMeshPatches, make_float3(0));
 
@@ -1067,7 +1067,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         for (; p < mesh_patch_owner.size(); p++) {
             if (mesh_patch_owner.at(p) != this_patch_owner)
                 break;
-            patchOwnerMesh[nExistingMeshPatches + p] = owner_offset_for_mesh_obj + this_patch_owner;
+            ownerPatchMesh[nExistingMeshPatches + p] = owner_offset_for_mesh_obj + this_patch_owner;
             patchMaterialOffset[nExistingMeshPatches + p] = mesh_patch_materials.at(p);
             relPosPatch[nExistingMeshPatches + p] = this_mesh_patch_locations[p - p_start];
         }
@@ -1079,7 +1079,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
             // mesh_facet_owner run length is the num of facets in this mesh entity
             if (mesh_facet_owner.at(k) != this_facet_owner)
                 break;
-            triOwnerMesh[nExistingFacets + k] = owner_offset_for_mesh_obj + this_facet_owner;
+            ownerTriMesh[nExistingFacets + k] = owner_offset_for_mesh_obj + this_facet_owner;
             // Tri's patch belonging needs to take into account those patches that are previously added
             triPatchID[nExistingFacets + k] = nExistingMeshPatches + mesh_facet_patch.at(k);
             DEMTriangle this_tri = mesh_facets.at(k);
@@ -2601,7 +2601,7 @@ inline void DEMDynamicThread::routineChecks() {
 
 inline void DEMDynamicThread::determineSysVel() {
     // Get linear velocity
-    pCycleVel = approxMaxVelFunc->dT_GetDeviceValue();
+    pCycleVel = approxVelFunc->dT_GetDeviceValue();
     // Get angular velocity magnitude
     pCycleAngVel = approxAngVelFunc->dT_GetDeviceValue();
 }
@@ -2958,8 +2958,8 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
         integrator_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu", Subs, JitifyOptions)));
     }
-    // Then kernels that are... wildcards, which make on-the-fly changes to solver data
-    if (solverFlags.canFamilyChangeOnDevice) {
+    // Then kernels that make on-the-fly changes to solver data
+    {
         mod_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMModeratorKernels", JitHelper::KERNEL_DIR / "DEMModeratorKernels.cu", Subs, JitifyOptions)));
     }
@@ -3163,7 +3163,7 @@ void DEMDynamicThread::setFamilyClumpMaterial(unsigned int N, unsigned int mat_i
 void DEMDynamicThread::setFamilyMeshMaterial(unsigned int N, unsigned int mat_id) {
     migrateFamilyToHost();
     for (size_t i = 0; i < simParams->nMeshPatches; i++) {
-        bodyID_t owner_id = patchOwnerMesh[i];  // No device-side change
+        bodyID_t owner_id = ownerPatchMesh[i];  // No device-side change
         if (+(familyID[owner_id]) == N) {
             patchMaterialOffset[i] = (materialsOffset_t)mat_id;
         }

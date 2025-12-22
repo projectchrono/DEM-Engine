@@ -36,7 +36,7 @@ __global__ void makeTriangleSandwich(deme::DEMSimParams* simParams,
         const float3 p1 = granData->relPosNode1[triID];
         const float3 p2 = granData->relPosNode2[triID];
         const float3 p3 = granData->relPosNode3[triID];
-        const deme::bodyID_t myOwnerID = granData->triOwnerMesh[triID];
+        const deme::bodyID_t myOwnerID = granData->ownerTriMesh[triID];
 
         // Get the incenter of this triangle.
         // This is because we use the incenter to enalrge a triangle. See for example, this
@@ -45,13 +45,13 @@ __global__ void makeTriangleSandwich(deme::DEMSimParams* simParams,
         // Generate normal using RHR from nodes 1, 2, and 3
         float3 triNormal = face_normal<float3>(p1, p2, p3);
 
-        sandwichANode1[triID] = sandwichVertex(p1, incenter, p2 - p1, triNormal, granData->marginSize[myOwnerID]);
-        sandwichANode2[triID] = sandwichVertex(p2, incenter, p3 - p2, triNormal, granData->marginSize[myOwnerID]);
-        sandwichANode3[triID] = sandwichVertex(p3, incenter, p1 - p3, triNormal, granData->marginSize[myOwnerID]);
+        sandwichANode1[triID] = sandwichVertex(p1, incenter, p2 - p1, triNormal, granData->marginSizeTriangle[triID]);
+        sandwichANode2[triID] = sandwichVertex(p2, incenter, p3 - p2, triNormal, granData->marginSizeTriangle[triID]);
+        sandwichANode3[triID] = sandwichVertex(p3, incenter, p1 - p3, triNormal, granData->marginSizeTriangle[triID]);
         // The other sandwich triangle needs to have an opposite normal direction
-        sandwichBNode1[triID] = sandwichVertex(p1, incenter, p2 - p1, -triNormal, granData->marginSize[myOwnerID]);
-        sandwichBNode2[triID] = sandwichVertex(p3, incenter, p1 - p3, -triNormal, granData->marginSize[myOwnerID]);
-        sandwichBNode3[triID] = sandwichVertex(p2, incenter, p3 - p2, -triNormal, granData->marginSize[myOwnerID]);
+        sandwichBNode1[triID] = sandwichVertex(p1, incenter, p2 - p1, -triNormal, granData->marginSizeTriangle[triID]);
+        sandwichBNode2[triID] = sandwichVertex(p3, incenter, p1 - p3, -triNormal, granData->marginSizeTriangle[triID]);
+        sandwichBNode3[triID] = sandwichVertex(p2, incenter, p3 - p2, -triNormal, granData->marginSizeTriangle[triID]);
     }
 }
 
@@ -67,7 +67,7 @@ inline __device__ void figureOutNodeAndBoundingBox(deme::DEMSimParams* simParams
                                                    float3 loc_vB,
                                                    float3 loc_vC) {
     // My sphere voxel ID and my relPos
-    deme::bodyID_t myOwnerID = granData->triOwnerMesh[triID];
+    deme::bodyID_t myOwnerID = granData->ownerTriMesh[triID];
 
     double3 ownerXYZ;
     voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
@@ -150,7 +150,7 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
                 deme::bodyID_t objBOwner = objOwner[objB];
                 // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
                 unsigned int objFamilyNum = granData->familyID[objBOwner];
-                deme::bodyID_t triOwnerID = granData->triOwnerMesh[triID];
+                deme::bodyID_t triOwnerID = granData->ownerTriMesh[triID];
                 unsigned int triFamilyNum = granData->familyID[triOwnerID];
                 unsigned int maskMatID = locateMaskPair<unsigned int>(triFamilyNum, objFamilyNum);
                 // If marked no contact, skip ths iteration
@@ -183,15 +183,16 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
                 nodeC = to_real3<float3, double3>(vC1);
                 deme::contact_t contact_type = checkTriEntityOverlap<double3>(
                     nodeA, nodeB, nodeC, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner]);
+                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
+                    granData->marginSizeAnalytical[objB]);
                 if (contact_type == deme::NOT_A_CONTACT) {
                     nodeA = to_real3<float3, double3>(vA2);
                     nodeB = to_real3<float3, double3>(vB2);
                     nodeC = to_real3<float3, double3>(vC2);
-                    contact_type = checkTriEntityOverlap<double3>(nodeA, nodeB, nodeC, objType[objB], objBPosXYZ,
-                                                                  make_float3(objBRotX, objBRotY, objBRotZ),
-                                                                  objSize1[objB], objSize2[objB], objSize3[objB],
-                                                                  objNormal[objB], granData->marginSize[objBOwner]);
+                    contact_type = checkTriEntityOverlap<double3>(
+                        nodeA, nodeB, nodeC, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                        objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
+                        granData->marginSizeAnalytical[objB]);
                 }
                 // Unlike the sphere-X contact case, we do not test against family extra margin here. This may result in
                 // more fake contact pairs, but the efficiency in the mesh-based particle case is not our top priority
@@ -281,7 +282,7 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                 deme::bodyID_t objBOwner = objOwner[objB];
                 // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
                 unsigned int objFamilyNum = granData->familyID[objBOwner];
-                deme::bodyID_t triOwnerID = granData->triOwnerMesh[triID];
+                deme::bodyID_t triOwnerID = granData->ownerTriMesh[triID];
                 unsigned int triFamilyNum = granData->familyID[triOwnerID];
                 unsigned int maskMatID = locateMaskPair<unsigned int>(triFamilyNum, objFamilyNum);
                 // If marked no contact, skip ths iteration
@@ -314,15 +315,16 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                 nodeC = to_real3<float3, double3>(vC1);
                 deme::contact_t contact_type = checkTriEntityOverlap<double3>(
                     nodeA, nodeB, nodeC, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner]);
+                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
+                    granData->marginSizeAnalytical[objB]);
                 if (contact_type == deme::NOT_A_CONTACT) {
                     nodeA = to_real3<float3, double3>(vA2);
                     nodeB = to_real3<float3, double3>(vB2);
                     nodeC = to_real3<float3, double3>(vC2);
-                    contact_type = checkTriEntityOverlap<double3>(nodeA, nodeB, nodeC, objType[objB], objBPosXYZ,
-                                                                  make_float3(objBRotX, objBRotY, objBRotZ),
-                                                                  objSize1[objB], objSize2[objB], objSize3[objB],
-                                                                  objNormal[objB], granData->marginSize[objBOwner]);
+                    contact_type = checkTriEntityOverlap<double3>(
+                        nodeA, nodeB, nodeC, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                        objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
+                        granData->marginSizeAnalytical[objB]);
                 }
                 // Unlike the sphere-X contact case, we do not test against family extra margin here, which is more
                 // lenient and perhaps makes more fake contacts.

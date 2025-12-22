@@ -247,17 +247,22 @@ class Logger : private NonCopyable, public Singleton<Logger> {
     }
 
 #define DEME_GPU_CALL_WATCH_BETA(res) \
-    { gpu_assert_watch_beta((res), __FILE__, __LINE__, *(stateParams.maxVel), true); }
+    { gpu_assert_watch_beta((res), __FILE__, __LINE__, *(stateParams.maxVel), *(stateParams.maxAngVel), true); }
 
-inline bool gpu_assert_watch_beta(cudaError_t code, const char* filename, int line, float max_vel, bool except = true) {
+inline bool gpu_assert_watch_beta(cudaError_t code,
+                                  const char* filename,
+                                  int line,
+                                  float max_vel,
+                                  float max_ang_vel,
+                                  bool except = true) {
     if (code != cudaSuccess) {
         if (except) {
             std::stringstream out_msg;
             out_msg << "\nGPU Assertion: " << cudaGetErrorString(code) << ". This happened in " << filename << ":"
                     << line << "\n";
             out_msg << "\n-------- Simulation crashed \"potentially\" due to too many geometries in a bin --------\n";
-            out_msg << "The dT reported max velocity is ";
-            out_msg << max_vel << "\n";
+            out_msg << "The dT reported max velocity is " << max_vel << " and max angular velocity is " << max_ang_vel
+                    << "\n";
             out_msg << "------------------------------------\n";
             out_msg << "If the velocity is huge, then the simulation probably diverged due to encountering "
                        "large particle velocities.\nDecreasing the step size could help, and remember to check if your "
