@@ -575,8 +575,9 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
         DEME_DUAL_ARRAY_RESIZE(idPatchB, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(contactTypePatch, cnt_arr_size, NOT_A_CONTACT);
 
-        // meshUniversalContact case uses these arrays to temp store
-        if (!solverFlags.useNoContactRecord || solverFlags.meshUniversalContact) {
+        // If there are meshes, then sph--mesh case always use force storage, no getting around; if no mesh, then if no
+        // need to store forces, we can choose to not resize these arrays.
+        if (!(solverFlags.useNoContactRecord && simParams->nTriGM == 0)) {
             DEME_DUAL_ARRAY_RESIZE(contactForces, cnt_arr_size, make_float3(0));
             DEME_DUAL_ARRAY_RESIZE(contactTorque_convToForce, cnt_arr_size, make_float3(0));
             DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, cnt_arr_size, make_float3(0));
@@ -2026,8 +2027,9 @@ inline void DEMDynamicThread::contactPrimitivesArraysResize(size_t nContactPairs
     // NEW: Resize geomToPatchMap to match geometry array size
     DEME_DUAL_ARRAY_RESIZE(geomToPatchMap, nContactPairs, 0);
 
-    // meshUniversalContact case uses these arrays to temp store
-    if (!solverFlags.useNoContactRecord || solverFlags.meshUniversalContact) {
+    // If there are meshes, then sph--mesh case always use force storage, no getting around; if no mesh, then if no need
+    // to store forces, we can choose to not resize these arrays.
+    if (!(solverFlags.useNoContactRecord && simParams->nTriGM == 0)) {
         DEME_DUAL_ARRAY_RESIZE(contactForces, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactTorque_convToForce, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, nContactPairs, make_float3(0));
