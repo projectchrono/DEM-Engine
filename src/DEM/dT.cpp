@@ -2045,7 +2045,7 @@ inline void DEMDynamicThread::contactPrimitivesArraysResize(size_t nContactPairs
     // Also note that dT does not have to worry about contact persistence, because kT handles that
 }
 
-inline void DEMDynamicThread::transferPatchArrayResize(size_t nPatchPairs) {
+inline void DEMDynamicThread::contactPatchArrayResize(size_t nPatchPairs) {
     // NEW: Resize separate patch ID arrays (sized to patch pairs, the shorter array)
     DEME_DUAL_ARRAY_RESIZE(idPatchA, nPatchPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(idPatchB, nPatchPairs, 0);
@@ -2074,7 +2074,7 @@ inline void DEMDynamicThread::unpackMyBuffer() {
         contactPrimitivesArraysResize(*solverScratchSpace.numPrimitiveContacts);
     }
     if (*solverScratchSpace.numContacts > idPatchA.size()) {
-        transferPatchArrayResize(*solverScratchSpace.numContacts);
+        contactPatchArrayResize(*solverScratchSpace.numContacts);
     }
 
     DEME_GPU_CALL(cudaMemcpy(granData->idPrimitiveA, idPrimitiveA_buffer.data(),

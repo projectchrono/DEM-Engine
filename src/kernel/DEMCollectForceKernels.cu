@@ -3,8 +3,6 @@
 #include <DEMHelperKernels.cuh>
 _kernelIncludes_;
 
-// For analytical entities' owners
-__constant__ __device__ deme::bodyID_t objOwner[] = {_objOwner_};
 // Mass properties are below, if jitified mass properties are in use
 _massDefs_;
 _moiDefs_;

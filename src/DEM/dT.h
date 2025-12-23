@@ -754,7 +754,7 @@ class DEMDynamicThread {
     // Resize some work arrays based on the number of contact pairs provided by kT
     void contactPrimitivesArraysResize(size_t nContactPairs);
     // Resize mesh patch pair array based on the number of mesh-involved contact pairs
-    void transferPatchArrayResize(size_t nMeshInvolvedContactPairs);
+    void contactPatchArrayResize(size_t nMeshInvolvedContactPairs);
 
     // Deallocate everything
     void deallocateEverything();

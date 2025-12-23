@@ -1571,27 +1571,27 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         whether_reduce_in_kernel = compact_code(whether_reduce_in_kernel);
         contact_info_write_strat = compact_code(contact_info_write_strat);
     }
-    strMap["_DEMForceModel_"] = model;
+    strMap["_DEMForceModel_;"] = model;
     strMap["_forceModelPrerequisites_;"] = model_prerequisites;
-    strMap["_forceModelIngredientDefinition_"] = ingredient_definition;
-    strMap["_forceModelIngredientAcqForA_"] = ingredient_acquisition_A;
-    strMap["_forceModelIngredientAcqForB_"] = ingredient_acquisition_B;
+    strMap["_forceModelIngredientDefinition_;"] = ingredient_definition;
+    strMap["_forceModelIngredientAcqForA_;"] = ingredient_acquisition_A;
+    strMap["_forceModelIngredientAcqForB_;"] = ingredient_acquisition_B;
     // Geo wildcard acquisition is contact type-dependent.
-    strMap["_forceModelGeoWildcardAcqForASph_"] = geo_wc_acquisition_A_sph;
-    strMap["_forceModelGeoWildcardAcqForAMeshPatch_"] = geo_wc_acquisition_A_patch;
-    strMap["_forceModelGeoWildcardAcqForBSph_"] = geo_wc_acquisition_B_sph;
-    strMap["_forceModelGeoWildcardAcqForBMeshPatch_"] = geo_wc_acquisition_B_patch;
-    strMap["_forceModelGeoWildcardAcqForBAnal_"] = geo_wc_acquisition_B_anal;
+    strMap["_forceModelGeoWildcardAcqForASph_;"] = geo_wc_acquisition_A_sph;
+    strMap["_forceModelGeoWildcardAcqForAMeshPatch_;"] = geo_wc_acquisition_A_patch;
+    strMap["_forceModelGeoWildcardAcqForBSph_;"] = geo_wc_acquisition_B_sph;
+    strMap["_forceModelGeoWildcardAcqForBMeshPatch_;"] = geo_wc_acquisition_B_patch;
+    strMap["_forceModelGeoWildcardAcqForBAnal_;"] = geo_wc_acquisition_B_anal;
 
     // This should be empty as of now...
-    strMap["_forceModelOwnerWildcardWrite_"] = owner_geo_wildcard_write_back;
+    strMap["_forceModelOwnerWildcardWrite_;"] = owner_geo_wildcard_write_back;
 
-    strMap["_forceModelContactWildcardAcq_"] = cnt_wildcard_acquisition;
-    strMap["_forceModelContactWildcardWrite_"] = cnt_wildcard_write_back;
-    strMap["_forceModelContactWildcardDestroy_"] = cnt_wildcard_destroy_record;
+    strMap["_forceModelContactWildcardAcq_;"] = cnt_wildcard_acquisition;
+    strMap["_forceModelContactWildcardWrite_;"] = cnt_wildcard_write_back;
+    strMap["_forceModelContactWildcardDestroy_;"] = cnt_wildcard_destroy_record;
 
-    strMap["_forceCollectInPlaceStrat_"] = whether_reduce_in_kernel;
-    strMap["_contactInfoWrite_"] = contact_info_write_strat;
+    strMap["_forceCollectInPlaceStrat_;"] = whether_reduce_in_kernel;
+    strMap["_contactInfoWrite_;"] = contact_info_write_strat;
 
     DEME_DEBUG_PRINTF("Model ingredient definition:\n%s", ingredient_definition.c_str());
 
@@ -1623,7 +1623,7 @@ inline void DEMSolver::equipFamilyOnFlyChanges(std::unordered_map<std::string, s
     }
 
     strMap["_nRulesOfChange_"] = std::to_string(n_rules);
-    strMap["_familyChangeRules_"] = condStr;
+    strMap["_familyChangeRules_;"] = condStr;
 }
 
 inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::string, std::string>& strMap) {
@@ -1730,9 +1730,9 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
         }
         accStr += "break; }";
     }
-    strMap["_velPrescriptionStrategy_"] = velStr;
-    strMap["_posPrescriptionStrategy_"] = posStr;
-    strMap["_accPrescriptionStrategy_"] = accStr;
+    strMap["_velPrescriptionStrategy_;"] = velStr;
+    strMap["_posPrescriptionStrategy_;"] = posStr;
+    strMap["_accPrescriptionStrategy_;"] = accStr;
 }
 
 // Family mask is no longer jitified... but stored in global array
@@ -1898,8 +1898,8 @@ inline void DEMSolver::equipMassMoiVolume(std::unordered_map<std::string, std::s
     }
     strMap["_massDefs_;"] = massDefs;
     strMap["_moiDefs_;"] = moiDefs;
-    strMap["_massAcqStrat_"] = massAcqStrat;
-    strMap["_moiAcqStrat_"] = moiAcqStrat;
+    strMap["_massAcqStrat_;"] = massAcqStrat;
+    strMap["_moiAcqStrat_;"] = moiAcqStrat;
     strMap["_volumeDefs_;"] = volumeDefs;
 
     DEME_DEBUG_PRINTF("Volume properties in kernel:");
@@ -2116,7 +2116,7 @@ inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::
         componentAcqStrat = compact_code(componentAcqStrat);
     }
     strMap["_clumpTemplateDefs_;"] = clump_template_arrays;
-    strMap["_componentAcqStrat_"] = componentAcqStrat;
+    strMap["_componentAcqStrat_;"] = componentAcqStrat;
 }
 
 inline void DEMSolver::equipIntegrationScheme(std::unordered_map<std::string, std::string>& strMap) {
@@ -2132,7 +2132,7 @@ inline void DEMSolver::equipIntegrationScheme(std::unordered_map<std::string, st
             strat = VEL_TO_PASS_ON_EXTENDED_TAYLOR();
             break;
     }
-    strMap["_integrationVelocityPassOnStrategy_"] = strat;
+    strMap["_integrationVelocityPassOnStrategy_;"] = strat;
 }
 
 inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::string>& strMap) {
