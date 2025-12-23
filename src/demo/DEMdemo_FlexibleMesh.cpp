@@ -55,7 +55,7 @@ int main() {
                                       {-world_size / 2, world_size / 2}, {0, world_size});
     */
 
-    // No need to add simulation `world' boundaries, b/c we'll add a cylinderical container manually
+    // No need to add simulation `world' boundaries, b/c we'll add a box-shaped container manually
     DEMSim.InstructBoxDomainBoundingBC("none", mat_type_mesh);
     // Now manually add boundaries (you can choose to add them automatically using InstructBoxDomainBoundingBC, too)
     auto walls = DEMSim.AddExternalObject();
@@ -115,9 +115,9 @@ int main() {
     // If you call SetFamilyPrescribedPosition and SetFamilyPrescribedQuaternion without specifying what position it
     // actually take, then its position is kept `as is' during simulation, without being affected by physics. It's
     // similar to fixing it but allows you manually impose velocities (which may have implications on your force model),
-    // even though the velocity won't change its location. If you prescribe position by do not prescribe velocities, it
+    // even though the velocity won't change its location. If you prescribe position but do not prescribe velocities, it
     // may make the object accumulate `phantom' velocity and de-stabilize the simulation. Fixing both position and
-    // velocity is equivalent to fixing the family.
+    // velocity is equivalent to fixing the family, which is slightly different from the `as-is' style we did here.
     DEMSim.SetFamilyPrescribedPosition(1);
     DEMSim.SetFamilyPrescribedQuaternion(1);
     DEMSim.SetFamilyPrescribedLinVel(1);
