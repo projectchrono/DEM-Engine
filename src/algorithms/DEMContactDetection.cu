@@ -1242,7 +1242,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector("idB_sorted", id_arr_bytes);
                 size_t type_arr_bytes = (*scratchPad.numPrimitiveContacts) * sizeof(contact_t);
                 contact_t* contactType_sorted =
-                    (contact_t*)scratchPad.allocateTempVector("contactType_sorted_patch", type_arr_bytes);
+                    (contact_t*)scratchPad.allocateTempVector("contactType_sorted", type_arr_bytes);
 
                 // Allocate temp arrays for per-type run-length encoding
                 size_t max_unique_per_segment = *scratchPad.numPrimitiveContacts;  // Upper bound
@@ -1286,6 +1286,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                         contactPatchPairs + prim_offset, patchPairs_sorted + prim_offset,
                         granData->contactTypePrimitive + prim_offset, contactType_sorted + prim_offset, count,
                         this_stream, scratchPad);
+
+                    // Sorted primitive pairs need to be copied back to the official storage, as it's implicitly related
+                    // to how geomToPatchMap is generated, and the primitive pairs here are shipped later directly. But
+                    // we delay this copy-back until the end.
 
                     // Step 1b: Run-length encode to find unique patch pairs WITHIN this type segment
                     cubDEMRunLengthEncode<patchIDPair_t, contactPairs_t>(
@@ -1369,10 +1373,21 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 scratchPad.finishUsingTempVector("patch_pair_counts");
                 scratchPad.finishUsingDualStruct("numUniquePatchPairs");
 
+                // Recall the `delayed copy back of primitives'. We do it here.
+                DEME_GPU_CALL(cudaMemcpy(granData->idPrimitiveA, idA_sorted,
+                                         *scratchPad.numPrimitiveContacts * sizeof(bodyID_t),
+                                         cudaMemcpyDeviceToDevice));
+                DEME_GPU_CALL(cudaMemcpy(granData->idPrimitiveB, idB_sorted,
+                                         *scratchPad.numPrimitiveContacts * sizeof(bodyID_t),
+                                         cudaMemcpyDeviceToDevice));
+                DEME_GPU_CALL(cudaMemcpy(granData->contactTypePrimitive, contactType_sorted,
+                                         *scratchPad.numPrimitiveContacts * sizeof(contact_t),
+                                         cudaMemcpyDeviceToDevice));
+
                 scratchPad.finishUsingTempVector("patchPairs_sorted");
                 scratchPad.finishUsingTempVector("idA_sorted");
                 scratchPad.finishUsingTempVector("idB_sorted");
-                scratchPad.finishUsingTempVector("contactType_sorted_patch");
+                scratchPad.finishUsingTempVector("contactType_sorted");
 
                 delete[] host_type_counts;
                 delete[] host_unique_types;

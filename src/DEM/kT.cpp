@@ -38,7 +38,7 @@ inline void DEMKinematicThread::transferPrimitivesArraysResize(size_t nContactPa
     // particupate kernel computations, so even if their pointers are fresh only on host, it's fine
 }
 
-inline void DEMKinematicThread::contactPatchArrayResize(size_t nContactPairs) {
+inline void DEMKinematicThread::transferPatchArrayResize(size_t nContactPairs) {
     // These buffers are on dT
     DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
     dT->patchBufferSize = nContactPairs;
@@ -256,7 +256,7 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
     }
     // Resize the patch-contact transfer array too
     if (*solverScratchSpace.numContacts > dT->patchBufferSize) {
-        contactPatchArrayResize(*solverScratchSpace.numContacts);
+        transferPatchArrayResize(*solverScratchSpace.numContacts);
     }
 
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idPrimitiveA, granData->idPrimitiveA,
