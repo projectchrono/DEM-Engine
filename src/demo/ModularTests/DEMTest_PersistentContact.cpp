@@ -51,11 +51,11 @@ int main() {
     std::cout << "\n--- Loading Mesh Templates ---" << std::endl;
     // Load mesh templates
     auto cube_template = DEMSim.LoadMeshType((GET_DATA_PATH() / "mesh/cube.obj").string(), mat_type_box,
-                                             true,   // load_normals
-                                             false); // load_uv
+                                             true,    // load_normals
+                                             false);  // load_uv
     auto plane_template = DEMSim.LoadMeshType((GET_DATA_PATH() / "mesh/plane_20by20.obj").string(), mat_type_plane,
-                                              true,   // load_normals
-                                              false); // load_uv
+                                              true,    // load_normals
+                                              false);  // load_uv
 
     if (!cube_template) {
         std::cout << "Failed to load cube mesh template from mesh/cube.obj" << std::endl;
@@ -151,10 +151,10 @@ int main() {
     double final_time = 5.0;  // 5 seconds simulation
 
     // Parameters for periodic lifting
-    double lift_period = 1.0;  // Lift boxes every 1 second
-    double lift_duration = 0.3;  // Keep lifted for 0.3 seconds
-    double lift_height = 3.0;    // Lift 3 units above contact plane
-    double contact_height = 0.6; // Normal contact height
+    double lift_period = 1.0;     // Lift boxes every 1 second
+    double lift_duration = 0.3;   // Keep lifted for 0.3 seconds
+    double lift_height = 3.0;     // Lift 3 units above contact plane
+    double contact_height = 0.6;  // Normal contact height
 
     double last_lift_time = 0.0;
     bool boxes_lifted = false;
