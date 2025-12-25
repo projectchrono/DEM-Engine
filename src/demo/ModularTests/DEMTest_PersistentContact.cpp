@@ -23,6 +23,14 @@
 using namespace deme;
 using namespace std::filesystem;
 
+// Helper function to set Z coordinate for a collection of boxes
+void SetBoxesHeight(const std::vector<std::shared_ptr<DEMTracker>>& trackers, float height) {
+    for (size_t j = 0; j < trackers.size(); j++) {
+        float3 current_pos = trackers[j]->Pos();
+        trackers[j]->SetPos(make_float3(current_pos.x, current_pos.y, height));
+    }
+}
+
 int main() {
     std::cout << "========================================" << std::endl;
     std::cout << "DEM Persistent Contact Mapping Demo" << std::endl;
@@ -49,8 +57,12 @@ int main() {
                                               true,   // load_normals
                                               false); // load_uv
 
-    if (!cube_template || !plane_template) {
-        std::cout << "Failed to load mesh templates" << std::endl;
+    if (!cube_template) {
+        std::cout << "Failed to load cube mesh template from mesh/cube.obj" << std::endl;
+        return 1;
+    }
+    if (!plane_template) {
+        std::cout << "Failed to load plane mesh template from mesh/plane_20by20.obj" << std::endl;
         return 1;
     }
 
@@ -154,14 +166,8 @@ int main() {
         if (!boxes_lifted && sim_time - last_lift_time >= lift_period) {
             std::cout << "\n*** Lifting boxes at time " << sim_time << "s ***" << std::endl;
             // Lift all boxes
-            for (size_t j = 0; j < plane1_box_trackers.size(); j++) {
-                float3 current_pos = plane1_box_trackers[j]->Pos();
-                plane1_box_trackers[j]->SetPos(make_float3(current_pos.x, current_pos.y, lift_height));
-            }
-            for (size_t j = 0; j < plane2_box_trackers.size(); j++) {
-                float3 current_pos = plane2_box_trackers[j]->Pos();
-                plane2_box_trackers[j]->SetPos(make_float3(current_pos.x, current_pos.y, lift_height));
-            }
+            SetBoxesHeight(plane1_box_trackers, lift_height);
+            SetBoxesHeight(plane2_box_trackers, lift_height);
             boxes_lifted = true;
             last_lift_time = sim_time;
         }
@@ -170,14 +176,8 @@ int main() {
         if (boxes_lifted && sim_time - last_lift_time >= lift_duration) {
             std::cout << "*** Returning boxes to contact at time " << sim_time << "s ***" << std::endl;
             // Return all boxes to contact
-            for (size_t j = 0; j < plane1_box_trackers.size(); j++) {
-                float3 current_pos = plane1_box_trackers[j]->Pos();
-                plane1_box_trackers[j]->SetPos(make_float3(current_pos.x, current_pos.y, contact_height));
-            }
-            for (size_t j = 0; j < plane2_box_trackers.size(); j++) {
-                float3 current_pos = plane2_box_trackers[j]->Pos();
-                plane2_box_trackers[j]->SetPos(make_float3(current_pos.x, current_pos.y, contact_height));
-            }
+            SetBoxesHeight(plane1_box_trackers, contact_height);
+            SetBoxesHeight(plane2_box_trackers, contact_height);
             boxes_lifted = false;
         }
 
