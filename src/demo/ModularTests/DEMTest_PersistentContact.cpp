@@ -135,7 +135,7 @@ int main() {
     // std::cout << "Family 2 boxes: sliding in -Y direction at 1 m/s" << std::endl;
 
     std::cout << "\n--- Initializing Simulation ---" << std::endl;
-    float step_time = 1e-5;
+    float step_time = 1e-4;
     DEMSim.SetInitTimeStep(step_time);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.SetExpandSafetyType("auto");
