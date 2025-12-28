@@ -393,9 +393,9 @@ __global__ void findMaxPenetrationPrimitiveForZeroAreaPatches_impl(DEMDataDT* gr
             zeroAreaPenetrations[localPatchIdx] = myPenetration < 0.0 ? myPenetration : -DEME_HUGE_FLOAT;
             // This zeroAreaPenetrations should store a negative number, as when it is needed, it's usually the
             // separation case (all zero-area primitives). But for the no-SAT case, which can resemble cross-particle
-            // errotic detection, we could have a positive max here (search for CubOpMaxNegative to understand how this
-            // max is derived). In that case, give it a very negative number, so in the patch-based force calculation,
-            // this one is considered a non-contact.
+            // erroneous detection, we could have a positive max here (search for CubOpMaxNegative to understand how
+            // this max is derived). In that case, we give it a very negative number, so in the patch-based force
+            // calculation, this one is considered a non-contact.
         }
     }
 }
@@ -544,7 +544,7 @@ __global__ void computeWeightedContactPoints_impl(DEMDataDT* granData,
         double area = float3StorageToDouble(areaStorage);
 
         // Compute weight = penetration * area
-        double weight = penetration * area;
+        double weight = penetration * (area <= 0.0 ? 0.0 : area);
 
         // Compute weighted contact point (multiply each component by weight)
         weightedContactPoints[idx] = contactPoint * weight;
