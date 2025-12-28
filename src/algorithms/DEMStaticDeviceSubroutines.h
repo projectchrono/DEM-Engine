@@ -216,12 +216,14 @@ void extractPrimitivePenetrations(DEMDataDT* granData,
                                   contactPairs_t count,
                                   cudaStream_t& this_stream);
 
-// Finds the primitive with max penetration for zero-area patches and extracts its normal
+// Finds the primitive with max penetration for zero-area patches and extracts its normal, penetration, and contact
+// point
 void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
                                                    double* totalAreas,
                                                    double* maxPenetrations,
                                                    float3* zeroAreaNormals,
                                                    double* zeroAreaPenetrations,
+                                                   double3* zeroAreaContactPoints,
                                                    contactPairs_t* keys,
                                                    contactPairs_t startOffsetPrimitive,
                                                    contactPairs_t startOffsetPatch,
@@ -243,13 +245,25 @@ void checkPatchHasSATSatisfyingPrimitive(DEMDataDT* granData,
 void finalizePatchResults(double* totalAreas,
                           double3* votedNormals,
                           double* votedPenetrations,
+                          double3* votedContactPoints,
                           float3* zeroAreaNormals,
                           double* zeroAreaPenetrations,
+                          double3* zeroAreaContactPoints,
                           notStupidBool_t* patchHasSAT,
                           float3* finalNormals,
                           double* finalPenetrations,
+                          double3* finalContactPoints,
                           contactPairs_t count,
                           cudaStream_t& this_stream);
+
+// Finalizes patch contact points by combining voting with zero-area case handling
+void finalizePatchContactPoints(double* totalAreas,
+                                double3* votedContactPoints,
+                                double3* zeroAreaContactPoints,
+                                notStupidBool_t* patchHasSAT,
+                                double3* finalContactPoints,
+                                contactPairs_t count,
+                                cudaStream_t& this_stream);
 
 // Computes weighted contact points for each primitive contact
 // The weight is: penetration * area

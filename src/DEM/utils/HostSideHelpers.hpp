@@ -67,21 +67,28 @@ inline void displayArray(T1* arr, size_t n) {
     std::cout << std::endl;
 }
 
+// Get device array to host
+template <typename T1>
+inline std::vector<T1> getDeviceArray(T1* d_arr, size_t n) {
+    std::vector<T1> h_arr(n);
+    DEME_GPU_CALL(cudaMemcpy(h_arr.data(), d_arr, n * sizeof(T1), cudaMemcpyDeviceToHost));
+    return h_arr;
+}
+
 // An extremely inefficient device vector view function
 template <typename T1>
 inline void displayDeviceArray(T1* arr, size_t n) {
-    std::vector<T1> tmp(n);
-    DEME_GPU_CALL(cudaMemcpy(tmp.data(), arr, n * sizeof(T1), cudaMemcpyDeviceToHost));
+    std::vector<T1> tmp = getDeviceArray(arr, n);
     for (size_t i = 0; i < n; i++) {
         std::cout << +(tmp[i]) << " ";
     }
     std::cout << std::endl;
 }
 
+// An extremely inefficient device float3 vector view function
 template <typename T1 = float3>
 inline void displayDeviceFloat3(T1* arr, size_t n) {
-    std::vector<T1> tmp(n);
-    DEME_GPU_CALL(cudaMemcpy(tmp.data(), arr, n * sizeof(T1), cudaMemcpyDeviceToHost));
+    std::vector<T1> tmp = getDeviceArray(arr, n);
     for (size_t i = 0; i < n; i++) {
         std::cout << "(" << +(tmp[i].x) << ", " << +(tmp[i].y) << ", " << +(tmp[i].z) << "), ";
     }
