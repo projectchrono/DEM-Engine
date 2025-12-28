@@ -174,7 +174,7 @@ void getContactForcesConcerningOwners(float3* d_points,
 
 // Prepares weighted normals (normal * area), areas, and keys from geomToPatchMap for voting
 void prepareWeightedNormalsForVoting(DEMDataDT* granData,
-                                     float3* weightedNormals,
+                                     double3* weightedNormals,
                                      double* areas,
                                      contactPairs_t* keys,
                                      contactPairs_t startOffset,
@@ -183,9 +183,9 @@ void prepareWeightedNormalsForVoting(DEMDataDT* granData,
 
 // Normalizes voted normals by total area and scatters to output
 // If total area is 0, output is (0,0,0) indicating no contact
-void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
+void normalizeAndScatterVotedNormals(double3* votedWeightedNormals,
                                      double* totalAreas,
-                                     float3* output,
+                                     double3* output,
                                      contactPairs_t count,
                                      cudaStream_t& this_stream);
 
@@ -193,7 +193,7 @@ void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
 // The "useful" penetration is the original penetration projected onto the voted normal
 // Each primitive's useful penetration is then weighted by its contact area
 void computeWeightedUsefulPenetration(DEMDataDT* granData,
-                                      float3* votedNormals,
+                                      double3* votedNormals,
                                       contactPairs_t* keys,
                                       double* weightedPenetrations,
                                       contactPairs_t startOffsetPrimitive,
@@ -241,7 +241,7 @@ void checkPatchHasSATSatisfyingPrimitive(DEMDataDT* granData,
 
 // Finalizes patch results by combining normal voting with zero-area case handling
 void finalizePatchResults(double* totalAreas,
-                          float3* votedNormals,
+                          double3* votedNormals,
                           double* votedPenetrations,
                           float3* zeroAreaNormals,
                           double* zeroAreaPenetrations,

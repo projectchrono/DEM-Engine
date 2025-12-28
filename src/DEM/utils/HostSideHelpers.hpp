@@ -88,6 +88,13 @@ inline void displayDeviceFloat3(T1* arr, size_t n) {
     std::cout << std::endl;
 }
 
+template <typename T1 = float3>
+inline std::vector<T1> getDeviceFloat3(T1* arr, size_t n) {
+    std::vector<T1> tmp(n);
+    DEME_GPU_CALL(cudaMemcpy(tmp.data(), arr, n * sizeof(T1), cudaMemcpyDeviceToHost));
+    return tmp;
+}
+
 template <typename T1>
 inline T1 vector_sum(const std::vector<T1>& vect) {
     T1 sum_of_elems = std::accumulate(vect.begin(), vect.end(), T1(0));

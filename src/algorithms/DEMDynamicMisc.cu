@@ -123,7 +123,7 @@ void getContactForcesConcerningOwners(float3* d_points,
 // Kernel to compute weighted normals (normal * area) for voting
 // Also prepares the area values for reduction and extracts the keys (geomToPatchMap values)
 __global__ void prepareWeightedNormalsForVoting_impl(DEMDataDT* granData,
-                                                     float3* weightedNormals,
+                                                     double3* weightedNormals,
                                                      double* areas,
                                                      contactPairs_t* keys,
                                                      contactPairs_t startOffset,
@@ -133,14 +133,18 @@ __global__ void prepareWeightedNormalsForVoting_impl(DEMDataDT* granData,
         contactPairs_t myContactID = startOffset + idx;
 
         // Get the contact normal from contactForces
-        float3 normal = granData->contactForces[myContactID];
+        double3 normal = to_double3(granData->contactForces[myContactID]);
+        double normalNorm = length(normal);
+        if (abs(normalNorm) > 0.1 && abs(normalNorm - 1.) > 0.1) {
+            DEME_ABORT_KERNEL("%d-th contact normal is not normalized! Norm = %f\n", myContactID, normalNorm);
+        }
 
         // Extract the area (double) from contactPointGeometryB (stored as float3)
         float3 areaStorage = granData->contactPointGeometryB[myContactID];
         double area = float3StorageToDouble(areaStorage);
 
         // Compute weighted normal (normal * area)
-        weightedNormals[idx] = make_float3(normal.x * area, normal.y * area, normal.z * area);
+        weightedNormals[idx] = make_double3(normal.x * area, normal.y * area, normal.z * area);
 
         // Store area for reduction
         areas[idx] = area;
@@ -151,7 +155,7 @@ __global__ void prepareWeightedNormalsForVoting_impl(DEMDataDT* granData,
 }
 
 void prepareWeightedNormalsForVoting(DEMDataDT* granData,
-                                     float3* weightedNormals,
+                                     double3* weightedNormals,
                                      double* areas,
                                      contactPairs_t* keys,
                                      contactPairs_t startOffset,
@@ -169,13 +173,13 @@ void prepareWeightedNormalsForVoting(DEMDataDT* granData,
 // If total area is 0, set result to (0,0,0)
 // Assumes uniqueKeys are sorted (CUB's ReduceByKey maintains sort order)
 // Uses contactPairs_t keys (geomToPatchMap values)
-__global__ void normalizeAndScatterVotedNormals_impl(float3* votedWeightedNormals,
+__global__ void normalizeAndScatterVotedNormals_impl(double3* votedWeightedNormals,
                                                      double* totalAreas,
-                                                     float3* output,
+                                                     double3* output,
                                                      contactPairs_t count) {
     contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
-        float3 votedNormal = make_float3(0, 0, 0);
+        double3 votedNormal = make_double3(0, 0, 0);
         double totalArea = totalAreas[idx];
         if (totalArea > 0.0) {
             // Normalize by dividing by total area (use reciprocal multiplication for efficiency)
@@ -183,6 +187,7 @@ __global__ void normalizeAndScatterVotedNormals_impl(float3* votedWeightedNormal
             votedNormal.x = votedWeightedNormals[idx].x * invTotalArea;
             votedNormal.y = votedWeightedNormals[idx].y * invTotalArea;
             votedNormal.z = votedWeightedNormals[idx].z * invTotalArea;
+            votedNormal = normalize(votedNormal);
         }
         // else: votedNormal remains (0,0,0)
 
@@ -191,9 +196,9 @@ __global__ void normalizeAndScatterVotedNormals_impl(float3* votedWeightedNormal
     }
 }
 
-void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
+void normalizeAndScatterVotedNormals(double3* votedWeightedNormals,
                                      double* totalAreas,
-                                     float3* output,
+                                     double3* output,
                                      contactPairs_t count,
                                      cudaStream_t& this_stream) {
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
@@ -213,7 +218,7 @@ void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
 // If the projection makes penetration negative (tangential contact), it's clamped to 0.
 // Each primitive's useful penetration is then weighted by its contact area.
 __global__ void computeWeightedUsefulPenetration_impl(DEMDataDT* granData,
-                                                      float3* votedNormals,
+                                                      double3* votedNormals,
                                                       contactPairs_t* keys,
                                                       double* weightedPenetrations,
                                                       contactPairs_t startOffsetPrimitive,
@@ -229,12 +234,12 @@ __global__ void computeWeightedUsefulPenetration_impl(DEMDataDT* granData,
         // Get the voted normalized normal for this patch pair
         // Subtract startOffsetPatch to get the local index into votedNormals
         contactPairs_t localPatchIdx = patchIdx - startOffsetPatch;
-        float3 votedNormal = votedNormals[localPatchIdx];
+        double3 votedNormal = votedNormals[localPatchIdx];
         // If voted normal is (0,0,0), meaning all primitive contacts agree on no contact, then the end result must be
         // 0, no special handling needed
 
         // Get the original contact normal (stored in contactForces during primitive force calc)
-        float3 originalNormal = granData->contactForces[myContactID];
+        double3 originalNormal = to_double3(granData->contactForces[myContactID]);
 
         // Get the original penetration depth from contactPointGeometryA (stored as double in float3)
         float3 penetrationStorage = granData->contactPointGeometryA[myContactID];
@@ -271,7 +276,7 @@ __global__ void computeWeightedUsefulPenetration_impl(DEMDataDT* granData,
 }
 
 void computeWeightedUsefulPenetration(DEMDataDT* granData,
-                                      float3* votedNormals,
+                                      double3* votedNormals,
                                       contactPairs_t* keys,
                                       double* weightedPenetrations,
                                       contactPairs_t startOffsetPrimitive,
@@ -468,7 +473,7 @@ void checkPatchHasSATSatisfyingPrimitive(DEMDataDT* granData,
 // For patches with totalArea == 0 OR patchHasSAT = 0: use max-penetration primitive's normal and penetration (Step 8
 // fallback)
 __global__ void finalizePatchResults_impl(double* totalAreas,
-                                          float3* votedNormals,
+                                          double3* votedNormals,
                                           double* votedPenetrations,
                                           float3* zeroAreaNormals,
                                           double* zeroAreaPenetrations,
@@ -485,7 +490,7 @@ __global__ void finalizePatchResults_impl(double* totalAreas,
         // Use voted results only if totalArea > 0 AND at least one primitive satisfies SAT
         if (totalArea > 0.0 && hasSAT) {
             // Normal case: use voted results
-            finalNormals[idx] = votedNormals[idx];
+            finalNormals[idx] = to_float3(votedNormals[idx]);
             finalPenetrations[idx] = votedPenetrations[idx];
         } else {
             // Zero-area case OR no SAT-satisfying primitives: use max-penetration primitive's results (Step 8 fallback)
@@ -496,7 +501,7 @@ __global__ void finalizePatchResults_impl(double* totalAreas,
 }
 
 void finalizePatchResults(double* totalAreas,
-                          float3* votedNormals,
+                          double3* votedNormals,
                           double* votedPenetrations,
                           float3* zeroAreaNormals,
                           double* zeroAreaPenetrations,

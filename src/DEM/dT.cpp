@@ -2310,8 +2310,8 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
             // force pairs. All elements that share the same geomToPatchMap value vote together.
             if (countPrimitive > 0) {
                 // Allocate temporary arrays for the voting process
-                float3* weightedNormals =
-                    (float3*)solverScratchSpace.allocateTempVector("weightedNormals", countPrimitive * sizeof(float3));
+                double3* weightedNormals =
+                    (double3*)solverScratchSpace.allocateTempVector("weightedNormals", countPrimitive * sizeof(double3));
                 double* areas =
                     (double*)solverScratchSpace.allocateTempVector("areas", countPrimitive * sizeof(double));
                 // Keys extracted from geomToPatchMap - these map primitives to patch pairs
@@ -2321,8 +2321,8 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 // Allocate arrays for reduce-by-key results (uniqueKeys uses contactPairs_t, not patchIDPair_t)
                 contactPairs_t* uniqueKeys = (contactPairs_t*)solverScratchSpace.allocateTempVector(
                     "uniqueKeys", countPrimitive * sizeof(contactPairs_t));
-                float3* votedWeightedNormals = (float3*)solverScratchSpace.allocateTempVector(
-                    "votedWeightedNormals", countPrimitive * sizeof(float3));
+                double3* votedWeightedNormals = (double3*)solverScratchSpace.allocateTempVector(
+                    "votedWeightedNormals", countPrimitive * sizeof(double3));
                 double* totalAreas =
                     (double*)solverScratchSpace.allocateTempVector("totalAreas", countPrimitive * sizeof(double));
                 solverScratchSpace.allocateDualStruct("numUniqueKeys");
@@ -2335,7 +2335,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
 
                 // Step 2: Reduce-by-key for weighted normals (sum)
                 // The keys are geomToPatchMap values (contactPairs_t), which group primitives by patch pair
-                cubSumReduceByKey<contactPairs_t, float3>(keys, uniqueKeys, weightedNormals, votedWeightedNormals,
+                cubSumReduceByKey<contactPairs_t, double3>(keys, uniqueKeys, weightedNormals, votedWeightedNormals,
                                                           numUniqueKeys, countPrimitive, streamInfo.stream,
                                                           solverScratchSpace);
                 solverScratchSpace.finishUsingTempVector("weightedNormals");
@@ -2360,12 +2360,27 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                                           countPrimitive, streamInfo.stream, solverScratchSpace);
 
                 // Step 4: Normalize the voted normals by total area and scatter back to a temp array.
-                float3* votedNormals =
-                    (float3*)solverScratchSpace.allocateTempVector("votedNormals", countPatch * sizeof(float3));
+                double3* votedNormals =
+                    (double3*)solverScratchSpace.allocateTempVector("votedNormals", countPatch * sizeof(double3));
                 normalizeAndScatterVotedNormals(votedWeightedNormals, totalAreas, votedNormals, countPatch,
                                                 streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
                 // displayDeviceFloat3(votedNormals, countPatch);
+                std::vector<double3> votedNormalsHost = getDeviceFloat3<double3>(votedNormals, countPatch);
+                for (size_t idx = 0; idx < countPatch; idx++) {
+                    double normalNorm = sqrt(votedNormalsHost[idx].x * votedNormalsHost[idx].x +
+                                             votedNormalsHost[idx].y * votedNormalsHost[idx].y +
+                                             votedNormalsHost[idx].z * votedNormalsHost[idx].z);
+                    const double thres = 0.4;
+                    if (std::abs(normalNorm - 1.) > thres && std::abs(normalNorm - 0.) > thres) {
+                        std::cout << "Areas vec: " << std::endl;
+                        displayDeviceArray<double>(totalAreas, countPrimitive);
+                        DEME_ERROR(
+                            "Patch-based contact voting produced non-unit normal (norm = %.9g) for patch index %zu "
+                            "for contact type %d!",
+                            normalNorm, idx, contact_type);
+                    }
+                }
 
                 // Step 5: Compute weighted useful penetration for each primitive contact
                 // Reuse keys array for the reduce-by-key operation
@@ -2452,6 +2467,11 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     (double*)solverScratchSpace.allocateTempVector("contactWeights", countPrimitive * sizeof(double));
                 computeWeightedContactPoints(&granData, weightedContactPoints, contactWeights, startOffsetPrimitive,
                                              countPrimitive, streamInfo.stream);
+                // std::cout << "Keys, weighted contact points and weights for contact type " << (int)contact_type << ":"
+                //           << std::endl;
+                //           displayDeviceArray<contactPairs_t>(keys, countPrimitive);
+                // displayDeviceFloat3<double3>(weightedContactPoints, countPrimitive);
+                // displayDeviceArray<double>(contactWeights, countPrimitive);
 
                 // Step 11: Reduce-by-key to get total weighted contact points per patch pair
                 double3* totalWeightedContactPoints = (double3*)solverScratchSpace.allocateTempVector(
@@ -2486,12 +2506,12 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 // - finalPenetrations: final penetration depth per patch pair (countPatch elements)
                 // - finalContactPoints: final contact point per patch pair (countPatch elements)
                 // These can be used for subsequent force calculations
-                // std::cout << "Patch-based contact penetration, area, normal, contact point for contact type "
-                //           << (int)contact_type << ":" << std::endl;
-                // displayDeviceArray<double>(finalPenetrations, countPatch);
-                // displayDeviceArray<double>(totalAreas, countPatch);
-                // displayDeviceFloat3(finalNormals, countPatch);
-                // displayDeviceFloat3<double3>(finalContactPoints, countPatch);
+                std::cout << "Patch-based contact penetration, area, normal, contact point for contact type "
+                          << (int)contact_type << ":" << std::endl;
+                displayDeviceArray<double>(finalPenetrations, countPatch);
+                displayDeviceArray<double>(totalAreas, countPatch);
+                displayDeviceFloat3(finalNormals, countPatch);
+                displayDeviceFloat3<double3>(finalContactPoints, countPatch);
 
                 // Call specialized patch-based force correction kernels here
                 if (contactTypePatchKernelMap.count(contact_type) > 0) {
@@ -2553,11 +2573,11 @@ void DEMDynamicThread::calculateForces() {
         dispatchPatchBasedForceCorrections(typeStartCountPrimitiveMap, typeStartCountPatchMap,
                                            contactTypePatchKernelMap);
 
-        // displayDeviceFloat3(granData->contactForces, nContactPairs);
+        displayDeviceFloat3(granData->contactForces, nContactPairs);
         // displayDeviceArray<contact_t>(granData->contactTypePatch, nContactPairs);
         // displayDeviceArray<bodyID_t>(granData->idPatchA, nContactPairs);
         // displayDeviceArray<bodyID_t>(granData->idPatchB, nContactPairs);
-        // std::cout << "===========================" << std::endl;
+        std::cout << "===========================" << std::endl;
         timers.GetTimer("Calculate contact forces").stop();
 
         if (!solverFlags.useForceCollectInPlace) {
