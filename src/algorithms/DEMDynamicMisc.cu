@@ -397,7 +397,7 @@ __global__ void findMaxPenetrationPrimitiveForZeroAreaPatches_impl(DEMDataDT* gr
             // erroneous detection, we could have a positive max here (search for CubOpMaxNegative to understand how
             // this max is derived). In that case, we give it a very negative number, so in the patch-based force
             // calculation, this one is considered a non-contact.
-            
+
             // Also store the contact point from this max-penetration primitive
             double3 myContactPoint = to_double3(granData->contactTorque_convToForce[myContactID]);
             zeroAreaContactPoints[localPatchIdx] = myContactPoint;
@@ -478,11 +478,14 @@ void checkPatchHasSATSatisfyingPrimitive(DEMDataDT* granData,
 __global__ void finalizePatchResults_impl(double* totalAreas,
                                           float3* votedNormals,
                                           double* votedPenetrations,
+                                          double3* votedContactPoints,
                                           float3* zeroAreaNormals,
                                           double* zeroAreaPenetrations,
+                                          double3* zeroAreaContactPoints,
                                           notStupidBool_t* patchHasSAT,
                                           float3* finalNormals,
                                           double* finalPenetrations,
+                                          double3* finalContactPoints,
                                           contactPairs_t count) {
     contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
@@ -495,10 +498,12 @@ __global__ void finalizePatchResults_impl(double* totalAreas,
             // Normal case: use voted results
             finalNormals[idx] = votedNormals[idx];
             finalPenetrations[idx] = votedPenetrations[idx];
+            finalContactPoints[idx] = votedContactPoints[idx];
         } else {
             // Zero-area case OR no SAT-satisfying primitives: use max-penetration primitive's results (Step 8 fallback)
             finalNormals[idx] = zeroAreaNormals[idx];
             finalPenetrations[idx] = zeroAreaPenetrations[idx];
+            finalContactPoints[idx] = zeroAreaContactPoints[idx];
         }
     }
 }
@@ -506,59 +511,21 @@ __global__ void finalizePatchResults_impl(double* totalAreas,
 void finalizePatchResults(double* totalAreas,
                           float3* votedNormals,
                           double* votedPenetrations,
+                          double3* votedContactPoints,
                           float3* zeroAreaNormals,
                           double* zeroAreaPenetrations,
+                          double3* zeroAreaContactPoints,
                           notStupidBool_t* patchHasSAT,
                           float3* finalNormals,
                           double* finalPenetrations,
+                          double3* finalContactPoints,
                           contactPairs_t count,
                           cudaStream_t& this_stream) {
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         finalizePatchResults_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            totalAreas, votedNormals, votedPenetrations, zeroAreaNormals, zeroAreaPenetrations, patchHasSAT,
-            finalNormals, finalPenetrations, count);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-    }
-}
-
-// Kernel to finalize patch contact points by combining voting results with zero-area case handling
-// For patches with totalArea > 0 AND patchHasSAT = 1: use voted contact point
-// For patches with totalArea == 0 OR patchHasSAT = 0: use max-penetration primitive's contact point (Step 8 fallback)
-__global__ void finalizePatchContactPoints_impl(double* totalAreas,
-                                                 double3* votedContactPoints,
-                                                 double3* zeroAreaContactPoints,
-                                                 notStupidBool_t* patchHasSAT,
-                                                 double3* finalContactPoints,
-                                                 contactPairs_t count) {
-    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < count) {
-        double totalArea = totalAreas[idx];
-        // Default to 1 (SAT satisfied) for non-triangle-triangle contacts where patchHasSAT is null
-        notStupidBool_t hasSAT = (patchHasSAT != nullptr) ? patchHasSAT[idx] : 1;
-
-        // Use voted results only if totalArea > 0 AND at least one primitive satisfies SAT
-        if (totalArea > 0.0 && hasSAT) {
-            // Normal case: use voted contact point
-            finalContactPoints[idx] = votedContactPoints[idx];
-        } else {
-            // Zero-area case OR no SAT-satisfying primitives: use max-penetration primitive's contact point (Step 8 fallback)
-            finalContactPoints[idx] = zeroAreaContactPoints[idx];
-        }
-    }
-}
-
-void finalizePatchContactPoints(double* totalAreas,
-                                 double3* votedContactPoints,
-                                 double3* zeroAreaContactPoints,
-                                 notStupidBool_t* patchHasSAT,
-                                 double3* finalContactPoints,
-                                 contactPairs_t count,
-                                 cudaStream_t& this_stream) {
-    size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-    if (blocks_needed > 0) {
-        finalizePatchContactPoints_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            totalAreas, votedContactPoints, zeroAreaContactPoints, patchHasSAT, finalContactPoints, count);
+            totalAreas, votedNormals, votedPenetrations, votedContactPoints, zeroAreaNormals, zeroAreaPenetrations,
+            zeroAreaContactPoints, patchHasSAT, finalNormals, finalPenetrations, finalContactPoints, count);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }

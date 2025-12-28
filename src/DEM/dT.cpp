@@ -2391,50 +2391,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                                 streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("totalWeightedPenetrations");
 
-                // Step 8: Handle zero-area patches (all primitive areas are 0)
-                // For these patches, we need to find the max penetration primitive and use its normal/penetration
-
-                // 8a: Extract primitive penetrations for max-reduce
-                double* primitivePenetrations = (double*)solverScratchSpace.allocateTempVector(
-                    "primitivePenetrations", countPrimitive * sizeof(double));
-                extractPrimitivePenetrations(&granData, primitivePenetrations, startOffsetPrimitive, countPrimitive,
-                                             streamInfo.stream);
-
-                // 8b: Max-negative-reduce-by-key to get max negative penetration per patch
-                // This finds the largest negative value (smallest absolute value among negatives)
-                // Positive values are treated as very negative to indicate invalid/non-physical state
-                double* maxPenetrations =
-                    (double*)solverScratchSpace.allocateTempVector("maxPenetrations", countPatch * sizeof(double));
-                cubMaxNegativeReduceByKey<contactPairs_t, double>(keys, uniqueKeys, primitivePenetrations,
-                                                                  maxPenetrations, numUniqueKeys, countPrimitive,
-                                                                  streamInfo.stream, solverScratchSpace);
-                solverScratchSpace.finishUsingTempVector("primitivePenetrations");
-
-                // 8c: Find max-penetration primitives for zero-area patches and extract their normals, penetrations, and contact points
-                float3* zeroAreaNormals =
-                    (float3*)solverScratchSpace.allocateTempVector("zeroAreaNormals", countPatch * sizeof(float3));
-                double* zeroAreaPenetrations =
-                    (double*)solverScratchSpace.allocateTempVector("zeroAreaPenetrations", countPatch * sizeof(double));
-                double3* zeroAreaContactPoints =
-                    (double3*)solverScratchSpace.allocateTempVector("zeroAreaContactPoints", countPatch * sizeof(double3));
-                findMaxPenetrationPrimitiveForZeroAreaPatches(&granData, totalAreas, maxPenetrations, zeroAreaNormals,
-                                                              zeroAreaPenetrations, zeroAreaContactPoints, keys,
-                                                              startOffsetPrimitive, startOffsetPatch, countPrimitive,
-                                                              streamInfo.stream);
-                solverScratchSpace.finishUsingTempVector("maxPenetrations");
-
-                // Step 8d: Check if each patch has any SAT-satisfying primitive (for tri-tri contacts)
-                // If no primitive satisfies SAT, the patch contact is non-physical and should use Step 8 fallback
-                notStupidBool_t* patchHasSAT = nullptr;
-                if (contact_type == TRIANGLE_TRIANGLE_CONTACT) {
-                    patchHasSAT = (notStupidBool_t*)solverScratchSpace.allocateTempVector(
-                        "patchHasSAT", countPatch * sizeof(notStupidBool_t));
-                    checkPatchHasSATSatisfyingPrimitive(&granData, patchHasSAT, keys, startOffsetPrimitive,
-                                                        startOffsetPatch, countPrimitive, countPatch,
-                                                        streamInfo.stream);
-                }
-
-                // Step 8e: Compute weighted contact points for each primitive (before finalization)
+                // Step 8: Compute weighted contact points for each primitive (normal case)
                 // Reuse keys, uniqueKeys, and numUniqueKeys that are still allocated
                 double3* weightedContactPoints = (double3*)solverScratchSpace.allocateTempVector(
                     "weightedContactPoints", countPrimitive * sizeof(double3));
@@ -2442,8 +2399,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     (double*)solverScratchSpace.allocateTempVector("contactWeights", countPrimitive * sizeof(double));
                 computeWeightedContactPoints(&granData, weightedContactPoints, contactWeights, startOffsetPrimitive,
                                              countPrimitive, streamInfo.stream);
-
-                // Step 8f: Reduce-by-key to get total weighted contact points per patch pair
+                // Reduce-by-key to get total weighted contact points per patch pair
                 double3* totalWeightedContactPoints = (double3*)solverScratchSpace.allocateTempVector(
                     "totalWeightedContactPoints", countPatch * sizeof(double3));
                 double* totalContactWeights =
@@ -2456,8 +2412,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                                           solverScratchSpace);
                 solverScratchSpace.finishUsingTempVector("weightedContactPoints");
                 solverScratchSpace.finishUsingTempVector("contactWeights");
-
-                // Step 8g: Compute voted contact points per patch pair by dividing by total weight
+                // Compute voted contact points per patch pair by dividing by total weight
                 double3* votedContactPoints =
                     (double3*)solverScratchSpace.allocateTempVector("votedContactPoints", countPatch * sizeof(double3));
                 computeFinalContactPointsPerPatch(totalWeightedContactPoints, totalContactWeights, votedContactPoints,
@@ -2465,17 +2420,65 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("totalWeightedContactPoints");
                 solverScratchSpace.finishUsingTempVector("totalContactWeights");
 
-                // Step 9: Finalize patch results by combining voting with zero-area handling
+                // Step 9: Handle zero-area patches (all primitive areas are 0)
+                // For these patches, we need to find the max penetration primitive and use its normal/penetration
+
+                // 9a: Extract primitive penetrations for max-reduce
+                double* primitivePenetrations = (double*)solverScratchSpace.allocateTempVector(
+                    "primitivePenetrations", countPrimitive * sizeof(double));
+                extractPrimitivePenetrations(&granData, primitivePenetrations, startOffsetPrimitive, countPrimitive,
+                                             streamInfo.stream);
+
+                // 9b: Max-negative-reduce-by-key to get max negative penetration per patch
+                // This finds the largest negative value (smallest absolute value among negatives)
+                // Positive values are treated as very negative to indicate invalid/non-physical state
+                double* maxPenetrations =
+                    (double*)solverScratchSpace.allocateTempVector("maxPenetrations", countPatch * sizeof(double));
+                cubMaxNegativeReduceByKey<contactPairs_t, double>(keys, uniqueKeys, primitivePenetrations,
+                                                                  maxPenetrations, numUniqueKeys, countPrimitive,
+                                                                  streamInfo.stream, solverScratchSpace);
+                solverScratchSpace.finishUsingTempVector("primitivePenetrations");
+
+                // 9c: Find max-penetration primitives for zero-area patches and extract their normals, penetrations,
+                // and contact points
+                float3* zeroAreaNormals =
+                    (float3*)solverScratchSpace.allocateTempVector("zeroAreaNormals", countPatch * sizeof(float3));
+                double* zeroAreaPenetrations =
+                    (double*)solverScratchSpace.allocateTempVector("zeroAreaPenetrations", countPatch * sizeof(double));
+                double3* zeroAreaContactPoints = (double3*)solverScratchSpace.allocateTempVector(
+                    "zeroAreaContactPoints", countPatch * sizeof(double3));
+                findMaxPenetrationPrimitiveForZeroAreaPatches(&granData, totalAreas, maxPenetrations, zeroAreaNormals,
+                                                              zeroAreaPenetrations, zeroAreaContactPoints, keys,
+                                                              startOffsetPrimitive, startOffsetPatch, countPrimitive,
+                                                              streamInfo.stream);
+                solverScratchSpace.finishUsingTempVector("maxPenetrations");
+
+                // Step 9d: Check if each patch has any SAT-satisfying primitive (for tri-tri contacts)
+                // If no primitive satisfies SAT, the patch contact is non-physical and should use Step 9 fallback
+                notStupidBool_t* patchHasSAT = nullptr;
+                if (contact_type == TRIANGLE_TRIANGLE_CONTACT) {
+                    patchHasSAT = (notStupidBool_t*)solverScratchSpace.allocateTempVector(
+                        "patchHasSAT", countPatch * sizeof(notStupidBool_t));
+                    checkPatchHasSATSatisfyingPrimitive(&granData, patchHasSAT, keys, startOffsetPrimitive,
+                                                        startOffsetPatch, countPrimitive, countPatch,
+                                                        streamInfo.stream);
+                }
+
+                // Clean up keys arrays now that we're done with reductions
+                solverScratchSpace.finishUsingTempVector("votingKeys");
+                solverScratchSpace.finishUsingTempVector("uniqueKeys");
+                solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
+
+                // Step 10: Finalize patch results by combining voting with zero-area handling
                 float3* finalNormals =
                     (float3*)solverScratchSpace.allocateTempVector("finalNormals", countPatch * sizeof(float3));
                 double* finalPenetrations =
                     (double*)solverScratchSpace.allocateTempVector("finalPenetrations", countPatch * sizeof(double));
                 double3* finalContactPoints =
                     (double3*)solverScratchSpace.allocateTempVector("finalContactPoints", countPatch * sizeof(double3));
-                finalizePatchResults(totalAreas, votedNormals, totalPenetrations, zeroAreaNormals, zeroAreaPenetrations,
-                                     patchHasSAT, finalNormals, finalPenetrations, countPatch, streamInfo.stream);
-                finalizePatchContactPoints(totalAreas, votedContactPoints, zeroAreaContactPoints, patchHasSAT,
-                                          finalContactPoints, countPatch, streamInfo.stream);
+                finalizePatchResults(totalAreas, votedNormals, totalPenetrations, votedContactPoints, zeroAreaNormals,
+                                     zeroAreaPenetrations, zeroAreaContactPoints, patchHasSAT, finalNormals,
+                                     finalPenetrations, finalContactPoints, countPatch, streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("votedNormals");
                 solverScratchSpace.finishUsingTempVector("totalPenetrations");
                 solverScratchSpace.finishUsingTempVector("zeroAreaNormals");
@@ -2483,11 +2486,6 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("votedContactPoints");
                 solverScratchSpace.finishUsingTempVector("zeroAreaContactPoints");
                 solverScratchSpace.finishUsingTempVector("patchHasSAT");
-
-                // Clean up keys arrays now that we're done with reductions
-                solverScratchSpace.finishUsingTempVector("votingKeys");
-                solverScratchSpace.finishUsingTempVector("uniqueKeys");
-                solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
 
                 // Now we have:
                 // - totalAreas: total contact area per patch pair (countPatch elements)
