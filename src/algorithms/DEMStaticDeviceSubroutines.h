@@ -189,13 +189,14 @@ void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
                                      contactPairs_t count,
                                      cudaStream_t& this_stream);
 
-// Computes weighted useful penetration for each primitive contact
-// The "useful" penetration is the original penetration projected onto the voted normal
-// Each primitive's useful penetration is then weighted by its contact area
+// Computes projected penetration and area for each primitive contact
+// Both the penetration and area are projected onto the voted normal
+// If the projected penetration becomes negative, both are set to 0
 void computeWeightedUsefulPenetration(DEMDataDT* granData,
                                       float3* votedNormals,
                                       contactPairs_t* keys,
-                                      double* weightedPenetrations,
+                                      double* projectedPenetrations,
+                                      double* projectedAreas,
                                       contactPairs_t startOffsetPrimitive,
                                       contactPairs_t startOffsetPatch,
                                       contactPairs_t count,
@@ -250,6 +251,7 @@ void finalizePatchResults(double* totalAreas,
                           double* zeroAreaPenetrations,
                           double3* zeroAreaContactPoints,
                           notStupidBool_t* patchHasSAT,
+                          double* finalAreas,
                           float3* finalNormals,
                           double* finalPenetrations,
                           double3* finalContactPoints,
@@ -266,10 +268,12 @@ void finalizePatchContactPoints(double* totalAreas,
                                 cudaStream_t& this_stream);
 
 // Computes weighted contact points for each primitive contact
-// The weight is: penetration * area
+// The weight is: projected_penetration * projected_area
 void computeWeightedContactPoints(DEMDataDT* granData,
                                   double3* weightedContactPoints,
                                   double* weights,
+                                  double* projectedPenetrations,
+                                  double* projectedAreas,
                                   contactPairs_t startOffsetPrimitive,
                                   contactPairs_t count,
                                   cudaStream_t& this_stream);
