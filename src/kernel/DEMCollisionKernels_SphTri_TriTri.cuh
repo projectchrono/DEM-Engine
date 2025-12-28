@@ -1111,27 +1111,24 @@ __device__ bool checkTriangleTriangleOverlap(
 
     // Average the results from both projections
     if (contactBA && contactAB) {
-        // Both directions have contact - average the results
-        depth = (depthBA + depthAB) / 2.0;
-        projectedArea = (areaBA + areaAB) / 2.0;
+        // Both projections have contact, choose the one with smaller projected area
+        if (areaBA < areaAB) {
+            // Use B->A projection results
+            depth = depthBA;
+            projectedArea = areaBA;
+            normal = -1.0 * nA;  // Pay attention to direction
 
-        // Contact normal: average of the two normals (pointing from B to A)
-        // Note: nA points outward from A, so when B is submerged below A, B2A is the inverse of nA
-        // Similarly, nB is the contact normal when A is submerged below B
-        T1 normalBA = -1.0 * nA;
-        T1 normalAB = nB;
-        T1 normalSum = normalBA + normalAB;
-        T2 normalSumLen2 = dot(normalSum, normalSum);
-        if (normalSumLen2 > DEME_TINY_FLOAT * DEME_TINY_FLOAT) {
-            normal = normalSum * rsqrt(normalSumLen2);
+            // Contact point: centroid on A's plane, moved back by half depth
+            point = centroidBA - nA * (depth * 0.5);
         } else {
-            // Normals are nearly opposite - use one of them
+            // Use A->B projection results
+            depth = depthAB;
+            projectedArea = areaAB;
             normal = nB;
-        }
 
-        // Contact point: midpoint between the two centroids
-        T1 midCentroid = (centroidBA + centroidAB) / 2.0;
-        point = midCentroid;
+            // Contact point: centroid on B's plane, moved back by half depth
+            point = centroidAB - nB * (depth * 0.5);
+        }
     } else if (contactBA) {
         // Only B->A projection has contact
         depth = depthBA;

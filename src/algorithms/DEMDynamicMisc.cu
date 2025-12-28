@@ -183,6 +183,8 @@ __global__ void normalizeAndScatterVotedNormals_impl(float3* votedWeightedNormal
             votedNormal.x = votedWeightedNormals[idx].x * invTotalArea;
             votedNormal.y = votedWeightedNormals[idx].y * invTotalArea;
             votedNormal.z = votedWeightedNormals[idx].z * invTotalArea;
+            // Normalization is needed, as voting by area can destroy unit length
+            votedNormal = normalize(votedNormal);
         }
         // else: votedNormal remains (0,0,0)
 
