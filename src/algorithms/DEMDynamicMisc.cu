@@ -352,7 +352,7 @@ void extractPrimitivePenetrations(DEMDataDT* granData,
 }
 
 // Kernel to handle zero-area patches by finding the primitive with max penetration
-// and using its penetration and normal for the patch result.
+// and using its penetration, normal, and contact point for the patch result.
 // For each primitive, check if it has the max penetration for its patch.
 // Note: Race condition when multiple primitives have the same max penetration is acceptable
 // since any of them produces a valid result.
@@ -361,6 +361,7 @@ __global__ void findMaxPenetrationPrimitiveForZeroAreaPatches_impl(DEMDataDT* gr
                                                                    double* maxPenetrations,
                                                                    float3* zeroAreaNormals,
                                                                    double* zeroAreaPenetrations,
+                                                                   double3* zeroAreaContactPoints,
                                                                    contactPairs_t* keys,
                                                                    contactPairs_t startOffsetPrimitive,
                                                                    contactPairs_t startOffsetPatch,
@@ -385,7 +386,7 @@ __global__ void findMaxPenetrationPrimitiveForZeroAreaPatches_impl(DEMDataDT* gr
         double relTol = 1e-12;  // Relative tolerance for larger values
         double tolerance = fmax(absTol, fabs(maxPen) * relTol);
         if (fabs(myPenetration - maxPen) <= tolerance) {
-            // This primitive has the max penetration - use its normal
+            // This primitive has the max penetration - use its normal, penetration, and contact point
             // Note: if multiple primitives have the same max, any one of them is fine
             // The race condition is acceptable since all competing values are valid
             float3 myNormal = granData->contactForces[myContactID];
@@ -396,6 +397,10 @@ __global__ void findMaxPenetrationPrimitiveForZeroAreaPatches_impl(DEMDataDT* gr
             // erroneous detection, we could have a positive max here (search for CubOpMaxNegative to understand how
             // this max is derived). In that case, we give it a very negative number, so in the patch-based force
             // calculation, this one is considered a non-contact.
+            
+            // Also store the contact point from this max-penetration primitive
+            double3 myContactPoint = to_double3(granData->contactTorque_convToForce[myContactID]);
+            zeroAreaContactPoints[localPatchIdx] = myContactPoint;
         }
     }
 }
@@ -405,6 +410,7 @@ void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
                                                    double* maxPenetrations,
                                                    float3* zeroAreaNormals,
                                                    double* zeroAreaPenetrations,
+                                                   double3* zeroAreaContactPoints,
                                                    contactPairs_t* keys,
                                                    contactPairs_t startOffsetPrimitive,
                                                    contactPairs_t startOffsetPatch,
@@ -414,8 +420,8 @@ void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
     if (blocks_needed > 0) {
         findMaxPenetrationPrimitiveForZeroAreaPatches_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0,
                                                              this_stream>>>(
-            granData, totalAreas, maxPenetrations, zeroAreaNormals, zeroAreaPenetrations, keys, startOffsetPrimitive,
-            startOffsetPatch, countPrimitive);
+            granData, totalAreas, maxPenetrations, zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, keys,
+            startOffsetPrimitive, startOffsetPatch, countPrimitive);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
@@ -512,6 +518,47 @@ void finalizePatchResults(double* totalAreas,
         finalizePatchResults_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             totalAreas, votedNormals, votedPenetrations, zeroAreaNormals, zeroAreaPenetrations, patchHasSAT,
             finalNormals, finalPenetrations, count);
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
+// Kernel to finalize patch contact points by combining voting results with zero-area case handling
+// For patches with totalArea > 0 AND patchHasSAT = 1: use voted contact point
+// For patches with totalArea == 0 OR patchHasSAT = 0: use max-penetration primitive's contact point (Step 8 fallback)
+__global__ void finalizePatchContactPoints_impl(double* totalAreas,
+                                                 double3* votedContactPoints,
+                                                 double3* zeroAreaContactPoints,
+                                                 notStupidBool_t* patchHasSAT,
+                                                 double3* finalContactPoints,
+                                                 contactPairs_t count) {
+    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < count) {
+        double totalArea = totalAreas[idx];
+        // Default to 1 (SAT satisfied) for non-triangle-triangle contacts where patchHasSAT is null
+        notStupidBool_t hasSAT = (patchHasSAT != nullptr) ? patchHasSAT[idx] : 1;
+
+        // Use voted results only if totalArea > 0 AND at least one primitive satisfies SAT
+        if (totalArea > 0.0 && hasSAT) {
+            // Normal case: use voted contact point
+            finalContactPoints[idx] = votedContactPoints[idx];
+        } else {
+            // Zero-area case OR no SAT-satisfying primitives: use max-penetration primitive's contact point (Step 8 fallback)
+            finalContactPoints[idx] = zeroAreaContactPoints[idx];
+        }
+    }
+}
+
+void finalizePatchContactPoints(double* totalAreas,
+                                 double3* votedContactPoints,
+                                 double3* zeroAreaContactPoints,
+                                 notStupidBool_t* patchHasSAT,
+                                 double3* finalContactPoints,
+                                 contactPairs_t count,
+                                 cudaStream_t& this_stream) {
+    size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        finalizePatchContactPoints_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            totalAreas, votedContactPoints, zeroAreaContactPoints, patchHasSAT, finalContactPoints, count);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
