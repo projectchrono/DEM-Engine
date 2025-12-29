@@ -35,7 +35,7 @@ void SetBoxesHeight(const std::vector<std::shared_ptr<DEMTracker>>& trackers, fl
 // Helper function to set Z coordinate for a collection of boxes
 void SetBoxesInitVel(const std::vector<std::shared_ptr<DEMTracker>>& trackers, float vel) {
     for (size_t j = 0; j < trackers.size(); j++) {
-        trackers[j]->SetVel(make_float3(0, vel, 0));  
+        trackers[j]->SetVel(make_float3(0, vel, 0));
     }
 }
 
@@ -146,15 +146,15 @@ int main() {
     create_directory(out_dir);
 
     std::cout << "\n--- Running Simulation ---" << std::endl;
-    float frame_time = 5e-2;  // Output every 0.05 seconds
+    float frame_time = 1e-2;  // Output every 0.05 seconds
     int frame = 0;
     int frame_step = (int)(frame_time / step_time);
     double final_time = 5.0;  // 5 seconds simulation
 
     // Parameters for periodic lifting
-    double lift_period = 1.0;     // Lift boxes every 1 second
-    double lift_duration = 0.3;   // Keep lifted for 0.3 seconds
-    double lift_height = 2.;     // Lift 3 units above contact plane
+    double lift_period = 1.0;      // Lift boxes every 1 second
+    double lift_duration = 0.3;    // Keep lifted for 0.3 seconds
+    double lift_height = 2.;       // Lift 3 units above contact plane
     double contact_height = 0.51;  // Normal contact height
 
     double last_lift_time = 0.0;

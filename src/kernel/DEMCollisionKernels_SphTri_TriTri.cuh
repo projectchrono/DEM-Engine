@@ -1086,7 +1086,7 @@ __device__ bool checkTriangleTriangleOverlap(
     bool contactAB = projectTriangleOntoTriangle<T1, T2>(triA, triB, nB, depthAB, areaAB, centroidAB);
 
     // Determine if there is contact
-    bool inContact = contactBA || contactAB;
+    bool inContact = contactBA && contactAB;
 
     if (!inContact) {
         // No contact detected, Provide separation info
@@ -1133,50 +1133,50 @@ __device__ bool checkTriangleTriangleOverlap(
         // T1 midCentroid = (centroidBA + centroidAB) / 2.0;
         // point = midCentroid;
 
+        if (depthBA < depthAB) {
+            // Use B->A projection results
+            depth = depthBA;
+            projectedArea = areaBA;
+            normal = -1.0 * nA;  // Pay attention to direction
 
-        // if (areaBA >= areaAB) {
-        //     // Use B->A projection results
-        //     depth = depthBA;
-        //     projectedArea = areaBA;
-        //     normal = -1.0 * nA;  // Pay attention to direction
+            // Contact point: centroid on A's plane, moved back by half depth
+            point = centroidBA - nA * (depth * 0.5);
+        } else {
+            // Use A->B projection results
+            depth = depthAB;
+            projectedArea = areaAB;
+            normal = nB;
 
-        //     // Contact point: centroid on A's plane, moved back by half depth
-        //     point = centroidBA - nA * (depth * 0.5);
-        // } else {
-        //     // Use A->B projection results
-        //     depth = depthAB;
-        //     projectedArea = areaAB;
-        //     normal = nB;
+            // Contact point: centroid on B's plane, moved back by half depth
+            point = centroidAB - nB * (depth * 0.5);
+        }
 
-        //     // Contact point: centroid on B's plane, moved back by half depth
-        //     point = centroidAB - nB * (depth * 0.5);
-        // }
+        // // Use A->B projection results
+        // depth = depthAB;
+        // projectedArea = areaAB;
+        // normal = nB;
 
-        // Use A->B projection results
-        depth = depthAB;
-        projectedArea = areaAB;
-        normal = nB;
-
-        // Contact point: centroid on B's plane, moved back by half depth
-        point = centroidAB - nB * (depth * 0.5);
-
-    } else if (contactBA) {
-        // Only B->A projection has contact
-        depth = depthBA;
-        projectedArea = areaBA;
-        normal = -1.0 * nA;  // Pay attention to direction
-
-        // Contact point: centroid on A's plane, moved back by half depth
-        point = centroidBA - nA * (depth * 0.5);
-    } else {
-        // Only A->B projection has contact
-        depth = depthAB;
-        projectedArea = areaAB;
-        normal = nB;
-
-        // Contact point: centroid on B's plane, moved back by half depth
-        point = centroidAB - nB * (depth * 0.5);
+        // // Contact point: centroid on B's plane, moved back by half depth
+        // point = centroidAB - nB * (depth * 0.5);
     }
+
+    // else if (contactBA) {
+    //     // Only B->A projection has contact
+    //     depth = depthBA;
+    //     projectedArea = areaBA;
+    //     normal = -1.0 * nA;  // Pay attention to direction
+
+    //     // Contact point: centroid on A's plane, moved back by half depth
+    //     point = centroidBA - nA * (depth * 0.5);
+    // } else {
+    //     // Only A->B projection has contact
+    //     depth = depthAB;
+    //     projectedArea = areaAB;
+    //     normal = nB;
+
+    //     // Contact point: centroid on B's plane, moved back by half depth
+    //     point = centroidAB - nB * (depth * 0.5);
+    // }
 
     return true;
 }
