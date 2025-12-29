@@ -95,6 +95,24 @@ inline void displayDeviceFloat3(T1* arr, size_t n) {
     std::cout << std::endl;
 }
 
+// A host vector view function
+template <typename T1>
+inline void displayHostArray(T1* arr, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        std::cout << +(arr[i]) << " ";
+    }
+    std::cout << std::endl;
+}
+
+// A host float3 vector view function
+template <typename T1 = float3>
+inline void displayHostFloat3(T1* arr, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        std::cout << "(" << +(arr[i].x) << ", " << +(arr[i].y) << ", " << +(arr[i].z) << "), ";
+    }
+    std::cout << std::endl;
+}
+
 template <typename T1>
 inline T1 vector_sum(const std::vector<T1>& vect) {
     T1 sum_of_elems = std::accumulate(vect.begin(), vect.end(), T1(0));
