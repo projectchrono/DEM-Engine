@@ -4,8 +4,8 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 // =============================================================================
-// A demo featuring multiple particles (boxes, spheres, cones, cylinders) 
-// falling onto an analytical plane, testing triangle-triangle contacts 
+// A demo featuring multiple particles (boxes, spheres, cones, cylinders)
+// falling onto an analytical plane, testing triangle-triangle contacts
 // between diverse mesh types and mesh-plane contacts.
 // =============================================================================
 
@@ -46,7 +46,7 @@ int main() {
     const int num_particles_y = 6;
     const float particle_spacing = 2.0;
     const float initial_height = 8.0;
-    const float base_size = 0.5;  // Base scale for all meshes
+    const float base_size = 0.5;              // Base scale for all meshes
     const float cylinder_scale_factor = 0.5;  // Cylinders scaled down since they're taller
 
     std::vector<std::shared_ptr<DEMTracker>> trackers;
@@ -56,8 +56,8 @@ int main() {
     std::mt19937 gen(rd());
     std::uniform_real_distribution<> pos_dist(-0.1, 0.1);
     std::uniform_real_distribution<> rot_dist(-0.2, 0.2);
-    std::uniform_real_distribution<> scale_dist(0.8, 1.2);  // Scale variation
-    std::uniform_int_distribution<> mesh_type_dist(0, 3);  // 4 mesh types
+    std::uniform_real_distribution<> scale_dist(0.8, 2.4);  // Scale variation
+    std::uniform_int_distribution<> mesh_type_dist(0, 3);   // 4 mesh types
 
     for (int i = 0; i < num_particles_x; i++) {
         for (int j = 0; j < num_particles_y; j++) {
@@ -67,8 +67,8 @@ int main() {
 
             // Select mesh type randomly: 0=cube, 1=sphere, 2=cone, 3=cylinder
             int mesh_type = mesh_type_dist(gen);
-            std::shared_ptr<DEMClumpTemplate> particle;
-            
+            std::shared_ptr<DEMMesh> particle;
+
             if (mesh_type == 0) {
                 // Cube with non-uniform scaling
                 particle = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cube.obj").string(), mat_box);
@@ -76,7 +76,7 @@ int main() {
                 float scale_y = base_size * scale_dist(gen);
                 float scale_z = base_size * scale_dist(gen);
                 particle->Scale(make_float3(scale_x, scale_y, scale_z));  // Non-uniform scaling
-                
+
                 // Set mass and MOI for the box (approximate as uniform density)
                 float mass = 1000.0 * scale_x * scale_y * scale_z;
                 float moi_x = mass * (scale_y * scale_y + scale_z * scale_z) / 12.0;
@@ -89,9 +89,9 @@ int main() {
                 particle = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/sphere.obj").string(), mat_box);
                 float scale = base_size * scale_dist(gen);
                 particle->Scale(scale);
-                
+
                 // Set mass and MOI for sphere
-                float mass = 1000.0 * (4.0/3.0) * math_PI * scale * scale * scale;
+                float mass = 1000.0 * (4.0 / 3.0) * math_PI * scale * scale * scale;
                 float moi = 0.4 * mass * scale * scale;  // MOI for sphere
                 particle->SetMass(mass);
                 particle->SetMOI(make_float3(moi, moi, moi));
@@ -100,9 +100,9 @@ int main() {
                 particle = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cone.obj").string(), mat_box);
                 float scale = base_size * scale_dist(gen);
                 particle->Scale(scale);
-                
+
                 // Set mass and MOI for cone (approximate)
-                float mass = 1000.0 * (1.0/3.0) * math_PI * scale * scale * scale;
+                float mass = 1000.0 * (1.0 / 3.0) * math_PI * scale * scale * scale;
                 float moi_base = 0.3 * mass * scale * scale;  // Approximate MOI
                 float moi_height = 0.15 * mass * scale * scale;
                 particle->SetMass(mass);
@@ -112,7 +112,7 @@ int main() {
                 particle = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cyl_r1_h2.obj").string(), mat_box);
                 float scale = base_size * cylinder_scale_factor * scale_dist(gen);
                 particle->Scale(scale);
-                
+
                 // Set mass and MOI for cylinder
                 float radius = scale;
                 float height = 2.0 * scale;
@@ -122,7 +122,7 @@ int main() {
                 particle->SetMass(mass);
                 particle->SetMOI(make_float3(moi_radial, moi_radial, moi_axial));
             }
-            
+
             particle->SetFamily(0);
             particle->SetInitPos(make_float3(x, y, z));
 
@@ -142,7 +142,7 @@ int main() {
 
     // Setup output directory
     path out_dir = current_path();
-    out_dir /= "DemoOutput_BoxesFalling";
+    out_dir /= "DemoOutput_MeshFalling";
     create_directory(out_dir);
 
     float frame_time = 1e-2;
@@ -150,7 +150,8 @@ int main() {
     int frame_step = (int)(frame_time / step_time);
     double final_time = 3.0;  // 3 seconds of simulation
 
-    std::cout << "Starting simulation with " << num_particles_x * num_particles_y << " particles (diverse meshes)" << std::endl;
+    std::cout << "Starting simulation with " << num_particles_x * num_particles_y << " particles (diverse meshes)"
+              << std::endl;
     std::cout << "Frame time: " << frame_time << " s, Time step: " << step_time << " s" << std::endl;
     std::cout << "Total frames: " << (int)(final_time / frame_time) << std::endl;
 
@@ -160,7 +161,7 @@ int main() {
             std::cout << "Frame: " << frame << " (t = " << i * step_time << " s)" << std::endl;
 
             char meshfilename[100];
-            sprintf(meshfilename, "DEMdemo_boxes_%04d.vtk", frame);
+            sprintf(meshfilename, "DEMdemo_meshes_%04d.vtk", frame);
             DEMSim.WriteMeshFile(out_dir / meshfilename);
 
             // Print some statistics
@@ -187,6 +188,6 @@ int main() {
 
     DEMSim.ShowThreadCollaborationStats();
     DEMSim.ShowTimingStats();
-    std::cout << "DEMdemo_BoxesFalling exiting..." << std::endl;
+    std::cout << "DEMdemo_MeshFalling exiting..." << std::endl;
     return 0;
 }
