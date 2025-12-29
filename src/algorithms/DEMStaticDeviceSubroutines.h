@@ -189,25 +189,18 @@ void normalizeAndScatterVotedNormals(double3* votedWeightedNormals,
                                      contactPairs_t count,
                                      cudaStream_t& this_stream);
 
-// Computes weighted useful penetration for each primitive contact
-// The "useful" penetration is the original penetration projected onto the voted normal
-// Each primitive's useful penetration is then weighted by its contact area
+// Computes projected penetration and area for each primitive contact
+// Both the penetration and area are projected onto the voted normal
+// If the projected penetration becomes negative, both are set to 0
 void computeWeightedUsefulPenetration(DEMDataDT* granData,
                                       double3* votedNormals,
                                       contactPairs_t* keys,
-                                      double* weightedPenetrations,
+                                      double* projectedPenetrations,
+                                      double* projectedAreas,
                                       contactPairs_t startOffsetPrimitive,
                                       contactPairs_t startOffsetPatch,
                                       contactPairs_t count,
                                       cudaStream_t& this_stream);
-
-// Computes total penetration per patch pair by dividing total weighted penetration by total area
-// If total area is 0, total penetration is 0
-void computeTotalPenetrationPerPatch(double* totalWeightedPenetrations,
-                                     double* totalAreas,
-                                     double* totalPenetrations,
-                                     contactPairs_t count,
-                                     cudaStream_t& this_stream);
 
 // Extracts primitive penetrations from contactPointGeometryA for max-reduce operation
 void extractPrimitivePenetrations(DEMDataDT* granData,
@@ -219,7 +212,6 @@ void extractPrimitivePenetrations(DEMDataDT* granData,
 // Finds the primitive with max penetration for zero-area patches and extracts its normal, penetration, and contact
 // point
 void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
-                                                   double* totalAreas,
                                                    double* maxPenetrations,
                                                    float3* zeroAreaNormals,
                                                    double* zeroAreaPenetrations,
@@ -250,6 +242,7 @@ void finalizePatchResults(double* totalAreas,
                           double* zeroAreaPenetrations,
                           double3* zeroAreaContactPoints,
                           notStupidBool_t* patchHasSAT,
+                          double* finalAreas,
                           float3* finalNormals,
                           double* finalPenetrations,
                           double3* finalContactPoints,
@@ -266,10 +259,12 @@ void finalizePatchContactPoints(double* totalAreas,
                                 cudaStream_t& this_stream);
 
 // Computes weighted contact points for each primitive contact
-// The weight is: penetration * area
+// The weight is: projected_penetration * projected_area
 void computeWeightedContactPoints(DEMDataDT* granData,
                                   double3* weightedContactPoints,
                                   double* weights,
+                                  double* projectedPenetrations,
+                                  double* projectedAreas,
                                   contactPairs_t startOffsetPrimitive,
                                   contactPairs_t count,
                                   cudaStream_t& this_stream);

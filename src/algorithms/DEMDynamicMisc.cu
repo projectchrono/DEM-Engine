@@ -221,7 +221,8 @@ void normalizeAndScatterVotedNormals(double3* votedWeightedNormals,
 __global__ void computeWeightedUsefulPenetration_impl(DEMDataDT* granData,
                                                       double3* votedNormals,
                                                       contactPairs_t* keys,
-                                                      double* weightedPenetrations,
+                                                      double* projectedPenetrations,
+                                                      double* projectedAreas,
                                                       contactPairs_t startOffsetPrimitive,
                                                       contactPairs_t startOffsetPatch,
                                                       contactPairs_t count) {
@@ -245,7 +246,7 @@ __global__ void computeWeightedUsefulPenetration_impl(DEMDataDT* granData,
         // Get the original penetration depth from contactPointGeometryA (stored as double in float3)
         float3 penetrationStorage = granData->contactPointGeometryA[myContactID];
         double originalPenetration = float3StorageToDouble(penetrationStorage);
-        // Negative penetration does not participate in useful penetration
+        // Negative penetration does not participate
         if (originalPenetration <= 0.0) {
             originalPenetration = 0.0;
         }
@@ -254,32 +255,38 @@ __global__ void computeWeightedUsefulPenetration_impl(DEMDataDT* granData,
         float3 areaStorage = granData->contactPointGeometryB[myContactID];
         double area = float3StorageToDouble(areaStorage);
 
-        // Compute the "useful" penetration by projecting onto the voted normal
-        // This is: originalPenetration * dot(originalNormal, votedNormal)
-        // If dot product is negative (opposite directions), useful penetration becomes negative
-        // which we clamp to 0
+        // Compute the projected penetration and area by projecting onto the voted normal
+        // Projected penetration: originalPenetration * dot(originalNormal, votedNormal)
+        // Projected area: area * dot(originalNormal, votedNormal)
+        // If dot product is negative (opposite directions), set both to 0
         float dotProduct = dot(originalNormal, votedNormal);
-        double usefulPenetration = originalPenetration * (double)dotProduct;
-        if (usefulPenetration <= 0.0) {
-            usefulPenetration = 0.0;
+        double projectedPenetration = originalPenetration * (double)dotProduct;
+        double projectedArea = area * (double)dotProduct;
+
+        // If projected values becomes negative, set both area and penetration to 0
+        if (projectedPenetration <= 0.0) {
+            projectedPenetration = 0.0;
+        }
+        if (projectedArea <= 0.0) {
+            projectedArea = 0.0;
         }
 
-        // Weight the useful penetration by area
-        double weightedPenetration = usefulPenetration * area;
-        weightedPenetrations[idx] = weightedPenetration;
+        projectedPenetrations[idx] = projectedPenetration;
+        projectedAreas[idx] = projectedArea;
 
         // printf(
-        //     "voted normal: (%f, %f, %f), original normal: (%f, %f, %f), original pen: %f, dot: %f, useful pen: %f, "
-        //     "area: %f, weighted pen: %f\n",
-        //     votedNormal.x, votedNormal.y, votedNormal.z, originalNormal.x, originalNormal.y, originalNormal.z,
-        //     originalPenetration, dotProduct, usefulPenetration, area, weightedPenetration);
+        //     "voted normal: (%f, %f, %f), original normal: (%f, %f, %f), original pen: %f, dot: %f, projected pen: %f,
+        //     " "area: %f, projected area: %f\n", votedNormal.x, votedNormal.y, votedNormal.z, originalNormal.x,
+        //     originalNormal.y, originalNormal.z, originalPenetration, dotProduct, projectedPenetration, area,
+        //     projectedArea);
     }
 }
 
 void computeWeightedUsefulPenetration(DEMDataDT* granData,
                                       double3* votedNormals,
                                       contactPairs_t* keys,
-                                      double* weightedPenetrations,
+                                      double* projectedPenetrations,
+                                      double* projectedAreas,
                                       contactPairs_t startOffsetPrimitive,
                                       contactPairs_t startOffsetPatch,
                                       contactPairs_t count,
@@ -287,37 +294,8 @@ void computeWeightedUsefulPenetration(DEMDataDT* granData,
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         computeWeightedUsefulPenetration_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            granData, votedNormals, keys, weightedPenetrations, startOffsetPrimitive, startOffsetPatch, count);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-    }
-}
-
-// Kernel to compute total penetration per patch pair by dividing by total area
-// If total area is 0, total penetration is 0
-__global__ void computeTotalPenetrationPerPatch_impl(double* totalWeightedPenetrations,
-                                                     double* totalAreas,
-                                                     double* totalPenetrations,
-                                                     contactPairs_t count) {
-    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < count) {
-        double totalArea = totalAreas[idx];
-        if (totalArea > 0.0) {
-            totalPenetrations[idx] = totalWeightedPenetrations[idx] / totalArea;
-        } else {
-            totalPenetrations[idx] = 0.0;
-        }
-    }
-}
-
-void computeTotalPenetrationPerPatch(double* totalWeightedPenetrations,
-                                     double* totalAreas,
-                                     double* totalPenetrations,
-                                     contactPairs_t count,
-                                     cudaStream_t& this_stream) {
-    size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-    if (blocks_needed > 0) {
-        computeTotalPenetrationPerPatch_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            totalWeightedPenetrations, totalAreas, totalPenetrations, count);
+            granData, votedNormals, keys, projectedPenetrations, projectedAreas, startOffsetPrimitive, startOffsetPatch,
+            count);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
@@ -361,7 +339,6 @@ void extractPrimitivePenetrations(DEMDataDT* granData,
 // Note: Race condition when multiple primitives have the same max penetration is acceptable
 // since any of them produces a valid result.
 __global__ void findMaxPenetrationPrimitiveForZeroAreaPatches_impl(DEMDataDT* granData,
-                                                                   double* totalAreas,
                                                                    double* maxPenetrations,
                                                                    float3* zeroAreaNormals,
                                                                    double* zeroAreaPenetrations,
@@ -410,7 +387,6 @@ __global__ void findMaxPenetrationPrimitiveForZeroAreaPatches_impl(DEMDataDT* gr
 }
 
 void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
-                                                   double* totalAreas,
                                                    double* maxPenetrations,
                                                    float3* zeroAreaNormals,
                                                    double* zeroAreaPenetrations,
@@ -424,7 +400,7 @@ void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
     if (blocks_needed > 0) {
         findMaxPenetrationPrimitiveForZeroAreaPatches_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0,
                                                              this_stream>>>(
-            granData, totalAreas, maxPenetrations, zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, keys,
+            granData, maxPenetrations, zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, keys,
             startOffsetPrimitive, startOffsetPatch, countPrimitive);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
@@ -487,6 +463,7 @@ __global__ void finalizePatchResults_impl(double* totalAreas,
                                           double* zeroAreaPenetrations,
                                           double3* zeroAreaContactPoints,
                                           notStupidBool_t* patchHasSAT,
+                                          double* finalAreas,
                                           float3* finalNormals,
                                           double* finalPenetrations,
                                           double3* finalContactPoints,
@@ -501,10 +478,13 @@ __global__ void finalizePatchResults_impl(double* totalAreas,
         if (totalArea > 0.0 && hasSAT) {
             // Normal case: use voted results
             finalNormals[idx] = to_float3(votedNormals[idx]);
+            finalAreas[idx] = totalArea;
             finalPenetrations[idx] = votedPenetrations[idx];
             finalContactPoints[idx] = votedContactPoints[idx];
         } else {
             // Zero-area case OR no SAT-satisfying primitives: use max-penetration primitive's results (Step 8 fallback)
+            // Set finalArea to 0 for these cases
+            finalAreas[idx] = 0.0;
             finalNormals[idx] = zeroAreaNormals[idx];
             finalPenetrations[idx] = zeroAreaPenetrations[idx];
             finalContactPoints[idx] = zeroAreaContactPoints[idx];
@@ -520,6 +500,7 @@ void finalizePatchResults(double* totalAreas,
                           double* zeroAreaPenetrations,
                           double3* zeroAreaContactPoints,
                           notStupidBool_t* patchHasSAT,
+                          double* finalAreas,
                           float3* finalNormals,
                           double* finalPenetrations,
                           double3* finalContactPoints,
@@ -529,17 +510,19 @@ void finalizePatchResults(double* totalAreas,
     if (blocks_needed > 0) {
         finalizePatchResults_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             totalAreas, votedNormals, votedPenetrations, votedContactPoints, zeroAreaNormals, zeroAreaPenetrations,
-            zeroAreaContactPoints, patchHasSAT, finalNormals, finalPenetrations, finalContactPoints, count);
+            zeroAreaContactPoints, patchHasSAT, finalAreas, finalNormals, finalPenetrations, finalContactPoints, count);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
 // Kernel to compute weighted contact points for each primitive contact
-// The weight is: penetration * area
+// The weight is: projected_penetration * projected_area
 // This prepares data for reduction to get patch-based contact points
 __global__ void computeWeightedContactPoints_impl(DEMDataDT* granData,
                                                   double3* weightedContactPoints,
                                                   double* weights,
+                                                  double* projectedPenetrations,
+                                                  double* projectedAreas,
                                                   contactPairs_t startOffsetPrimitive,
                                                   contactPairs_t count) {
     contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -549,20 +532,12 @@ __global__ void computeWeightedContactPoints_impl(DEMDataDT* granData,
         // Get the contact point from contactTorque_convToForce (stored as float3)
         double3 contactPoint = to_double3(granData->contactTorque_convToForce[myContactID]);
 
-        // Get the penetration depth from contactPointGeometryA (stored as double in float3)
-        float3 penetrationStorage = granData->contactPointGeometryA[myContactID];
-        double penetration = float3StorageToDouble(penetrationStorage);
-        // Only positive penetration contributes
-        if (penetration < 0.0) {
-            penetration = 0.0;
-        }
+        // Get the projected penetration and area
+        double penetration = projectedPenetrations[idx];
+        double area = projectedAreas[idx];
 
-        // Get the contact area from contactPointGeometryB (stored as double in float3)
-        float3 areaStorage = granData->contactPointGeometryB[myContactID];
-        double area = float3StorageToDouble(areaStorage);
-
-        // Compute weight = penetration * area
-        double weight = penetration * (area <= 0.0 ? 0.0 : area);
+        // Compute weight = projected_penetration * projected_area
+        double weight = penetration * area;
 
         // Compute weighted contact point (multiply each component by weight)
         weightedContactPoints[idx] = contactPoint * weight;
@@ -575,13 +550,16 @@ __global__ void computeWeightedContactPoints_impl(DEMDataDT* granData,
 void computeWeightedContactPoints(DEMDataDT* granData,
                                   double3* weightedContactPoints,
                                   double* weights,
+                                  double* projectedPenetrations,
+                                  double* projectedAreas,
                                   contactPairs_t startOffsetPrimitive,
                                   contactPairs_t count,
                                   cudaStream_t& this_stream) {
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         computeWeightedContactPoints_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            granData, weightedContactPoints, weights, startOffsetPrimitive, count);
+            granData, weightedContactPoints, weights, projectedPenetrations, projectedAreas, startOffsetPrimitive,
+            count);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
