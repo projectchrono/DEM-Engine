@@ -22,6 +22,8 @@
 using namespace deme;
 using namespace std::filesystem;
 
+const double math_PI = 3.1415927;
+
 int main() {
     DEMSolver DEMSim;
     DEMSim.SetVerbosity("INFO");
@@ -45,6 +47,7 @@ int main() {
     const float particle_spacing = 2.0;
     const float initial_height = 8.0;
     const float base_size = 0.5;  // Base scale for all meshes
+    const float cylinder_scale_factor = 0.5;  // Cylinders scaled down since they're taller
 
     std::vector<std::shared_ptr<DEMTracker>> trackers;
 
@@ -88,7 +91,7 @@ int main() {
                 particle->Scale(scale);
                 
                 // Set mass and MOI for sphere
-                float mass = 1000.0 * (4.0/3.0) * 3.14159 * scale * scale * scale;
+                float mass = 1000.0 * (4.0/3.0) * math_PI * scale * scale * scale;
                 float moi = 0.4 * mass * scale * scale;  // MOI for sphere
                 particle->SetMass(mass);
                 particle->SetMOI(make_float3(moi, moi, moi));
@@ -99,7 +102,7 @@ int main() {
                 particle->Scale(scale);
                 
                 // Set mass and MOI for cone (approximate)
-                float mass = 1000.0 * (1.0/3.0) * 3.14159 * scale * scale * scale;
+                float mass = 1000.0 * (1.0/3.0) * math_PI * scale * scale * scale;
                 float moi_base = 0.3 * mass * scale * scale;  // Approximate MOI
                 float moi_height = 0.15 * mass * scale * scale;
                 particle->SetMass(mass);
@@ -107,13 +110,13 @@ int main() {
             } else {
                 // Cylinder (radius ~1, height ~2 in mesh)
                 particle = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cyl_r1_h2.obj").string(), mat_box);
-                float scale = base_size * 0.5 * scale_dist(gen);  // Scale down cylinders since they're taller
+                float scale = base_size * cylinder_scale_factor * scale_dist(gen);
                 particle->Scale(scale);
                 
                 // Set mass and MOI for cylinder
                 float radius = scale;
                 float height = 2.0 * scale;
-                float mass = 1000.0 * 3.14159 * radius * radius * height;
+                float mass = 1000.0 * math_PI * radius * radius * height;
                 float moi_radial = mass * (3.0 * radius * radius + height * height) / 12.0;
                 float moi_axial = 0.5 * mass * radius * radius;
                 particle->SetMass(mass);
