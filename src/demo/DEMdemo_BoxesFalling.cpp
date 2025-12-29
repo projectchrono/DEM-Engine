@@ -4,8 +4,9 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 // =============================================================================
-// A demo featuring multiple boxes falling onto an analytical plane, testing
-// triangle-triangle contacts between boxes and box-plane contacts.
+// A demo featuring multiple particles (boxes, spheres, cones, cylinders) 
+// falling onto an analytical plane, testing triangle-triangle contacts 
+// between diverse mesh types and mesh-plane contacts.
 // =============================================================================
 
 #include <core/ApiVersion.h>
@@ -38,42 +39,94 @@ int main() {
     // Add a bottom plane at z = 0
     DEMSim.AddBCPlane(make_float3(0, 0, 0), make_float3(0, 0, 1), mat_plane);
 
-    // Create multiple boxes in a grid pattern above the plane
-    const int num_boxes_x = 4;
-    const int num_boxes_y = 4;
-    const float box_spacing = 2.0;
+    // Create multiple particles in a grid pattern above the plane
+    const int num_particles_x = 6;
+    const int num_particles_y = 6;
+    const float particle_spacing = 2.0;
     const float initial_height = 8.0;
-    const float box_size = 0.5;  // Assume cube.obj is roughly 1x1x1, scale to 0.5
+    const float base_size = 0.5;  // Base scale for all meshes
 
     std::vector<std::shared_ptr<DEMTracker>> trackers;
 
-    // Random number generator for small position variations
+    // Random number generator for variations
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<> pos_dist(-0.1, 0.1);
     std::uniform_real_distribution<> rot_dist(-0.2, 0.2);
+    std::uniform_real_distribution<> scale_dist(0.8, 1.2);  // Scale variation
+    std::uniform_int_distribution<> mesh_type_dist(0, 3);  // 4 mesh types
 
-    for (int i = 0; i < num_boxes_x; i++) {
-        for (int j = 0; j < num_boxes_y; j++) {
-            float x = (i - num_boxes_x / 2.0 + 0.5) * box_spacing + pos_dist(gen);
-            float y = (j - num_boxes_y / 2.0 + 0.5) * box_spacing + pos_dist(gen);
+    for (int i = 0; i < num_particles_x; i++) {
+        for (int j = 0; j < num_particles_y; j++) {
+            float x = (i - num_particles_x / 2.0 + 0.5) * particle_spacing + pos_dist(gen);
+            float y = (j - num_particles_y / 2.0 + 0.5) * particle_spacing + pos_dist(gen);
             float z = initial_height + (i + j) * 0.5 + pos_dist(gen) * 2;
 
-            auto box = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cube.obj").string(), mat_box);
-            box->SetFamily(0);
-            box->SetInitPos(make_float3(x, y, z));
-            box->Scale(box_size);  // Scale the box
-
-            // Set mass and MOI for the box (scaled cubic)
-            float mass = 1000.0 * box_size * box_size * box_size;
-            float moi = mass * box_size * box_size / 6.0;  // MOI for cube
-            box->SetMass(mass);
-            box->SetMOI(make_float3(moi, moi, moi));
+            // Select mesh type randomly: 0=cube, 1=sphere, 2=cone, 3=cylinder
+            int mesh_type = mesh_type_dist(gen);
+            std::shared_ptr<DEMClumpTemplate> particle;
+            
+            if (mesh_type == 0) {
+                // Cube with non-uniform scaling
+                particle = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cube.obj").string(), mat_box);
+                float scale_x = base_size * scale_dist(gen);
+                float scale_y = base_size * scale_dist(gen);
+                float scale_z = base_size * scale_dist(gen);
+                particle->Scale(make_float3(scale_x, scale_y, scale_z));  // Non-uniform scaling
+                
+                // Set mass and MOI for the box (approximate as uniform density)
+                float mass = 1000.0 * scale_x * scale_y * scale_z;
+                float moi_x = mass * (scale_y * scale_y + scale_z * scale_z) / 12.0;
+                float moi_y = mass * (scale_x * scale_x + scale_z * scale_z) / 12.0;
+                float moi_z = mass * (scale_x * scale_x + scale_y * scale_y) / 12.0;
+                particle->SetMass(mass);
+                particle->SetMOI(make_float3(moi_x, moi_y, moi_z));
+            } else if (mesh_type == 1) {
+                // Sphere (unit sphere in mesh)
+                particle = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/sphere.obj").string(), mat_box);
+                float scale = base_size * scale_dist(gen);
+                particle->Scale(scale);
+                
+                // Set mass and MOI for sphere
+                float mass = 1000.0 * (4.0/3.0) * 3.14159 * scale * scale * scale;
+                float moi = 0.4 * mass * scale * scale;  // MOI for sphere
+                particle->SetMass(mass);
+                particle->SetMOI(make_float3(moi, moi, moi));
+            } else if (mesh_type == 2) {
+                // Cone (height ~1, radius ~1 in mesh)
+                particle = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cone.obj").string(), mat_box);
+                float scale = base_size * scale_dist(gen);
+                particle->Scale(scale);
+                
+                // Set mass and MOI for cone (approximate)
+                float mass = 1000.0 * (1.0/3.0) * 3.14159 * scale * scale * scale;
+                float moi_base = 0.3 * mass * scale * scale;  // Approximate MOI
+                float moi_height = 0.15 * mass * scale * scale;
+                particle->SetMass(mass);
+                particle->SetMOI(make_float3(moi_base, moi_base, moi_height));
+            } else {
+                // Cylinder (radius ~1, height ~2 in mesh)
+                particle = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cyl_r1_h2.obj").string(), mat_box);
+                float scale = base_size * 0.5 * scale_dist(gen);  // Scale down cylinders since they're taller
+                particle->Scale(scale);
+                
+                // Set mass and MOI for cylinder
+                float radius = scale;
+                float height = 2.0 * scale;
+                float mass = 1000.0 * 3.14159 * radius * radius * height;
+                float moi_radial = mass * (3.0 * radius * radius + height * height) / 12.0;
+                float moi_axial = 0.5 * mass * radius * radius;
+                particle->SetMass(mass);
+                particle->SetMOI(make_float3(moi_radial, moi_radial, moi_axial));
+            }
+            
+            particle->SetFamily(0);
+            particle->SetInitPos(make_float3(x, y, z));
 
             // Add small initial rotation for more interesting dynamics
-            box->SetInitQuat(make_float4(rot_dist(gen), rot_dist(gen), rot_dist(gen), 1.0));
+            particle->SetInitQuat(make_float4(rot_dist(gen), rot_dist(gen), rot_dist(gen), 1.0));
 
-            auto tracker = DEMSim.Track(box);
+            auto tracker = DEMSim.Track(particle);
             trackers.push_back(tracker);
         }
     }
@@ -94,7 +147,7 @@ int main() {
     int frame_step = (int)(frame_time / step_time);
     double final_time = 3.0;  // 3 seconds of simulation
 
-    std::cout << "Starting simulation with " << num_boxes_x * num_boxes_y << " boxes" << std::endl;
+    std::cout << "Starting simulation with " << num_particles_x * num_particles_y << " particles (diverse meshes)" << std::endl;
     std::cout << "Frame time: " << frame_time << " s, Time step: " << step_time << " s" << std::endl;
     std::cout << "Total frames: " << (int)(final_time / frame_time) << std::endl;
 
@@ -108,19 +161,19 @@ int main() {
             DEMSim.WriteMeshFile(out_dir / meshfilename);
 
             // Print some statistics
-            int boxes_settled = 0;
+            int particles_settled = 0;
             float avg_height = 0.0;
             for (size_t k = 0; k < trackers.size(); k++) {
                 float3 pos = trackers[k]->Pos();
                 avg_height += pos.z;
-                if (pos.z < 2.0) {  // Consider boxes below 2m as settled
-                    boxes_settled++;
+                if (pos.z < 2.0) {  // Consider particles below 2m as settled
+                    particles_settled++;
                 }
             }
             avg_height /= trackers.size();
 
             std::cout << "  Average height: " << avg_height << " m" << std::endl;
-            std::cout << "  Boxes settled: " << boxes_settled << " / " << trackers.size() << std::endl;
+            std::cout << "  Particles settled: " << particles_settled << " / " << trackers.size() << std::endl;
 
             DEMSim.ShowMemStats();
             std::cout << "----------------------------------------" << std::endl;
