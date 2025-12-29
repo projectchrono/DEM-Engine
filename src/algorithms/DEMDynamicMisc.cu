@@ -217,6 +217,7 @@ void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
 __global__ void computeWeightedUsefulPenetration_impl(DEMDataDT* granData,
                                                       float3* votedNormals,
                                                       contactPairs_t* keys,
+                                                      double* areas,
                                                       double* projectedPenetrations,
                                                       double* projectedAreas,
                                                       contactPairs_t startOffsetPrimitive,
@@ -247,9 +248,9 @@ __global__ void computeWeightedUsefulPenetration_impl(DEMDataDT* granData,
             originalPenetration = 0.0;
         }
 
-        // Get the contact area from contactPointGeometryB (stored as double in float3)
-        float3 areaStorage = granData->contactPointGeometryB[myContactID];
-        double area = float3StorageToDouble(areaStorage);
+        // Get the contact area from storage that is not yet freed. Note the index is idx not myContactID, as areas is a
+        // type-specific vector.
+        double area = areas[idx];
 
         // Compute the projected penetration and area by projecting onto the voted normal
         // Projected penetration: originalPenetration * dot(originalNormal, votedNormal)
@@ -281,6 +282,7 @@ __global__ void computeWeightedUsefulPenetration_impl(DEMDataDT* granData,
 void computeWeightedUsefulPenetration(DEMDataDT* granData,
                                       float3* votedNormals,
                                       contactPairs_t* keys,
+                                      double* areas,
                                       double* projectedPenetrations,
                                       double* projectedAreas,
                                       contactPairs_t startOffsetPrimitive,
@@ -290,8 +292,8 @@ void computeWeightedUsefulPenetration(DEMDataDT* granData,
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         computeWeightedUsefulPenetration_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            granData, votedNormals, keys, projectedPenetrations, projectedAreas, startOffsetPrimitive, startOffsetPatch,
-            count);
+            granData, votedNormals, keys, areas, projectedPenetrations, projectedAreas, startOffsetPrimitive,
+            startOffsetPatch, count);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }

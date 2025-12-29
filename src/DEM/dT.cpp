@@ -2376,8 +2376,8 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     "projectedPenetrations", countPrimitive * sizeof(double));
                 double* projectedAreas =
                     (double*)solverScratchSpace.allocateTempVector("projectedAreas", countPrimitive * sizeof(double));
-                computeWeightedUsefulPenetration(&granData, votedNormals, keys, projectedPenetrations, projectedAreas,
-                                                 startOffsetPrimitive, startOffsetPatch, countPrimitive,
+                computeWeightedUsefulPenetration(&granData, votedNormals, keys, areas, projectedPenetrations,
+                                                 projectedAreas, startOffsetPrimitive, startOffsetPatch, countPrimitive,
                                                  streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("areas");
 
@@ -2478,7 +2478,9 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("uniqueKeys");
                 solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
 
-                // Step 10: Finalize patch results by combining voting with zero-area handling
+                // Step 10: Finalize patch results by combining voting with zero-area handling.
+                // If patch-based projected area is 0 (or this patch pair consists of no SAT pair), meaning no physical
+                // contact, we use the fallback estimations (zeroArea*) of CP, penetration and areas.
                 double* finalAreas =
                     (double*)solverScratchSpace.allocateTempVector("finalAreas", countPatch * sizeof(double));
                 float3* finalNormals =

@@ -900,19 +900,10 @@ __device__ bool checkTriangleTriangleSAT(const T1& A1,
     const T1 triB[3] = {A2, B2, C2};
 
     // Compute face normals
-    T1 nA_unnorm = cross(B1 - A1, C1 - A1);
-    T1 nB_unnorm = cross(B2 - A2, C2 - A2);
+    T1 nA = normalize(cross(B1 - A1, C1 - A1));
+    T1 nB = normalize(cross(B2 - A2, C2 - A2));
 
-    T2 lenA2 = dot(nA_unnorm, nA_unnorm);
-    T2 lenB2 = dot(nB_unnorm, nB_unnorm);
-
-    // Check for degenerate triangles
-    if (lenA2 <= DEME_TINY_FLOAT * DEME_TINY_FLOAT || lenB2 <= DEME_TINY_FLOAT * DEME_TINY_FLOAT) {
-        return false;
-    }
-
-    T1 nA = nA_unnorm * rsqrt(lenA2);
-    T1 nB = nB_unnorm * rsqrt(lenB2);
+    //// TODO: And degenerated triangles?
 
     // Edge vectors
     T1 edges1[3] = {triA[1] - triA[0], triA[2] - triA[1], triA[0] - triA[2]};
@@ -1056,19 +1047,10 @@ __device__ bool checkTriangleTriangleOverlap(
     const T1 triB[3] = {A2, B2, C2};
 
     // Compute face normals
-    T1 nA_unnorm = cross(B1 - A1, C1 - A1);
-    T1 nB_unnorm = cross(B2 - A2, C2 - A2);
+    T1 nA = normalize(cross(B1 - A1, C1 - A1));
+    T1 nB = normalize(cross(B2 - A2, C2 - A2));
 
-    T2 lenA2 = dot(nA_unnorm, nA_unnorm);
-    T2 lenB2 = dot(nB_unnorm, nB_unnorm);
-
-    // Check for degenerate triangles
-    if (lenA2 <= DEME_TINY_FLOAT * DEME_TINY_FLOAT || lenB2 <= DEME_TINY_FLOAT * DEME_TINY_FLOAT) {
-        return false;
-    }
-
-    T1 nA = nA_unnorm * rsqrt(lenA2);
-    T1 nB = nB_unnorm * rsqrt(lenB2);
+    //// TODO: And degenerated triangles?
 
     // ========================================================================
     // Projection-based approach: project each triangle onto the other's plane
@@ -1086,7 +1068,7 @@ __device__ bool checkTriangleTriangleOverlap(
     bool contactAB = projectTriangleOntoTriangle<T1, T2>(triA, triB, nB, depthAB, areaAB, centroidAB);
 
     // Determine if there is contact
-    bool inContact = contactBA || contactAB;
+    bool inContact = contactBA && contactAB;
 
     if (!inContact) {
         // No contact detected, Provide separation info
@@ -1109,28 +1091,13 @@ __device__ bool checkTriangleTriangleOverlap(
         return false;
     }
 
-    // Average the results from both projections
-    if (contactBA && contactAB) {
-        // Both projections have contact, choose the one with smaller projected area
-        if (areaBA < areaAB) {
-            // Use B->A projection results
-            depth = depthBA;
-            projectedArea = areaBA;
-            normal = -1.0 * nA;  // Pay attention to direction
-
-            // Contact point: centroid on A's plane, moved back by half depth
-            point = centroidBA - nA * (depth * 0.5);
-        } else {
-            // Use A->B projection results
-            depth = depthAB;
-            projectedArea = areaAB;
-            normal = nB;
-
-            // Contact point: centroid on B's plane, moved back by half depth
-            point = centroidAB - nB * (depth * 0.5);
-        }
-    } else if (contactBA) {
-        // Only B->A projection has contact
+    // If both projection yields results, we select the one with less projection distance.
+    // This is important. For example, consider a small surface intersecting with a large surface nearly vertically. The
+    // smaller one projected onto the larger one: nearly 0 area (depending on numerical stability, may actually be 0);
+    // Larger one projected onto the smaller one: almost covers the entire smaller surface. We always want them both
+    // have non-0 projection area, and then select the shorter projection distance one. This is good for stability.
+    if (depthBA < depthAB) {
+        // Use B->A projection results
         depth = depthBA;
         projectedArea = areaBA;
         normal = -1.0 * nA;  // Pay attention to direction
@@ -1138,7 +1105,7 @@ __device__ bool checkTriangleTriangleOverlap(
         // Contact point: centroid on A's plane, moved back by half depth
         point = centroidBA - nA * (depth * 0.5);
     } else {
-        // Only A->B projection has contact
+        // Use A->B projection results
         depth = depthAB;
         projectedArea = areaAB;
         normal = nB;
