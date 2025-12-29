@@ -258,10 +258,12 @@ __global__ void computeWeightedUsefulPenetration_impl(DEMDataDT* granData,
         float dotProduct = dot(originalNormal, votedNormal);
         double projectedPenetration = originalPenetration * (double)dotProduct;
         double projectedArea = area * (double)dotProduct;
-        
-        // If projected penetration becomes negative, set both area and penetration to 0
+
+        // If projected values becomes negative, set both area and penetration to 0
         if (projectedPenetration <= 0.0) {
             projectedPenetration = 0.0;
+        }
+        if (projectedArea <= 0.0) {
             projectedArea = 0.0;
         }
 
@@ -269,10 +271,10 @@ __global__ void computeWeightedUsefulPenetration_impl(DEMDataDT* granData,
         projectedAreas[idx] = projectedArea;
 
         // printf(
-        //     "voted normal: (%f, %f, %f), original normal: (%f, %f, %f), original pen: %f, dot: %f, projected pen: %f, "
-        //     "area: %f, projected area: %f\n",
-        //     votedNormal.x, votedNormal.y, votedNormal.z, originalNormal.x, originalNormal.y, originalNormal.z,
-        //     originalPenetration, dotProduct, projectedPenetration, area, projectedArea);
+        //     "voted normal: (%f, %f, %f), original normal: (%f, %f, %f), original pen: %f, dot: %f, projected pen: %f,
+        //     " "area: %f, projected area: %f\n", votedNormal.x, votedNormal.y, votedNormal.z, originalNormal.x,
+        //     originalNormal.y, originalNormal.z, originalPenetration, dotProduct, projectedPenetration, area,
+        //     projectedArea);
     }
 }
 
@@ -288,37 +290,8 @@ void computeWeightedUsefulPenetration(DEMDataDT* granData,
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         computeWeightedUsefulPenetration_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            granData, votedNormals, keys, projectedPenetrations, projectedAreas, startOffsetPrimitive, startOffsetPatch, count);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-    }
-}
-
-// Kernel to compute total penetration per patch pair by dividing by total area
-// If total area is 0, total penetration is 0
-__global__ void computeTotalPenetrationPerPatch_impl(double* totalWeightedPenetrations,
-                                                     double* totalAreas,
-                                                     double* totalPenetrations,
-                                                     contactPairs_t count) {
-    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < count) {
-        double totalArea = totalAreas[idx];
-        if (totalArea > 0.0) {
-            totalPenetrations[idx] = totalWeightedPenetrations[idx] / totalArea;
-        } else {
-            totalPenetrations[idx] = 0.0;
-        }
-    }
-}
-
-void computeTotalPenetrationPerPatch(double* totalWeightedPenetrations,
-                                     double* totalAreas,
-                                     double* totalPenetrations,
-                                     contactPairs_t count,
-                                     cudaStream_t& this_stream) {
-    size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-    if (blocks_needed > 0) {
-        computeTotalPenetrationPerPatch_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            totalWeightedPenetrations, totalAreas, totalPenetrations, count);
+            granData, votedNormals, keys, projectedPenetrations, projectedAreas, startOffsetPrimitive, startOffsetPatch,
+            count);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
@@ -362,7 +335,6 @@ void extractPrimitivePenetrations(DEMDataDT* granData,
 // Note: Race condition when multiple primitives have the same max penetration is acceptable
 // since any of them produces a valid result.
 __global__ void findMaxPenetrationPrimitiveForZeroAreaPatches_impl(DEMDataDT* granData,
-                                                                   double* totalAreas,
                                                                    double* maxPenetrations,
                                                                    float3* zeroAreaNormals,
                                                                    double* zeroAreaPenetrations,
@@ -411,7 +383,6 @@ __global__ void findMaxPenetrationPrimitiveForZeroAreaPatches_impl(DEMDataDT* gr
 }
 
 void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
-                                                   double* totalAreas,
                                                    double* maxPenetrations,
                                                    float3* zeroAreaNormals,
                                                    double* zeroAreaPenetrations,
@@ -425,7 +396,7 @@ void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
     if (blocks_needed > 0) {
         findMaxPenetrationPrimitiveForZeroAreaPatches_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0,
                                                              this_stream>>>(
-            granData, totalAreas, maxPenetrations, zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, keys,
+            granData, maxPenetrations, zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, keys,
             startOffsetPrimitive, startOffsetPatch, countPrimitive);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
@@ -583,7 +554,8 @@ void computeWeightedContactPoints(DEMDataDT* granData,
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         computeWeightedContactPoints_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            granData, weightedContactPoints, weights, projectedPenetrations, projectedAreas, startOffsetPrimitive, count);
+            granData, weightedContactPoints, weights, projectedPenetrations, projectedAreas, startOffsetPrimitive,
+            count);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
