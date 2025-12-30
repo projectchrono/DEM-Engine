@@ -141,8 +141,8 @@ int main() {
     DEMSim.Initialize();
 
     // After system initialization, you can still get an handle of the mesh components using trackers (GetMesh method).
-    // But note that if you do changes using this handle, the changes are done to the mesh and it immediate affects the
-    // simulation. So sometimes you want to copy the information you are after and keep for your record.
+    // But note that if you do changes using this handle, the changes are done to the mesh and it immediately affects
+    // the simulation. So sometimes you want to copy the information you are after and keep for your record.
     auto mesh_handle = flex_mesh_tracker->GetMesh();
     // This is keeping a copy of the RELATIVE (to the CoM) locations of the mesh nodes. In our case, the Z coordinates
     // of these nodes range from -0.5 to 0.5.
