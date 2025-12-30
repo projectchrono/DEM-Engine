@@ -649,9 +649,9 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
             DEME_DEVICE_ARRAY_RESIZE(familyID_buffer, nOwnerBodies);
         }
 
-        DEME_DEVICE_ARRAY_RESIZE(relPosNode1_buffer, nOwnerBodies);
-        DEME_DEVICE_ARRAY_RESIZE(relPosNode2_buffer, nOwnerBodies);
-        DEME_DEVICE_ARRAY_RESIZE(relPosNode3_buffer, nOwnerBodies);
+        DEME_DEVICE_ARRAY_RESIZE(relPosNode1_buffer, nTriGM);
+        DEME_DEVICE_ARRAY_RESIZE(relPosNode2_buffer, nTriGM);
+        DEME_DEVICE_ARRAY_RESIZE(relPosNode3_buffer, nTriGM);
 
         // Unset the device change we just did
         DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
