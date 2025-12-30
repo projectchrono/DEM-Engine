@@ -152,7 +152,7 @@ class CMakeBuild(build_ext):
 # logic and declaration, and simpler if you include description/version in a file.
 setup(
     name="deme",
-    version="2.1.7",
+    version="2.1.8",
     author="Ruochun Zhang",
     author_email="ruochunz@gmail.com",
     description="PyBind Wrapper Library for DEM-Engine",
