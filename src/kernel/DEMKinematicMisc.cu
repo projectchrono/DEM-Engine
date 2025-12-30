@@ -75,7 +75,7 @@ __global__ void computeMarginFromAbsv_implTri(deme::DEMSimParams* simParams,
         granData->marginSizeTriangle[triID] =
             (double)(vel * simParams->expSafetyMulti + simParams->expSafetyAdder) * (*ts) * (*maxDrift) +
             // Temp artificial margin for mesh contact
-            0.05 + granData->familyExtraMarginSize[my_family];
+            0.005 + granData->familyExtraMarginSize[my_family];
     }
 }
 

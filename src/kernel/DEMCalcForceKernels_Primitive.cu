@@ -173,7 +173,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
                                            B2A.z, overlapDepth, overlapArea);
         // If overlapDepth is negative then it might still be considered in contact, if the extra margins of A and B
         // combined is larger than abs(overlapDepth)
-        if (overlapDepth < -extraMarginSize) {
+        if (overlapDepth <= -extraMarginSize) {
             ContactType = deme::NOT_A_CONTACT;
         }
 
@@ -233,7 +233,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             // If the solver says in contact, we do not question it
             if (!in_contact) {
                 // Extra margin takes effect
-                if (overlapDepth < -extraMarginSize) {
+                if (overlapDepth <= -extraMarginSize) {
                     ContactType = deme::NOT_A_CONTACT;
                 }
             }
@@ -258,7 +258,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             // If the solver says in contact, we do not question it
             if (!in_contact) {
                 // Then, if we have extra margin, we check that if the distance is within the extra margin
-                if (overlapDepth < -extraMarginSize) {
+                if (overlapDepth <= -extraMarginSize) {
                     ContactType = deme::NOT_A_CONTACT;
                 }
             }
@@ -305,7 +305,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
                                                              objSize3[analyticalID], objNormal[analyticalID], 0.0,
                                                              contactPnt, B2A, overlapDepth, overlapArea);
             // Fix ContactType if needed
-            if (overlapDepth < -extraMarginSize) {
+            if (overlapDepth <= -extraMarginSize) {
                 ContactType = deme::NOT_A_CONTACT;
             }
         } else if constexpr (AType == deme::GEO_T_TRIANGLE) {
@@ -314,7 +314,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
                                                   objSize3[analyticalID], objNormal[analyticalID], contactPnt, B2A,
                                                   overlapDepth, overlapArea);
             // Fix ContactType if needed
-            if (overlapDepth < -extraMarginSize) {
+            if (overlapDepth <= -extraMarginSize) {
                 ContactType = deme::NOT_A_CONTACT;
             }
         }
