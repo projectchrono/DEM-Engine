@@ -2140,9 +2140,9 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxDrift, perhapsIdealFutureDrift.getHostPointer(),
                              sizeof(unsigned int), cudaMemcpyHostToDevice));
     
-    // Send max tri-tri penetration value for kT's margin computation
-    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxTriTriPenetration, maxTriTriPenetration.getHostPointer(),
-                             sizeof(double), cudaMemcpyHostToDevice));
+    // Send max tri-tri penetration value for kT's margin computation (device-to-device)
+    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxTriTriPenetration, maxTriTriPenetration.getDevicePointer(),
+                             sizeof(double), cudaMemcpyDeviceToDevice));
 
     // Family number is a typical changable quantity on-the-fly. If this flag is on, dT is responsible for sending this
     // info to kT.
@@ -2540,15 +2540,13 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
                 // If this is a tri-tri contact, compute max penetration for kT
+                // The max value stays on device until sendToTheirBuffer transfers it
                 if (contact_type == TRIANGLE_TRIANGLE_CONTACT && countPatch > 0) {
-                    // Compute max penetration and store it
+                    // Compute max penetration and store it on device
+                    // Note: penetration values should always be non-negative in physical contacts
                     cubMaxReduce<double>(finalPenetrations.data(), &maxTriTriPenetration, countPatch, streamInfo.stream,
                                         solverScratchSpace);
-                    maxTriTriPenetration.toHost();
-                    // Ensure it's at least 0 (cannot be negative)
-                    if (*maxTriTriPenetration < 0.0) {
-                        *maxTriTriPenetration = 0.0;
-                    }
+                    // No toHost() here - keep on device until sendToTheirBuffer
                 }
 
                 // Final clean up
@@ -2567,8 +2565,8 @@ void DEMDynamicThread::calculateForces() {
     size_t nContactPairs = *solverScratchSpace.numContacts;
     size_t nPrimitiveContactPairs = *solverScratchSpace.numPrimitiveContacts;
     
-    // Reset max tri-tri penetration for this timestep
-    *maxTriTriPenetration = 0.0;
+    // Reset max tri-tri penetration for this timestep on device
+    DEME_GPU_CALL(cudaMemset(maxTriTriPenetration.getDevicePointer(), 0, sizeof(double)));
 
     timers.GetTimer("Clear force array").start();
     {
