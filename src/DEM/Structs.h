@@ -474,6 +474,8 @@ struct kTStateParams {
     DualStruct<float> ts;                                  // kT's own storage of ts size
     DualStruct<unsigned int> maxDrift_buffer;              // buffer for max dT future drift steps
     DualStruct<unsigned int> maxDrift;                     // kT's own storage for max future drift
+    DualStruct<double> maxTriTriPenetration_buffer;        // buffer for max tri-tri penetration from dT
+    DualStruct<double> maxTriTriPenetration;               // kT's own storage of max tri-tri penetration
 };
 
 // A struct that defines a `clump' (one of the core concepts of this solver). A clump is typically small which consists

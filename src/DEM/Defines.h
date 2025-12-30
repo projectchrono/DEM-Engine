@@ -394,6 +394,7 @@ struct DEMDataDT {
     float3* pKTOwnedBuffer_relPosNode1 = nullptr;
     float3* pKTOwnedBuffer_relPosNode2 = nullptr;
     float3* pKTOwnedBuffer_relPosNode3 = nullptr;
+    double* pKTOwnedBuffer_maxTriTriPenetration = nullptr;
 
     // The collection of pointers to DEM template arrays such as radiiSphere, still useful when there are template info
     // not directly jitified into the kernels

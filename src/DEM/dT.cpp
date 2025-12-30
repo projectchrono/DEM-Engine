@@ -333,6 +333,7 @@ void DEMDynamicThread::packTransferPointers(DEMKinematicThread*& kT) {
     // Single-number data are now not packaged in granData...
     granData->pKTOwnedBuffer_ts = &(kT->stateParams.ts_buffer);
     granData->pKTOwnedBuffer_maxDrift = &(kT->stateParams.maxDrift_buffer);
+    granData->pKTOwnedBuffer_maxTriTriPenetration = &(kT->stateParams.maxTriTriPenetration_buffer);
 }
 
 void DEMDynamicThread::changeFamily(unsigned int ID_from, unsigned int ID_to) {
@@ -2138,6 +2139,10 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
     // scheduleHelper is instructed to have negative future drift then perhapsIdealFutureDrift no longer affects them.
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxDrift, perhapsIdealFutureDrift.getHostPointer(),
                              sizeof(unsigned int), cudaMemcpyHostToDevice));
+    
+    // Send max tri-tri penetration value for kT's margin computation
+    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxTriTriPenetration, maxTriTriPenetration.getHostPointer(),
+                             sizeof(double), cudaMemcpyHostToDevice));
 
     // Family number is a typical changable quantity on-the-fly. If this flag is on, dT is responsible for sending this
     // info to kT.
@@ -2485,13 +2490,15 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     (double*)solverScratchSpace.allocateTempVector("finalAreas", countPatch * sizeof(double));
                 float3* finalNormals =
                     (float3*)solverScratchSpace.allocateTempVector("finalNormals", countPatch * sizeof(float3));
-                double* finalPenetrations =
-                    (double*)solverScratchSpace.allocateTempVector("finalPenetrations", countPatch * sizeof(double));
+                
+                // Resize permanent finalPenetrations array for this patch contact batch
+                DEME_DEVICE_ARRAY_RESIZE(finalPenetrations, countPatch);
+                
                 double3* finalContactPoints =
                     (double3*)solverScratchSpace.allocateTempVector("finalContactPoints", countPatch * sizeof(double3));
                 finalizePatchResults(totalProjectedAreas, votedNormals, maxProjectedPenetrations, votedContactPoints,
                                      zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, patchHasSAT,
-                                     finalAreas, finalNormals, finalPenetrations, finalContactPoints, countPatch,
+                                     finalAreas, finalNormals, finalPenetrations.data(), finalContactPoints, countPatch,
                                      streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("totalProjectedAreas");
                 solverScratchSpace.finishUsingTempVector("votedNormals");
@@ -2525,17 +2532,29 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                             progName->kernel(kernelName)
                                 .instantiate()
                                 .configure(dim3(blocks), dim3(DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0, streamInfo.stream)
-                                .launch(&simParams, &granData, finalAreas, finalNormals, finalPenetrations,
+                                .launch(&simParams, &granData, finalAreas, finalNormals, finalPenetrations.data(),
                                         finalContactPoints, startOffsetPatch, countPatch);
                         }
                     }
                 }
                 DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
+                // If this is a tri-tri contact, compute max penetration for kT
+                if (contact_type == TRIANGLE_TRIANGLE_CONTACT && countPatch > 0) {
+                    // Compute max penetration and store it
+                    cubMaxReduce<double>(finalPenetrations.data(), &maxTriTriPenetration, countPatch, streamInfo.stream,
+                                        solverScratchSpace);
+                    maxTriTriPenetration.toHost();
+                    // Ensure it's at least 0 (cannot be negative)
+                    if (*maxTriTriPenetration < 0.0) {
+                        *maxTriTriPenetration = 0.0;
+                    }
+                }
+
                 // Final clean up
                 solverScratchSpace.finishUsingTempVector("finalAreas");
                 solverScratchSpace.finishUsingTempVector("finalNormals");
-                solverScratchSpace.finishUsingTempVector("finalPenetrations");
+                // Note: finalPenetrations is now a permanent array, not freed here
                 solverScratchSpace.finishUsingTempVector("finalContactPoints");
             }
         }

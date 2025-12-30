@@ -95,6 +95,12 @@ class DEMDynamicThread {
     DeviceArray<contactPairs_t> geomToPatchMap_buffer = DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed);
     DeviceArray<contactPairs_t> contactMapping_buffer = DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed);
 
+    // Permanent array for patch contact penetrations (used to compute max tri-tri penetration)
+    DeviceArray<double> finalPenetrations = DeviceArray<double>(&m_approxDeviceBytesUsed);
+    
+    // Max tri-tri penetration value to be sent to kT
+    DualStruct<double> maxTriTriPenetration = DualStruct<double>(0.0);
+
     // Simulation params-related variables
     DualStruct<DEMSimParams> simParams = DualStruct<DEMSimParams>();
 

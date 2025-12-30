@@ -132,7 +132,7 @@ inline void DEMKinematicThread::computeMarginFromAbsv(float* absVel_owner, float
             .instantiate()
             .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
             .launch(&simParams, &granData, absVel_owner, absAngVel_owner, &(stateParams.ts), &(stateParams.maxDrift),
-                    (size_t)simParams->nTriGM);
+                    &(stateParams.maxTriTriPenetration), (size_t)simParams->nTriGM);
     }
     blocks_needed = (simParams->nAnalGM + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
@@ -164,6 +164,8 @@ inline void DEMKinematicThread::unpackMyBuffer() {
                              cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(&(stateParams.ts), &(stateParams.ts_buffer), sizeof(float), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(&(stateParams.maxDrift), &(stateParams.maxDrift_buffer), sizeof(unsigned int),
+                             cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(&(stateParams.maxTriTriPenetration), &(stateParams.maxTriTriPenetration_buffer), sizeof(double),
                              cudaMemcpyDeviceToDevice));
     // Use two temp arrays to store absVel and absAngVel's buffer
     float* absVel_owner =
