@@ -2566,6 +2566,9 @@ void DEMDynamicThread::calculateForces() {
     // Reset force (acceleration) arrays for this time step
     size_t nContactPairs = *solverScratchSpace.numContacts;
     size_t nPrimitiveContactPairs = *solverScratchSpace.numPrimitiveContacts;
+    
+    // Reset max tri-tri penetration for this timestep
+    *maxTriTriPenetration = 0.0;
 
     timers.GetTimer("Clear force array").start();
     {
