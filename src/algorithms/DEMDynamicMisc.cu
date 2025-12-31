@@ -453,7 +453,7 @@ void checkPatchHasSATSatisfyingPrimitive(DEMDataDT* granData,
 // For patches with totalArea > 0 AND patchHasSAT = 1: use voted normal and weighted penetration
 // For patches with totalArea == 0 OR patchHasSAT = 0: use max-penetration primitive's normal and penetration (Step 8
 // fallback)
-__global__ void finalizePatchResults_impl(double* totalAreas,
+__global__ void finalizePatchResults_impl(double* totalProjectedAreas,
                                           float3* votedNormals,
                                           double* votedPenetrations,
                                           double3* votedContactPoints,
@@ -468,14 +468,14 @@ __global__ void finalizePatchResults_impl(double* totalAreas,
                                           contactPairs_t count) {
     contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
-        double totalArea = totalAreas[idx];
+        double projectedArea = totalProjectedAreas[idx];
         // Default to 1 (SAT satisfied) for non-triangle-triangle contacts where patchHasSAT is null
         notStupidBool_t hasSAT = (patchHasSAT != nullptr) ? patchHasSAT[idx] : 1;
 
-        // Use voted results only if totalArea > 0 AND at least one primitive satisfies SAT
-        if (totalArea > 0.0 && hasSAT) {
+        // Use voted results only if projectedArea > 0 AND at least one primitive satisfies SAT
+        if (projectedArea > 0.0 && hasSAT) {
             // Normal case: use voted results
-            finalAreas[idx] = totalArea;
+            finalAreas[idx] = projectedArea;
             finalNormals[idx] = votedNormals[idx];
             finalPenetrations[idx] = votedPenetrations[idx];
             finalContactPoints[idx] = votedContactPoints[idx];
@@ -490,7 +490,7 @@ __global__ void finalizePatchResults_impl(double* totalAreas,
     }
 }
 
-void finalizePatchResults(double* totalAreas,
+void finalizePatchResults(double* totalProjectedAreas,
                           float3* votedNormals,
                           double* votedPenetrations,
                           double3* votedContactPoints,
@@ -507,8 +507,9 @@ void finalizePatchResults(double* totalAreas,
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         finalizePatchResults_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            totalAreas, votedNormals, votedPenetrations, votedContactPoints, zeroAreaNormals, zeroAreaPenetrations,
-            zeroAreaContactPoints, patchHasSAT, finalAreas, finalNormals, finalPenetrations, finalContactPoints, count);
+            totalProjectedAreas, votedNormals, votedPenetrations, votedContactPoints, zeroAreaNormals,
+            zeroAreaPenetrations, zeroAreaContactPoints, patchHasSAT, finalAreas, finalNormals, finalPenetrations,
+            finalContactPoints, count);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }

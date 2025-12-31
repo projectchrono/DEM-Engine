@@ -235,7 +235,7 @@ void checkPatchHasSATSatisfyingPrimitive(DEMDataDT* granData,
                                          cudaStream_t& this_stream);
 
 // Finalizes patch results by combining normal voting with zero-area case handling
-void finalizePatchResults(double* totalAreas,
+void finalizePatchResults(double* totalProjectedAreas,
                           float3* votedNormals,
                           double* votedPenetrations,
                           double3* votedContactPoints,
