@@ -232,7 +232,13 @@ class DEMSolver {
     /// @details This value caps the penetration margin added to triangle margins to prevent excessively large values.
     /// The default is a huge value, so if not called, it doesn't affect the workflow.
     /// @param max_margin Maximum allowed penetration margin (must be non-negative).
-    void SetMaxTriTriPenetrationMargin(double max_margin) { m_max_tritri_penetration_margin = max_margin; }
+    void SetMaxTriTriPenetrationMargin(double max_margin) { 
+        if (max_margin < 0.0) {
+            DEME_WARNING("SetMaxTriTriPenetrationMargin called with negative value %.6g. Setting to 0.", max_margin);
+            max_margin = 0.0;
+        }
+        m_max_tritri_penetration_margin = max_margin; 
+    }
 
     /// @brief Used to force the solver to error out when there are too many spheres in a bin. A huge number can be used
     /// to discourage this error type.
