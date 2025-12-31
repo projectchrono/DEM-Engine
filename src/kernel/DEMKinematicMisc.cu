@@ -81,8 +81,8 @@ __global__ void computeMarginFromAbsv_implTri(deme::DEMSimParams* simParams,
         double penetrationMargin = *maxTriTriPenetration;
         penetrationMargin = (meshUniversalContact && penetrationMargin > 0.0) ? penetrationMargin : 0.0;
         // Clamp penetration margin to the maximum allowed value to prevent super large margins
-        if (penetrationMargin > simParams->maxTriTriPenetrationMargin) {
-            penetrationMargin = simParams->maxTriTriPenetrationMargin;
+        if (penetrationMargin > simParams->capTriTriPenetration) {
+            penetrationMargin = simParams->capTriTriPenetration;
         }
 
         granData->marginSizeTriangle[triID] =

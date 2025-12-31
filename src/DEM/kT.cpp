@@ -200,8 +200,13 @@ inline void DEMKinematicThread::unpackMyBuffer() {
     if (*stateParams.maxVel >
         simParams->approxMaxVel) {  // If maxVel is larger than the user estimation, that is an anomaly
         // This prints when verbosity higher than METRIC
-        DEME_STATUS("OVER_MAX_VEL", "Simulation entity velocity reached %.6g, over the user-estimated %.6g",
+        DEME_STATUS("OVER_MAX_VEL", "Simulation entity velocity reached %.6g, over the user-estimated max (%.6g)",
                     *stateParams.maxVel, simParams->approxMaxVel);
+    }
+    if (*stateParams.maxTriTriPenetration > simParams->capTriTriPenetration) {
+        DEME_STATUS("OVER_MAX_MESH_PENETRATION",
+                    "Mesh--mesh contact penetration reached %.6g, over the user-estimated max (%.6g)",
+                    *stateParams.maxTriTriPenetration, simParams->capTriTriPenetration);
     }
     DEME_DEBUG_PRINTF("kT received an update, max vel: %.6g", *stateParams.maxVel);
     DEME_DEBUG_PRINTF("kT received an update, max ang vel: %.6g", *stateParams.maxAngVel);
@@ -636,12 +641,12 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
                                       double ts_size,
                                       float expand_factor,
                                       float approx_max_vel,
+                                      double max_tritri_penetration,
                                       float expand_safety_param,
                                       float expand_safety_adder,
                                       const std::set<std::string>& contact_wildcards,
                                       const std::set<std::string>& owner_wildcards,
-                                      const std::set<std::string>& geo_wildcards,
-                                      double max_tritri_penetration_margin) {
+                                      const std::set<std::string>& geo_wildcards) {
     simParams->nvXp2 = nvXp2;
     simParams->nvYp2 = nvYp2;
     simParams->nvZp2 = nvZp2;
@@ -659,7 +664,7 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
     simParams->approxMaxVel = approx_max_vel;
     simParams->expSafetyMulti = expand_safety_param;
     simParams->expSafetyAdder = expand_safety_adder;
-    simParams->maxTriTriPenetrationMargin = max_tritri_penetration_margin;
+    simParams->capTriTriPenetration = max_tritri_penetration;
     simParams->nbX = nbX;
     simParams->nbY = nbY;
     simParams->nbZ = nbZ;

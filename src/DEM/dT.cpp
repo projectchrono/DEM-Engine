@@ -363,12 +363,12 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                     double ts_size,
                                     float expand_factor,
                                     float approx_max_vel,
+                                    double max_tritri_penetration,
                                     float expand_safety_param,
                                     float expand_safety_adder,
                                     const std::set<std::string>& contact_wildcards,
                                     const std::set<std::string>& owner_wildcards,
-                                    const std::set<std::string>& geo_wildcards,
-                                    double max_tritri_penetration_margin) {
+                                    const std::set<std::string>& geo_wildcards) {
     simParams->nvXp2 = nvXp2;
     simParams->nvYp2 = nvYp2;
     simParams->nvZp2 = nvZp2;
@@ -386,7 +386,7 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->approxMaxVel = approx_max_vel;
     simParams->expSafetyMulti = expand_safety_param;
     simParams->expSafetyAdder = expand_safety_adder;
-    simParams->maxTriTriPenetrationMargin = max_tritri_penetration_margin;
+    simParams->capTriTriPenetration = max_tritri_penetration;
     simParams->nbX = nbX;
     simParams->nbY = nbY;
     simParams->nbZ = nbZ;

@@ -776,7 +776,8 @@ void DEMSolver::SetTriTriPenetration(double penetration) {
         penetration = 0.0;
     }
     if (!sys_initialized) {
-        DEME_WARNING("SetTriTriPenetration called before system initialization. This has no effect until after Initialize().");
+        DEME_WARNING(std::string(
+            "SetTriTriPenetration called before system initialization. This has no effect until after Initialize()."));
         return;
     }
     // Directly set the value in dT

@@ -286,9 +286,9 @@ struct DEMSimParams {
     unsigned int nContactWildcards;
     unsigned int nOwnerWildcards;
     unsigned int nGeoWildcards;
-    
+
     // Max tri-tri penetration margin (to prevent super large margins from being added)
-    double maxTriTriPenetrationMargin = DEME_HUGE_FLOAT;
+    double capTriTriPenetration = DEME_HUGE_FLOAT;
 
     // The max vel at which the solver errors out
     float errOutVel = DEME_HUGE_FLOAT;
