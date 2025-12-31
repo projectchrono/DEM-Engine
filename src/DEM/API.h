@@ -222,6 +222,17 @@ class DEMSolver {
     /// thinckness of the contact `safety' margin. This need not to be large unless the simulation velocity can increase
     /// significantly in one kT update cycle.
     void SetExpandSafetyAdder(float vel) { m_expand_base_vel = vel; }
+    
+    /// @brief Manually set the current triangle-triangle penetration value in dT.
+    /// @details This allows the user to directly control the maxTriTriPenetration value for testing or specific use cases.
+    /// @param penetration The penetration value to set (must be non-negative).
+    void SetTriTriPenetration(double penetration);
+    
+    /// @brief Set the maximum allowed triangle-triangle penetration margin.
+    /// @details This value caps the penetration margin added to triangle margins to prevent excessively large values.
+    /// The default is a huge value, so if not called, it doesn't affect the workflow.
+    /// @param max_margin Maximum allowed penetration margin (must be non-negative).
+    void SetMaxTriTriPenetrationMargin(double max_margin) { m_max_tritri_penetration_margin = max_margin; }
 
     /// @brief Used to force the solver to error out when there are too many spheres in a bin. A huge number can be used
     /// to discourage this error type.
@@ -1586,6 +1597,9 @@ class DEMSolver {
     std::shared_ptr<DEMInspector> m_approx_vel_func;
     // The inspector that will be used for querying system angular velocity magnitude
     std::shared_ptr<DEMInspector> m_approx_angvel_func;
+    
+    // User-instructed maximum tri-tri penetration margin (to prevent super large margins)
+    double m_max_tritri_penetration_margin = DEME_HUGE_FLOAT;
 
     // The number of user-estimated (max) number of owners that will be present in the simulation. If 0, then the arrays
     // will just be resized at intialization based on the input size.

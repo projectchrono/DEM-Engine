@@ -80,6 +80,10 @@ __global__ void computeMarginFromAbsv_implTri(deme::DEMSimParams* simParams,
         // in our future-proof contact detection, always.
         double penetrationMargin = *maxTriTriPenetration;
         penetrationMargin = (meshUniversalContact && penetrationMargin > 0.0) ? penetrationMargin : 0.0;
+        // Clamp penetration margin to the maximum allowed value to prevent super large margins
+        if (penetrationMargin > simParams->maxTriTriPenetrationMargin) {
+            penetrationMargin = simParams->maxTriTriPenetrationMargin;
+        }
 
         granData->marginSizeTriangle[triID] =
             (double)(vel * simParams->expSafetyMulti + simParams->expSafetyAdder) * (*ts) * (*maxDrift) +
