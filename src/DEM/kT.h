@@ -376,6 +376,7 @@ class DEMKinematicThread {
                       double ts_size,
                       float expand_factor,
                       float approx_max_vel,
+                      double max_tritri_penetration,
                       float expand_safety_param,
                       float expand_safety_adder,
                       const std::set<std::string>& contact_wildcards,

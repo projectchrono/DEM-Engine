@@ -223,6 +223,30 @@ class DEMSolver {
     /// significantly in one kT update cycle.
     void SetExpandSafetyAdder(float vel) { m_expand_base_vel = vel; }
 
+    /// @brief Manually set the current triangle--triangle penetration value in dT.
+    /// @details This allows the user to directly control the maxTriTriPenetration value which will ONLY be used in the
+    /// NEXT contact detection run in kT. One use case is if at the start of simulation, there is already significant
+    /// mesh--mesh penetration, then without calling this method, the solver might not be able to resolve triangles that
+    /// are deeply inside another mesh. Use this method to boost the solver's mesh--mesh contact detection proactiveness
+    /// for one step, then the solver will automatically know how much of an extra margin it needs to add from this step
+    /// onwards.
+    /// @param penetration The penetration value to set (must be non-negative).
+    void SetTriTriPenetration(double penetration);
+
+    /// @brief Set the maximum allowed triangle--triangle penetration used as the margin added in kT contact detection.
+    /// @details This value caps the penetration margin added to the triangle--triangle contact detection to prevent
+    /// excessively large values. The default is a huge value, so if not called, it doesn't affect the workflow. Note it
+    /// only affects kT's contact detection algorithm's proactiveness in detecting future contacts, not capping the
+    /// actual physical contact used in force calculation.
+    /// @param max_margin Maximum allowed penetration margin (must be non-negative).
+    void SetMaxTriTriPenetration(double max_margin) {
+        if (max_margin < 0.0) {
+            DEME_WARNING("SetMaxTriTriPenetration called with negative value %.6g. Setting to 0.", max_margin);
+            max_margin = 0.0;
+        }
+        m_max_tritri_penetration = max_margin;
+    }
+
     /// @brief Used to force the solver to error out when there are too many spheres in a bin. A huge number can be used
     /// to discourage this error type.
     /// @param max_sph Max number of spheres in a bin.
@@ -1586,6 +1610,9 @@ class DEMSolver {
     std::shared_ptr<DEMInspector> m_approx_vel_func;
     // The inspector that will be used for querying system angular velocity magnitude
     std::shared_ptr<DEMInspector> m_approx_angvel_func;
+
+    // User-instructed maximum tri-tri penetration margin (to prevent super large margins)
+    double m_max_tritri_penetration = DEME_HUGE_FLOAT;
 
     // The number of user-estimated (max) number of owners that will be present in the simulation. If 0, then the arrays
     // will just be resized at intialization based on the input size.

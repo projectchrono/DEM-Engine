@@ -287,6 +287,9 @@ struct DEMSimParams {
     unsigned int nOwnerWildcards;
     unsigned int nGeoWildcards;
 
+    // Max tri-tri penetration margin (to prevent super large margins from being added)
+    double capTriTriPenetration = DEME_HUGE_FLOAT;
+
     // The max vel at which the solver errors out
     float errOutVel = DEME_HUGE_FLOAT;
     // The max ang vel at which the solver errors out
@@ -394,6 +397,7 @@ struct DEMDataDT {
     float3* pKTOwnedBuffer_relPosNode1 = nullptr;
     float3* pKTOwnedBuffer_relPosNode2 = nullptr;
     float3* pKTOwnedBuffer_relPosNode3 = nullptr;
+    double* pKTOwnedBuffer_maxTriTriPenetration = nullptr;
 
     // The collection of pointers to DEM template arrays such as radiiSphere, still useful when there are template info
     // not directly jitified into the kernels

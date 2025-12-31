@@ -770,6 +770,20 @@ void DEMSolver::SetMaxVelocity(float max_vel) {
     m_approx_max_vel = max_vel;
 }
 
+void DEMSolver::SetTriTriPenetration(double penetration) {
+    if (penetration < 0.0) {
+        DEME_WARNING("SetTriTriPenetration called with negative value %.6g. Setting to 0.", penetration);
+        penetration = 0.0;
+    }
+    if (!sys_initialized) {
+        DEME_WARNING(std::string(
+            "SetTriTriPenetration called before system initialization. This has no effect until after Initialize()."));
+        return;
+    }
+    // Directly set the value in dT
+    *dT->maxTriTriPenetration = penetration;
+}
+
 void DEMSolver::SetExpandSafetyType(const std::string& insp_type) {
     if (insp_type == "auto") {
         m_max_v_finder_type = MARGIN_FINDER_TYPE::DEFAULT;

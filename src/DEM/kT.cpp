@@ -132,7 +132,7 @@ inline void DEMKinematicThread::computeMarginFromAbsv(float* absVel_owner, float
             .instantiate()
             .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
             .launch(&simParams, &granData, absVel_owner, absAngVel_owner, &(stateParams.ts), &(stateParams.maxDrift),
-                    (size_t)simParams->nTriGM);
+                    &(stateParams.maxTriTriPenetration), solverFlags.meshUniversalContact, (size_t)simParams->nTriGM);
     }
     blocks_needed = (simParams->nAnalGM + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
@@ -165,6 +165,8 @@ inline void DEMKinematicThread::unpackMyBuffer() {
     DEME_GPU_CALL(cudaMemcpy(&(stateParams.ts), &(stateParams.ts_buffer), sizeof(float), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(&(stateParams.maxDrift), &(stateParams.maxDrift_buffer), sizeof(unsigned int),
                              cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(&(stateParams.maxTriTriPenetration), &(stateParams.maxTriTriPenetration_buffer),
+                             sizeof(double), cudaMemcpyDeviceToDevice));
     // Use two temp arrays to store absVel and absAngVel's buffer
     float* absVel_owner =
         (float*)solverScratchSpace.allocateTempVector("absVel_owner", simParams->nOwnerBodies * sizeof(float));
@@ -183,6 +185,7 @@ inline void DEMKinematicThread::unpackMyBuffer() {
     // Get the reduced maxVel value
     stateParams.maxVel.toHost();
     stateParams.maxAngVel.toHost();
+    stateParams.maxTriTriPenetration.toHost();
     if (*stateParams.maxVel > simParams->errOutVel || !std::isfinite(*stateParams.maxVel) ||
         *stateParams.maxAngVel > simParams->errOutAngVel || !std::isfinite(*stateParams.maxAngVel)) {
         DEME_ERROR(
@@ -197,11 +200,17 @@ inline void DEMKinematicThread::unpackMyBuffer() {
     if (*stateParams.maxVel >
         simParams->approxMaxVel) {  // If maxVel is larger than the user estimation, that is an anomaly
         // This prints when verbosity higher than METRIC
-        DEME_STATUS("OVER_MAX_VEL", "Simulation entity velocity reached %.6g, over the user-estimated %.6g",
+        DEME_STATUS("OVER_MAX_VEL", "Simulation entity velocity reached %.6g, over the user-estimated max (%.6g)",
                     *stateParams.maxVel, simParams->approxMaxVel);
+    }
+    if (*stateParams.maxTriTriPenetration > simParams->capTriTriPenetration) {
+        DEME_STATUS("OVER_MAX_MESH_PENETRATION",
+                    "Mesh--mesh contact penetration reached %.6g, over the user-estimated max (%.6g)",
+                    *stateParams.maxTriTriPenetration, simParams->capTriTriPenetration);
     }
     DEME_DEBUG_PRINTF("kT received an update, max vel: %.6g", *stateParams.maxVel);
     DEME_DEBUG_PRINTF("kT received an update, max ang vel: %.6g", *stateParams.maxAngVel);
+    DEME_DEBUG_PRINTF("kT received an update, max tri--tri penetration: %.6g", *stateParams.maxTriTriPenetration);
 
     // Now update the future drift info. Whatever drift value dT says, kT listens; unless kinematicMaxFutureDrift is
     // negative in which case the user explicitly said not caring the future drift.
@@ -632,6 +641,7 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
                                       double ts_size,
                                       float expand_factor,
                                       float approx_max_vel,
+                                      double max_tritri_penetration,
                                       float expand_safety_param,
                                       float expand_safety_adder,
                                       const std::set<std::string>& contact_wildcards,
@@ -654,6 +664,7 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
     simParams->approxMaxVel = approx_max_vel;
     simParams->expSafetyMulti = expand_safety_param;
     simParams->expSafetyAdder = expand_safety_adder;
+    simParams->capTriTriPenetration = max_tritri_penetration;
     simParams->nbX = nbX;
     simParams->nbY = nbY;
     simParams->nbZ = nbZ;

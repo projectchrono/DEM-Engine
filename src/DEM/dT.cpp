@@ -333,6 +333,7 @@ void DEMDynamicThread::packTransferPointers(DEMKinematicThread*& kT) {
     // Single-number data are now not packaged in granData...
     granData->pKTOwnedBuffer_ts = &(kT->stateParams.ts_buffer);
     granData->pKTOwnedBuffer_maxDrift = &(kT->stateParams.maxDrift_buffer);
+    granData->pKTOwnedBuffer_maxTriTriPenetration = &(kT->stateParams.maxTriTriPenetration_buffer);
 }
 
 void DEMDynamicThread::changeFamily(unsigned int ID_from, unsigned int ID_to) {
@@ -362,6 +363,7 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                     double ts_size,
                                     float expand_factor,
                                     float approx_max_vel,
+                                    double max_tritri_penetration,
                                     float expand_safety_param,
                                     float expand_safety_adder,
                                     const std::set<std::string>& contact_wildcards,
@@ -384,6 +386,7 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->approxMaxVel = approx_max_vel;
     simParams->expSafetyMulti = expand_safety_param;
     simParams->expSafetyAdder = expand_safety_adder;
+    simParams->capTriTriPenetration = max_tritri_penetration;
     simParams->nbX = nbX;
     simParams->nbY = nbY;
     simParams->nbZ = nbZ;
@@ -532,6 +535,10 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(ownerPatchMesh, nMeshPatches, 0);
     DEME_DUAL_ARRAY_RESIZE(patchMaterialOffset, nMeshPatches, 0);
     DEME_DUAL_ARRAY_RESIZE(relPosPatch, nMeshPatches, make_float3(0));
+    // maxTriTriPenetration usually keeps the max tri--tri penetration during the on-going simulation. But after
+    // initialization, when it stores no meaningful values, dT will send a work order to kT, so maxTriTriPenetration's
+    // value has to be initialized.
+    DEME_GPU_CALL(cudaMemset(maxTriTriPenetration.getDevicePointer(), 0, sizeof(double)));
 
     // Resize to the number of analytical geometries
     DEME_DUAL_ARRAY_RESIZE(ownerAnalBody, nAnalGM, 0);
@@ -2139,6 +2146,10 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxDrift, perhapsIdealFutureDrift.getHostPointer(),
                              sizeof(unsigned int), cudaMemcpyHostToDevice));
 
+    // Send max tri-tri penetration value for kT's margin computation (device-to-device)
+    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxTriTriPenetration, maxTriTriPenetration.getDevicePointer(),
+                             sizeof(double), cudaMemcpyDeviceToDevice));
+
     // Family number is a typical changable quantity on-the-fly. If this flag is on, dT is responsible for sending this
     // info to kT.
     if (solverFlags.canFamilyChangeOnDevice) {
@@ -2293,6 +2304,9 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
     const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPrimitiveMap,
     const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
     const ContactTypeMap<std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>& typeKernelMap) {
+    // Reset max tri-tri penetration for this timestep on device (kT may need this info)
+    DEME_GPU_CALL(cudaMemset(maxTriTriPenetration.getDevicePointer(), 0, sizeof(double)));
+
     // For each contact type that exists, check if it is patch(mesh)-related type...
     for (size_t i = 0; i < m_numExistingTypes; i++) {
         contact_t contact_type = existingContactTypes[i];
@@ -2485,13 +2499,16 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     (double*)solverScratchSpace.allocateTempVector("finalAreas", countPatch * sizeof(double));
                 float3* finalNormals =
                     (float3*)solverScratchSpace.allocateTempVector("finalNormals", countPatch * sizeof(float3));
-                double* finalPenetrations =
-                    (double*)solverScratchSpace.allocateTempVector("finalPenetrations", countPatch * sizeof(double));
+                // Resize permanent finalPenetrations array for this patch contact batch.
+                // Note: I made it a permanent array in case that in the future, we want to transfer this entire array
+                // to kT for better margin derivation.
+                DEME_DEVICE_ARRAY_RESIZE(finalPenetrations, countPatch);
+
                 double3* finalContactPoints =
                     (double3*)solverScratchSpace.allocateTempVector("finalContactPoints", countPatch * sizeof(double3));
                 finalizePatchResults(totalProjectedAreas, votedNormals, maxProjectedPenetrations, votedContactPoints,
                                      zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, patchHasSAT,
-                                     finalAreas, finalNormals, finalPenetrations, finalContactPoints, countPatch,
+                                     finalAreas, finalNormals, finalPenetrations.data(), finalContactPoints, countPatch,
                                      streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("totalProjectedAreas");
                 solverScratchSpace.finishUsingTempVector("votedNormals");
@@ -2525,17 +2542,27 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                             progName->kernel(kernelName)
                                 .instantiate()
                                 .configure(dim3(blocks), dim3(DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0, streamInfo.stream)
-                                .launch(&simParams, &granData, finalAreas, finalNormals, finalPenetrations,
+                                .launch(&simParams, &granData, finalAreas, finalNormals, finalPenetrations.data(),
                                         finalContactPoints, startOffsetPatch, countPatch);
                         }
                     }
                 }
                 DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
+                // If this is a tri-tri contact, compute max penetration for kT
+                // The max value stays on device until sendToTheirBuffer transfers it
+                if (contact_type == TRIANGLE_TRIANGLE_CONTACT && countPatch > 0) {
+                    // Compute max penetration and store it on device
+                    // Note: penetration values should always be non-negative in physical contacts
+                    cubMaxReduce<double>(finalPenetrations.data(), &maxTriTriPenetration, countPatch, streamInfo.stream,
+                                         solverScratchSpace);
+                    // No toHost() here - keep on device since host never needs it
+                }
+
                 // Final clean up
                 solverScratchSpace.finishUsingTempVector("finalAreas");
                 solverScratchSpace.finishUsingTempVector("finalNormals");
-                solverScratchSpace.finishUsingTempVector("finalPenetrations");
+                // Note: finalPenetrations is now a permanent array, not freed here
                 solverScratchSpace.finishUsingTempVector("finalContactPoints");
             }
         }
