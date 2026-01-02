@@ -143,11 +143,10 @@ int main() {
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEMSim.SetCDUpdateFreq(30);
+    // Usually, the end user do not have to manually set expand safety parameters.
     DEMSim.SetExpandSafetyMultiplier(1.0);
     DEMSim.SetExpandSafetyAdder(1.0);
-    // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto bin
-    // size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case setting
-    // init bin size may save the simulation.
+    // You usually don't have to worry about initial bin size. Using the automatic adaptive size by default is fine.
     // DEMSim.SetInitBinSize(0.1);
     // DEMSim.DisableAdaptiveBinSize();
 

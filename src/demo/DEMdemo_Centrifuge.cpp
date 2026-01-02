@@ -93,7 +93,8 @@ int main() {
     unsigned int drum_family = 100;
     Drum->SetFamily(drum_family);
     // The drum rotates (facing Z direction)
-    DEMSim.SetFamilyPrescribedAngVel(drum_family, "0", "0", "6.0");
+    float DurmRotVel = 6.0;
+    DEMSim.SetFamilyPrescribedAngVel(drum_family, "0", "0", to_string_with_precision(DurmRotVel));
     // Then add planes to `close up' the drum. We add it as another object b/c we want to track the force on it
     // separately.
     auto top_bot_planes = DEMSim.AddExternalObject();
@@ -138,7 +139,7 @@ int main() {
     // account in consideration of adding contact margins, you have to specify it here, since the solver's automatic max
     // velocity derivation algorithm currently cannot take analytical object's angular velocity-induced velocity into
     // account.
-    DEMSim.SetExpandSafetyAdder(6.0);
+    DEMSim.SetExpandSafetyAdder(DurmRotVel * CylRad);
     DEMSim.Initialize();
 
     path out_dir = current_path();

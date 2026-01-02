@@ -84,17 +84,15 @@ int main() {
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.SetCDUpdateFreq(40);
-    // Mixer has a big angular velocity-contributed linear speed at its blades, this is something the solver do not
-    // account for, for now. And that means it needs to be added as an estimated value.
-    DEMSim.SetExpandSafetyAdder(2.0);
+    DEMSim.SetErrorOutVelocity(20.);
     // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto bin
     // size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case setting
     // init bin size may save the simulation.
     // DEMSim.SetInitBinSize(25 * granular_rad);
+    // The following parameters control how the solver adapts its update frequency in response to max velocity changes.
+    // For most end users, using the default is fine; here we just show an example.
     DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1.2);
     DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(6);
-    // DEMSim.DisableAdaptiveBinSize();
-    DEMSim.SetErrorOutVelocity(20.);
     // Force the solver to error out if something went crazy. A good practice to add them, but not necessary.
     DEMSim.SetErrorOutAvgContacts(50);
 

@@ -33,7 +33,6 @@ int main() {
     DEMSim.SetCollectAccRightAfterForceCalc(true);
     DEMSim.SetErrorOutAvgContacts(80);
 
-    // DEMSim.SetExpandSafetyAdder(0.5);
     int totalCyl = 10500;
     int totalSph = 7000 + totalCyl;
 
