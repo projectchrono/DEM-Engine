@@ -1,0 +1,100 @@
+# Building the Python Package
+
+This document describes how to build the Python package for DEM-Engine.
+
+## Prerequisites
+
+- CUDA Toolkit (11.0 or later)
+- CMake (3.18 or later)
+- Python (3.8 or later)
+- C++17 compatible compiler
+- pip (for Python package installation)
+
+## Building the Package
+
+### Option 1: Using pip (recommended)
+
+```bash
+pip install .
+```
+
+This will use scikit-build-core to automatically configure CMake with the Python build options enabled, compile the C++/CUDA code, and install the package.
+
+### Option 2: Building a wheel
+
+```bash
+pip install build
+python -m build
+```
+
+This creates a `.whl` file in the `dist/` directory that can be distributed and installed on other machines.
+
+### Option 3: Development installation
+
+For development, you can install in editable mode:
+
+```bash
+pip install -e .
+```
+
+## CMake Options
+
+When building manually with CMake, use the following option to enable Python bindings:
+
+```bash
+mkdir build
+cd build
+cmake .. -DDEME_BUILD_PYTHON=ON
+cmake --build .
+```
+
+## Usage
+
+After installation, you can import the package in Python:
+
+```python
+import DEME
+
+# Create a solver
+solver = DEME.DEMSolver(nGPUs=1)
+
+# Use other classes and functions
+# ...
+```
+
+## Package Contents
+
+The Python package provides bindings for:
+- `DEMSolver` - Main simulation solver class
+- `DEMMaterial` - Material properties
+- `DEMClumpBatch` - Batch operations for clumps
+- `DEMExternObj` - External objects
+- `DEMMeshConnected` - Triangle mesh support
+- Samplers: `PDSampler`, `GridSampler`, `HCPSampler`
+- Utility functions for transformations and sampling
+
+## Troubleshooting
+
+### CUDA Not Found
+
+Ensure that CUDA is installed and the `CUDA_ROOT` or `CUDACXX` environment variable is set:
+
+```bash
+export CUDA_ROOT=/usr/local/cuda
+```
+
+### CUB Library Not Found
+
+The CUDA Toolkit includes CUB. If CMake cannot find it, you may need to specify its location:
+
+```bash
+cmake .. -DDEME_BUILD_PYTHON=ON -DCUB_DIR=/path/to/cuda/lib64/cmake/cub
+```
+
+### Python Version Mismatch
+
+Make sure you're using the same Python version for building and running. You can specify the Python executable:
+
+```bash
+cmake .. -DDEME_BUILD_PYTHON=ON -DPython_EXECUTABLE=/path/to/python
+```

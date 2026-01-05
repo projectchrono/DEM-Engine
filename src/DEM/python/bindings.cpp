@@ -61,7 +61,7 @@ struct type_caster<float4> {
         if (!isinstance<py::sequence>(src))
             return false;
         auto seq = reinterpret_borrow<py::sequence>(src);
-        if (seq.size() != 3)
+        if (seq.size() != 4)
             return false;
         value.x = seq[0].cast<float>();
         value.y = seq[1].cast<float>();
