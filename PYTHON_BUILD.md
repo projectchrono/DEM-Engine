@@ -4,10 +4,12 @@ This document describes how to build the Python package for DEM-Engine.
 
 ## Prerequisites
 
-- CUDA Toolkit (11.0 or later)
+- CUDA Toolkit (11.0 or later recommended; tested with 11.0-12.x)
+  - Compute capability 6.0+ required (Pascal architecture or newer)
+  - Includes CUB library (bundled with CUDA 11.0+)
 - CMake (3.18 or later)
 - Python (3.8 or later)
-- C++17 compatible compiler
+- C++17 compatible compiler (GCC 7+, Clang 5+, MSVC 2017+)
 - pip (for Python package installation)
 
 ## Building the Package

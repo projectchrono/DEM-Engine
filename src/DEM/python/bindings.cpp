@@ -77,10 +77,6 @@ struct type_caster<float4> {
 }  // namespace detail
 }  // namespace pybind11
 
-// Allow pybind11 to convert std::vector<float3 or 4> using the custom type caster
-// PYBIND11_DECLARE_VECTOR_SPECIALIZATION(std::vector<float3>, true);
-// PYBIND11_DECLARE_VECTOR_SPECIALIZATION(std::vector<float4>, true);
-
 PYBIND11_MODULE(DEME, obj) {
     // Obtaining the location of python's site-packages dynamically and setting it
     // as path prefix
@@ -114,7 +110,8 @@ PYBIND11_MODULE(DEME, obj) {
         DEMERuntimeDataHelper::SetPathPrefix(path);
     } catch (const py::error_already_set& e) {
         // If all else fails, don't set the prefix and let the system use default paths
-        py::print("Warning: Could not determine site-packages location, using default paths");
+        py::print("Warning: Could not determine site-packages location for data files, using default paths. "
+                  "Data file loading may fail. Set DEME_DATA_PATH environment variable if you encounter issues.");
     }
     
     deme::SetDEMEDataPath();
@@ -145,7 +142,7 @@ PYBIND11_MODULE(DEME, obj) {
             py::arg("CylCenter"), py::arg("CylAxis"), py::arg("CylRad"), py::arg("CylHeight"), py::arg("ParticleRad"),
             py::arg("spacing") = 1.2);
 
-    obj.attr("PI") = py::float_(3.141592653589793238462643383279502884197);
+    obj.attr("PI") = py::float_(M_PI);
 
     py::class_<DEMERuntimeDataHelper>(obj, "DEMERuntimeDataHelper")
         .def(py::init<>())
