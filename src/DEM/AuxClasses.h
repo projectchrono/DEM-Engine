@@ -90,8 +90,8 @@ class DEMInspector {
     /// Get value directly within dT (returns host pointer by default)
     float* dT_GetValue();
 
-    /// Get value directly within dT (returns device pointer)
-    float* dT_GetDeviceValue();
+    /// Get values on device without forcing a host sync (internal use).
+    float* dT_GetDeviceValues();
 
     /// Manually release the data arrays
     void ReleaseData();

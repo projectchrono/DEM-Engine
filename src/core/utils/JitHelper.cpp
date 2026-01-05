@@ -3,8 +3,6 @@
 //
 //  SPDX-License-Identifier: BSD-3-Clause
 
-#include <core/utils/JitHelper.h>
-
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
@@ -19,7 +17,8 @@
 #include <memory>
 
 #include <core/ApiVersion.h>
-#include <core/utils/RuntimeData.h>
+#include "RuntimeData.h"
+#include "JitHelper.h"
 
 namespace {
 

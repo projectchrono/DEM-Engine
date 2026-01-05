@@ -113,7 +113,6 @@ void getContactForcesConcerningOwners(float3* d_points,
     getContactForcesConcerningOwners_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
         d_points, d_forces, d_torques, reinterpret_cast<unsigned long long*>(d_numUsefulCnt), d_ownerIDs, IDListSize,
         simParams, granData, numCnt, need_torque, torque_in_local);
-    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -161,7 +160,6 @@ void prepareWeightedNormalsForVoting(DEMDataDT* granData,
     if (blocks_needed > 0) {
         prepareWeightedNormalsForVoting_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             granData, weightedNormals, areas, keys, startOffset, count);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -202,7 +200,6 @@ void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
     if (blocks_needed > 0) {
         normalizeAndScatterVotedNormals_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             votedWeightedNormals, totalAreas, output, count);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -294,7 +291,6 @@ void computeWeightedUsefulPenetration(DEMDataDT* granData,
         computeWeightedUsefulPenetration_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             granData, votedNormals, keys, areas, projectedPenetrations, projectedAreas, startOffsetPrimitive,
             startOffsetPatch, count);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -327,7 +323,6 @@ void extractPrimitivePenetrations(DEMDataDT* granData,
     if (blocks_needed > 0) {
         extractPrimitivePenetrations_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             granData, penetrations, startOffset, count);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -400,7 +395,6 @@ void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
                                                              this_stream>>>(
             granData, maxPenetrations, zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, keys,
             startOffsetPrimitive, startOffsetPatch, countPrimitive);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -445,7 +439,6 @@ void checkPatchHasSATSatisfyingPrimitive(DEMDataDT* granData,
     if (blocks_needed > 0) {
         checkPatchHasSATSatisfyingPrimitive_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             granData, patchHasSAT, keys, startOffsetPrimitive, startOffsetPatch, countPrimitive);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -510,7 +503,6 @@ void finalizePatchResults(double* totalProjectedAreas,
             totalProjectedAreas, votedNormals, votedPenetrations, votedContactPoints, zeroAreaNormals,
             zeroAreaPenetrations, zeroAreaContactPoints, patchHasSAT, finalAreas, finalNormals, finalPenetrations,
             finalContactPoints, count);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -559,7 +551,6 @@ void computeWeightedContactPoints(DEMDataDT* granData,
         computeWeightedContactPoints_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             granData, weightedContactPoints, weights, projectedPenetrations, projectedAreas, startOffsetPrimitive,
             count);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -592,7 +583,6 @@ void computeFinalContactPointsPerPatch(double3* totalWeightedContactPoints,
     if (blocks_needed > 0) {
         computeFinalContactPointsPerPatch_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             totalWeightedContactPoints, totalWeights, finalContactPoints, count);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -647,7 +637,6 @@ void prepareForceArrays(DEMSimParams* simParams,
     if (blocks_needed_for_force_prep > 0) {
         prepareForceArrays_impl<<<blocks_needed_for_force_prep, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             simParams, granData, nPrimitiveContactPairs);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -656,7 +645,6 @@ void prepareAccArrays(DEMSimParams* simParams, DEMDataDT* granData, bodyID_t nOw
     if (blocks_needed_for_acc_prep > 0) {
         prepareAccArrays_impl<<<blocks_needed_for_acc_prep, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(simParams,
                                                                                                           granData);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -694,7 +682,6 @@ void rearrangeContactWildcards(DEMDataDT* granData,
     if (blocks_needed > 0) {
         rearrangeContactWildcards_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             granData, wildcard, sentry, nWildcards, nContactPairs);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -716,7 +703,6 @@ void markAliveContacts(float* wildcard, notStupidBool_t* sentry, size_t nContact
     if (blocks_needed > 0) {
         markAliveContacts_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(wildcard, sentry,
                                                                                               nContactPairs);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 

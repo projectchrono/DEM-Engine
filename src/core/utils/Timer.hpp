@@ -56,6 +56,11 @@ class Timer {
         m_total += m_end - m_start;
     }
 
+    /// Manually accumulate a duration (in seconds) that was measured elsewhere.
+    void addDuration(seconds_type duration_seconds) {
+        m_total += std::chrono::duration<seconds_type>(duration_seconds);
+    }
+
     /// Reset the total accumulated time (when repeating multiple start() stop() start() stop() )
     void reset() { m_total = std::chrono::duration<seconds_type>(0); }
 

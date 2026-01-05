@@ -95,7 +95,7 @@ void __advise_impl(const T* data, std::size_t size, ManagedAdvice advice, int de
                   static_cast<cudaMemoryAdvise>(advice),
                   loc);
 #else
-    // Older Toolkits: cudaMemAdvise(const void*, size_t, cudaMemoryAdvise, int)
+    // Older toolkits: cudaMemAdvise(const void*, size_t, cudaMemoryAdvise, int)
     cudaMemAdvise(static_cast<const void*>(data),
                   size * sizeof(T),
                   static_cast<cudaMemoryAdvise>(advice),

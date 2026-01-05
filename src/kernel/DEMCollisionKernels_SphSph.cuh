@@ -69,7 +69,7 @@ __host__ __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
     normalX = XA - XB;
     normalY = YA - YB;
     normalZ = ZA - ZB;
-    normalizeVector3<T2>(normalX, normalY, normalZ);
+    normalizeVector3(normalX, normalY, normalZ);
     overlapDepth = radA + radB - sqrt(centerDist2);
     // overlap area in the sph-sph case will involve only half the overlap depth
     // overlapArea = deme::PI * (radA * radA - (radA - overlapDepth / (T1)2) * (radA - overlapDepth / (T1)2));

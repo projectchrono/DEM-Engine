@@ -246,11 +246,10 @@ float* DEMInspector::dT_GetValue() {
                            m_reduceRes, false);
 }
 
-float* DEMInspector::dT_GetDeviceValue() {
-    // assertInit(); // This one the user should not use
-    // This returns a device pointer instead of a host pointer
-    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, m_reduceResArr,
-                           m_reduceRes, true);
+float* DEMInspector::dT_GetDeviceValues() {
+    // Device-only inspection path to avoid host syncs in dT's worker thread.
+    return dT->inspectCallDeviceNoReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
+                                         m_reduceResArr, m_reduceRes);
 }
 
 void DEMInspector::ReleaseData() {

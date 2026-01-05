@@ -283,7 +283,7 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                     if (in_contact_A || in_contact_B) {
                         snap_to_face(triANode1[ind], triANode2[ind], triANode3[ind], sphXYZ, cntPnt);
                         deme::binID_t contactPntBin = getPointBinID<deme::binID_t>(
-                            cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize, simParams->nbX, simParams->nbY);
+                            cntPnt.x, cntPnt.y, cntPnt.z, simParams->dyn.binSize, simParams->nbX, simParams->nbY);
                         if (contactPntBin == binID) {
                             atomicAdd(&blockSphTriPairCnt, 1);
                         }
@@ -334,9 +334,9 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                     unsigned int ZZ = binID/(simParams->nbX*simParams->nbY);
                     unsigned int YY = binID%(simParams->nbX*simParams->nbY)/simParams->nbX;
                     unsigned int XX = binID%(simParams->nbX*simParams->nbY)%simParams->nbX;
-                    double binLocX = (XX + 0.5) * simParams->binSize;
-                    double binLocY = (YY + 0.5) * simParams->binSize;
-                    double binLocZ = (ZZ + 0.5) * simParams->binSize;
+                    double binLocX = (XX + 0.5) * simParams->dyn.binSize;
+                    double binLocY = (YY + 0.5) * simParams->dyn.binSize;
+                    double binLocZ = (ZZ + 0.5) * simParams->dyn.binSize;
                     printf("binLoc: %f, %f, %f\n", binLocX, binLocY, binLocZ);
                     printf("triANode1A: %f, %f, %f\n", triANode1[bodyA].x, triANode1[bodyA].y, triANode1[bodyA].z);
                 }
@@ -553,7 +553,7 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                     if (in_contact_A || in_contact_B) {
                         snap_to_face(triANode1[ind], triANode2[ind], triANode3[ind], sphXYZ, cntPnt);
                         deme::binID_t contactPntBin = getPointBinID<deme::binID_t>(
-                            cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize, simParams->nbX, simParams->nbY);
+                            cntPnt.x, cntPnt.y, cntPnt.z, simParams->dyn.binSize, simParams->nbX, simParams->nbY);
                         if (contactPntBin == binID) {
                             deme::contactPairs_t inBlockOffset = smReportOffset + atomicAdd(&blockSphTriPairCnt, 1);
                             if (inBlockOffset < smReportOffset_end) {

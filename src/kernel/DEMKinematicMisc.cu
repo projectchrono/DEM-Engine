@@ -26,7 +26,7 @@ __device__ __forceinline__ float getApproxAbsVel(deme::DEMSimParams* simParams,
     // estimation as no direction is considered.
     float vel = abs_v + length(myRelPos) * abs_angv;
 
-    vel = fminf(vel, simParams->approxMaxVel);
+    vel = fminf(vel, simParams->dyn.approxMaxVel);
     return vel;
 }
 
@@ -50,7 +50,7 @@ __global__ void computeMarginFromAbsv_implSph(deme::DEMSimParams* simParams,
         float vel = getApproxAbsVel(simParams, ownerID, absVel_owner, absAngVel_owner, myRelPos);
         unsigned int my_family = granData->familyID[ownerID];
         granData->marginSizeSphere[sphereID] =
-            (double)(vel * simParams->expSafetyMulti + simParams->expSafetyAdder) * (*ts) * (*maxDrift) +
+            (double)(vel * simParams->dyn.expSafetyMulti + simParams->dyn.expSafetyAdder) * (*ts) * (*maxDrift) +
             granData->familyExtraMarginSize[my_family];
     }
 }
@@ -86,7 +86,7 @@ __global__ void computeMarginFromAbsv_implTri(deme::DEMSimParams* simParams,
         }
 
         granData->marginSizeTriangle[triID] =
-            (double)(vel * simParams->expSafetyMulti + simParams->expSafetyAdder) * (*ts) * (*maxDrift) +
+            (double)(vel * simParams->dyn.expSafetyMulti + simParams->dyn.expSafetyAdder) * (*ts) * (*maxDrift) +
             penetrationMargin + granData->familyExtraMarginSize[my_family];
     }
 }
@@ -106,7 +106,7 @@ __global__ void computeMarginFromAbsv_implAnal(deme::DEMSimParams* simParams,
         float vel = getApproxAbsVel(simParams, ownerID, absVel_owner, absAngVel_owner, myRelPos);
         unsigned int my_family = granData->familyID[ownerID];
         granData->marginSizeAnalytical[objID] =
-            (double)(vel * simParams->expSafetyMulti + simParams->expSafetyAdder) * (*ts) * (*maxDrift) +
+            (double)(vel * simParams->dyn.expSafetyMulti + simParams->dyn.expSafetyAdder) * (*ts) * (*maxDrift) +
             granData->familyExtraMarginSize[my_family];
     }
 }

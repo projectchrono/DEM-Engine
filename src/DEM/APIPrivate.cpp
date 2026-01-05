@@ -1151,7 +1151,13 @@ void DEMSolver::setSolverParams() {
     dT->solverFlags.upperBoundFutureDrift = upper_bound_future_drift;
     dT->solverFlags.targetDriftMoreThanAvg = max_drift_ahead_of_avg_drift;
     dT->solverFlags.targetDriftMultipleOfAvg = max_drift_multiple_of_avg_drift;
-    dT->accumStepUpdater.SetCacheSize(max_drift_gauge_history_size);
+    kT->solverFlags.futureDriftEffDriftSafetyFactor = future_drift_eff_drift_safety_factor;
+    dT->solverFlags.futureDriftEffDriftSafetyFactor = future_drift_eff_drift_safety_factor;
+    kT->solverFlags.futureDriftSendUpperBoundRatio = future_drift_send_upper_bound_ratio;
+    dT->solverFlags.futureDriftSendUpperBoundRatio = future_drift_send_upper_bound_ratio;
+    kT->solverFlags.futureDriftSendLowerBoundRatio = future_drift_send_lower_bound_ratio;
+    dT->solverFlags.futureDriftSendLowerBoundRatio = future_drift_send_lower_bound_ratio;
+    // accumStepUpdater removed; FutureDriftRegulator manages its own window size.
 }
 
 void DEMSolver::setSimParams() {
@@ -1185,13 +1191,53 @@ void DEMSolver::setSimParams() {
             DEME_MAX_WILDCARD_NUM);
     }
     DEME_DEBUG_PRINTF("%u contact wildcards are in the force model.", nContactWildcards);
-
     // Error-out velocity should be no smaller than the max velocity we can expect
     if (threshold_error_out_vel < m_approx_max_vel) {
         // Silently bring down m_approx_max_vel
         m_approx_max_vel = threshold_error_out_vel;
     }
-
+    { // Adaptive Timestep -- currently only Hertz const. 
+        if (adapt_ts_type == ADAPT_TS_TYPE::HERTZ_CONST) {
+            auto sqr = [](double x) { return x * x; };
+            auto effective_E = [&](double E1, double nu1, double E2, double nu2) -> double {
+                if (E1 <= 0.0 || E2 <= 0.0) return 0.0;
+                return 1.0 / ( ((1.0 - sqr(nu1)) / E1) + ((1.0 - sqr(nu2)) / E2) );
+            };  // max effektive E* over all material contacts
+            double Eeff_max = 0.0;
+            for (size_t i = 0; i < m_loaded_materials.size(); ++i) {
+                const auto& A = m_loaded_materials[i]->mat_prop;
+                const double E1  = (A.count("E")  ? (double)A.at("E")  : 0.0);
+                const double nu1 = (A.count("nu") ? (double)A.at("nu") : 0.3);
+                for (size_t j = i; j < m_loaded_materials.size(); ++j) {
+                    const auto& B = m_loaded_materials[j]->mat_prop;
+                    const double E2  = (B.count("E")  ? (double)B.at("E")  : 0.0);
+                    const double nu2 = (B.count("nu") ? (double)B.at("nu") : 0.3);
+                    const double Ee = effective_E(E1, nu1, E2, nu2);
+                    if (Ee > Eeff_max) Eeff_max = Ee;
+                }
+            } // lowest mass
+            double min_mass = std::numeric_limits<double>::infinity();
+            for (double m : m_template_clump_mass)
+                if (m > 0.0 && m < min_mass) min_mass = m;
+            const double r_min = (double)m_smallest_radius;
+            if (std::isfinite(min_mass) && r_min > 0.0 && Eeff_max > 0.0) {
+                const double R_eff = 0.5 * r_min;
+                const double m_eff = 0.5 * min_mass;
+                const double KH = FOUR_OVER_THREE * std::sqrt(0.1) * Eeff_max * R_eff;
+                const double dt_hertz = (PI / (2.0 * N_DT)) * std::sqrt(m_eff / KH);
+                if (dt_hertz > 0.0 && std::isfinite(dt_hertz)) {
+                    m_ts_size = dt_hertz;  // <- set const. timestep
+                    DEME_INFO("Adaptive time step 'hertz_const': dt = %.9g  (m_min=%.6g, r_min=%.6g, E*=%.6g, N_DT=%.1f)",
+                            m_ts_size, min_mass, r_min, Eeff_max, N_DT);
+                } else {
+                    DEME_WARNING("hertz_const erzeugte ungueltigen dt; behalte bisherigen Wert %.7g.", m_ts_size);
+                }
+            } else {
+                DEME_WARNING("hertz_const: fehlende/ungueltige Daten (m_min=%g, r_min=%g, E*=%g); dt bleibt %.7g.",
+                            min_mass, r_min, Eeff_max, m_ts_size);
+            }
+        }
+    }
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
                      m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_max_tritri_penetration,
                      m_expand_safety_multi, m_expand_base_vel, m_force_model->m_contact_wildcards,
@@ -1333,7 +1379,10 @@ void DEMSolver::packDataPointers() {
 }
 
 void DEMSolver::migrateSimParamsToDevice() {
+    DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
     dT->simParams.toDevice();
+
+    DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
     kT->simParams.toDevice();
 }
 
@@ -1568,6 +1617,14 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     if (!no_recording_contact_forces) {
         contact_info_write_strat = FORCE_INFO_WRITE_BACK_STRAT();
     }
+    std::string contact_info_clear_strat = " ";
+    if (!no_recording_contact_forces) {
+        contact_info_clear_strat =
+            "granData->contactPointGeometryA[myContactID] = make_float3(0,0,0);"
+            "granData->contactPointGeometryB[myContactID] = make_float3(0,0,0);"
+            "granData->contactForces[myContactID] = make_float3(0,0,0);"
+            "granData->contactTorque_convToForce[myContactID] = make_float3(0,0,0)";
+    }
 
     if (ensure_kernel_line_num) {
         model = compact_code(model);
@@ -1576,6 +1633,7 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         ingredient_acquisition_B = compact_code(ingredient_acquisition_B);
         whether_reduce_in_kernel = compact_code(whether_reduce_in_kernel);
         contact_info_write_strat = compact_code(contact_info_write_strat);
+        contact_info_clear_strat = compact_code(contact_info_clear_strat);
     }
     strMap["_DEMForceModel_;"] = model;
     strMap["_forceModelPrerequisites_;"] = model_prerequisites;
@@ -1596,8 +1654,9 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     strMap["_forceModelContactWildcardWrite_;"] = cnt_wildcard_write_back;
     strMap["_forceModelContactWildcardDestroy_;"] = cnt_wildcard_destroy_record;
 
-    strMap["_forceCollectInPlaceStrat_;"] = whether_reduce_in_kernel;
-    strMap["_contactInfoWrite_;"] = contact_info_write_strat;
+    strMap["_forceCollectInPlaceStrat_"] = whether_reduce_in_kernel;
+    strMap["_contactInfoWrite_"] = contact_info_write_strat;
+    strMap["_contactInfoClear_"] = contact_info_clear_strat;
 
     DEME_DEBUG_PRINTF("Model ingredient definition:\n%s", ingredient_definition.c_str());
 

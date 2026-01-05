@@ -95,7 +95,6 @@ inline void removeDuplicateContacts(DualStruct<DEMDataKT>& granData,
     if (blocks_needed_for_setting_1 > 0) {
         setArr<<<dim3(blocks_needed_for_setting_1), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
             retain_flags, numTotalCnts, (notStupidBool_t)1);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 
     size_t blocks_needed_for_flagging = (*pNumUniqueA + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
@@ -103,7 +102,6 @@ inline void removeDuplicateContacts(DualStruct<DEMDataKT>& granData,
         markDuplicateContacts<<<dim3(blocks_needed_for_flagging), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream>>>(
             idA_runlength, idA_scanned_runlength, idB_sorted, contactType_sorted, persistency_sorted, retain_flags,
             *pNumUniqueA, process_persistency);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
     // std::cout << "Marked retainers: " << std::endl;
     // displayDeviceArray<notStupidBool_t>(retain_flags, numTotalCnts);
@@ -293,7 +291,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 .instantiate()
                 .configure(dim3(blocks_needed_for_bodies), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
                 .launch(&simParams, &granData, numBinsSphereTouches, numAnalGeoSphereTouches);
-            DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 
             // 2nd step: prefix scan sphere--bin touching pairs
             // The last element of this scanned array is useful: it can be used to check if the 2 sweeps reach the same
@@ -358,7 +355,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 .launch(&simParams, &granData, numBinsSphereTouchesScan, numAnalGeoSphereTouchesScan,
                         binIDsEachSphereTouches, sphereIDsEachBinTouches, granData->idPrimitiveA,
                         granData->idPrimitiveB, granData->contactTypePrimitive);
-            DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             // std::cout << "Unsorted bin IDs: ";
             // displayDeviceArray<binID_t>(binIDsEachSphereTouches, *pNumBinSphereTouchPairs);
             // std::cout << "Corresponding sphere IDs: ";
@@ -479,7 +475,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
                 .launch(&simParams, &granData, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
                         sandwichBNode2, sandwichBNode3);
-            DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 
             // 1st step: register the number of triangle--bin touching pairs for each triangle for further processing.
             // We also use the opportunity to find how many analytical objects each triangle touches.
@@ -498,7 +493,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 .launch(&simParams, &granData, numBinsTriTouches, numAnalGeoTriTouches, sandwichANode1, sandwichANode2,
                         sandwichANode3, sandwichBNode1, sandwichBNode2, sandwichBNode3,
                         solverFlags.meshUniversalContact);
-            DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             // std::cout << "numBinsTriTouches: " << std::endl;
             // displayDeviceArray<binsTriangleTouches_t>(numBinsTriTouches, simParams->nTriGM);
             // std::cout << "numAnalGeoTriTouches: " << std::endl;
@@ -573,7 +567,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 .launch(&simParams, &granData, numBinsTriTouchesScan, numAnalGeoTriTouchesScan, binIDsEachTriTouches,
                         triIDsEachBinTouches, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
                         sandwichBNode2, sandwichBNode3, idTriA, idGeoB, dType, solverFlags.meshUniversalContact);
-            DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             // std::cout << "binIDsEachTriTouches: " << std::endl;
             // displayDeviceArray<binsTriangleTouches_t>(binIDsEachTriTouches, *pNumBinTriTouchPairs);
             // std::cout << "dType: " << std::endl;
@@ -720,7 +713,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                     .configure(dim3(blocks_needed_for_bins_sph), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
                     .launch(&simParams, &granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
                             sphereIDsLookUpTable, numSphContactsInEachBin, *pNumActiveBins);
-                DEME_GPU_CALL_WATCH_BETA(cudaStreamSynchronize(this_stream));
             }
 
             if (blocks_needed_for_bins_tri > 0) {
@@ -733,7 +725,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                             activeBinIDsForTri, numTrianglesBinTouches, triIDsLookUpTable, numTriSphContactsInEachBin,
                             numTriTriContactsInEachBin, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
                             sandwichBNode2, sandwichBNode3, *pNumActiveBinsForTri, solverFlags.meshUniversalContact);
-                DEME_GPU_CALL_WATCH_BETA(cudaStreamSynchronize(this_stream));
                 // std::cout << "numTriSphContactsInEachBin: " << std::endl;
                 // displayDeviceArray<binContactPairs_t>(numTriSphContactsInEachBin, *pNumActiveBinsForTri);
                 // std::cout << "numTriTriContactsInEachBin: " << std::endl;
@@ -841,7 +832,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                     .configure(dim3(blocks_needed_for_bins_sph), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
                     .launch(&simParams, &granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
                             sphereIDsLookUpTable, sphSphContactReportOffsets, idSphA, idSphB, dType, *pNumActiveBins);
-                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
 
             // Triangle--sphere contact pairs go after sphere--sphere contacts. Remember to mark their type.
@@ -871,7 +861,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                             triTriContactReportOffsets, idSphA_sm, idTriB_sm, dType_sm, idTriA_mm, idTriB_mm, dType_mm,
                             sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1, sandwichBNode2,
                             sandwichBNode3, *pNumActiveBinsForTri, solverFlags.meshUniversalContact);
-                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
             // std::cout << "idPrimitiveA: " << std::endl;
             // displayDeviceArray<bodyID_t>(granData->idPrimitiveA, *scratchPad.numPrimitiveContacts);
@@ -928,7 +917,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 markBoolIf<<<dim3(blocks_needed_for_flagging), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
                     grab_flags, granData->contactPersistency, CONTACT_IS_PERSISTENT,
                     *scratchPad.numPrevPrimitiveContacts);
-                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
             // Store the number of persistent contacts
             scratchPad.allocateDualStruct("numPersistCnts");
@@ -987,7 +975,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
             if (blocks_needed_for_setting_1 > 0) {
                 setArr<<<dim3(blocks_needed_for_setting_1), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
                     total_persistency, *pNumPersistCnts, CONTACT_IS_PERSISTENT);
-                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
             scratchPad.finishUsingTempVector("grab_flags");
             scratchPad.finishUsingTempVector("selected_idA");
@@ -1199,7 +1186,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                                                           dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
                     contactPatchPairs, granData->contactTypePrimitive, granData->idPrimitiveA, granData->idPrimitiveB,
                     granData->triPatchID, *scratchPad.numPrimitiveContacts);
-                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
 
             // Sort contactPatchPairs within each contact type segment, so we can construct geomToPatchMap
@@ -1318,13 +1304,11 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                                                            dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
                             unique_patch_pairs, granData->idPatchA + totalUniquePatchPairs,
                             granData->idPatchB + totalUniquePatchPairs, numUniqueInSegment);
-                        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 
                         // Set contactTypePatch for this segment - all have the same type (using GPU kernel)
                         fillContactTypeArray<<<dim3(blocks_needed_for_decode), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
                                                this_stream>>>(granData->contactTypePatch + totalUniquePatchPairs,
                                                               thisType, numUniqueInSegment);
-                        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                     }
 
                     // Step 4: Build geomToPatchMap for this segment
@@ -1337,7 +1321,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                     if (blocks_needed_for_mark > 0) {
                         markNewPatchPairGroups<<<dim3(blocks_needed_for_mark), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
                                                  this_stream>>>(patchPairs_sorted + prim_offset, isNewGroup, count);
-                        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                     }
                     // std::cout << "patchPairs_sorted segment " << i << ": " << std::endl;
                     // displayDeviceArray<patchIDPair_t>(patchPairs_sorted + prim_offset, count);
@@ -1356,7 +1339,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                         addOffsetToArray<<<dim3(blocks_needed_for_mark), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
                                            this_stream>>>(granData->geomToPatchMap + prim_offset,
                                                           (contactPairs_t)totalUniquePatchPairs, count);
-                        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                     }
 
                     scratchPad.finishUsingTempVector("isNewGroup");
@@ -1465,7 +1447,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 }
             }
             // Synchronize once after all mapping kernels are launched
-            DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             // std::cout << "Patch contact mapping:" << std::endl;
             // displayDeviceArray<contactPairs_t>(granData->contactMapping, *scratchPad.numContacts);
 

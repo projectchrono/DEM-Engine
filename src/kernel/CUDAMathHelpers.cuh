@@ -1452,11 +1452,15 @@ inline __host__ __device__ T2 to_real3(const T1& a) {
 }
 
 // Cause an error inside a kernel
+#if defined(__CUDA_ARCH__) || defined(__CUDACC__)
     #define DEME_ABORT_KERNEL(...) \
         {                          \
             printf(__VA_ARGS__);   \
             __threadfence();       \
             asm volatile("trap;"); \
         }
+#else
+    #define DEME_ABORT_KERNEL(...) do { } while (0)
+#endif
 
 #endif

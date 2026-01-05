@@ -192,22 +192,35 @@ __host__ __device__ T1 magVector3(T1& x, T1& y, T1& z) {
 }
 
 // Normalize a 3-component vector
-template <typename T1>
-__host__ __device__ void normalizeVector3(T1& x, T1& y, T1& z) {
-    T1 magnitude = sqrt(x * x + y * y + z * z);
+inline __host__ __device__ void normalizeVector3(float& x, float& y, float& z) {
+    float r2 = x*x + y*y + z*z;
+    float invMag = rsqrtf(r2);
+    invMag = invMag * (1.5f - 0.5f * r2 * invMag * invMag); // 1x Newton for acurrency
     // TODO: Think about whether this is safe
     // if (magnitude < DEME_TINY_FLOAT) {
     //     printf("Caution!\n");
     // }
-    x /= magnitude;
-    y /= magnitude;
-    z /= magnitude;
+    x *= invMag;
+    y *= invMag;
+    z *= invMag;
+}
+// Normalize a 3-component vector safe (not used and maybe not needed)
+inline __host__ __device__ void normalizeVector3safe(float& x, float& y, float& z) {
+    float r2 = x*x + y*y + z*z;
+    const float tiny = 1e-30f;
+    float safe_r2 = fmaxf(r2, tiny);    
+    float invMag  = rsqrtf(safe_r2);
+    invMag = invMag * (1.5f - 0.5f * safe_r2 * invMag * invMag);
+    float m = r2 > tiny ? 1.0f : 0.0f;
+    x = x * invMag * m;
+    y = y * invMag * m;
+    z = z * invMag * m;
 }
 
 // Calculate the centroid of a triangle
 template <typename T1>
-__host__ __device__ T1 triangleCentroid(const T1& p1, const T1& p2, const T1& p3) {
-    return (p1 + p2 + p3) / 3.;
+inline __host__ __device__ T1 triangleCentroid(const T1& p1, const T1& p2, const T1& p3) {
+    return (p1 + p2 + p3) * deme::ONE_OVER_THREE;
 }
 
 // Calculate the incenter of a triangle
@@ -243,13 +256,94 @@ __host__ __device__ void HamiltonProduct(T1& A,
     D = a1 * d2 + b1 * c2 - c1 * b2 + d1 * a2;
 }
 
-// Compute the binID for a point in space
+/*
+// This version of checkSpheresOverlap is not used anymore for code clarity, and the fact that every use case now
+// requires overlapDepth.
 template <typename T1>
-__host__ __device__ T1
-getPointBinID(const double& X, const double& Y, const double& Z, const double& binSize, const T1& nbX, const T1& nbY) {
-    T1 binIDX = X / binSize;
-    T1 binIDY = Y / binSize;
-    T1 binIDZ = Z / binSize;
+inline __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
+                                                      const T1& YA,
+                                                      const T1& ZA,
+                                                      const T1& radA,
+                                                      const T1& XB,
+                                                      const T1& YB,
+                                                      const T1& ZB,
+                                                      const T1& radB,
+                                                      T1& CPX,
+                                                      T1& CPY,
+                                                      T1& CPZ) {
+    T1 centerDist2 = distSquared<T1>(XA, YA, ZA, XB, YB, ZB);
+    deme::contact_t contactType;
+    if (centerDist2 > (radA + radB) * (radA + radB)) {
+        contactType = deme::NOT_A_CONTACT;
+    } else {
+        contactType = deme::SPHERE_SPHERE_CONTACT;
+    }
+    // If getting this far, then 2 spheres have an intersection, let's calculate the intersection point
+    float B2AVecX = XA - XB;
+    float B2AVecY = YA - YB;
+    float B2AVecZ = ZA - ZB;
+    normalizeVector3<float>(B2AVecX, B2AVecY, B2AVecZ);
+    T1 halfOverlapDepth = (radA + radB - sqrt(centerDist2)) / (T1)2;
+    // From center of B, towards center of A, move a distance of radB, then backtrack a bit, for half the overlap depth
+    CPX = XB + (radB - halfOverlapDepth) * B2AVecX;
+    CPY = YB + (radB - halfOverlapDepth) * B2AVecY;
+    CPZ = ZB + (radB - halfOverlapDepth) * B2AVecZ;
+    return contactType;
+}
+*/
+
+/**
+ * Template arguments:
+ *   - T1: the floating point accuracy level for contact point location/penetration depth
+ *   - T2: the floating point accuracy level for the relative position of 2 bodies involved
+ *
+ * Basic idea: determines whether 2 spheres intersect and the intersection point coordinates which also gives the
+ * penetration length and bodyB's outward contact normal.
+ *
+ */
+template <typename T1, typename T2>
+inline __host__ __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
+                                                               const T1& YA,
+                                                               const T1& ZA,
+                                                               const T1& radA,
+                                                               const T1& XB,
+                                                               const T1& YB,
+                                                               const T1& ZB,
+                                                               const T1& radB,
+                                                               T1& CPX,
+                                                               T1& CPY,
+                                                               T1& CPZ,
+                                                               T2& normalX,
+                                                               T2& normalY,
+                                                               T2& normalZ,
+                                                               T1& overlapDepth) {
+    T1 centerDist2 = distSquared<T1>(XA, YA, ZA, XB, YB, ZB);
+    deme::contact_t contactType;
+    if (centerDist2 > (radA + radB) * (radA + radB)) {
+        contactType = deme::NOT_A_CONTACT;
+    } else {
+        contactType = deme::SPHERE_SPHERE_CONTACT;
+    }
+    // If getting this far, then 2 spheres have an intersection, let's calculate the intersection point
+    normalX = XA - XB;
+    normalY = YA - YB;
+    normalZ = ZA - ZB;
+    normalizeVector3(normalX, normalY, normalZ);
+    overlapDepth = radA + radB - sqrt(centerDist2);
+    // From center of B, towards center of A, move a distance of radB, then backtrack a bit, for half the overlap depth
+    CPX = XB + (radB - overlapDepth / (T1)2) * normalX;
+    CPY = YB + (radB - overlapDepth / (T1)2) * normalY;
+    CPZ = ZB + (radB - overlapDepth / (T1)2) * normalZ;
+    return contactType;
+}
+
+// Compute the binID for a point in space (mixed precision, fp32 with fp64 fallback)
+template <typename T1>
+inline __host__ __device__ T1
+getPointBinID(const double& X, const double& Y, const double& Z, const double& inv_binSize, const T1& nbX, const T1& nbY) {
+    T1 binIDX = X * inv_binSize;
+    T1 binIDY = Y * inv_binSize;
+    T1 binIDZ = Z * inv_binSize;
     return binIDX + binIDY * nbX + binIDZ * nbX * nbY;
 }
 
@@ -263,6 +357,107 @@ binIDFrom3Indices(const T1& X, const T1& Y, const T1& Z, const T1& nbX, const T1
         return deme::NULL_BINID;
     }
 }
+
+// Do we have an edge case where higher precision is required?--> Yes/No
+inline __host__ __device__ bool near_edge(float b) {
+    const float k = floorf(b);
+    const float d = fminf(b - k, (k + 1.0f) - b);
+    const float tau = 8.0f * fmaxf(fabsf(b) * 1.1920929e-7f, 1.1920929e-7f);
+    return d <= tau;
+}
+// Computes the inclusive [imin, imax] bin range (clamped to [0, nb-1]) 
+// along one axis for a sphere at position p with radius r, 
+// using a fast FP32 path with near-edge detection and a precise FP64 fallback.
+inline __host__ __device__ deme::AxisBounds axis_bounds(double p, double r, int nb, double invBinSize) {
+    // FP32 fast path
+    const float invBinF = (float)invBinSize;
+    const float pF = (float)p, rF = (float)r;
+    const float bPlusF  = fmaf(rF, invBinF, pF * invBinF); // (p+r)/B
+    const float bMinusF = (pF - rF) * invBinF;                  // (p-r)/B
+    if (!(near_edge(bPlusF) || near_edge(bMinusF))) {
+        int imax = (int)fminf(bPlusF,  (float)(nb - 1));
+        int imin = (int)fmaxf(bMinusF, 0.0f);
+        if (imax < imin) return {0, -1};
+        return {imin, imax};
+    }
+    // Double fallback for edge cases
+    const double bPlusD  = fma(r, invBinSize, p * invBinSize);
+    const double bMinusD = (p - r) * invBinSize;
+    const int imax = (int)fmin(bPlusD,  (double)(nb - 1));
+    const int imin = (int)fmax(bMinusD, 0.0);
+    if (imax < imin) return {0, -1};
+    return {imin, imax};
+}
+
+// Is there a contact? And which binID does the contact point belong to?
+// Returns contact type, overlapDepth and binID.
+inline __host__ __device__ deme::contact_t
+checkSphereContactOverlapAndBin(const double& XA, const double& YA, const double& ZA, const double& radA,
+                        const double& XB, const double& YB, const double& ZB, const double& radB,
+                        const double& invBinSize, const deme::binID_t& nbX, const deme::binID_t& nbY,
+                        double& overlapDepth, deme::binID_t& binID) {
+    // ---- FP32 fast path for distance test and contact point ----
+    const float xA = (float)XA, yA = (float)YA, zA = (float)ZA;
+    const float xB = (float)XB, yB = (float)YB, zB = (float)ZB;
+    const float dx = xA - xB;
+    const float dy = yA - yB;
+    const float dz = zA - zB;
+    // Distance^2 with FMAs (fast, stable in fp32)
+    const float dist2f = fmaf(dz, dz, fmaf(dy, dy, dx * dx));
+    const float rsumf  = (float)radA + (float)radB;
+    const float r2f    = rsumf * rsumf;
+    {
+        if (dist2f > r2f) {
+            overlapDepth = 0.0;
+            binID = (deme::binID_t)0;
+            return deme::NOT_A_CONTACT; // early exit! (safe, since we have a margin)
+        }
+    }
+    // Contact! - in fp32: compute normal and contact point
+    float nx, ny, nz, distf = 0.0f;
+    if (dist2f > 0.0f) {
+        distf = sqrtf(dist2f);
+        const float invd = 1.0f / distf;
+        nx = dx * invd; ny = dy * invd; nz = dz * invd;
+    } else { // Should not occur....
+        nx = 1.0f; ny = 0.0f; nz = 0.0f;
+    } // now contact point
+    const float overlapF = rsumf - distf;
+    const float stepF    = (float)radB - 0.5f * overlapF;
+    const float CPXf     = fmaf(stepF, nx, xB);
+    const float CPYf     = fmaf(stepF, ny, yB);
+    const float CPZf     = fmaf(stepF, nz, zB);
+    // Map contact point to binID using fp32, but guard against bin-edge cases.
+    const float invF = (float)invBinSize;
+    const float bxF  = CPXf * invF;
+    const float byF  = CPYf * invF;
+    const float bzF  = CPZf * invF;
+    // If not near any integer boundary in fp32, we can safely truncate in fp32.
+    if (!(near_edge(bxF) || near_edge(byF) || near_edge(bzF))) {
+        const deme::binID_t ix = (deme::binID_t)bxF;  // truncate toward zero (matches original)
+        const deme::binID_t iy = (deme::binID_t)byF;
+        const deme::binID_t iz = (deme::binID_t)bzF;
+        binID = ix + iy * nbX + iz * nbX * nbY;
+        overlapDepth = (double)overlapF;
+        return deme::SPHERE_SPHERE_CONTACT;
+    }
+    // ---- FP64 fallback ONLY when the fp32 CP is near any bin boundary ----
+    // overlap, and contact point in double for a robust bin map.
+    {
+        const double centerDist2 = distSquared<double>(XA, YA, ZA, XB, YB, ZB);
+        overlapDepth = radA + radB - sqrt(centerDist2);
+        const double CPXd = XB + (radB - overlapDepth * 0.5) * nx;
+        const double CPYd = YB + (radB - overlapDepth * 0.5) * ny;
+        const double CPZd = ZB + (radB - overlapDepth * 0.5) * nz;
+        // Bin mapping in full double, using truncate-to-zero cast (compat with original)
+        const deme::binID_t ix = (deme::binID_t)(CPXd * invBinSize);
+        const deme::binID_t iy = (deme::binID_t)(CPYd * invBinSize);
+        const deme::binID_t iz = (deme::binID_t)(CPZd * invBinSize);
+        binID = ix + iy * nbX + iz * nbX * nbY;
+        return deme::SPHERE_SPHERE_CONTACT;
+    }
+}
+
 
 // This utility function returns the normal to the triangular face defined by
 // the vertices A, B, and C. The face is assumed to be non-degenerate.
@@ -399,11 +594,12 @@ inline __device__ void boundingBoxIntersectBin(deme::binID_t* L,
     min_pt.z = DEME_MIN(vA.z, DEME_MIN(vB.z, vC.z));
 
     // Enlarge bounding box, so that no triangle lies right between 2 layers of bins
-    min_pt -= DEME_BIN_ENLARGE_RATIO_FOR_FACETS * simParams->binSize;
-    // A point on a mesh can be out of the simulation world. In this case, becasue we only need to detect contacts
-    // inside the simulation world, so we just clamp out the bins that are outside the simulation world.
+    min_pt -= (float)DEME_BIN_ENLARGE_RATIO_FOR_FACETS * (float)simParams->dyn.binSize;
+    // A point on a mesh can be out of the simulation world. In this case, becasue we only need to detect their contact
+    // with spheres, and spheres are all in the simulation world, so we just clamp out the bins that are outside the
+    // simulation world.
     int3 min_bin =
-        clampBetween3Comp<float3, int3>(min_pt / simParams->binSize, make_int3(0, 0, 0),
+        clampBetween3Comp<float3, int3>(min_pt * (float)simParams->dyn.inv_binSize, make_int3(0, 0, 0),
                                         make_int3(simParams->nbX - 1, simParams->nbY - 1, simParams->nbZ - 1));
 
     float3 max_pt;
@@ -411,9 +607,9 @@ inline __device__ void boundingBoxIntersectBin(deme::binID_t* L,
     max_pt.y = DEME_MAX(vA.y, DEME_MAX(vB.y, vC.y));
     max_pt.z = DEME_MAX(vA.z, DEME_MAX(vB.z, vC.z));
 
-    max_pt += DEME_BIN_ENLARGE_RATIO_FOR_FACETS * simParams->binSize;
+    max_pt += (float)DEME_BIN_ENLARGE_RATIO_FOR_FACETS * (float)simParams->dyn.binSize;
     int3 max_bin =
-        clampBetween3Comp<float3, int3>(max_pt / simParams->binSize, make_int3(0, 0, 0),
+        clampBetween3Comp<float3, int3>(max_pt * (float)simParams->dyn.inv_binSize, make_int3(0, 0, 0),
                                         make_int3(simParams->nbX - 1, simParams->nbY - 1, simParams->nbZ - 1));
 
     L[0] = min_bin.x;
