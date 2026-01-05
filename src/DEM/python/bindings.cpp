@@ -13,7 +13,6 @@
 #include <sstream>
 #include <array>
 #include <cmath>
-#include <string>
 
 #include <core/utils/RuntimeData.h>
 #include <DEM/Defines.h>
@@ -1009,7 +1008,7 @@ PYBIND11_MODULE(DEME, obj) {
                  const std::vector<deme::bodyID_t>& ownerIDs, std::vector<float3>& points, std::vector<float3>& forces,
                  std::vector<float3>& torques, bool torque_in_local)>(&deme::DEMSolver::GetOwnerContactForces),
              "Get all contact forces and torque that concern a list of owners.", py::arg("ownerIDs"), py::arg("points"),
-             py::arg("forces"), py::arg("poitorquesnts"), py::arg("torque_in_local") = false)
+             py::arg("forces"), py::arg("torques"), py::arg("torque_in_local") = false)
 
         .def("SetTriWildcardValue", &deme::DEMSolver::SetTriWildcardValue, "Set the wildcard values of some triangles.")
         .def("SetSphereWildcardValue", &deme::DEMSolver::SetSphereWildcardValue,
