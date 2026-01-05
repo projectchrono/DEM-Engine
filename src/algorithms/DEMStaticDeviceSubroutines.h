@@ -104,10 +104,10 @@ inline void cubDEMInclusiveScan(T1* d_in,
 // For kT and dT's private usage
 ////////////////////////////////////////////////////////////////////////////////
 
-void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
-                      std::shared_ptr<jitify::Program>& bin_triangle_kernels,
-                      std::shared_ptr<jitify::Program>& sphere_contact_kernels,
-                      std::shared_ptr<jitify::Program>& sphTri_contact_kernels,
+void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kernels,
+                      std::shared_ptr<JitHelper::CachedProgram>& bin_triangle_kernels,
+                      std::shared_ptr<JitHelper::CachedProgram>& sphere_contact_kernels,
+                      std::shared_ptr<JitHelper::CachedProgram>& sphTri_contact_kernels,
                       DualStruct<DEMDataKT>& granData,
                       DualStruct<DEMSimParams>& simParams,
                       SolverFlags& solverFlags,
@@ -135,7 +135,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       SolverTimers& timers,
                       kTStateParams& stateParams);
 
-void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force_kernels,
+void collectContactForcesThruCub(std::shared_ptr<JitHelper::CachedProgram>& collect_force_kernels,
                                  DualStruct<DEMDataDT>& granData,
                                  const size_t nContactPairs,
                                  const size_t nClumps,

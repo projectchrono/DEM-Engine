@@ -1471,28 +1471,28 @@ class DEMSolver {
     void PrintKinematicScratchSpaceUsage() const { kT->printScratchSpaceUsage(); }
 
     /// Let dT do this call and return the reduce value of the inspected quantity.
-    float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
+    float dTInspectReduce(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                           const std::string& kernel_name,
                           INSPECT_ENTITY_TYPE thing_to_insp,
                           CUB_REDUCE_FLAVOR reduce_flavor,
                           bool all_domain,
                           DualArray<scratch_t>& reduceResArr,
                           DualArray<scratch_t>& reduceRes);
-    float* dTInspectNoReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
+    float* dTInspectNoReduce(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                              const std::string& kernel_name,
                              INSPECT_ENTITY_TYPE thing_to_insp,
                              CUB_REDUCE_FLAVOR reduce_flavor,
                              bool all_domain,
                              DualArray<scratch_t>& reduceResArr,
                              DualArray<scratch_t>& reduceRes);
-    float dTInspectReduceDevice(const std::shared_ptr<jitify::Program>& inspection_kernel,
+    float dTInspectReduceDevice(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                                 const std::string& kernel_name,
                                 INSPECT_ENTITY_TYPE thing_to_insp,
                                 CUB_REDUCE_FLAVOR reduce_flavor,
                                 bool all_domain,
                                 DualArray<scratch_t>& reduceResArr,
                                 DualArray<scratch_t>& reduceRes);
-    float* dTInspectNoReduceDevice(const std::shared_ptr<jitify::Program>& inspection_kernel,
+    float* dTInspectNoReduceDevice(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                                    const std::string& kernel_name,
                                    INSPECT_ENTITY_TYPE thing_to_insp,
                                    CUB_REDUCE_FLAVOR reduce_flavor,

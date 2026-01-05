@@ -11,11 +11,6 @@
 #include "../core/utils/JitHelper.h"
 #include "Defines.h"
 
-// Forward declare jitify::Program to avoid downstream dependency
-namespace jitify {
-class Program;
-}
-
 namespace deme {
 
 class DEMSolver;
@@ -25,7 +20,7 @@ class DEMDynamicThread;
 /// their simulation entites, in a given region.
 class DEMInspector {
   private:
-    std::shared_ptr<jitify::Program> inspection_kernel;
+    std::shared_ptr<JitHelper::CachedProgram> inspection_kernel;
 
     std::string inspection_code;
     std::string in_region_code;

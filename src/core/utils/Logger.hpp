@@ -13,6 +13,7 @@
 #include <vector>
 #include <mutex>
 #include <memory>
+#include <unordered_map>
 
 #include <cuda_runtime_api.h>
 #include "BaseClasses.hpp"

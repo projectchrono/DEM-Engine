@@ -2155,10 +2155,10 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
     if (solverFlags.canFamilyChangeOnDevice) {
         DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_familyID, granData->familyID,
                                  simParams->nOwnerBodies * sizeof(family_t), cudaMemcpyDeviceToDevice));
-    }
+        }
 
     // May need to send updated mesh
-    if (solverFlags.willMeshDeform) {
+        if (solverFlags.willMeshDeform) {
         DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_relPosNode1, granData->relPosNode1,
                                  simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
         DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_relPosNode2, granData->relPosNode2,
@@ -2266,7 +2266,7 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
 // kernel name)]
 inline void DEMDynamicThread::dispatchPrimitiveForceKernels(
     const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountMap,
-    const ContactTypeMap<std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>& typeKernelMap) {
+    const ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>>& typeKernelMap) {
     // For each contact type that exists, call its corresponding kernel(s)
     for (size_t i = 0; i < m_numExistingTypes; i++) {
         contact_t contact_type = existingContactTypes[i];
@@ -2303,7 +2303,7 @@ inline void DEMDynamicThread::dispatchPrimitiveForceKernels(
 inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
     const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPrimitiveMap,
     const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
-    const ContactTypeMap<std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>& typeKernelMap) {
+    const ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>>& typeKernelMap) {
     // Reset max tri-tri penetration for this timestep on device (kT may need this info)
     DEME_GPU_CALL(cudaMemset(maxTriTriPenetration.getDevicePointer(), 0, sizeof(double)));
 
@@ -2875,7 +2875,7 @@ void DEMDynamicThread::workerThread() {
             // off (across 2 kT updates)! So, dT only send new work orders after kT finishes the old order and it
             // unpacks it.
             ifProduceFreshThenUseItAndSendNewOrder();
-
+            
             // Check if we need to wait; i.e., if dynamic drifted too much into future, then we must wait a bit before
             // the next cycle begins
             if (pSchedSupport->dynamicShouldWait()) {
@@ -2921,7 +2921,7 @@ void DEMDynamicThread::workerThread() {
             if (cycle == (cycleDuration - 1))
                 pSchedSupport->dynamicDone = true;
             */
-
+          
             // Dynamic wrapped up one cycle, record this fact into schedule support
             pSchedSupport->currentStampOfDynamic++;
             nTotalSteps++;
@@ -2989,29 +2989,29 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
                                      const std::vector<std::string>& JitifyOptions) {
     // Force calculation kernels
     {
-        cal_force_kernels = std::make_shared<jitify::Program>(std::move(
+        cal_force_kernels = std::make_shared<JitHelper::CachedProgram>(std::move(
             JitHelper::buildProgram("DEMCalcForceKernels_Primitive",
                                     JitHelper::KERNEL_DIR / "DEMCalcForceKernels_Primitive.cu", Subs, JitifyOptions)));
     }
     // Then patch-based force calculation kernels
     {
-        cal_patch_force_kernels = std::make_shared<jitify::Program>(std::move(
+        cal_patch_force_kernels = std::make_shared<JitHelper::CachedProgram>(std::move(
             JitHelper::buildProgram("DEMCalcForceKernels_PatchBased",
                                     JitHelper::KERNEL_DIR / "DEMCalcForceKernels_PatchBased.cu", Subs, JitifyOptions)));
     }
     // Then force accumulation kernels
     {
-        collect_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+        collect_force_kernels = std::make_shared<JitHelper::CachedProgram>(std::move(JitHelper::buildProgram(
             "DEMCollectForceKernels", JitHelper::KERNEL_DIR / "DEMCollectForceKernels.cu", Subs, JitifyOptions)));
     }
     // Then integration kernels
     {
-        integrator_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu", Subs, JitifyOptions)));
+        integrator_kernels = std::make_shared<JitHelper::CachedProgram>(JitHelper::buildProgram(
+            "DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu", Subs, JitifyOptions));
     }
     // Then kernels that make on-the-fly changes to solver data
     {
-        mod_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+        mod_kernels = std::make_shared<JitHelper::CachedProgram>(std::move(JitHelper::buildProgram(
             "DEMModeratorKernels", JitHelper::KERNEL_DIR / "DEMModeratorKernels.cu", Subs, JitifyOptions)));
     }
 
@@ -3036,7 +3036,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
         {cal_patch_force_kernels, "calculatePatchContactForces_TriAnal"}};
 }
 
-float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
+float* DEMDynamicThread::inspectCall(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                                      const std::string& kernel_name,
                                      INSPECT_ENTITY_TYPE thing_to_insp,
                                      CUB_REDUCE_FLAVOR reduce_flavor,
@@ -3656,6 +3656,34 @@ void DEMDynamicThread::addOwnerNextStepAngAcc(bodyID_t ownerID, const std::vecto
     alphaY.setVal(streamInfo.stream, RealTupleVectorToYComponentVector<float, float3>(angAcc), ownerID);
     alphaZ.setVal(streamInfo.stream, RealTupleVectorToZComponentVector<float, float3>(angAcc), ownerID);
     syncMemoryTransfer();
+}
+
+void DEMDynamicThread::prewarmKernels() {
+    if (cal_force_kernels) {
+        cal_force_kernels->kernel("calculatePrimitiveContactForces_SphSph").instantiate();
+        cal_force_kernels->kernel("calculatePrimitiveContactForces_SphTri").instantiate();
+        cal_force_kernels->kernel("calculatePrimitiveContactForces_SphAnal").instantiate();
+        cal_force_kernels->kernel("calculatePrimitiveContactForces_TriTri").instantiate();
+        cal_force_kernels->kernel("calculatePrimitiveContactForces_TriAnal").instantiate();
+    }
+    if (cal_patch_force_kernels) {
+        cal_patch_force_kernels->kernel("calculatePatchContactForces_SphTri").instantiate();
+        cal_patch_force_kernels->kernel("calculatePatchContactForces_TriTri").instantiate();
+        cal_patch_force_kernels->kernel("calculatePatchContactForces_TriAnal").instantiate();
+    }
+    if (collect_force_kernels) {
+        collect_force_kernels->kernel("forceToAcc").instantiate();
+        if (!solverFlags.useForceCollectInPlace) {
+            collect_force_kernels->kernel("cashInOwnerIndex").instantiate();
+            collect_force_kernels->kernel("stashElem").instantiate();
+        }
+    }
+    if (integrator_kernels) {
+        integrator_kernels->kernel("integrateOwners").instantiate();
+    }
+    if (mod_kernels && solverFlags.canFamilyChangeOnDevice) {
+        mod_kernels->kernel("applyFamilyChanges").instantiate();
+    }
 }
 
 }  // namespace deme

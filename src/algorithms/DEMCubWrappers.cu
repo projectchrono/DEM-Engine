@@ -7,6 +7,13 @@
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
 
+#if CUDART_VERSION >= 13000
+    #define CUB_SUM_OP(T) cuda::std::plus<T>{}
+#else
+    #define CUB_SUM_OP(T) cub::Sum{}
+#endif
+
+
 namespace deme {
 
 // Functor type for selecting values less than some criteria
@@ -100,10 +107,10 @@ inline void cubDEMPrefixScan(T1* d_in,
     // let you know when it happens. I made a trick: use ExclusiveScan and (T2)0 as the initial value, and this forces
     // cub to store results as T2 type.
     size_t cub_scratch_bytes = 0;
-    cub::DeviceScan::ExclusiveScan(NULL, cub_scratch_bytes, d_in, d_out, cub::Sum(), (T2)0, n, this_stream);
+    cub::DeviceScan::ExclusiveScan(NULL, cub_scratch_bytes, d_in, d_out, CUB_SUM_OP(T2), (T2)0, n, this_stream);
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
-    cub::DeviceScan::ExclusiveScan(d_scratch_space, cub_scratch_bytes, d_in, d_out, cub::Sum(), (T2)0, n, this_stream);
+    cub::DeviceScan::ExclusiveScan(d_scratch_space, cub_scratch_bytes, d_in, d_out, CUB_SUM_OP(T2), (T2)0, n, this_stream);
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
@@ -114,10 +121,10 @@ inline void cubDEMInclusiveScan(T1* d_in,
                                 cudaStream_t& this_stream,
                                 DEMSolverScratchData& scratchPad) {
     size_t cub_scratch_bytes = 0;
-    cub::DeviceScan::InclusiveScan(NULL, cub_scratch_bytes, d_in, d_out, cub::Sum(), n, this_stream);
+    cub::DeviceScan::InclusiveScan(NULL, cub_scratch_bytes, d_in, d_out, CUB_SUM_OP(T2), n, this_stream);
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
-    cub::DeviceScan::InclusiveScan(d_scratch_space, cub_scratch_bytes, d_in, d_out, cub::Sum(), n, this_stream);
+    cub::DeviceScan::InclusiveScan(d_scratch_space, cub_scratch_bytes, d_in, d_out, CUB_SUM_OP(T2), n, this_stream);
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
@@ -211,10 +218,10 @@ inline void cubDEMReduceByKeys(T1* d_keys_in,
 template <typename T1, typename T2>
 void cubDEMSum(T1* d_in, T2* d_out, size_t n, cudaStream_t& this_stream, DEMSolverScratchData& scratchPad) {
     size_t cub_scratch_bytes = 0;
-    cub::DeviceReduce::Reduce(NULL, cub_scratch_bytes, d_in, d_out, n, cub::Sum(), (T2)0, this_stream);
+    cub::DeviceReduce::Reduce(NULL, cub_scratch_bytes, d_in, d_out, n, CUB_SUM_OP(T2), (T2)0, this_stream);
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
-    cub::DeviceReduce::Reduce(d_scratch_space, cub_scratch_bytes, d_in, d_out, n, cub::Sum(), (T2)0, this_stream);
+    cub::DeviceReduce::Reduce(d_scratch_space, cub_scratch_bytes, d_in, d_out, n, CUB_SUM_OP(T2), (T2)0, this_stream);
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 

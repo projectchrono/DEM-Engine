@@ -295,7 +295,7 @@ void DEMSolver::jitifyKernels() {
     equipIntegrationScheme(m_subs);
     equipKernelIncludes(m_subs);
 
-    // Jitify may require a defined device to derive the arch
+        // Jitify may require a defined device to derive the arch
     std::thread kT_build([&]() {
         DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
         kT->jitifyKernels(m_subs, m_jitify_options);
@@ -304,12 +304,6 @@ void DEMSolver::jitifyKernels() {
     std::thread dT_build([&]() {
         DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
         dT->jitifyKernels(m_subs, m_jitify_options);
-
-        // Now, inspectors need to be jitified too... but the current design jitify inspector kernels at the first time
-        // they are used. for (auto& insp : m_inspectors) {
-        //     insp->Initialize(m_subs);
-        // }
-
         // Solver system's own max vel inspector should be init-ed. Don't bother init-ing it while using, because it is
         // called at high frequency, let's save an if check. Forced initialization (since doing it before system
         // completes init).
@@ -319,8 +313,20 @@ void DEMSolver::jitifyKernels() {
         m_approx_angvel_func->Initialize(m_subs, m_jitify_options, true);
         dT->approxAngVelFunc = m_approx_angvel_func;
     });
+
     kT_build.join();
     dT_build.join();
+
+    // Eagerly initialize user-created inspectors so their kernels compile before first use
+    for (auto& insp : m_inspectors) {
+        if (insp) {
+            insp->Initialize(m_subs, m_jitify_options, true);
+            if (insp->inspection_kernel) {
+                insp->inspection_kernel->kernel(insp->kernel_name).instantiate();
+            }
+        }
+    }
+
 }
 
 void DEMSolver::getContacts_impl(std::vector<bodyID_t>& idA,

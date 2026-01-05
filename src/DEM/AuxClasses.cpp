@@ -294,11 +294,11 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
     my_subs["_inRegionPolicy_"] = in_region_specifier;
     my_subs["_quantityQueryProcess_"] = inspection_code;
     if (thing_to_insp == INSPECT_ENTITY_TYPE::SPHERE) {
-        inspection_kernel = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMSphereQueryKernels", JitHelper::KERNEL_DIR / "DEMSphereQueryKernels.cu", my_subs, options)));
+        inspection_kernel = std::make_shared<JitHelper::CachedProgram>(JitHelper::buildProgram(
+            "DEMSphereQueryKernels", JitHelper::KERNEL_DIR / "DEMSphereQueryKernels.cu", my_subs, options));
     } else if (thing_to_insp == INSPECT_ENTITY_TYPE::CLUMP || thing_to_insp == INSPECT_ENTITY_TYPE::EVERYTHING) {
-        inspection_kernel = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMOwnerQueryKernels", JitHelper::KERNEL_DIR / "DEMOwnerQueryKernels.cu", my_subs, options)));
+        inspection_kernel = std::make_shared<JitHelper::CachedProgram>(JitHelper::buildProgram(
+            "DEMOwnerQueryKernels", JitHelper::KERNEL_DIR / "DEMOwnerQueryKernels.cu", my_subs, options));
     } else {
         DEME_ERROR(std::string(
             "Sorry, an inspector object you are using is not implemented yet.\nConsider letting the developers "

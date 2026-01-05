@@ -300,7 +300,7 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
 void DEMKinematicThread::workerThread() {
     // Set the device for this thread
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
-
+    
     // Allocate arrays whose length does not depend on user inputs
     initAllocation();
 
@@ -1013,31 +1013,32 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
                                        const std::vector<std::string>& JitifyOptions) {
     // First one is bin_sphere_kernels kernels, which figure out the bin--sphere touch pairs
     {
-        bin_sphere_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu", Subs, JitifyOptions)));
+        bin_sphere_kernels = std::make_shared<JitHelper::CachedProgram>(JitHelper::buildProgram(
+            "DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu", Subs, JitifyOptions));
     }
     // Then CD kernels
     {
-        sphere_contact_kernels = std::make_shared<jitify::Program>(std::move(
-            JitHelper::buildProgram("DEMContactKernels_SphereSphere",
-                                    JitHelper::KERNEL_DIR / "DEMContactKernels_SphereSphere.cu", Subs, JitifyOptions)));
+        sphere_contact_kernels = std::make_shared<JitHelper::CachedProgram>(JitHelper::buildProgram(
+            "DEMContactKernels_SphereSphere", JitHelper::KERNEL_DIR / "DEMContactKernels_SphereSphere.cu", Subs,
+            JitifyOptions));
     }
     // Then triangle--bin intersection-related kernels
     {
-        bin_triangle_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMBinTriangleKernels", JitHelper::KERNEL_DIR / "DEMBinTriangleKernels.cu", Subs, JitifyOptions)));
+        bin_triangle_kernels = std::make_shared<JitHelper::CachedProgram>(JitHelper::buildProgram(
+            "DEMBinTriangleKernels", JitHelper::KERNEL_DIR / "DEMBinTriangleKernels.cu", Subs, JitifyOptions));
     }
     // Then sphere--triangle contact detection-related kernels
     {
-        sphTri_contact_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+        sphTri_contact_kernels = std::make_shared<JitHelper::CachedProgram>(std::move(JitHelper::buildProgram(
             "DEMContactKernels_SphTri_TriTri", JitHelper::KERNEL_DIR / "DEMContactKernels_SphTri_TriTri.cu", Subs,
             JitifyOptions)));
     }
     // Then misc.
     {
-        misc_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+        misc_kernels = std::make_shared<JitHelper::CachedProgram>(std::move(JitHelper::buildProgram(
             "DEMKinematicMisc", JitHelper::KERNEL_DIR / "DEMKinematicMisc.cu", Subs, JitifyOptions)));
     }
+    prewarmKernels();
 }
 
 void DEMKinematicThread::initAllocation() {
@@ -1075,6 +1076,37 @@ void DEMKinematicThread::updateTriNodeRelPos(size_t start, const std::vector<DEM
     relPosNode2.toDeviceAsync(streamInfo.stream, start, updates.size());
     relPosNode3.toDeviceAsync(streamInfo.stream, start, updates.size());
     syncMemoryTransfer();
+}
+
+void DEMKinematicThread::prewarmKernels() {
+    if (bin_sphere_kernels) {
+        bin_sphere_kernels->kernel("populateBinSphereTouchingPairs").instantiate();
+        bin_sphere_kernels->kernel("getNumberOfBinsEachSphereTouches").instantiate();
+    }
+    if (sphere_contact_kernels) {
+        sphere_contact_kernels->kernel("populateSphereContactPairsEachBin").instantiate();
+        sphere_contact_kernels->kernel("getNumberOfSphereContactsEachBin").instantiate();
+    }
+    if (bin_triangle_kernels) {
+        bin_triangle_kernels->kernel("getNumberOfBinsEachTriangleTouches").instantiate();
+        bin_triangle_kernels->kernel("populateBinTriangleTouchingPairs").instantiate();
+    }
+    if (sphTri_contact_kernels) {
+        sphTri_contact_kernels->kernel("getNumberOfTriangleContactsEachBin").instantiate();
+        sphTri_contact_kernels->kernel("populateTriangleContactsEachBin").instantiate();
+    }
+    if (history_kernels) {
+        history_kernels->kernel("buildPersistentMap").instantiate();
+        history_kernels->kernel("rearrangeMapping").instantiate();
+        history_kernels->kernel("lineNumbers").instantiate();
+        history_kernels->kernel("fillRunLengthArray").instantiate();
+        history_kernels->kernel("convertToAndFrom").instantiate();
+    }
+    if (misc_kernels) {
+        misc_kernels->kernel("computeMarginFromAbsv_implSph").instantiate();
+        misc_kernels->kernel("computeMarginFromAbsv_implTri").instantiate();
+        misc_kernels->kernel("computeMarginFromAbsv_implAnal").instantiate();
+    }
 }
 
 }  // namespace deme

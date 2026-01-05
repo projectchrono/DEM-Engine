@@ -16,16 +16,12 @@
 #include "../core/utils/CudaAllocator.hpp"
 #include "../core/utils/ThreadManager.h"
 #include "../core/utils/GpuManager.h"
+#include "../core/utils/JitHelper.h"
 #include "../core/utils/DataMigrationHelper.hpp"
 #include "BdrsAndObjs.h"
 #include "Defines.h"
 #include "Structs.h"
 #include "AuxClasses.h"
-
-// Forward declare jitify::Program to avoid downstream dependency
-namespace jitify {
-class Program;
-}
 
 namespace deme {
 
@@ -329,8 +325,8 @@ class DEMDynamicThread {
     ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>> typeStartCountPrimitiveMap;
     ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>> typeStartCountPatchMap;
     // A map that records the corresponding jitify program bundle and kernel name for each contact type
-    ContactTypeMap<std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>> contactTypePrimitiveKernelMap;
-    ContactTypeMap<std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>> contactTypePatchKernelMap;
+    ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>> contactTypePrimitiveKernelMap;
+    ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>> contactTypePatchKernelMap;
 
     // dT's timers
     std::vector<std::string> timer_names = {"Clear force array", "Calculate contact forces", "Optional force reduction",
@@ -686,7 +682,7 @@ class DEMDynamicThread {
                        const std::vector<std::string>& JitifyOptions);
 
     // Execute this kernel, then return the reduced value
-    float* inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
+    float* inspectCall(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                        const std::string& kernel_name,
                        INSPECT_ENTITY_TYPE thing_to_insp,
                        CUB_REDUCE_FLAVOR reduce_flavor,
@@ -728,11 +724,11 @@ class DEMDynamicThread {
     // Impl of calculateForces
     inline void dispatchPrimitiveForceKernels(
         const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountMap,
-        const ContactTypeMap<std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>& typeKernelMap);
+        const ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>>& typeKernelMap);
     inline void dispatchPatchBasedForceCorrections(
         const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPrimitiveMap,
         const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
-        const ContactTypeMap<std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>& typeKernelMap);
+        const ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>>& typeKernelMap);
     // Update clump-based acceleration array based on sphere-based force array
     void calculateForces();
 
@@ -777,12 +773,13 @@ class DEMDynamicThread {
         const std::function<bool(unsigned int, unsigned int, unsigned int, unsigned int)>& condition);
 
     // Just-in-time compiled kernels
-    std::shared_ptr<jitify::Program> cal_force_kernels;
-    std::shared_ptr<jitify::Program> cal_patch_force_kernels;
-    std::shared_ptr<jitify::Program> collect_force_kernels;
-    std::shared_ptr<jitify::Program> integrator_kernels;
-    // std::shared_ptr<jitify::Program> quarry_stats_kernels;
-    std::shared_ptr<jitify::Program> mod_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> cal_force_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> cal_patch_force_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> collect_force_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> integrator_kernels;
+    // std::shared_ptr<JitHelper::CachedProgram> quarry_stats_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> mod_kernels;
+    void prewarmKernels();
 
     // Adjuster for update freq
     class AccumStepUpdater {
