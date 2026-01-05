@@ -39,6 +39,20 @@ For development, you can install in editable mode:
 pip install -e .
 ```
 
+### Option 4: Using conda
+
+For conda users, you can build and install using conda-build:
+
+```bash
+# Build the conda package
+conda build recipe/
+
+# Install from local build
+conda install --use-local deme
+```
+
+This is useful for managing the package alongside other conda packages in your environment.
+
 ## CMake Options
 
 When building manually with CMake, use the following option to enable Python bindings:
@@ -67,7 +81,12 @@ solver = DEME.DEMSolver(nGPUs=1)
 ## Package Contents
 
 The Python package provides bindings for:
-- `DEMSolver` - Main simulation solver class
+- `DEMSolver` - Main simulation solver class with full API including:
+  - Contact detection control (`SetMaxTriTriPenetration`, `SetTriTriPenetration`)
+  - Mesh contact settings (`SetMeshUniversalContact`, `SetPersistentContact`)
+  - Performance tuning (`UseCompactForceKernel`, `DisableJitifyClumpTemplates`)
+  - Output control (`EnableOwnerWildcardOutput`, `EnableContactWildcardOutput`)
+  - Error thresholds (`SetErrorOutAngularVelocity`, `SetErrorOutVelocity`)
 - `DEMMaterial` - Material properties
 - `DEMClumpBatch` - Batch operations for clumps
 - `DEMExternObj` - External objects
