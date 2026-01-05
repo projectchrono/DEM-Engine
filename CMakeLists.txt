@@ -43,6 +43,18 @@ fix_ninja_colors()
 
 find_package(CUDAToolkit REQUIRED)
 
+# Option to build Python bindings
+option(DEME_BUILD_PYTHON "Build Python bindings for DEME" OFF)
+
+# Find Python and pybind11 if building Python bindings
+if(DEME_BUILD_PYTHON)
+	find_package(Python COMPONENTS Interpreter Development REQUIRED)
+	add_subdirectory(thirdparty/pybind11)
+	message(STATUS "Python bindings enabled")
+	message(STATUS "Python version: ${Python_VERSION}")
+	message(STATUS "Python executable: ${Python_EXECUTABLE}")
+endif()
+
 # Find CUB library (this might need to be done in source-level config)
 find_package(
 	CUB REQUIRED
@@ -164,22 +176,41 @@ if(USE_CHPF)
     target_compile_definitions(simulator_multi_gpu PUBLIC DEME_USE_CHPF)
 	set(USE_CHPF_STR "ON")
 
-	target_link_libraries(simulator_multi_gpu
-		PUBLIC CUDA::cudart
-		PUBLIC CUDA::nvrtc
-		PUBLIC CUDA::cuda_driver
-		PUBLIC ${ChPF_IMPORTED_NAME}
-		PUBLIC DEMERuntimeDataHelper
-	)
+	if(DEME_BUILD_PYTHON)
+		target_link_libraries(simulator_multi_gpu
+			PUBLIC CUDA::cudart
+			PUBLIC CUDA::nvrtc
+			PUBLIC CUDA::cuda_driver
+			PUBLIC ${ChPF_IMPORTED_NAME}
+			PUBLIC DEMERuntimeDataHelper_python
+		)
+	else()
+		target_link_libraries(simulator_multi_gpu
+			PUBLIC CUDA::cudart
+			PUBLIC CUDA::nvrtc
+			PUBLIC CUDA::cuda_driver
+			PUBLIC ${ChPF_IMPORTED_NAME}
+			PUBLIC DEMERuntimeDataHelper
+		)
+	endif()
 else()
 	set(USE_CHPF_STR "OFF")
 
-	target_link_libraries(simulator_multi_gpu
-		PUBLIC CUDA::cudart
-		PUBLIC CUDA::nvrtc
-		PUBLIC CUDA::cuda_driver
-		PUBLIC DEMERuntimeDataHelper
-	)
+	if(DEME_BUILD_PYTHON)
+		target_link_libraries(simulator_multi_gpu
+			PUBLIC CUDA::cudart
+			PUBLIC CUDA::nvrtc
+			PUBLIC CUDA::cuda_driver
+			PUBLIC DEMERuntimeDataHelper_python
+		)
+	else()
+		target_link_libraries(simulator_multi_gpu
+			PUBLIC CUDA::cudart
+			PUBLIC CUDA::nvrtc
+			PUBLIC CUDA::cuda_driver
+			PUBLIC DEMERuntimeDataHelper
+		)
+	endif()
 endif()
 
 # If use managed arrays, define a macro
@@ -206,22 +237,33 @@ set_target_properties(simulator_multi_gpu
 set(config_directory ${CMAKE_INSTALL_LIBDIR}/cmake/DEME)
 
 # Install the library, creating an export target for it as well 
-install(
-	TARGETS simulator_multi_gpu DEMERuntimeDataHelper
-	EXPORT DEMETargets
-	LIBRARY
-		DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
+if(DEME_BUILD_PYTHON)
+	install(
+		TARGETS simulator_multi_gpu DEMERuntimeDataHelper_python
+		EXPORT DEMETargets
+		LIBRARY
+			DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	)
+else()
+	install(
+		TARGETS simulator_multi_gpu DEMERuntimeDataHelper
+		EXPORT DEMETargets
+		LIBRARY
+			DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	)
+endif()
 
 install(CODE "message(\"Removing build-tree libraries from installation target...\")")
-install(CODE "file(REMOVE \"$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libDEMERuntimeDataHelper.so\")")
+if(NOT DEME_BUILD_PYTHON)
+	install(CODE "file(REMOVE \"$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libDEMERuntimeDataHelper.so\")")
 
-install(
-	TARGETS DEMERuntimeDataHelper_install
-	EXPORT DEMETargets
-	LIBRARY
-		DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	install(
+		TARGETS DEMERuntimeDataHelper_install
+		EXPORT DEMETargets
+		LIBRARY
+			DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	)
+endif()
 
 # Export the generated library target
 export(EXPORT DEMETargets

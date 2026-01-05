@@ -1,0 +1,54 @@
+[build-system]
+requires = [
+    "scikit-build-core>=0.8.0",
+    "pybind11>=2.11.0",
+]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "deme"
+version = "2.1.0"
+description = "Python bindings for DEM-Engine - a GPU-accelerated Discrete Element Method simulation engine"
+readme = "README.md"
+authors = [
+    { name = "Ruochun Zhang", email = "ruochunz@gmail.com" },
+]
+license = { text = "BSD-3-Clause" }
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "numpy>=1.19.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pybind11>=2.11.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/projectchrono/DEM-Engine"
+Repository = "https://github.com/projectchrono/DEM-Engine"
+Documentation = "https://github.com/projectchrono/DEM-Engine"
+
+[tool.scikit-build]
+cmake.build-type = "Release"
+cmake.verbose = true
+minimum-version = "0.8"
+build-dir = "build/{wheel_tag}"
+wheel.packages = []
+
+[tool.scikit-build.cmake.define]
+DEME_BUILD_PYTHON = "ON"

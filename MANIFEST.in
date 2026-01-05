@@ -1,0 +1,7 @@
+include README.md
+include LICENSE.md
+include pyproject.toml
+recursive-include data *
+recursive-include src/kernel *.cu *.cuh
+include src/DEM/Defines.h
+include src/DEM/VariableTypes.h

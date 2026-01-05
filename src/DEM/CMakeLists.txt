@@ -84,3 +84,43 @@ install(
 		PATTERN "utils/*.hpp"
 )
 
+# Build Python module if requested
+if(DEME_BUILD_PYTHON)
+	message(STATUS "==== Building Python Bindings ====")
+	
+	pybind11_add_module(DEME 
+		${DEM_headers}
+		${DEM_sources}
+		${CMAKE_CURRENT_SOURCE_DIR}/python/bindings.cpp
+	)
+	
+	set_target_properties(DEME PROPERTIES 
+		LINKER_LANGUAGE CXX
+		CXX_STANDARD ${CXXSTD_SUPPORTED}
+		POSITION_INDEPENDENT_CODE True
+	)
+	
+	target_include_directories(DEME
+		PUBLIC ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
+		PUBLIC ${ProjectIncludeSource}
+		PUBLIC ${ProjectIncludeGenerated}
+	)
+	
+	target_link_libraries(DEME
+		PUBLIC CUDA::cudart
+		PUBLIC CUDA::nvrtc
+		PUBLIC CUDA::cuda_driver
+		PUBLIC core
+		PUBLIC DEMERuntimeDataHelper_python
+		PUBLIC algorithms
+		PUBLIC pybind11::headers
+	)
+	
+	# Install the Python module
+	install(TARGETS DEME
+		LIBRARY DESTINATION .
+		COMPONENT python
+	)
+	
+	message(STATUS "==== Completed Building Python Bindings ====")
+endif()
