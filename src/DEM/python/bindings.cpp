@@ -84,13 +84,39 @@ struct type_caster<float4> {
 PYBIND11_MODULE(DEME, obj) {
     // Obtaining the location of python's site-packages dynamically and setting it
     // as path prefix
-
-    py::module _site = py::module_::import("site");
-    std::string loc = _site.attr("getsitepackages")().cast<py::list>()[0].cast<py::str>();
-
-    // Setting path prefix
-    std::filesystem::path path = loc;
-    DEMERuntimeDataHelper::SetPathPrefix(path);
+    try {
+        py::module _site = py::module_::import("site");
+        std::string loc;
+        
+        // Try getsitepackages() first (works in most environments)
+        if (py::hasattr(_site, "getsitepackages")) {
+            py::object site_packages = _site.attr("getsitepackages")();
+            if (py::isinstance<py::list>(site_packages) && py::len(site_packages) > 0) {
+                loc = site_packages.cast<py::list>()[0].cast<std::string>();
+            }
+        }
+        
+        // Fallback to USER_SITE if getsitepackages fails
+        if (loc.empty() && py::hasattr(_site, "USER_SITE")) {
+            loc = _site.attr("USER_SITE").cast<std::string>();
+        }
+        
+        // Last resort: use sys.prefix
+        if (loc.empty()) {
+            py::module sys = py::module_::import("sys");
+            std::string prefix = sys.attr("prefix").cast<std::string>();
+            loc = prefix + "/lib/python" + sys.attr("version_info").attr("major").cast<std::string>() + 
+                  "." + sys.attr("version_info").attr("minor").cast<std::string>() + "/site-packages";
+        }
+        
+        // Setting path prefix
+        std::filesystem::path path = loc;
+        DEMERuntimeDataHelper::SetPathPrefix(path);
+    } catch (const py::error_already_set& e) {
+        // If all else fails, don't set the prefix and let the system use default paths
+        py::print("Warning: Could not determine site-packages location, using default paths");
+    }
+    
     deme::SetDEMEDataPath();
 
     // Setting JitHelper variables

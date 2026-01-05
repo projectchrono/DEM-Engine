@@ -48,7 +48,6 @@ cmake.build-type = "Release"
 cmake.verbose = true
 minimum-version = "0.8"
 build-dir = "build/{wheel_tag}"
-wheel.packages = []
 
 [tool.scikit-build.cmake.define]
 DEME_BUILD_PYTHON = "ON"

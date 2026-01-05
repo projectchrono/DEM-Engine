@@ -171,46 +171,34 @@ target_include_directories(simulator_multi_gpu
 	PUBLIC ${CORE_INTERFACE}
 )
 
+# Determine which runtime data helper to use
+if(DEME_BUILD_PYTHON)
+	set(RUNTIME_DATA_HELPER DEMERuntimeDataHelper_python)
+else()
+	set(RUNTIME_DATA_HELPER DEMERuntimeDataHelper)
+endif()
+
+# Set up common link libraries
+set(DEME_LINK_LIBS
+	CUDA::cudart
+	CUDA::nvrtc
+	CUDA::cuda_driver
+	${RUNTIME_DATA_HELPER}
+)
+
 # If use ChPF, inform the source
 if(USE_CHPF)
     target_compile_definitions(simulator_multi_gpu PUBLIC DEME_USE_CHPF)
 	set(USE_CHPF_STR "ON")
-
-	if(DEME_BUILD_PYTHON)
-		target_link_libraries(simulator_multi_gpu
-			PUBLIC CUDA::cudart
-			PUBLIC CUDA::nvrtc
-			PUBLIC CUDA::cuda_driver
-			PUBLIC ${ChPF_IMPORTED_NAME}
-			PUBLIC DEMERuntimeDataHelper_python
-		)
-	else()
-		target_link_libraries(simulator_multi_gpu
-			PUBLIC CUDA::cudart
-			PUBLIC CUDA::nvrtc
-			PUBLIC CUDA::cuda_driver
-			PUBLIC ${ChPF_IMPORTED_NAME}
-			PUBLIC DEMERuntimeDataHelper
-		)
-	endif()
+	target_link_libraries(simulator_multi_gpu
+		PUBLIC ${DEME_LINK_LIBS}
+		PUBLIC ${ChPF_IMPORTED_NAME}
+	)
 else()
 	set(USE_CHPF_STR "OFF")
-
-	if(DEME_BUILD_PYTHON)
-		target_link_libraries(simulator_multi_gpu
-			PUBLIC CUDA::cudart
-			PUBLIC CUDA::nvrtc
-			PUBLIC CUDA::cuda_driver
-			PUBLIC DEMERuntimeDataHelper_python
-		)
-	else()
-		target_link_libraries(simulator_multi_gpu
-			PUBLIC CUDA::cudart
-			PUBLIC CUDA::nvrtc
-			PUBLIC CUDA::cuda_driver
-			PUBLIC DEMERuntimeDataHelper
-		)
-	endif()
+	target_link_libraries(simulator_multi_gpu
+		PUBLIC ${DEME_LINK_LIBS}
+	)
 endif()
 
 # If use managed arrays, define a macro
