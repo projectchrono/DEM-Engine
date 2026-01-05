@@ -611,7 +611,7 @@ PYBIND11_MODULE(DEME, obj) {
              "A string. If 'auto': the solver automatically derives.")
         .def("SetExpandSafetyAdder", &deme::DEMSolver::SetExpandSafetyAdder,
              "Set a `base' velocity, which we will always add to our estimated maximum system velocity, when deriving "
-             "the thinckness of the contact `safety' margin")
+             "the thickness of the contact `safety' margin")
         .def("SetMaxSphereInBin", &deme::DEMSolver::SetMaxSphereInBin,
              "Used to force the solver to error out when there are too many spheres in a bin. A huge number can be "
              "used to discourage this error type")
