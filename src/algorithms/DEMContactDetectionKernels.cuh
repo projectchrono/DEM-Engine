@@ -170,6 +170,30 @@ __global__ void markNewPatchPairGroups(patchIDPair_t* sortedPatchPairs, contactP
     }
 }
 
+// Build geomToPatchMap by detecting boundaries of unique (patchPair, contactType) groups in a sorted array.
+// The array is expected to be sorted by contact type, then by patch pairs.
+__global__ void markNewPatchPairGroupsByType(const patchIDPair_t* sortedPatchPairs,
+                                             const contact_t* sortedContactTypes,
+                                             contactPairs_t* isNewGroup,
+                                             size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        if (myID == 0) {
+            isNewGroup[myID] = 0;
+        } else {
+            const bool new_pair = sortedPatchPairs[myID] != sortedPatchPairs[myID - 1];
+            const bool new_type = sortedContactTypes[myID] != sortedContactTypes[myID - 1];
+            isNewGroup[myID] = (new_pair || new_type) ? 1 : 0;
+        }
+    }
+}
+
+__global__ void setFirstFlagToOne(contactPairs_t* flags, size_t n) {
+    if (blockIdx.x == 0 && threadIdx.x == 0 && n > 0) {
+        flags[0] = 1;
+    }
+}
+
 // Set NULL_MAPPING_PARTNER for contacts of a specific type segment.
 // Used when current step has contacts of this type but previous step does not.
 //
