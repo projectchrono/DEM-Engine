@@ -13,10 +13,27 @@
 // Convenience functions to help with Managed Memory (allocated using ManagedAllocator, typically)
 namespace deme {
 
+#if CUDART_VERSION >= 13000
+inline cudaMemLocation make_device_location(int device) {
+    cudaMemLocation loc{};
+    loc.type = cudaMemLocationTypeDevice;
+    loc.id   = device;
+    return loc;
+}
+#endif
+
 // Underlying implementation
 template <class T>
 inline void __migrate_impl(T* data, std::size_t size, int device, cudaStream_t stream = 0) {
+#if CUDART_VERSION >= 13000
+    // CUDA 13.0+: cudaMemPrefetchAsync(const void*, size_t, cudaMemLocation, unsigned int flags, cudaStream_t)
+    auto loc = make_device_location(device);
+    unsigned int flags = 0;
+    cudaMemPrefetchAsync(static_cast<void*>(data), size * sizeof(T), loc, flags, stream);
+#else
+    // CUDA <= 12.x: cudaMemPrefetchAsync(const void*, size_t, int dstDevice, cudaStream_t)
     cudaMemPrefetchAsync(static_cast<void*>(data), size * sizeof(T), device, stream);
+#endif
 }
 
 // Pointer syntax, basically the same as cudaMemPrefetchAsync(...)
@@ -68,7 +85,22 @@ enum class ManagedAdvice {
 // Underlying implementation
 template <class T>
 void __advise_impl(const T* data, std::size_t size, ManagedAdvice advice, int device) {
-    cudaMemAdvise(data, size * sizeof(T), (cudaMemoryAdvise)advice, device);
+#if CUDART_VERSION >= 13000
+    cudaMemLocation loc{};
+    loc.type = cudaMemLocationTypeDevice;
+    loc.id   = device;
+    // CUDA 13.0+: cudaMemAdvise(const void*, size_t, cudaMemoryAdvise, cudaMemLocation)
+    cudaMemAdvise(static_cast<const void*>(data),
+                  size * sizeof(T),
+                  static_cast<cudaMemoryAdvise>(advice),
+                  loc);
+#else
+    // Ältere Toolkits: cudaMemAdvise(const void*, size_t, cudaMemoryAdvise, int)
+    cudaMemAdvise(static_cast<const void*>(data),
+                  size * sizeof(T),
+                  static_cast<cudaMemoryAdvise>(advice),
+                  device);
+#endif
 }
 
 // Advice for raw pointer

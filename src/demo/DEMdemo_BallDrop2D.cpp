@@ -1,12 +1,9 @@
-//  Copyright (c) 2021, SBEL GPU Development Team
-//  Copyright (c) 2021, University of Wisconsin - Madison
-//
-//	SPDX-License-Identifier: BSD-3-Clause
-
-// =============================================================================
-// A meshed ball hitting a granular bed under gravity. A collection of different
-// ball densities and drop heights are tested against loosely packed material.
-// =============================================================================
+// Streamfinish demo (both container AND workpiece are OBJ meshes)
+// Rotierender Behälter (Z‑Achse) + stationäres Werkstück nach Einfahren
+// Parameter per CLI: --rpm <double>, --ball_d_mm <double>, --container_R <m>, --fill_H <m>,
+//                    --container_H <m>, --insert_depth <m>, --insert_time <s>,
+//                    --workpiece <obj path>, --container_mesh <obj path>
+// Hinweis: Kein analytischer Fallback – beide Geometrien werden als Mesh geladen.
 
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
@@ -14,188 +11,188 @@
 #include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
+#include <filesystem>
 #include <cstdio>
 #include <chrono>
-#include <filesystem>
-#include <random>
+#include <cmath>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <chrono>
+#include <cmath>
+#include <iostream>
+#include <string>
+#include <unordered_map>
+#include <vector>
+#include <memory>
 
 using namespace deme;
-using namespace std::filesystem;
 
-double randomBetween0and1() {
-    static std::mt19937 gen(std::random_device{}());                       // Random number generator
-    static std::uniform_real_distribution<double> distribution(0.0, 1.0);  // Uniform distribution between 0 and 1
+using std::string;
 
-    return distribution(gen);
+static double optAsDouble(int argc, char** argv, const string& key, double defval) {
+    for (int i = 1; i < argc - 1; ++i) {
+        if (string(argv[i]) == key) return std::stod(argv[i + 1]);
+    }
+    return defval;
+}
+static string optAsString(int argc, char** argv, const string& key, const string& defval) {
+    for (int i = 1; i < argc - 1; ++i) {
+        if (string(argv[i]) == key) return string(argv[i + 1]);
+    }
+    return defval;
 }
 
-int main() {
-    float ball_density = 6.2e3;
-    float H = 0.1;
-    double R = 0.0254 / 2.;
-
-    double terrain_rad = 0.006 / 2.;
-
+int main(int argc, char** argv) {
     DEMSolver DEMSim;
-    // Output less info at initialization
-    DEMSim.SetVerbosity("ERROR");
-    DEMSim.SetOutputFormat("CSV");
-    DEMSim.SetOutputContent({"ABSV"});
-    DEMSim.SetMeshOutputFormat("VTK");
 
-    path out_dir = current_path();
-    out_dir /= "DemoOutput_BallDrop2D";
-    create_directory(out_dir);
+    // ---------------- Params (CLI with sensible defaults) ----------------
+    const float MESH_MM2M = 1.0f / 1000.0f;  // mm -> m
 
-    // E, nu, CoR, mu, Crr...
-    auto mat_type_ball = DEMSim.LoadMaterial({{"E", 7e7}, {"nu", 0.24}, {"CoR", 0.9}, {"mu", 0.3}, {"Crr", 0.0}});
-    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 7e7}, {"nu", 0.24}, {"CoR", 0.9}, {"mu", 0.3}, {"Crr", 0.0}});
-    auto mat_type_terrain_sim =
-        DEMSim.LoadMaterial({{"E", 7e7}, {"nu", 0.24}, {"CoR", 0.9}, {"mu", 0.3}, {"Crr", 0.0}});
+    const double rpm            = optAsDouble(argc, argv, "--rpm", 50.0);
+    const double ball_d_mm      = optAsDouble(argc, argv, "--ball_d_mm", 12.8);
+    const double container_R    = optAsDouble(argc, argv, "--container_R", 0.525);  // [m]
+    const double container_H    = optAsDouble(argc, argv, "--container_H", 0.5);  // [m]
+    const double fill_H         = optAsDouble(argc, argv, "--fill_H", 0.24);       // [m]
+    const double insert_depth   = optAsDouble(argc, argv, "--insert_depth", 0.2);  // [m]
+    const double insert_time    = optAsDouble(argc, argv, "--insert_time", 0.5);    // [s]
+    const string workpiece_obj  = optAsString(argc, argv, "--workpiece", (GET_DATA_PATH() / "mesh/workpiece.obj").string());
+    const string container_obj  = optAsString(argc, argv, "--container_mesh", (GET_DATA_PATH() / "mesh/container.obj").string());
 
-    float step_size = 2e-6;
-    double world_size = 0.2;
-    DEMSim.InstructBoxDomainDimension({-world_size / 2., world_size / 2.}, {-world_size / 2., world_size / 2.},
-                                      {0, 10 * world_size});
-    DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
-
-    auto projectile = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/sphere.obj").string(), mat_type_ball);
-    projectile->Scale(R);
-    std::cout << "Total num of triangles: " << projectile->GetNumTriangles() << std::endl;
-
-    projectile->SetInitPos(make_float3(0, 0, 8 * world_size));
-    float ball_mass = ball_density * 4. / 3. * PI * R * R * R;
-    projectile->SetMass(ball_mass);
-    projectile->SetMOI(make_float3(ball_mass * 2 / 5 * R * R, ball_mass * 2 / 5 * R * R, ball_mass * 2 / 5 * R * R));
-    projectile->SetFamily(2);
-    DEMSim.SetFamilyFixed(2);
-    DEMSim.DisableContactBetweenFamilies(0, 2);
-    // Track the projectile
-    auto proj_tracker = DEMSim.Track(projectile);
-
-    // Force model to use
-    auto model2D = DEMSim.ReadContactForceModel("ForceModel2D.cu");
-    model2D->SetMustHaveMatProp({"E", "nu", "CoR", "mu", "Crr"});
-    model2D->SetMustPairwiseMatProp({"CoR", "mu", "Crr"});
-    model2D->SetPerContactWildcards({"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"});
-
-    std::vector<std::shared_ptr<DEMClumpTemplate>> templates_terrain;
-    for (int i = 0; i < 11; i++) {
-        templates_terrain.push_back(DEMSim.LoadSphereType(terrain_rad * terrain_rad * terrain_rad * 2.0e3 * 4 / 3 * PI,
-                                                          terrain_rad, mat_type_terrain));
-        terrain_rad += 0.0001 / 2.;
+    if (workpiece_obj.empty() || container_obj.empty()) {
+        std::cerr << "Both --workpiece and --container_mesh must be provided (OBJ files)." << std::endl;
+        return 2;
     }
 
-    unsigned int num_particle = 0;
-    float sample_z = 1.5 * terrain_rad;
-    float fullheight = world_size * 6.;
-    float sample_halfwidth = world_size / 2 - 2 * terrain_rad;
-    float init_v = 0.01;
+    const double ball_r         = 0.5 * ball_d_mm * 1e-3; // mm -> m
+    const double omega          = rpm * 2.0 * M_PI / 60.0; // rad/s
+    const double v_ins          = insert_depth / insert_time; // m/s (downwards)
+    const double frame_dt = optAsDouble(argc, argv, "--frame_dt", 0.01);         // [s] Zeit zwischen Frames
+    const string out_dir  = optAsString(argc, argv, "--out_dir", "output_streamfinish");  // Ausgabeverzeichnis
 
-    std::random_device rd;   // Random number device to seed the generator
-    std::mt19937 gen(rd());  // Mersenne Twister generator
-    std::uniform_int_distribution<> dist(
-        0, templates_terrain.size() - 1);  // Uniform distribution of integers between 0 and n
 
-    // HCPSampler sampler(2.01 * terrain_rad); // to be tested
-    PDSampler sampler(2.01 * terrain_rad);
+    // ---------------- Materials ----------------
+    auto mat_container = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.30}, {"CoR", 0.5}, {"mu", 0.50}, {"Crr", 0.0}});
+    auto mat_media     = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.30}, {"CoR", 0.5}, {"mu", 0.20}, {"Crr", 0.0}});
+    DEMSim.SetMaterialPropertyPair("mu", mat_container, mat_media, 0.50);
 
-    float3 sample_center = make_float3(0, 0, fullheight / 2 + 1 * terrain_rad);
-    auto input_xyz = sampler.SampleBox(sample_center, make_float3(sample_halfwidth, 0.f, fullheight / 2.));
-    std::vector<std::shared_ptr<DEMClumpTemplate>> template_to_use(input_xyz.size());
-    for (unsigned int i = 0; i < input_xyz.size(); i++) {
-        template_to_use[i] = templates_terrain[dist(gen)];
+    // ---------------- World / domain ----------------
+    const float m = 0.01f;                          // Puffer
+    const float worldX = 2.f * float(container_R) + 2.f * m;   // ≈ 1.05 + 0.02
+    const float worldY = 2.f * float(container_R) + 2.f * m;
+    const float worldZ = float(container_H) + 10.f * m;         // 0.50 + 0.1 = 0.6
+    DEMSim.InstructBoxDomainDimension(worldX, worldY, worldZ);
+    DEMSim.InstructBoxDomainBoundingBC("all", mat_media);
+    DEMSim.SetGravitationalAcceleration(make_float3(0.f, 0.f, -9.81f));
+    DEMSim.SetInitTimeStep(5e-6);
+
+    // Optional: add top/bottom planes to confine the media in Z (bleiben stationär)
+    // auto bc = DEMSim.AddExternalObject();
+    // bc->AddPlane(make_float3(0, 0, -0.5f * worldZ), make_float3(0, 0,  1), mat_container); // bottom, Normal nach +Z
+    // bc->AddPlane(make_float3(0, 0,  0.5f * worldZ), make_float3(0, 0, -1), mat_container); // top,    Normal nach −Z
+
+
+    // ---------------- Container (mesh, rotating about global Z) ----------------
+    const unsigned FAM_CONTAINER = 10;
+    auto container = DEMSim.AddWavefrontMeshObject(container_obj, mat_container);
+    // Annahme: Container-OBJ ist um Ursprung herum modelliert (Z‑Achse entlang global Z),
+    container->Scale(MESH_MM2M);
+    // Positioniere so, dass Container „auf dem Boden“ steht
+    container->SetInitPos(make_float3(0.f, 0.f, 0.f));
+    container->SetFamily(FAM_CONTAINER);
+    // Reine Rotation um Z, Translation fixieren (keine Drift)
+    DEMSim.SetFamilyPrescribedLinVel(FAM_CONTAINER, "0", "0", "0");
+    DEMSim.SetFamilyPrescribedAngVel(FAM_CONTAINER, "0", "0", std::to_string(omega));
+
+    // ---------------- Media (spheres) ----------------
+    const double rho_media = 2600.0; // kg/m^3 (Beispiel: Korund)
+    const double mass = rho_media * (4.0 / 3.0) * M_PI * ball_r * ball_r * ball_r;
+    auto sphere_type = DEMSim.LoadSphereType(float(mass), float(ball_r), mat_media);
+
+    // Packen: HCP in Z-Zylinder (Füllhöhe)
+    HCPSampler sampler(float(2.05f * ball_r));
+    // Ziel: z ∈ [0, fill_H]  → Mittelpunkt bei z = 0.5*fill_H, halbe Höhe = 0.5*fill_H
+    const float3 fill_center = make_float3(0.f, 0.f, 0.5f * float(fill_H));
+    const float  r_fill      = float(container_R - 1.1f * ball_r);  // kleiner Rand zur Wand
+    const float  h_half      = 0.5f * float(fill_H);
+    auto xyz = sampler.SampleCylinderZ(fill_center, r_fill, h_half);
+    std::vector<float3> locs;
+    locs.reserve(xyz.size());
+    for (const auto& p : xyz) {
+        locs.push_back(p);
     }
-    DEMSim.AddClumps(template_to_use, input_xyz);
-    num_particle += input_xyz.size();
+    DEMSim.AddClumps(
+        std::vector<std::shared_ptr<DEMClumpTemplate>>(locs.size(), sphere_type),
+        locs
+    );
 
-    std::cout << "Total num of particles: " << num_particle << std::endl;
+    // ---------------- Workpiece (mesh: insert then hold) ----------------
+    const unsigned FAM_WORKPIECE = 20;
+    auto workpiece = DEMSim.AddWavefrontMeshObject(workpiece_obj, mat_container);
+    workpiece->Scale(MESH_MM2M);
+    const float z_surface = -0.5f * worldZ + float(fill_H);
+    workpiece->SetInitPos(make_float3(0.425f, 0.f, float(insert_depth)));
+    workpiece->SetFamily(FAM_WORKPIECE);
 
-    auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
-    auto total_mass_finder = DEMSim.CreateInspector("clump_mass");
+    // Zeitgesteuerte Einfahrt: v = -v_ins für t < t_ins, sonst 0
+    const string pre_code =
+        string("const float t_ins=") + std::to_string(insert_time) + ";" +
+        string("const float v_ins=") + std::to_string(v_ins) + ";" +
+        string("const float v = (t < t_ins) ? -v_ins : 0.0f;");
+    DEMSim.SetFamilyPrescribedLinVel(FAM_WORKPIECE, "0", "0", "v", true, pre_code);
 
-    DEMSim.SetInitTimeStep(step_size);
-    DEMSim.SetMaxVelocity(30.);
-    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
+
+    // ---------------- Output & run ----------------
+    DEMSim.SetVerbosity(STEP_METRIC);
+    // Force the solver to error out if something went crazy. A good practice to add them, but not necessary.
+    DEMSim.SetErrorOutVelocity(20.);
+    DEMSim.SetErrorOutAvgContacts(50);
 
     DEMSim.Initialize();
+    // --- Output-Konfiguration (Mixer-Stil) ---
+    std::filesystem::create_directories(out_dir);
 
-    float sim_time = 3.0;
-    float settle_time = 1.0;
-    unsigned int fps = 20;
-    float frame_time = 1.0 / fps;
-    unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
+    // Formate wie im Mixer: Clumps als CSV, Mesh als VTK
+    DEMSim.SetOutputFormat("CSV");
+    DEMSim.SetOutputContent({"XYZ", "VEL"});     // ggf. erweitern: "VEL","ANG_VEL","FAMILY"
+    DEMSim.SetMeshOutputFormat("VTK");
 
-    std::cout << "Output at " << fps << " FPS" << std::endl;
-    unsigned int currframe = 0;
-    double terrain_max_z;
+    // Frame-Schreiber (Clumps + Mesh)
+    auto write_frame = [&](int f) {
+        char path[512];
 
-    // We can let it settle first
-    for (float t = 0; t < settle_time; t += frame_time) {
-        std::cout << "Frame: " << currframe << std::endl;
-        char filename[100], meshfilename[100];
-        sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
-        sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk", currframe);
-        DEMSim.WriteSphereFile(out_dir / filename);
-        DEMSim.WriteMeshFile(out_dir / meshfilename);
-        currframe++;
+        std::snprintf(path, sizeof(path), "%s/clumps_%06d.csv", out_dir.c_str(), f);
+        DEMSim.WriteClumpFile(std::string(path));   // <— HIER
 
-        DEMSim.DoDynamicsThenSync(frame_time);
-        DEMSim.ShowThreadCollaborationStats();
+        std::snprintf(path, sizeof(path), "%s/mesh_%06d.vtk", out_dir.c_str(), f);
+        DEMSim.WriteMeshFile(std::string(path));    // <— UND HIER
+
+        // Optional (groß!): Kontakte
+        // std::snprintf(path, sizeof(path), "%s/contacts_%06d.csv", out_dir.c_str(), f);
+        // DEMSim.WriteContactFile(path);
+    };
+
+    // Startzustand (Frame 0)
+    int frame = 0;
+    write_frame(frame++);
+    // SIM-Driver
+    const double t_end = insert_time + 2.0;
+    const double dt_ts = DEMSim.GetTimeStepSize();   // tatsächliches ∆t aus der Engine
+    double next_frame  = frame_dt;
+    auto start = std::chrono::high_resolution_clock::now();
+
+    const int steps_per_frame = std::max(1, int(std::round(frame_dt / dt_ts)));
+    int step = 0;
+    while (DEMSim.GetSimTime() < t_end) {
+        DEMSim.DoStepDynamics();
+        if ((++step) % steps_per_frame == 0) write_frame(frame++);
     }
 
-    path cp_filename = out_dir / "bed.csv";
-    DEMSim.WriteClumpFile(cp_filename);
-
-    // This is to show that you can change the material for all the particles in a family... although here,
-    // mat_type_terrain_sim and mat_type_terrain are the same material so there is no effect; you can define
-    // them differently though.
-    DEMSim.SetFamilyClumpMaterial(0, mat_type_terrain_sim);
-    DEMSim.DoDynamicsThenSync(0.2);
-    terrain_max_z = max_z_finder->GetValue();
-    float matter_mass = total_mass_finder->GetValue();
-    float total_volume = (world_size * world_size) * (terrain_max_z - 0.);
-    float bulk_density = matter_mass / total_volume;
-    std::cout << "Original terrain height: " << terrain_max_z << std::endl;
-    std::cout << "Bulk density: " << bulk_density << std::endl;
-
-    // Then drop the ball
-    DEMSim.ChangeFamily(2, 0);
-    proj_tracker->SetPos(make_float3(0, 0, terrain_max_z + R + H));
-
-    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
-    for (float t = 0; t < sim_time; t += frame_time) {
-        std::cout << "Frame: " << currframe << std::endl;
-        char filename[100], meshfilename[100], cnt_filename[100];
-        sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
-        sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk", currframe);
-        // sprintf(cnt_filename, "Contact_pairs_%04d.csv", currframe);
-        DEMSim.WriteSphereFile(out_dir / filename);
-        DEMSim.WriteMeshFile(out_dir / meshfilename);
-        // DEMSim.WriteContactFile(out_dir / cnt_filename);
-        currframe++;
-
-        DEMSim.DoDynamics(frame_time);
-        DEMSim.ShowThreadCollaborationStats();
-
-        if (std::abs(proj_tracker->Vel().z) < 1e-4) {
-            break;
-        }
-    }
-    std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
-    std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> dt = end - start;
+    std::cout << dt.count() << " s wall time for streamfinish demo (all-mesh)" << std::endl;
 
     DEMSim.ShowTimingStats();
-
-    float3 final_pos = proj_tracker->Pos();
-    std::cout << "Ball density: " << ball_density << std::endl;
-    std::cout << "Ball rad: " << R << std::endl;
-    std::cout << "Drop height: " << H << std::endl;
-    std::cout << "Penetration: " << terrain_max_z - (final_pos.z - R) << std::endl;
-
-    std::cout << "==============================================================" << std::endl;
-
-    std::cout << "DEMdemo_BallDrop2D exiting..." << std::endl;
+    DEMSim.ShowMemStats();
     return 0;
 }

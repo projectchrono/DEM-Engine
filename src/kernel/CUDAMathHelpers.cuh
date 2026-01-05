@@ -69,6 +69,16 @@ inline float rsqrtf(float x) {
 }
 #endif
 
+#if defined(CUDART_VERSION) && CUDART_VERSION >= 13000
+    ///////////////////////////////////////////////////
+    // New Toolkits
+    using double4_vec = double4_16a;   // or  double4_32a, but 32 byte alignment is not good for GPUs before Blackwell (128bit  --> 256 bit register)
+#else
+    ////////////////////////////////////////////////////
+    // Old Toolkits
+    using double4_vec = double4;
+#endif
+
 ////////////////////////////////////////////////////////////////////////////////
 // constructors
 ////////////////////////////////////////////////////////////////////////////////
@@ -1199,17 +1209,17 @@ inline __host__ __device__ float dot(double3 a, float3 b) {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
-inline __host__ __device__ double dot(double4 a, double4 b) {
+inline __host__ __device__ double dot(double4_vec a, double4_vec b) {
     return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 }
-inline __host__ __device__ float dot(double4 a, float4 b) {
+inline __host__ __device__ float dot(double4_vec a, float4 b) {
     return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 }
 
 inline __host__ __device__ double length(double3 v) {
     return sqrt(dot(v, v));
 }
-inline __host__ __device__ double length(double4 v) {
+inline __host__ __device__ double length(double4_vec v) {
     return sqrt(dot(v, v));
 }
 
@@ -1343,14 +1353,27 @@ inline __host__ __device__ void operator/=(double3& a, double b) {
 inline __host__ __device__ float4 operator/(float4 a, double b) {
     return make_float4(a.x / b, a.y / b, a.z / b, a.w / b);
 }
+#if defined(CUDART_VERSION) && CUDART_VERSION >= 13000
+    ///////////////////////////////////////////////////
+    // New Toolkits
+    inline __host__ __device__ double4_vec operator/(double4_vec a, float b) {
+        return make_double4_16a(a.x / b, a.y / b, a.z / b, a.w / b);
+    }
+    inline __host__ __device__ double4_vec operator/(double4_vec a, double b) {
+        return make_double4_16a(a.x / b, a.y / b, a.z / b, a.w / b);
+    }
+#else
+    ////////////////////////////////////////////////////
+    // Old Toolkits
+    inline __host__ __device__ double4 operator/(double4 a, float b) {
+        return make_double4(a.x / b, a.y / b, a.z / b, a.w / b);
+    }
+    inline __host__ __device__ double4 operator/(double4 a, double b) {
+        return make_double4(a.x / b, a.y / b, a.z / b, a.w / b);
+    }
+#endif
 
-inline __host__ __device__ double4 operator/(double4 a, float b) {
-    return make_double4(a.x / b, a.y / b, a.z / b, a.w / b);
-}
-inline __host__ __device__ double4 operator/(double4 a, double b) {
-    return make_double4(a.x / b, a.y / b, a.z / b, a.w / b);
-}
-inline __host__ __device__ void operator/=(double4& a, float b) {
+inline __host__ __device__ void operator/=(double4_vec& a, float b) {
     a.x /= b;
     a.y /= b;
     a.z /= b;
@@ -1405,11 +1428,15 @@ inline __host__ __device__ T2 to_real3(const T1& a) {
 }
 
 // Cause an error inside a kernel
-#define DEME_ABORT_KERNEL(...) \
-    {                          \
-        printf(__VA_ARGS__);   \
-        __threadfence();       \
-        asm volatile("trap;"); \
-    }
+#if defined(__CUDA_ARCH__) || defined(__CUDACC__)
+    #define DEME_ABORT_KERNEL(...) \
+        {                          \
+            printf(__VA_ARGS__);   \
+            __threadfence();       \
+            asm volatile("trap;"); \
+        }
+#else
+    #define DEME_ABORT_KERNEL(...) do { } while (0)
+#endif
 
 #endif

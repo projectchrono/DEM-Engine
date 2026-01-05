@@ -253,12 +253,15 @@ inline __device__ void integrateVelPos(deme::bodyID_t ownerID,
 //     IDPacker<deme::voxelID_t, deme::voxelID_t>(voxel, voxelX, voxelY, voxelZ, _nvXp2_, _nvYp2_);
 // }
 
-__global__ void integrateOwners(deme::DEMSimParams* simParams, deme::DEMDataDT* granData) {
+__global__ void integrateOwners(deme::DEMSimParams* simParams, deme::DEMDataDT* granData, double timeElapsed) {
     deme::bodyID_t ownerID = blockIdx.x * blockDim.x + threadIdx.x;
     if (ownerID < simParams->nOwnerBodies) {
         // These 2 quantities mean the velocity and ang vel used for updating position/quaternion for this step.
         // Depending on the integration scheme in use, they can be different.
         float3 v, omgBar;
-        integrateVelPos(ownerID, simParams, granData, v, omgBar, simParams->h, simParams->timeElapsed);
+        integrateVelPos(ownerID, simParams, granData, v, omgBar, simParams->dyn.h, (float)timeElapsed);
+    }
+    if (blockIdx.x == 0 && threadIdx.x == 0) {
+        simParams->dyn.timeElapsed = timeElapsed + (double)simParams->dyn.h;
     }
 }

@@ -21,7 +21,8 @@ inline void contactEventArraysResize(size_t nContactPairs,
                                      DualArray<bodyID_t>& idGeometryA,
                                      DualArray<bodyID_t>& idGeometryB,
                                      DualArray<contact_t>& contactType,
-                                     DualStruct<DEMDataKT>& granData) {
+                                     DualStruct<DEMDataKT>& granData,
+                                     cudaStream_t& this_stream) {
     // Note these resizing are automatically on kT's device
     DEME_DUAL_ARRAY_RESIZE_NOVAL(idGeometryA, nContactPairs);
     DEME_DUAL_ARRAY_RESIZE_NOVAL(idGeometryB, nContactPairs);
@@ -32,14 +33,14 @@ inline void contactEventArraysResize(size_t nContactPairs,
     // It's safe to toDevice even though kT is working now and dT may write to its buffer
     // This is because all buffer arrays are not used in kernels so their pointers are only meaningfully stored on host,
     // so writing from host to device won't change the destination where dT writes
-    granData.toDevice();
+    granData.toDeviceAsync(this_stream);
 }
 
-void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
-                      std::shared_ptr<jitify::Program>& bin_triangle_kernels,
-                      std::shared_ptr<jitify::Program>& sphere_contact_kernels,
-                      std::shared_ptr<jitify::Program>& sphTri_contact_kernels,
-                      std::shared_ptr<jitify::Program>& history_kernels,
+void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kernels,
+                      std::shared_ptr<JitHelper::CachedProgram>& bin_triangle_kernels,
+                      std::shared_ptr<JitHelper::CachedProgram>& sphere_contact_kernels,
+                      std::shared_ptr<JitHelper::CachedProgram>& sphTri_contact_kernels,
+                      std::shared_ptr<JitHelper::CachedProgram>& history_kernels,
                       DualStruct<DEMDataKT>& granData,
                       DualStruct<DEMSimParams>& simParams,
                       SolverFlags& solverFlags,
@@ -62,9 +63,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         *scratchPad.numPrevContacts = 0;
         *scratchPad.numPrevSpheres = 0;
 
-        scratchPad.numContacts.toDevice();
-        scratchPad.numPrevContacts.toDevice();
-        scratchPad.numPrevSpheres.toDevice();
+        scratchPad.numContacts.toDeviceAsync(this_stream);
+        scratchPad.numPrevContacts.toDeviceAsync(this_stream);
+        scratchPad.numPrevSpheres.toDeviceAsync(this_stream);
         return;
     }
     // These are needed for the solver to keep tab... But you know, we may have no triangles or no contacts, so
@@ -77,7 +78,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     size_t CD_temp_arr_bytes = 0;
 
     {
-        timers.GetTimer("Discretize domain").start();
+        timers.StartGpuTimer("Discretize domain", this_stream);
         ////////////////////////////////////////////////////////////////////////////////
         // Sphere-related discretization & sphere--analytical contact detection
         ////////////////////////////////////////////////////////////////////////////////
@@ -98,7 +99,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             .instantiate()
             .configure(dim3(blocks_needed_for_bodies), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
             .launch(&simParams, &granData, numBinsSphereTouches, numAnalGeoSphereTouches);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 
         // 2nd step: prefix scan sphere--bin touching pairs
         // The last element of this scanned array is useful: it can be used to check if the 2 sweeps reach the same
@@ -136,7 +136,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // numContact is updated (with geo--sphere pair number), get it to host
         scratchPad.numContacts.toHost();
         if (*(scratchPad.numContacts) > idGeometryA.size()) {
-            contactEventArraysResize(*(scratchPad.numContacts), idGeometryA, idGeometryB, contactType, granData);
+            contactEventArraysResize(*(scratchPad.numContacts), idGeometryA, idGeometryB, contactType, granData,
+                                     this_stream);
         }
         // std::cout << *pNumBinSphereTouchPairs << std::endl;
         // displayDeviceArray<binsSphereTouches_t>(numBinsSphereTouches, simParams->nSpheresGM);
@@ -160,7 +161,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             .launch(&simParams, &granData, numBinsSphereTouchesScan, numAnalGeoSphereTouchesScan,
                     binIDsEachSphereTouches, sphereIDsEachBinTouches, granData->idGeometryA, granData->idGeometryB,
                     granData->contactType);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
         // std::cout << "Unsorted bin IDs: ";
         // displayDeviceArray<binID_t>(binIDsEachSphereTouches, *pNumBinSphereTouchPairs);
         // std::cout << "Corresponding sphere IDs: ";
@@ -277,7 +277,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
                 .launch(&simParams, &granData, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
                         sandwichBNode2, sandwichBNode3);
-            DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 
             // 1st step: register the number of triangle--bin touching pairs for each triangle for further processing.
             // Because we do a `sandwich' contact detection, we are
@@ -290,7 +289,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
                     .launch(&simParams, &granData, numBinsTriTouches, sandwichANode1, sandwichANode2, sandwichANode3,
                             sandwichBNode1, sandwichBNode2, sandwichBNode3);
-                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
             // std::cout << "numBinsTriTouches: " << std::endl;
             // displayDeviceArray<binsTriangleTouches_t>(numBinsTriTouches, simParams->nTriGM);
@@ -331,7 +329,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     .launch(&simParams, &granData, numBinsTriTouchesScan, binIDsEachTriTouches, triIDsEachBinTouches,
                             sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1, sandwichBNode2,
                             sandwichBNode3);
-                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
             // std::cout << "binIDsEachTriTouches: " << std::endl;
             // displayDeviceArray<binsTriangleTouches_t>(binIDsEachTriTouches, *pNumBinTriTouchPairs);
@@ -429,13 +426,14 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             cubDEMPrefixScan<trianglesBinTouches_t, binsTriangleTouchPairs_t>(
                 numTrianglesBinTouches, triIDsLookUpTable, *pNumActiveBinsForTri, this_stream, scratchPad);
         }
-        timers.GetTimer("Discretize domain").stop();
+        timers.StopGpuTimer("Discretize domain", this_stream);
 
-        ////////////////////////////////////////////////////////////////////////////////
-        // Populating contact pairs
-        ////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////
+    // Populating contact pairs
+    ////////////////////////////////////////////////////////////////////////////////
 
-        timers.GetTimer("Find contact pairs").start();
+
+    timers.StartGpuTimer("Find contact pairs", this_stream);
         // Final step: find the contact pairs. One-two punch: first find num of contacts in each bin, then prescan, then
         // find the actual pair names. A new temp array is needed for this numSphContactsInEachBin. Note we assume the
         // number of contact in each bin is the same level as the number of spheres in each bin (capped by the same data
@@ -461,7 +459,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 .configure(dim3(blocks_needed_for_bins_sph), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
                 .launch(&simParams, &granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
                         sphereIDsLookUpTable, numSphContactsInEachBin, *pNumActiveBins);
-            DEME_GPU_CALL_WATCH_BETA(cudaStreamSynchronize(this_stream));
 
             if (blocks_needed_for_bins_tri > 0) {
                 sphTri_contact_kernels->kernel("getNumberOfSphTriContactsEachBin")
@@ -472,7 +469,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                             activeBinIDsForTri, numTrianglesBinTouches, triIDsLookUpTable, numTriSphContactsInEachBin,
                             sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1, sandwichBNode2,
                             sandwichBNode3, *pNumActiveBinsForTri);
-                DEME_GPU_CALL_WATCH_BETA(cudaStreamSynchronize(this_stream));
                 // std::cout << "numTriSphContactsInEachBin: " << std::endl;
                 // displayDeviceArray<binContactPairs_t>(numTriSphContactsInEachBin, *pNumActiveBinsForTri);
             }
@@ -542,7 +538,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
 
             *scratchPad.numContacts = nSphereSphereContact + nSphereGeoContact + nTriSphereContact;
             if (*scratchPad.numContacts > idGeometryA.size()) {
-                contactEventArraysResize(*scratchPad.numContacts, idGeometryA, idGeometryB, contactType, granData);
+                contactEventArraysResize(*scratchPad.numContacts, idGeometryA, idGeometryB, contactType, granData,
+                                         this_stream);
             }
 
             // Sphere--sphere contact pairs go after sphere--anal-geo contacts
@@ -550,12 +547,11 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             bodyID_t* idSphB = (granData->idGeometryB + nSphereGeoContact);
             contact_t* dType = (granData->contactType + nSphereGeoContact);
             // Then fill in those contacts
-            sphere_contact_kernels->kernel("populateSphSphContactPairsEachBin")
-                .instantiate()
-                .configure(dim3(blocks_needed_for_bins_sph), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
-                .launch(&simParams, &granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
-                        sphereIDsLookUpTable, sphSphContactReportOffsets, idSphA, idSphB, dType, *pNumActiveBins);
-            DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+        sphere_contact_kernels->kernel("populateSphSphContactPairsEachBin")
+            .instantiate()
+            .configure(dim3(blocks_needed_for_bins_sph), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
+            .launch(&simParams, &granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
+                    sphereIDsLookUpTable, sphSphContactReportOffsets, idSphA, idSphB, dType, *pNumActiveBins);
 
             // Triangle--sphere contact pairs go after sphere--sphere contacts. Remember to mark their type.
             if (blocks_needed_for_bins_tri > 0) {
@@ -570,7 +566,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                             activeBinIDsForTri, numTrianglesBinTouches, triIDsLookUpTable, triSphContactReportOffsets,
                             idSphA, idTriB, dType, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
                             sandwichBNode2, sandwichBNode3, *pNumActiveBinsForTri);
-                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                 // std::cout << "Contacts: " << std::endl;
                 // displayDeviceArray<bodyID_t>(granData->idGeometryA, *scratchPad.numContacts);
                 // displayDeviceArray<bodyID_t>(granData->idGeometryB, *scratchPad.numContacts);
@@ -614,7 +609,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     .configure(dim3(blocks_needed_for_flagging), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream)
                     .launch(grab_flags, granData->contactPersistency, CONTACT_IS_PERSISTENT,
                             *scratchPad.numPrevContacts);
-                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
             // Store the number of persistent contacts
             scratchPad.allocateDualStruct("numPersistCnts");
@@ -652,15 +646,16 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             contact_t* total_types = (contact_t*)scratchPad.allocateTempVector("total_types", total_types_bytes);
             notStupidBool_t* total_persistency =
                 (notStupidBool_t*)scratchPad.allocateTempVector("total_persistency", total_persistency_bytes);
-            DEME_GPU_CALL(cudaMemcpy(total_idA, selected_idA, selected_ids_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(total_idA + *pNumPersistCnts, granData->idGeometryA,
-                                     total_ids_bytes - selected_ids_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(total_idB, selected_idB, selected_ids_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(total_idB + *pNumPersistCnts, granData->idGeometryB,
-                                     total_ids_bytes - selected_ids_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(total_types, selected_types, selected_types_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(total_types + *pNumPersistCnts, granData->contactType,
-                                     total_types_bytes - selected_types_bytes, cudaMemcpyDeviceToDevice));
+            int dev = 0;
+            DEME_GPU_CALL(cudaGetDevice(&dev));
+            xfer::XferList xt;
+            xt.add(total_idA, selected_idA, selected_ids_bytes);
+            xt.add(total_idA + *pNumPersistCnts, granData->idGeometryA, total_ids_bytes - selected_ids_bytes);
+            xt.add(total_idB, selected_idB, selected_ids_bytes);
+            xt.add(total_idB + *pNumPersistCnts, granData->idGeometryB, total_ids_bytes - selected_ids_bytes);
+            xt.add(total_types, selected_types, selected_types_bytes);
+            xt.add(total_types + *pNumPersistCnts, granData->contactType, total_types_bytes - selected_types_bytes);
+            xt.run(dev, dev);
             // For the selected portion, persistency is all 1
             DEME_GPU_CALL(cudaMemset(total_persistency, CONTACT_NOT_PERSISTENT, total_persistency_bytes));
             size_t blocks_needed_for_setting_1 =
@@ -670,7 +665,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     .instantiate()
                     .configure(dim3(blocks_needed_for_setting_1), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream)
                     .launch(total_persistency, *pNumPersistCnts, CONTACT_IS_PERSISTENT);
-                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
             scratchPad.finishUsingTempVector("grab_flags");
             scratchPad.finishUsingTempVector("selected_idA");
@@ -733,7 +727,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     .instantiate()
                     .configure(dim3(blocks_needed_for_setting_1), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream)
                     .launch(retain_flags, numTotalCnts, (notStupidBool_t)1);
-                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
             blocks_needed_for_flagging = (*pNumUniqueA + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
             if (blocks_needed_for_flagging > 0) {
@@ -742,7 +735,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     .configure(dim3(blocks_needed_for_flagging), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
                     .launch(idA_runlength, idA_scanned_runlength, idB_sorted, contactType_sorted, persistency_sorted,
                             retain_flags, *pNumUniqueA);
-                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
             // std::cout << "Marked retainers: " << std::endl;
             // displayDeviceArray<notStupidBool_t>(retain_flags, numTotalCnts);
@@ -758,11 +750,12 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // DEME_STEP_DEBUG_PRINTF("Found %zu contacts, including user-specified persistent contacts.",
             //                        *pNumRetainedCnts);
             if (*pNumRetainedCnts > idGeometryA.size()) {
-                contactEventArraysResize(*pNumRetainedCnts, idGeometryA, idGeometryB, contactType, granData);
+                contactEventArraysResize(*pNumRetainedCnts, idGeometryA, idGeometryB, contactType, granData,
+                                         this_stream);
             }
             if (*pNumRetainedCnts > contactPersistency.size()) {
                 DEME_DUAL_ARRAY_RESIZE_NOVAL(contactPersistency, *pNumRetainedCnts);
-                granData.toDevice();
+                granData.toDeviceAsync(this_stream);
             }
             cubDEMSelectFlagged<bodyID_t, notStupidBool_t>(idA_sorted, granData->idGeometryA, retain_flags,
                                                            scratchPad.getDualStructDevice("numRetainedCnts"),
@@ -801,14 +794,14 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             scratchPad.finishUsingTempVector("retain_flags");
         }
 
-        timers.GetTimer("Find contact pairs").stop();
+        timers.StopGpuTimer("Find contact pairs", this_stream);
     }
 
     ////////////////////////////////////////////////////////////////////////////////
     // Constructing contact history
     ////////////////////////////////////////////////////////////////////////////////
 
-    timers.GetTimer("Build history map").start();
+    timers.StartGpuTimer("Build history map", this_stream);
     // Now, sort idGeometryAB by their owners. Needed for identifying enduring contacts in history-based models.
     if (*scratchPad.numContacts > 0) {
         // All temp vectors are free now...
@@ -830,11 +823,13 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             cubDEMSortByKeys<bodyID_t, contact_t>(granData->idGeometryA, idA_sorted, granData->contactType,
                                                   contactType_sorted, *scratchPad.numContacts, this_stream, scratchPad);
 
-            // Copy back to idGeometry arrays
-            DEME_GPU_CALL(cudaMemcpy(granData->idGeometryA, idA_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(granData->idGeometryB, idB_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(
-                cudaMemcpy(granData->contactType, contactType_sorted, type_arr_bytes, cudaMemcpyDeviceToDevice));
+            int dev = 0;
+            DEME_GPU_CALL(cudaGetDevice(&dev));
+            xfer::XferList xt;
+            xt.add(granData->idGeometryA, idA_sorted, id_arr_bytes);
+            xt.add(granData->idGeometryB, idB_sorted, id_arr_bytes);
+            xt.add(granData->contactType, contactType_sorted, type_arr_bytes);
+            xt.run(dev, dev);
             // Short-lifespan vectors can now be freed
             scratchPad.finishUsingTempVector("contactType_sorted");
             scratchPad.finishUsingTempVector("idA_sorted");
@@ -919,7 +914,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     .instantiate()
                     .configure(dim3(blocks_needed_for_mapping), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream)
                     .launch(new_idA_runlength_full, unique_new_idA, new_idA_runlength, *pNumUniqueNewA);
-                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
 
             blocks_needed_for_mapping = (*pNumUniqueOldA + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
@@ -928,7 +922,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     .instantiate()
                     .configure(dim3(blocks_needed_for_mapping), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream)
                     .launch(old_idA_runlength_full, unique_old_idA, old_idA_runlength, *pNumUniqueOldA);
-                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
             // DEME_DEBUG_PRINTF("Unique contact IDs (A):");
             // DEME_DEBUG_EXEC(displayDeviceArray<bodyID_t>(unique_new_idA, *pNumUniqueNewA));
@@ -954,7 +947,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // contacts in the previous contact array.
             if (*scratchPad.numContacts > contactMapping.size()) {
                 DEME_DUAL_ARRAY_RESIZE_NOVAL(contactMapping, *scratchPad.numContacts);
-                granData.toDevice();
+                granData.toDeviceAsync(this_stream);
             }
             blocks_needed_for_mapping = (nSpheresSafe + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
             if (blocks_needed_for_mapping > 0) {
@@ -963,7 +956,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     .configure(dim3(blocks_needed_for_mapping), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
                     .launch(new_idA_runlength_full, old_idA_runlength_full, new_idA_scanned_runlength,
                             old_idA_scanned_runlength, granData->contactMapping, &granData, nSpheresSafe);
-                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
             // DEME_DEBUG_PRINTF("Contact mapping:");
             // DEME_DEBUG_EXEC(displayDeviceArray<contactPairs_t>(granData->contactMapping,
@@ -988,7 +980,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                         .instantiate()
                         .configure(dim3(blocks_needed_for_mapping), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream)
                         .launch(one_to_n, *scratchPad.numPrevContacts);
-                    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 
                     contact_t* old_contactType_sorted = (contact_t*)scratchPad.allocateTempVector(
                         "old_contactType_sorted", (*scratchPad.numPrevContacts) * sizeof(contact_t));
@@ -1001,7 +992,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                         .instantiate()
                         .configure(dim3(blocks_needed_for_mapping), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream)
                         .launch(old_arr_unsort_to_sort_map, one_to_n, *scratchPad.numPrevContacts);
-                    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                 }
                 // one_to_n used for temp storage; now give it back to the true mapping we wanted.
                 // So here, old_arr_unsort_to_sort_map's memory space is not needed anymore, but one_to_n must still
@@ -1020,14 +1010,14 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_contactType, *scratchPad.numContacts);
 
                 // Re-packing pointers now is automatic
-                granData.toDevice();
+                granData.toDeviceAsync(this_stream);
             }
-            DEME_GPU_CALL(cudaMemcpy(granData->previous_idGeometryA, granData->idGeometryA, id_arr_bytes,
-                                     cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(granData->previous_idGeometryB, granData->idGeometryB, id_arr_bytes,
-                                     cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(granData->previous_contactType, granData->contactType, type_arr_bytes,
-                                     cudaMemcpyDeviceToDevice));
+            DEME_GPU_CALL(cudaMemcpyAsync(granData->previous_idGeometryA, granData->idGeometryA, id_arr_bytes,
+                                          cudaMemcpyDeviceToDevice, this_stream));
+            DEME_GPU_CALL(cudaMemcpyAsync(granData->previous_idGeometryB, granData->idGeometryB, id_arr_bytes,
+                                          cudaMemcpyDeviceToDevice, this_stream));
+            DEME_GPU_CALL(cudaMemcpyAsync(granData->previous_contactType, granData->contactType, type_arr_bytes,
+                                          cudaMemcpyDeviceToDevice, this_stream));
 
             // dT potentially benefits from type-sorted contact array
             if (solverFlags.should_sort_pairs) {
@@ -1058,16 +1048,16 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                         .instantiate()
                         .configure(dim3(blocks_needed_for_mapping), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream)
                         .launch(map_sorted, old_arr_unsort_to_sort_map, *scratchPad.numContacts);
-                    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                 }
 
-                // Copy back to idGeometry arrays
-                DEME_GPU_CALL(cudaMemcpy(granData->idGeometryA, idA_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
-                DEME_GPU_CALL(cudaMemcpy(granData->idGeometryB, idB_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
-                DEME_GPU_CALL(
-                    cudaMemcpy(granData->contactType, contactType_sorted, type_arr_bytes, cudaMemcpyDeviceToDevice));
-                DEME_GPU_CALL(
-                    cudaMemcpy(granData->contactMapping, map_sorted, cnt_arr_bytes, cudaMemcpyDeviceToDevice));
+                int dev = 0;
+                DEME_GPU_CALL(cudaGetDevice(&dev));
+                xfer::XferList xt;
+                xt.add(granData->idGeometryA, idA_sorted, id_arr_bytes);
+                xt.add(granData->idGeometryB, idB_sorted, id_arr_bytes);
+                xt.add(granData->contactType, contactType_sorted, type_arr_bytes);
+                xt.add(granData->contactMapping, map_sorted, cnt_arr_bytes);
+                xt.run(dev, dev);
 
                 scratchPad.finishUsingTempVector("contactType_sorted");
                 scratchPad.finishUsingTempVector("idA_sorted");
@@ -1088,11 +1078,13 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 cubDEMSortByKeys<contact_t, bodyID_t>(granData->contactType, contactType_sorted, granData->idGeometryA,
                                                       idA_sorted, *scratchPad.numContacts, this_stream, scratchPad);
 
-                // Copy back to idGeometry arrays
-                DEME_GPU_CALL(cudaMemcpy(granData->idGeometryA, idA_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
-                DEME_GPU_CALL(cudaMemcpy(granData->idGeometryB, idB_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
-                DEME_GPU_CALL(
-                    cudaMemcpy(granData->contactType, contactType_sorted, type_arr_bytes, cudaMemcpyDeviceToDevice));
+                int dev = 0;
+                DEME_GPU_CALL(cudaGetDevice(&dev));
+                xfer::XferList xt;
+                xt.add(granData->idGeometryA, idA_sorted, id_arr_bytes);
+                xt.add(granData->idGeometryB, idB_sorted, id_arr_bytes);
+                xt.add(granData->contactType, contactType_sorted, type_arr_bytes);
+                xt.run(dev, dev);
                 scratchPad.finishUsingTempVector("contactType_sorted");
                 scratchPad.finishUsingTempVector("idA_sorted");
                 scratchPad.finishUsingTempVector("idB_sorted");
@@ -1108,7 +1100,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         scratchPad.finishUsingTempVector("old_arr_unsort_to_sort_map");
 
     }  // End of contact sorting--mapping subroutine
-    timers.GetTimer("Build history map").stop();
+    timers.StopGpuTimer("Build history map", this_stream);
 
     // Finally, don't forget to store the number of contacts for the next iteration, even if there is 0 contacts (in
     // that case, mapping will not be constructed, but we don't have to worry b/c in the next iteration, simply no work
@@ -1117,9 +1109,13 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     *scratchPad.numPrevSpheres = simParams->nSpheresGM;
 
     // dT kT may send these numbers to each other from device
-    scratchPad.numContacts.toDevice();
-    scratchPad.numPrevContacts.toDevice();
-    scratchPad.numPrevSpheres.toDevice();
+    scratchPad.numContacts.toDeviceAsync(this_stream);
+    scratchPad.numPrevContacts.toDeviceAsync(this_stream);
+    scratchPad.numPrevSpheres.toDeviceAsync(this_stream);
+
+    timers.AccumulateGpuTimer("Discretize domain");
+    timers.AccumulateGpuTimer("Find contact pairs");
+    timers.AccumulateGpuTimer("Build history map");
 }
 
 void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
@@ -1143,16 +1139,19 @@ void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
         DEME_DUAL_ARRAY_RESIZE(contactPersistency, nContacts, CONTACT_NOT_PERSISTENT);
 
         // Re-packing pointers now is automatic
-        kT_data.toDevice();
+        kT_data.toDeviceAsync(this_stream);
     }
 
     // Copy to temp array for easier usage
     bodyID_t* idA = (bodyID_t*)scratchPad.allocateTempVector("idA", nContacts * sizeof(bodyID_t));
     bodyID_t* idB = (bodyID_t*)scratchPad.allocateTempVector("idB", nContacts * sizeof(bodyID_t));
     contact_t* cType = (contact_t*)scratchPad.allocateTempVector("cType", nContacts * sizeof(contact_t));
-    DEME_GPU_CALL(cudaMemcpy(idA, dT_data->idGeometryA, nContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(idB, dT_data->idGeometryB, nContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(cType, dT_data->contactType, nContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpyAsync(idA, dT_data->idGeometryA, nContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice,
+                                  this_stream));
+    DEME_GPU_CALL(cudaMemcpyAsync(idB, dT_data->idGeometryB, nContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice,
+                                  this_stream));
+    DEME_GPU_CALL(cudaMemcpyAsync(cType, dT_data->contactType, nContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice,
+                                  this_stream));
 
     // Prev contact arrays actually need to be sorted based on idA
     // bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector("idA_sorted", nContacts * sizeof(bodyID_t));
@@ -1180,8 +1179,8 @@ void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
     // simParams now
     *scratchPad.numPrevSpheres = simParams->nSpheresGM;
     // dT kT may send these numbers to each other from device
-    scratchPad.numPrevContacts.toDevice();
-    scratchPad.numPrevSpheres.toDevice();
+    scratchPad.numPrevContacts.toDeviceAsync(this_stream);
+    scratchPad.numPrevSpheres.toDeviceAsync(this_stream);
 
     scratchPad.finishUsingTempVector("idA");
     scratchPad.finishUsingTempVector("idB");

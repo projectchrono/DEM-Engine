@@ -725,16 +725,19 @@ void DEMSolver::SetIntegrator(const std::string& intg) {
 
 void DEMSolver::SetAdaptiveTimeStepType(const std::string& type) {
     DEME_WARNING(
-        "SetAdaptiveTimeStepType is currently not implemented and has no effect, time step size is still fixed.");
+        "SetAdaptiveTimeStepType is a beta feature, currently hertz_const calculates a fixed timestep based on particle size, mass and contact E-modulus.");
     switch (hash_charr(type.c_str())) {
         case ("none"_):
             adapt_ts_type = ADAPT_TS_TYPE::NONE;
             break;
+        case ("hertz_const"_):
+            adapt_ts_type = ADAPT_TS_TYPE::HERTZ_CONST;
+            break;
         case ("max_vel"_):
-            adapt_ts_type = ADAPT_TS_TYPE::MAX_VEL;
+            adapt_ts_type = ADAPT_TS_TYPE::MAX_VEL; // Not implemented yet
             break;
         case ("int_diff"_):
-            adapt_ts_type = ADAPT_TS_TYPE::INT_DIFF;
+            adapt_ts_type = ADAPT_TS_TYPE::INT_DIFF; // Not implemented yet
             break;
         default:
             DEME_ERROR("Adaptive time step type %s is unknown. Please select another via SetAdaptiveTimeStepType.",
@@ -2107,11 +2110,12 @@ void DEMSolver::Initialize(bool dry_run) {
     migrateSimParamsToDevice();
     migrateArrayDataToDevice();
 
+    // Notify the user how about the setup parameters
+    reportInitStats();
+
     // Compile some of the kernels
     jitifyKernels();
 
-    // Notify the user how jitification goes
-    reportInitStats();
 
     // Release the memory for those flattened arrays, as they are only used for transfers between workers and
     // jitification
@@ -2122,6 +2126,8 @@ void DEMSolver::Initialize(bool dry_run) {
 
     // Always clear cache after init
     ClearCache();
+
+
 
     //// TODO: Give a warning if sys_initialized is true and the system is re-initialized: in that case, the user should
     /// know what they are doing
@@ -2136,6 +2142,13 @@ void DEMSolver::Initialize(bool dry_run) {
 }
 
 void DEMSolver::ShowTimingStats() {
+    // If accumulation is deferred, flush any pending GPU timer spans before reading values.
+    if (m_gpu_timers_enabled) {
+        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+        dT->timers.FlushGpuTimers();
+        DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
+        kT->timers.FlushGpuTimers();
+    }
     std::vector<std::string> kT_timer_names, dT_timer_names;
     std::vector<double> kT_timer_vals, dT_timer_vals;
     double kT_total_time, dT_total_time;
@@ -2160,6 +2173,29 @@ void DEMSolver::ShowTimingStats() {
                     dT_timer_vals.at(i) / dT_total_time * 100.);
     }
     DEME_PRINTF("--------------------------\n");
+}
+
+void DEMSolver::SetGPUTimersEnabled(bool enabled) {
+    m_gpu_timers_enabled = enabled;
+
+    // Note: SolverTimers uses cudaEventCreate/Destroy, which are device-scoped. Ensure we operate on the correct device.
+    if (enabled) {
+        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+        dT->timers.EnableGpuTimers();
+        DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
+        kT->timers.EnableGpuTimers();
+    } else {
+        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+        dT->timers.DestroyGpuEvents();
+        DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
+        kT->timers.DestroyGpuEvents();
+    }
+}
+
+void DEMSolver::SetGPUTimerAccumulationDeferred(bool deferred) {
+    // No device changes needed; this only toggles host-side accumulation behavior.
+    dT->timers.SetDeferGpuTimerAccumulation(deferred);
+    kT->timers.SetDeferGpuTimerAccumulation(deferred);
 }
 
 void DEMSolver::ClearTimingStats() {
@@ -2259,12 +2295,14 @@ void DEMSolver::UpdateSimParams() {
 void DEMSolver::UpdateStepSize(double ts) {
     m_ts_size = ts;
     // We for now store ts as float on devices...
-    dT->simParams->h = ts;
-    kT->simParams->h = ts;
-    // dT->simParams.syncMemberToDevice<float>(offsetof(DEMSimParams, h));
-    // kT->simParams.syncMemberToDevice<float>(offsetof(DEMSimParams, h));
-    dT->simParams.toDevice();
-    kT->simParams.toDevice();
+    dT->simParams->dyn.h = ts;
+    kT->simParams->dyn.h = ts;
+    DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+    dT->simParams.syncMemberToDeviceAsync<float>(offsetof(DEMSimParams, dyn) + offsetof(DEMSimParamsDynamic, h),
+                                                 dT->streamInfo.stream);
+    DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
+    kT->simParams.syncMemberToDeviceAsync<float>(offsetof(DEMSimParams, dyn) + offsetof(DEMSimParamsDynamic, h),
+                                                 kT->streamInfo.stream);
 }
 
 void DEMSolver::UpdateClumps() {
@@ -2449,7 +2487,7 @@ void DEMSolver::ClearThreadCollaborationStats() {
     dT->nTotalSteps = 0;
 }
 
-float DEMSolver::dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
+float DEMSolver::dTInspectReduce(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                                  const std::string& kernel_name,
                                  INSPECT_ENTITY_TYPE thing_to_insp,
                                  CUB_REDUCE_FLAVOR reduce_flavor,
@@ -2460,7 +2498,7 @@ float DEMSolver::dTInspectReduce(const std::shared_ptr<jitify::Program>& inspect
     return (float)(*pRes);
 }
 
-float* DEMSolver::dTInspectNoReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
+float* DEMSolver::dTInspectNoReduce(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                                     const std::string& kernel_name,
                                     INSPECT_ENTITY_TYPE thing_to_insp,
                                     CUB_REDUCE_FLAVOR reduce_flavor,

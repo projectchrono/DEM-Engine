@@ -70,6 +70,37 @@ inline __host__ __device__ void recoverCntPair(T1& i, T1& j, const T1& ind, cons
     j = ind + i + 1 + (n - i) * ((n - i) - 1) / 2 - n * (n - 1) / 2;
 }
 
+// Compute expanded contact margin for an owner; marginSize stores absVel on device.
+inline __device__ float calcContactMargin(deme::DEMSimParams* simParams,
+                                          deme::DEMDataKT* granData,
+                                          const deme::bodyID_t ownerID) {
+    const unsigned int my_family = granData->familyID[ownerID];
+    const float extra = granData->familyExtraMarginSize[my_family];
+    const unsigned int margin_mode = *(granData->useFixedMargin);
+    if (margin_mode == 2u) {
+        return granData->marginSize[ownerID];
+    }
+    if (margin_mode == 1u) {
+        return simParams->dyn.beta + extra;
+    }
+
+    float absv = granData->marginSize[ownerID];
+#if defined(__CUDA_ARCH__)
+    if (!isfinite(absv)) {
+#else
+    if (!std::isfinite(absv)) {
+#endif
+        DEME_ABORT_KERNEL("Absolute velocity for ownerID %llu is not finite. This happened at time %.9g.\n",
+                          static_cast<unsigned long long>(ownerID), simParams->dyn.timeElapsed);
+    }
+    if (absv > simParams->dyn.approxMaxVel) {
+        absv = simParams->dyn.approxMaxVel;
+    }
+    const float ts = *(granData->ts);
+    const float max_drift = (float)(*(granData->maxDrift));
+    return (absv * simParams->dyn.expSafetyMulti + simParams->dyn.expSafetyAdder) * ts * max_drift + extra;
+}
+
 // Make sure a T1 type triplet falls in a range, then output as T2 type
 template <typename T1, typename T2>
 inline __host__ __device__ T2 clampBetween3Comp(const T1& data, const T2& low, const T2& high) {
@@ -698,12 +729,12 @@ __inline__ __device__ void boundingBoxIntersectBin(deme::binID_t* L,
     min_pt.z = DEME_MIN(vA.z, DEME_MIN(vB.z, vC.z));
 
     // Enlarge bounding box, so that no triangle lies right between 2 layers of bins
-    min_pt -= (float)DEME_BIN_ENLARGE_RATIO_FOR_FACETS * (float)simParams->binSize;
+    min_pt -= (float)DEME_BIN_ENLARGE_RATIO_FOR_FACETS * (float)simParams->dyn.binSize;
     // A point on a mesh can be out of the simulation world. In this case, becasue we only need to detect their contact
     // with spheres, and spheres are all in the simulation world, so we just clamp out the bins that are outside the
     // simulation world.
     int3 min_bin =
-        clampBetween3Comp<float3, int3>(min_pt * (float)simParams->inv_binSize, make_int3(0, 0, 0),
+        clampBetween3Comp<float3, int3>(min_pt * (float)simParams->dyn.inv_binSize, make_int3(0, 0, 0),
                                         make_int3(simParams->nbX - 1, simParams->nbY - 1, simParams->nbZ - 1));
 
     float3 max_pt;
@@ -711,9 +742,9 @@ __inline__ __device__ void boundingBoxIntersectBin(deme::binID_t* L,
     max_pt.y = DEME_MAX(vA.y, DEME_MAX(vB.y, vC.y));
     max_pt.z = DEME_MAX(vA.z, DEME_MAX(vB.z, vC.z));
 
-    max_pt += (float)DEME_BIN_ENLARGE_RATIO_FOR_FACETS * (float)simParams->binSize;
+    max_pt += (float)DEME_BIN_ENLARGE_RATIO_FOR_FACETS * (float)simParams->dyn.binSize;
     int3 max_bin =
-        clampBetween3Comp<float3, int3>(max_pt * (float)simParams->inv_binSize, make_int3(0, 0, 0),
+        clampBetween3Comp<float3, int3>(max_pt * (float)simParams->dyn.inv_binSize, make_int3(0, 0, 0),
                                         make_int3(simParams->nbX - 1, simParams->nbY - 1, simParams->nbZ - 1));
 
     L[0] = min_bin.x;

@@ -37,7 +37,7 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
     // Use an input named exactly `sphereID' which is the id of this sphere component
     {
         _componentAcqStrat_;
-        myRadius += granData->marginSize[ownerID];
+        myRadius += calcContactMargin(simParams, granData, ownerID);
     }
 
     voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
@@ -75,7 +75,7 @@ inline __device__ bool calcContactPoint(deme::DEMSimParams* simParams,
     float normZ;
     double overlapDepth;  // overlapDepth is needed for making artificial contacts not too loose. // Really?
 
-    in_contact = checkSphereContactOverlapAndBin(XA, YA, ZA, rA, XB, YB, ZB, rB, simParams->inv_binSize, simParams->nbX,
+    in_contact = checkSphereContactOverlapAndBin(XA, YA, ZA, rA, XB, YB, ZB, rB, simParams->dyn.inv_binSize, simParams->nbX,
                                          simParams->nbY, overlapDepth, binID);
 
     // The contact needs to be larger than the smaller articifical margin so that we don't double count the artificially

@@ -96,7 +96,7 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
     // Use an input named exactly `sphereID' which is the id of this sphere component
     {
         _componentAcqStrat_;
-        myRadius += granData->marginSize[ownerID];
+        myRadius += calcContactMargin(simParams, granData, ownerID);
     }
 
     voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
@@ -251,7 +251,7 @@ __global__ void getNumberOfSphTriContactsEachBin(deme::DEMSimParams* simParams,
                     if (in_contact_A || in_contact_B) {
                         snap_to_face(triANode1[ind], triANode2[ind], triANode3[ind], sphXYZ, cntPnt);
                         deme::binID_t contactPntBin = getPointBinID<deme::binID_t>(
-                            cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize, simParams->nbX, simParams->nbY);
+                            cntPnt.x, cntPnt.y, cntPnt.z, simParams->dyn.binSize, simParams->nbX, simParams->nbY);
                         if (contactPntBin == binID) {
                             atomicAdd(&blockPairCnt, 1);
                         }
@@ -399,7 +399,7 @@ __global__ void populateTriSphContactsEachBin(deme::DEMSimParams* simParams,
                     if (in_contact_A || in_contact_B) {
                         snap_to_face(triANode1[ind], triANode2[ind], triANode3[ind], sphXYZ, cntPnt);
                         deme::binID_t contactPntBin = getPointBinID<deme::binID_t>(
-                            cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize, simParams->nbX, simParams->nbY);
+                            cntPnt.x, cntPnt.y, cntPnt.z, simParams->dyn.binSize, simParams->nbX, simParams->nbY);
                         if (contactPntBin == binID) {
                             deme::contactPairs_t inBlockOffset = myReportOffset + atomicAdd(&blockPairCnt, 1);
                             if (inBlockOffset < myReportOffset_end) {

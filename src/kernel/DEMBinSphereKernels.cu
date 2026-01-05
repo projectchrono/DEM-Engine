@@ -33,7 +33,7 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
             // Use an input named exactly `sphereID' which is the id of this sphere component
             {
                 _componentAcqStrat_;
-                myRadius += granData->marginSize[myOwnerID];
+                myRadius += calcContactMargin(simParams, granData, myOwnerID);
             }
 
             {
@@ -52,7 +52,7 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
             deme::binsSphereTouches_t numX, numY, numZ;
             {
                 // The bin number that I live in (with fractions)?
-                const double invBinSize = simParams->inv_binSize;
+                const double invBinSize = simParams->dyn.inv_binSize;
                 const int    nbX     = (int)simParams->nbX;
                 const int    nbY     = (int)simParams->nbY;
                 const int    nbZ     = (int)simParams->nbZ;
@@ -124,7 +124,8 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                 float3 cntNorm;  // cntNorm is placeholder too
                 contact_type = checkSphereEntityOverlap<double3, float, double>(
                     myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner],
+                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
+                    calcContactMargin(simParams, granData, objBOwner),
                     cntPnt, cntNorm, overlapDepth);
             }
             // overlapDepth (which has both entities' full margins) needs to be larger than the smaller one of the two
@@ -168,7 +169,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
             // Use an input named exactly `sphereID' which is the id of this sphere component
             {
                 _componentAcqStrat_;
-                myRadius += granData->marginSize[myOwnerID];
+                myRadius += calcContactMargin(simParams, granData, myOwnerID);
             }
 
             // Get the offset of my spot where I should start writing back to the global bin--sphere pair registration
@@ -189,7 +190,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                 myPosXYZ = ownerXYZ + to_double3(myRelPos);
             }
             // The bin number that I live in (with fractions)?
-            const double invBinSize = simParams->inv_binSize;
+            const double invBinSize = simParams->dyn.inv_binSize;
             const int nbX = (int)simParams->nbX;
             const int nbY = (int)simParams->nbY;
             const int nbZ = (int)simParams->nbZ;
@@ -271,7 +272,8 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                     float3  cntNorm; // cntNorm is placeholder too
                     contact_type = checkSphereEntityOverlap<double3, float, double>(
                         myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                        objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner],
+                        objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
+                        calcContactMargin(simParams, granData, objBOwner),
                         cntPnt, cntNorm, overlapDepth);
                 }
                 // overlapDepth (which has both entities' full margins) needs to be larger than the smaller one of the two

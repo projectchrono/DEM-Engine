@@ -23,6 +23,19 @@ configure_file(
 
 add_library(core OBJECT)
 
+# Capture CUDA include dirs from whichever variable is populated
+set(_DEME_CUDA_INC_DIRS "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
+if(NOT _DEME_CUDA_INC_DIRS AND DEFINED CUDAToolkit_INCLUDE_DIRS)
+    set(_DEME_CUDA_INC_DIRS "${CUDAToolkit_INCLUDE_DIRS}")
+endif()
+if(NOT _DEME_CUDA_INC_DIRS AND DEFINED CUDA_INCLUDE_DIRS)
+    set(_DEME_CUDA_INC_DIRS "${CUDA_INCLUDE_DIRS}")
+endif()
+
+target_compile_definitions(core PRIVATE
+    DEME_CUDA_TOOLKIT_INCLUDE_DIRS="$<JOIN:${_DEME_CUDA_INC_DIRS},;>"
+)
+
 
 target_include_directories(
 	core
