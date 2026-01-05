@@ -8,6 +8,7 @@ _clumpTemplateDefs_;
 // Definitions of analytical entites are below
 _analyticalEntityDefs_;
 
+
 __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                                                  deme::DEMDataKT* granData,
                                                  deme::binsSphereTouches_t* numBinsSphereTouches,
@@ -32,7 +33,7 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
             // Use an input named exactly `sphereID' which is the id of this sphere component
             {
                 _componentAcqStrat_;
-                myRadius += granData->marginSize[myOwnerID];
+                myRadius += calcContactMargin(simParams, granData, myOwnerID);
             }
 
             {
@@ -51,22 +52,32 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
             deme::binsSphereTouches_t numX, numY, numZ;
             {
                 // The bin number that I live in (with fractions)?
-                double myBinX = myPosXYZ.x / simParams->binSize;
-                double myBinY = myPosXYZ.y / simParams->binSize;
-                double myBinZ = myPosXYZ.z / simParams->binSize;
-                // How many bins my radius spans (with fractions)?
-                double myRadiusSpan = myRadius / simParams->binSize;
-                // printf("myRadius: %f\n", myRadiusSpan);
-                // Now, figure out how many bins I touch in each direction
-                numX = ((myBinX + myRadiusSpan < (double)simParams->nbX) ? (unsigned int)(myBinX + myRadiusSpan)
-                                                                         : (unsigned int)simParams->nbX - 1) -
-                       (unsigned int)((myBinX - myRadiusSpan > 0.0) ? myBinX - myRadiusSpan : 0.0) + 1;
-                numY = ((myBinY + myRadiusSpan < (double)simParams->nbY) ? (unsigned int)(myBinY + myRadiusSpan)
-                                                                         : (unsigned int)simParams->nbY - 1) -
-                       (unsigned int)((myBinY - myRadiusSpan > 0.0) ? myBinY - myRadiusSpan : 0.0) + 1;
-                numZ = ((myBinZ + myRadiusSpan < (double)simParams->nbZ) ? (unsigned int)(myBinZ + myRadiusSpan)
-                                                                         : (unsigned int)simParams->nbZ - 1) -
-                       (unsigned int)((myBinZ - myRadiusSpan > 0.0) ? myBinZ - myRadiusSpan : 0.0) + 1;
+                const double invBinSize = simParams->dyn.inv_binSize;
+                const int    nbX     = (int)simParams->nbX;
+                const int    nbY     = (int)simParams->nbY;
+                const int    nbZ     = (int)simParams->nbZ;
+                // Mixed precision counting with early exits
+                const deme::AxisBounds bx = axis_bounds(myPosXYZ.x, myRadius, nbX, invBinSize);
+                if (bx.imax < bx.imin) { 
+                    numBinsSphereTouches[sphereID] = 0;
+                    numAnalGeoSphereTouches[sphereID] = 0;   // ← dazu
+                    return; 
+                }
+                const deme::AxisBounds by = axis_bounds(myPosXYZ.y, myRadius, nbY, invBinSize);
+                if (by.imax < by.imin) { 
+                    numBinsSphereTouches[sphereID] = 0;
+                    numAnalGeoSphereTouches[sphereID] = 0;   // ← dazu
+                    return; 
+                }
+                const deme::AxisBounds bz = axis_bounds(myPosXYZ.z, myRadius, nbZ, invBinSize);
+                if (bz.imax < bz.imin) { 
+                    numBinsSphereTouches[sphereID] = 0;
+                    numAnalGeoSphereTouches[sphereID] = 0;   // ← dazu
+                    return; 
+                }
+                numX = bx.imax - bx.imin + 1;
+                numY = by.imax - by.imin + 1;
+                numZ = bz.imax - bz.imin + 1;
                 //// TODO: Add an error message if numX * numY * numZ > MAX(binsSphereTouches_t)
             }
 
@@ -113,7 +124,8 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                 float3 cntNorm;  // cntNorm is placeholder too
                 contact_type = checkSphereEntityOverlap<double3, float, double>(
                     myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner],
+                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
+                    calcContactMargin(simParams, granData, objBOwner),
                     cntPnt, cntNorm, overlapDepth);
             }
             // overlapDepth (which has both entities' full margins) needs to be larger than the smaller one of the two
@@ -157,7 +169,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
             // Use an input named exactly `sphereID' which is the id of this sphere component
             {
                 _componentAcqStrat_;
-                myRadius += granData->marginSize[myOwnerID];
+                myRadius += calcContactMargin(simParams, granData, myOwnerID);
             }
 
             // Get the offset of my spot where I should start writing back to the global bin--sphere pair registration
@@ -177,102 +189,115 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                                                         myOriQz);
                 myPosXYZ = ownerXYZ + to_double3(myRelPos);
             }
-
             // The bin number that I live in (with fractions)?
-            double myBinX = myPosXYZ.x / simParams->binSize;
-            double myBinY = myPosXYZ.y / simParams->binSize;
-            double myBinZ = myPosXYZ.z / simParams->binSize;
-            // How many bins my radius spans (with fractions)?
-            double myRadiusSpan = myRadius / simParams->binSize;
+            const double invBinSize = simParams->dyn.inv_binSize;
+            const int nbX = (int)simParams->nbX;
+            const int nbY = (int)simParams->nbY;
+            const int nbZ = (int)simParams->nbZ;
+            const int nbXY = nbX * nbY;
+            // Bounds and avoid unnecessary work
+            const deme::AxisBounds bx = axis_bounds(myPosXYZ.x, myRadius, nbX, invBinSize);
+            if (bx.imax < bx.imin) { return; }
+            const deme::AxisBounds by = axis_bounds(myPosXYZ.y, myRadius, nbY, invBinSize);
+            if (by.imax < by.imin) { return; }
+            const deme::AxisBounds bz = axis_bounds(myPosXYZ.z, myRadius, nbZ, invBinSize);
+            if (bz.imax < bz.imin) { return; }
+            // Alias names for the loop
+            const int ix0 = bx.imin, ix1 = bx.imax;
+            const int iy0 = by.imin, iy1 = by.imax;
+            const int iz0 = bz.imin, iz1 = bz.imax;
             // Now, write the IDs of those bins that I touch, back to the global memory
-            deme::binID_t thisBinID;
-            for (deme::binID_t k = (deme::binID_t)((myBinZ - myRadiusSpan > 0.0) ? myBinZ - myRadiusSpan : 0.0);
-                 (k <= (deme::binID_t)(myBinZ + myRadiusSpan)) && (k < simParams->nbZ); k++) {
-                for (deme::binID_t j = (deme::binID_t)((myBinY - myRadiusSpan > 0.0) ? myBinY - myRadiusSpan : 0.0);
-                     (j <= (deme::binID_t)(myBinY + myRadiusSpan)) && (j < simParams->nbY); j++) {
-                    for (deme::binID_t i = (deme::binID_t)((myBinX - myRadiusSpan > 0.0) ? myBinX - myRadiusSpan : 0.0);
-                         (i <= (deme::binID_t)(myBinX + myRadiusSpan)) && (i < simParams->nbX); i++) {
+            for (int k = iz0; k <= iz1; ++k) {
+                const int baseZ = k * nbXY;
+                for (int j = iy0; j <= iy1; ++j) {
+                    const int baseYZ = baseZ + j * nbX;
+                    for (int i = ix0; i <= ix1; ++i) {
                         if (myReportOffset >= myReportOffset_end) {
-                            continue;  // No stepping on the next one's domain
+                            return; // No stepping on the next one's domain
                         }
-                        thisBinID =
-                            binIDFrom3Indices<deme::binID_t>(i, j, k, simParams->nbX, simParams->nbY, simParams->nbZ);
-                        binIDsEachSphereTouches[myReportOffset] = thisBinID;
+                        const deme::binID_t binLin = (deme::binID_t)(baseYZ + i);  // = i + nbX*(j + nbY*k)
+                        binIDsEachSphereTouches[myReportOffset] = binLin;
                         sphereIDsEachBinTouches[myReportOffset] = sphereID;
-                        myReportOffset++;
+                        ++myReportOffset;
                     }
                 }
             }
             // First found that this `not filled' problem can happen in the triangle bin--tri intersection detections
             // part... Quite peculiar.
-            for (; myReportOffset < myReportOffset_end; myReportOffset++) {
+            for (; myReportOffset < myReportOffset_end; ++myReportOffset) {
                 binIDsEachSphereTouches[myReportOffset] = deme::NULL_BINID;
                 sphereIDsEachBinTouches[myReportOffset] = sphereID;
             }
         }
 
-        deme::binSphereTouchPairs_t mySphereGeoReportOffset = numAnalGeoSphereTouchesScan[sphereID];
+        // ----- Analytical geometry contacts -----
+        deme::binSphereTouchPairs_t mySphereGeoReportOffset     = numAnalGeoSphereTouchesScan[sphereID];
         deme::binSphereTouchPairs_t mySphereGeoReportOffset_end = numAnalGeoSphereTouchesScan[sphereID + 1];
-        // Each sphere entity should also check if it overlaps with an analytical boundary-type geometry
-        for (deme::objID_t objB = 0; objB < simParams->nAnalGM; objB++) {
-            deme::bodyID_t objBOwner = objOwner[objB];
-            // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
-            unsigned int objFamilyNum = granData->familyID[objBOwner];
-            unsigned int maskMatID = locateMaskPair<unsigned int>(sphFamilyNum, objFamilyNum);
-            // If marked no contact, skip ths iteration
-            if (granData->familyMasks[maskMatID] != deme::DONT_PREVENT_CONTACT) {
-                continue;
-            }
-            double3 ownerXYZ;
-            voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
-                ownerXYZ.x, ownerXYZ.y, ownerXYZ.z, granData->voxelID[objBOwner], granData->locX[objBOwner],
-                granData->locY[objBOwner], granData->locZ[objBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            const float ownerOriQw = granData->oriQw[objBOwner];
-            const float ownerOriQx = granData->oriQx[objBOwner];
-            const float ownerOriQy = granData->oriQy[objBOwner];
-            const float ownerOriQz = granData->oriQz[objBOwner];
-            float objBRelPosX = objRelPosX[objB];
-            float objBRelPosY = objRelPosY[objB];
-            float objBRelPosZ = objRelPosZ[objB];
-            float objBRotX = objRotX[objB];
-            float objBRotY = objRotY[objB];
-            float objBRotZ = objRotZ[objB];
-            applyOriQToVector3<float, deme::oriQ_t>(objBRelPosX, objBRelPosY, objBRelPosZ, ownerOriQw, ownerOriQx,
-                                                    ownerOriQy, ownerOriQz);
-            applyOriQToVector3<float, deme::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx, ownerOriQy,
-                                                    ownerOriQz);
-            double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
+        // Only check analytical geometry if capacity was reserved
+        if (mySphereGeoReportOffset < mySphereGeoReportOffset_end) {
+            // Each sphere entity should also check if it overlaps with an analytical boundary-type geometry
+            for (deme::objID_t objB = 0; objB < simParams->nAnalGM; ++objB) {
+                deme::bodyID_t objBOwner = objOwner[objB];
+                // Grab family number from memory (not jitified: because family number can change frequently in a sim)
+                unsigned int objFamilyNum = granData->familyID[objBOwner];
+                unsigned int maskMatID = locateMaskPair<unsigned int>(sphFamilyNum, objFamilyNum);
+                // If marked no contact, skip this iteration
+                if (granData->familyMasks[maskMatID] != deme::DONT_PREVENT_CONTACT) {
+                    continue;
+                }
+                double3 ownerXYZ;
+                voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
+                    ownerXYZ.x, ownerXYZ.y, ownerXYZ.z, granData->voxelID[objBOwner], granData->locX[objBOwner],
+                    granData->locY[objBOwner], granData->locZ[objBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
+                const float ownerOriQw = granData->oriQw[objBOwner];
+                const float ownerOriQx = granData->oriQx[objBOwner];
+                const float ownerOriQy = granData->oriQy[objBOwner];
+                const float ownerOriQz = granData->oriQz[objBOwner];
+                float objBRelPosX = objRelPosX[objB];
+                float objBRelPosY = objRelPosY[objB];
+                float objBRelPosZ = objRelPosZ[objB];
+                float objBRotX = objRotX[objB];
+                float objBRotY = objRotY[objB];
+                float objBRotZ = objRotZ[objB];
+                applyOriQToVector3<float, deme::oriQ_t>(objBRelPosX, objBRelPosY, objBRelPosZ, ownerOriQw, ownerOriQx,
+                                                        ownerOriQy, ownerOriQz);
+                applyOriQToVector3<float, deme::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx, ownerOriQy,
+                                                        ownerOriQz);
+                double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
 
-            double overlapDepth;
-            deme::contact_t contact_type;
-            {
-                double3 cntPnt;  // cntPnt here is a placeholder
-                float3 cntNorm;  // cntNorm is placeholder too
-                contact_type = checkSphereEntityOverlap<double3, float, double>(
-                    myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner],
-                    cntPnt, cntNorm, overlapDepth);
-            }
-            // overlapDepth (which has both entities' full margins) needs to be larger than the smaller one of the two
-            // added margin to be considered in-contact.
-            double marginThres =
-                (granData->familyExtraMarginSize[sphFamilyNum] < granData->familyExtraMarginSize[objFamilyNum])
-                    ? granData->familyExtraMarginSize[sphFamilyNum]
-                    : granData->familyExtraMarginSize[objFamilyNum];
-            if (contact_type && overlapDepth > marginThres) {
-                idGeoA[mySphereGeoReportOffset] = sphereID;
-                idGeoB[mySphereGeoReportOffset] = (deme::bodyID_t)objB;
-                contactType[mySphereGeoReportOffset] = contact_type;
-                mySphereGeoReportOffset++;
-                if (mySphereGeoReportOffset >= mySphereGeoReportOffset_end) {
-                    return;  // Don't step on the next sphere's domain
+                double overlapDepth;
+                deme::contact_t contact_type;
+                {
+                    double3 cntPnt;  // cntPnt here is a placeholder
+                    float3  cntNorm; // cntNorm is placeholder too
+                    contact_type = checkSphereEntityOverlap<double3, float, double>(
+                        myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                        objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
+                        calcContactMargin(simParams, granData, objBOwner),
+                        cntPnt, cntNorm, overlapDepth);
+                }
+                // overlapDepth (which has both entities' full margins) needs to be larger than the smaller one of the two
+                // added margin to be considered in-contact.
+                double marginThres =
+                    (granData->familyExtraMarginSize[sphFamilyNum] < granData->familyExtraMarginSize[objFamilyNum])
+                        ? granData->familyExtraMarginSize[sphFamilyNum]
+                        : granData->familyExtraMarginSize[objFamilyNum];
+                if (contact_type && overlapDepth > marginThres) {
+                    // Check capacity BEFORE writing (prevents OOB when capacity is exactly exhausted)
+                    if (mySphereGeoReportOffset >= mySphereGeoReportOffset_end) {
+                        return;  // Don't step on the next sphere's domain
+                    }
+                    idGeoA[mySphereGeoReportOffset]      = sphereID;
+                    idGeoB[mySphereGeoReportOffset]      = (deme::bodyID_t)objB;
+                    contactType[mySphereGeoReportOffset] = contact_type;
+                    ++mySphereGeoReportOffset;
                 }
             }
-        }
-        // In practice, I've never seen non-illed contact slots that need to be resolved this way. It's purely for ultra
-        // safety.
-        for (; mySphereGeoReportOffset < mySphereGeoReportOffset_end; mySphereGeoReportOffset++) {
-            contactType[mySphereGeoReportOffset] = deme::NOT_A_CONTACT;
-        }
+            // In practice, I've never seen non-illed contact slots that need to be resolved this way. It's purely for ultra
+            // safety.
+            for (; mySphereGeoReportOffset < mySphereGeoReportOffset_end; ++mySphereGeoReportOffset) {
+                contactType[mySphereGeoReportOffset] = deme::NOT_A_CONTACT;
+            }
+        } // end capacity guard for analytical geometry
     }
 }

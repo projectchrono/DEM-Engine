@@ -6,27 +6,30 @@
 #ifndef DEME_DT
 #define DEME_DT
 
+#include <array>
 #include <mutex>
 #include <vector>
 #include <thread>
+#include <chrono>
 #include <unordered_map>
 #include <set>
 #include <functional>
+#include <algorithm>
+#include <cmath>
 
 #include "../core/utils/CudaAllocator.hpp"
 #include "../core/utils/ThreadManager.h"
 #include "../core/utils/GpuManager.h"
 #include "../core/utils/DataMigrationHelper.hpp"
 #include "../core/utils/GpuError.h"
+#include "../core/utils/JitHelper.h"
+//#include "../core/ApiVersion.h"
+#include "../kernel/DEMHelperKernels.cuh"
 #include "BdrsAndObjs.h"
 #include "Defines.h"
 #include "Structs.h"
 #include "AuxClasses.h"
 
-// Forward declare jitify::Program to avoid downstream dependency
-namespace jitify {
-class Program;
-}
 
 namespace deme {
 
@@ -34,6 +37,141 @@ namespace deme {
 class DEMKinematicThread;
 class DEMDynamicThread;
 class DEMSolverScratchData;
+
+// Internal estimator for tracking the drift/cost trade-off:
+// J(d) ≈ a + b/d + c*(d/dmax) + e*(d/dmax)^2, with forgetting (non-stationary baseline).
+struct DriftRLS {
+    static constexpr int N = 4;  // a, b, c, e
+    double theta[N] = {0.0, 0.0, 0.0, 0.0};
+    double P[N][N] = {{0.0, 0.0, 0.0, 0.0}, {0.0, 0.0, 0.0, 0.0}, {0.0, 0.0, 0.0, 0.0}, {0.0, 0.0, 0.0, 0.0}};
+    double lambda = 0.999;     // forgetting factor (closer to 1 => less covariance blow-up)
+    double sigma2_ema = 1e-6;  // residual variance estimate (EWMA)
+    bool initialized = false;
+
+    void reset(double p0 = 1e2) {
+        for (int i = 0; i < N; i++) {
+            theta[i] = 0.0;
+            for (int j = 0; j < N; j++) {
+                P[i][j] = (i == j) ? p0 : 0.0;
+            }
+        }
+        sigma2_ema = 1e-6;
+        initialized = true;
+    }
+
+    static double dot(const double* a, const double* b) {
+        double s = 0.0;
+        for (int i = 0; i < N; i++) s += a[i] * b[i];
+        return s;
+    }
+
+    double huberWeight(double r) const {
+        const double sigma = std::sqrt(std::max(1e-12, sigma2_ema));
+        const double k = 2.5;
+        const double t = k * sigma;
+        const double ar = std::abs(r);
+        if (ar <= t) return 1.0;
+        return t / ar;
+    }
+
+    void update(unsigned int d, double d0, double y) {
+        if (!initialized) reset();
+        if (!std::isfinite(y)) return;
+
+        const double dd = static_cast<double>(std::max(1u, d));
+        // Use a saturating normalization with an *external* scale d0 (typical drift),
+        // so the hard safety cap (upperBoundFutureDrift) does not distort the model.
+        d0 = std::max(1.0, d0);
+        const double x = dd / (dd + d0);
+        const double phi[N] = {1.0, d0 / dd, x, x * x};
+
+        const double y_hat = dot(theta, phi);
+        if (!std::isfinite(y_hat)) {
+            reset();
+            return;
+        }
+        const double r = y - y_hat;
+
+        // Update residual variance estimate (EWMA)
+        const double beta = 0.05;
+        sigma2_ema = (1.0 - beta) * sigma2_ema + beta * (r * r);
+        if (!std::isfinite(sigma2_ema) || sigma2_ema < 0.0) sigma2_ema = 1e-6;
+
+        // Robust weight
+        const double w = huberWeight(r);
+        const double s = std::sqrt(w);
+
+        // Weighted observation
+        double phiw[N];
+        for (int i = 0; i < N; i++) phiw[i] = s * phi[i];
+        const double yw = s * y;
+
+        // Compute P * phiw
+        double Pphi[N] = {0.0, 0.0, 0.0, 0.0};
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < N; j++) Pphi[i] += P[i][j] * phiw[j];
+        }
+
+        const double denom = lambda + dot(phiw, Pphi);
+        if (!std::isfinite(denom) || denom <= 1e-18) {
+            reset();
+            return;
+        }
+
+        // Gain K = Pphi / denom
+        double K[N];
+        for (int i = 0; i < N; i++) K[i] = Pphi[i] / denom;
+
+        // Innovation
+        const double errw = yw - dot(theta, phiw);
+        if (!std::isfinite(errw)) {
+            reset();
+            return;
+        }
+        for (int i = 0; i < N; i++) theta[i] += K[i] * errw;
+
+        // Light physical priors: prevent pathological fits under noise.
+        if (theta[1] < 0.0) theta[1] = 0.0;  // b >= 0
+        if (theta[2] < 0.0) theta[2] = 0.0;  // c >= 0
+        if (theta[3] < 0.0) theta[3] = 0.0;  // e >= 0
+        for (int i = 0; i < N; i++) {
+            if (!std::isfinite(theta[i])) {
+                reset();
+                return;
+            }
+        }
+
+        // P = (P - K * phiw^T * P) / lambda
+        double newP[N][N];
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < N; j++) {
+                double ssum = P[i][j];
+                for (int k = 0; k < N; k++) {
+                    ssum -= (K[i] * phiw[k]) * P[k][j];
+                }
+                newP[i][j] = ssum / lambda;
+            }
+        }
+        constexpr double P_ABS_MAX = 1e12;
+        for (int i = 0; i < N; i++) {
+            for (int j = 0; j < N; j++) {
+                if (!std::isfinite(newP[i][j]) || std::abs(newP[i][j]) > P_ABS_MAX) {
+                    reset();
+                    return;
+                }
+                P[i][j] = newP[i][j];
+            }
+        }
+    }
+
+    double predict(unsigned int d, double d0) const {
+        const double dd = static_cast<double>(std::max(1u, d));
+        d0 = std::max(1.0, d0);
+        const double x = dd / (dd + d0);
+        const double phi[N] = {1.0, d0 / dd, x, x * x};
+        return theta[0] * phi[0] + theta[1] * phi[1] + theta[2] * phi[2] + theta[3] * phi[3];
+    }
+};
 
 /// DynamicThread class
 class DEMDynamicThread {
@@ -61,6 +199,9 @@ class DEMDynamicThread {
     // dT's one-element buffer of kT-supplied nContacts (as buffer, it's device-only, but I used DualStruct just for
     // convenience...)
     DualStruct<size_t> nContactPairs_buffer = DualStruct<size_t>(0);
+    // Staging area for kT-supplied contact count to avoid updating active counts before unpack.
+    DualStruct<size_t> kT_numContacts_staging = DualStruct<size_t>(0);
+    bool kT_numContacts_ready = false;
 
     // Array-used memory size in bytes
     size_t m_approxDeviceBytesUsed = 0;
@@ -68,6 +209,23 @@ class DEMDynamicThread {
 
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
+
+    // Reusable event for stream barriers
+    cudaEvent_t streamSyncEvent = nullptr;
+    // Signals that dT finished writing the dT->kT transfer buffers (same-device fast path).
+    cudaEvent_t dT_to_kT_BufferReadyEvent = nullptr;
+    // Signals that the kT->dT numContacts copy has completed (kT stream for same-device fast path).
+    cudaEvent_t kT_numContactsReadyEvent = nullptr;
+    bool kT_numContacts_copy_pending = false;
+    bool contactMappingUsesBuffer = false;
+    uint64_t last_kT_produce_stamp = 0;  // last seen kT->dT update count (same-device fast path)
+    int64_t recv_stamp_override = -1;
+    static constexpr int kProgressEventDepth = 8;
+    static constexpr int kMaxInFlightProgress = 1;
+    std::array<cudaEvent_t, kProgressEventDepth> progressEvents = {};
+    std::array<int64_t, kProgressEventDepth> progressEventStamps = {};
+    int progressEventHead = 0;
+    int progressEventCount = 0;
 
     // A class that contains scratch pad and system status data (constructed with the number of temp arrays we need)
     DEMSolverScratchData solverScratchSpace = DEMSolverScratchData(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
@@ -81,11 +239,16 @@ class DEMDynamicThread {
     // Buffer arrays for storing info from the dT side.
     // kT modifies these arrays; dT uses them only.
 
-    // dT gets contact pair/location/history map info from kT
-    DeviceArray<bodyID_t> idGeometryA_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
-    DeviceArray<bodyID_t> idGeometryB_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
-    DeviceArray<contact_t> contactType_buffer = DeviceArray<contact_t>(&m_approxDeviceBytesUsed);
-    DeviceArray<contactPairs_t> contactMapping_buffer = DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed);
+    // dT gets contact pair/location/history map info from kT (double-buffered for ping-pong)
+    DeviceArray<bodyID_t> idGeometryA_buffer[2] = {DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed),
+                                                   DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed)};
+    DeviceArray<bodyID_t> idGeometryB_buffer[2] = {DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed),
+                                                   DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed)};
+    DeviceArray<contact_t> contactType_buffer[2] = {DeviceArray<contact_t>(&m_approxDeviceBytesUsed),
+                                                    DeviceArray<contact_t>(&m_approxDeviceBytesUsed)};
+    DeviceArray<contactPairs_t> contactMapping_buffer[2] = {DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed),
+                                                            DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed)};
+    int kt_write_buf = 0;  // which buffer kT writes to next
 
     // Simulation params-related variables
     DualStruct<DEMSimParams> simParams = DualStruct<DEMSimParams>();
@@ -251,7 +414,7 @@ class DEMDynamicThread {
     bool pendingCriticalUpdate = true;
 
     // Number of threads per block for dT force calculation kernels
-    unsigned int DT_FORCE_CALC_NTHREADS_PER_BLOCK = 256;
+    unsigned int DT_FORCE_CALC_NTHREADS_PER_BLOCK = 128;
 
     // Template-related arrays
     // Belonged-body ID
@@ -292,9 +455,12 @@ class DEMDynamicThread {
 
     // dT's timers
     std::vector<std::string> timer_names = {"Clear force array", "Calculate contact forces", "Optional force reduction",
-                                            "Integration",       "Unpack updates from kT",   "Send to kT buffer",
-                                            "Wait for kT update"};
+                                            "Integration", "Unpack updates from kT", "Send to kT buffer"};
     SolverTimers timers = SolverTimers(timer_names);
+    std::chrono::steady_clock::time_point cycle_stopwatch_start;
+    bool cycle_stopwatch_started = false;
+    void startCycleStopwatch();
+    double getCycleElapsedSeconds() const;
 
   public:
     friend class DEMSolver;
@@ -312,7 +478,17 @@ class DEMDynamicThread {
         // This is because in smaller problems, the array data transfer portion (which needs the stream) could even be
         // reached before the stream is created in the child thread. So we have to create the stream here before
         // spawning the child thread.
+
         DEME_GPU_CALL(cudaStreamCreate(&streamInfo.stream));
+
+        DEME_GPU_CALL(cudaEventCreateWithFlags(&streamSyncEvent, cudaEventDisableTiming));
+        DEME_GPU_CALL(cudaEventCreateWithFlags(&dT_to_kT_BufferReadyEvent, cudaEventDisableTiming));
+        DEME_GPU_CALL(cudaEventCreateWithFlags(&kT_numContactsReadyEvent, cudaEventDisableTiming));
+        for (auto& evt : progressEvents) {
+            evt = nullptr;
+            DEME_GPU_CALL(cudaEventCreateWithFlags(&evt, cudaEventDisableTiming));
+        }
+        timers.InitGpuEvents();
 
         // Launch a worker thread bound to this instance
         th = std::move(std::thread([this]() { this->workerThread(); }));
@@ -322,7 +498,26 @@ class DEMDynamicThread {
         pSchedSupport->dynamicShouldJoin = true;
         startThread();
         th.join();
+        timers.DestroyGpuEvents();
         cudaStreamDestroy(streamInfo.stream);
+        if (streamSyncEvent) {
+            cudaEventDestroy(streamSyncEvent);
+            streamSyncEvent = nullptr;
+        }
+        if (dT_to_kT_BufferReadyEvent) {
+            cudaEventDestroy(dT_to_kT_BufferReadyEvent);
+            dT_to_kT_BufferReadyEvent = nullptr;
+        }
+        if (kT_numContactsReadyEvent) {
+            cudaEventDestroy(kT_numContactsReadyEvent);
+            kT_numContactsReadyEvent = nullptr;
+        }
+        for (auto& evt : progressEvents) {
+            if (evt) {
+                cudaEventDestroy(evt);
+                evt = nullptr;
+            }
+        }
 
         deallocateEverything();
     }
@@ -605,6 +800,19 @@ class DEMDynamicThread {
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 
+    // Record and sync a reusable event on the main stream
+    void recordAndSyncEvent();
+    // Record only; sync later
+    void recordEventOnly();
+    // Record a progress event for non-blocking completion tracking.
+    void recordProgressEvent(int64_t stamp);
+    // Drain completed progress events and update completion stamp.
+    void drainProgressEvents();
+    // Keep host enqueueing close to GPU progress by limiting in-flight steps.
+    void throttleInFlightProgress();
+    // Sync the previously recorded event
+    void syncRecordedEvent();
+
     // Reset kT--dT interaction coordinator stats
     void resetUserCallStat();
     // Return the approximate RAM usage
@@ -631,12 +839,19 @@ class DEMDynamicThread {
                        const std::vector<std::string>& JitifyOptions);
 
     // Execute this kernel, then return the reduced value
-    float* inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
+    float* inspectCall(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                        const std::string& kernel_name,
                        INSPECT_ENTITY_TYPE thing_to_insp,
                        CUB_REDUCE_FLAVOR reduce_flavor,
                        bool all_domain,
                        bool return_device_ptr = false);
+
+    // Device-only inspection helper (no host sync); intended for non-reduce paths.
+    float* inspectCallDeviceNoReduce(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
+                                     const std::string& kernel_name,
+                                     INSPECT_ENTITY_TYPE thing_to_insp,
+                                     CUB_REDUCE_FLAVOR reduce_flavor,
+                                     bool all_domain);
 
   private:
     // Name for this class
@@ -675,7 +890,7 @@ class DEMDynamicThread {
 
     // If kT provides fresh CD results, we unpack and use it
     inline void ifProduceFreshThenUseItAndSendNewOrder();
-    inline void ifProduceFreshThenUseIt();
+    inline void ifProduceFreshThenUseIt(bool allow_blocking);
     inline void unpack_impl();
 
     // Change sim params based on dT's experience, if needed
@@ -694,6 +909,12 @@ class DEMDynamicThread {
     void sendToTheirBuffer();
     // Resize some work arrays based on the number of contact pairs provided by kT
     void contactEventArraysResize(size_t nContactPairs);
+    // Check if kT has finished populating buffers on the GPU (same-device fast path).
+    bool isKinematicProduceReady(bool allow_blocking);
+    // Check if kT has produced a fresh batch and it is ready to consume.
+    bool hasFreshKinematicProduce(bool allow_blocking);
+    // Consume kT produce if ready, optionally tagging the receive for the drift regulator.
+    bool tryConsumeKinematicProduce(bool allow_blocking, bool mark_receive, bool use_logical_stamp);
 
     // Deallocate everything
     void deallocateEverything();
@@ -709,48 +930,136 @@ class DEMDynamicThread {
         const std::function<bool(unsigned int, unsigned int, unsigned int, unsigned int)>& condition);
 
     // Just-in-time compiled kernels
-    std::shared_ptr<jitify::Program> prep_force_kernels;
-    std::shared_ptr<jitify::Program> cal_force_kernels;
-    std::shared_ptr<jitify::Program> collect_force_kernels;
-    std::shared_ptr<jitify::Program> integrator_kernels;
-    // std::shared_ptr<jitify::Program> quarry_stats_kernels;
-    std::shared_ptr<jitify::Program> mod_kernels;
-    std::shared_ptr<jitify::Program> misc_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> prep_force_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> cal_force_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> collect_force_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> integrator_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> mod_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> misc_kernels;
+    void prewarmKernels();
 
-    // Adjuster for update freq
-    class AccumStepUpdater {
-      private:
-        unsigned int num_steps = 0;
-        unsigned int num_updates = 0;
-        unsigned int cached_size = 200;
+    // Curcial Drift optimizer
+    struct FutureDriftRegulator {
+        double last_total_time = 0.0;
+        double debug_cum_time = 0.0;
+        double last_debug_cum_time = 0.0;
 
-      public:
-        AccumStepUpdater() {}
-        ~AccumStepUpdater() {}
-        inline void AddUpdate() { num_updates++; }
-        inline void AddStep() { num_steps++; }
-        inline bool Query(unsigned int& ideal) {
-            if (num_updates > NUM_STEPS_RESERVED_AFTER_RENEWING_FREQ_TUNER) {
-                // * 2 because double update freq is an ideal future drift
-                ideal = (unsigned int)((double)num_steps / num_updates * 2);
-                if (num_updates >= cached_size) {
-                    Clear();
-                }
-                return true;
-            } else {
-                return false;
-            }
-        }
+        uint64_t last_step_sample = 0;
+        bool has_last_step_sample = false;
 
-        // Return this accumulator to initial state
-        void Clear() {
-            num_steps = 0;
-            num_updates = 0;
-        }
+        // calibrateParams may be called multiple times; only the first call after a kT update should advance the
+        // timing baseline and update the tuner.
+        bool receive_pending = false;
+        uint64_t pending_recv_stamp = 0;
+        double pending_total_time = 0.0;
 
-        void SetCacheSize(unsigned int n) { cached_size = n; }
+        static constexpr int COST_WINDOW = 100;
+        double cost_window[COST_WINDOW] = {0.0};
+        unsigned int drift_window[COST_WINDOW] = {0u};
+        int window_size = 0;
+        int window_pos = 0;
+
+        // Last chosen TOTAL drift target (de-headroomed).
+        unsigned int last_proposed = 0;
+        // The max drift command (with safety headroom) that was last sent to kT.
+        unsigned int last_sent_proposed = 0;
+        // The TRUE drift target used for the last work order (de-headroomed).
+        unsigned int last_sent_true = 0;
+        // WAIT (intentional delay in dT steps) used for the last work order.
+        unsigned int last_sent_wait = 0;
+
+        // Last WAIT we computed (actuator space).
+        unsigned int last_wait_cmd = 0;
+
+        // Smoothed estimate of kT lag (in dT steps, pipeline-corrected); used for scheduling only.
+        double lag_ema = 0.0;
+        bool lag_ema_initialized = false;
+
+        // Next kT work order scheduling (in units of dT steps, i.e., nTotalSteps).
+        uint64_t next_send_step = 0;
+        unsigned int next_send_wait = 0;
+        bool pending_send = false;
+
+        unsigned int last_observed_kinematic_lag_steps = 0;
+
+        DriftRLS drift_rls;
+        uint64_t drift_rls_samples = 0;
+        double drift_scale_ema = 0.0;
+        bool drift_scale_initialized = false;
+        double cost_scale_ema = 0.0;
+        bool cost_scale_initialized = false;
+
+        void Clear() { *this = FutureDriftRegulator{}; }
     };
-    AccumStepUpdater accumStepUpdater = AccumStepUpdater();
+    FutureDriftRegulator futureDriftRegulator;
+    // Helpers for future drift regulator - 
+    static inline unsigned clamp_drift_u(unsigned v, unsigned maxv) {
+        return (v < 1u) ? 1u : (v > maxv ? maxv : v);
+    }
+    static inline unsigned clamp_wait_i(int v, unsigned maxv) {
+        if (v <= 0) return 0u;
+        const unsigned u = (unsigned)v;
+        return (u > maxv) ? maxv : u;
+    }
+    static inline unsigned apply_wait_policy_u(
+        unsigned w, double lag_pred, double upper_ratio, double lower_ratio, unsigned maxv)
+    {
+        w = (w > maxv) ? maxv : w;
+        double total = lag_pred + (double)w;
+        if (total < 1.0) total = 1.0;
+        if (upper_ratio <= 0.0) w = 0u;
+        else if (upper_ratio < 1.0) {
+            const unsigned uw = clamp_wait_i((int)std::ceil(total * upper_ratio), maxv);
+            if (w > uw) w = uw;
+        }
+        if (lower_ratio > 0.0) {
+            const unsigned lw = clamp_wait_i((int)std::floor(total * lower_ratio), maxv);
+            if (w <= lw) w = 0u;
+        }
+        return w;
+    }
+    static inline void ema_asym(double& ema, bool& init, double x, double a_up, double a_dn, double minv) {
+        if (!init) { init = true; ema = x; }
+        else {
+            const double a = (x > ema) ? a_up : a_dn;
+            ema = (1.0 - a) * ema + a * x;
+        }
+        if (!std::isfinite(ema) || ema < minv) ema = std::max(minv, x);
+    }
+    static inline void ring_push(FutureDriftRegulator& r, double cost, unsigned obs) {
+        const int W = FutureDriftRegulator::COST_WINDOW;
+        const int i = r.window_pos;
+        r.cost_window[i]  = cost;
+        r.drift_window[i] = obs;
+        if (r.window_size < W) r.window_size++;
+        r.window_pos = (i + 1) % W;
+    }
+    static inline double drift_ref_quantile(const FutureDriftRegulator& r, double floor_ref) {
+        constexpr int WIN = 30;
+        const int n = std::min(r.window_size, WIN);
+        if (n <= 0) return floor_ref;
+        std::array<unsigned, WIN> a; // no zero-init
+        int idx = (r.window_pos > 0) ? (r.window_pos - 1) : (FutureDriftRegulator::COST_WINDOW - 1);
+        for (int i = 0; i < n; ++i) {
+            a[i] = r.drift_window[idx];
+            idx = (idx > 0) ? (idx - 1) : (FutureDriftRegulator::COST_WINDOW - 1);
+        }
+        const int q = n / 5; // Quantile - IMPRORTANT
+        std::nth_element(a.begin(), a.begin() + q, a.begin() + n);
+        double qv = (double)a[q];
+        if (r.drift_scale_initialized) qv = std::min(qv, r.drift_scale_ema);
+        return std::max(floor_ref, qv);
+    }
+    static inline bool rls_is_bad(const DriftRLS& rls, unsigned obs, double drift_ref, double scale) {
+        const double yhat = rls.predict(obs, drift_ref);
+        if (!std::isfinite(yhat) || std::abs(yhat) > 1000.0 * scale) return true;
+        const double clip = std::max(1e-3, 1000.0 * scale);
+        for (int i = 0; i < DriftRLS::N; ++i) {
+            const double t = rls.theta[i];
+            if (!std::isfinite(t) || std::abs(t) > clip) return true;
+        }
+        return false;
+    }
 
     // A collection of migrate-to-host methods. Bulk migrate-to-host is by nature on-demand only.
     void migrateFamilyToHost();
@@ -761,6 +1070,7 @@ class DEMDynamicThread {
     void migrateTriGeoWildcardToHost();
     void migrateAnalGeoWildcardToHost();
     void migrateContactInfoToHost();
+
     void migrateDeviceModifiableInfoToHost();
 
 };  // dT ends

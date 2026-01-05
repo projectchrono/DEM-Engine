@@ -28,9 +28,9 @@ inline __device__ void equipOwnerPosRot(deme::DEMSimParams* simParams,
         ownerPos.x, ownerPos.y, ownerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
         granData->locY[myOwner], granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
     // Do this and we get the `true' pos...
-    ownerPos.x += simParams->LBFX;
-    ownerPos.y += simParams->LBFY;
-    ownerPos.z += simParams->LBFZ;
+    ownerPos.x += _LBFX_;
+    ownerPos.y += _LBFY_;
+    ownerPos.z += _LBFZ_;
     oriQ.w = granData->oriQw[myOwner];
     oriQ.x = granData->oriQx[myOwner];
     oriQ.y = granData->oriQy[myOwner];
@@ -44,6 +44,7 @@ inline __device__ void equipOwnerPosRot(deme::DEMSimParams* simParams,
 __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMDataDT* granData, size_t nContactPairs) {
     deme::contactPairs_t myContactID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myContactID < nContactPairs) {
+        _contactInfoClear_;
         // Identify contact type first
         deme::contact_t ContactType = granData->contactType[myContactID];
         // The following quantities are always calculated, regardless of force model

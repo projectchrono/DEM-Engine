@@ -67,7 +67,7 @@ if (overlapDepth > 0) {
     }
 
     // Rolling resistance part
-    if (Crr_cnt > 0.0) {
+    if (Crr_cnt > 0.f) {
         // Figure out if we should apply rolling resistance force
         bool should_add_rolling_resistance = true;
         {
@@ -77,7 +77,7 @@ if (overlapDepth > 0) {
 
             const float d_coeff = gn_simple / (2.f * sqrtf(kn_simple * mass_eff));
 
-            if (d_coeff < 1.0) {
+            if (d_coeff < 1.f) {
                 float t_collision = deme::PI * sqrtf(mass_eff / (kn_simple * (1.f - d_coeff * d_coeff)));
                 if (delta_time <= t_collision) {
                     should_add_rolling_resistance = false;
@@ -102,7 +102,7 @@ if (overlapDepth > 0) {
     }
 
     // Tangential force part
-    if (mu_cnt > 0.0) {
+    if (mu_cnt > 0.f) {
         const float kt = 8. * G_cnt * sqrt_Rd;
         const float gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
         float3 tangent_force = -kt * delta_tan - gt * vrel_tan;

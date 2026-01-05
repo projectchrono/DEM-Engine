@@ -20,12 +20,15 @@ SET(DEMOS
 		DEMdemo_Sieve
 		DEMdemo_SingleSphereCollide
 		DEMdemo_TestPack
+		DEMdemo_TestRestart
 		DEMdemo_RotatingDrum
 		DEMdemo_Centrifuge
 		DEMdemo_GameOfLife
 		DEMdemo_BallDrop
 		DEMdemo_BallDrop2D
 		DEMdemo_Mixer
+		DEMdemo_PolydisperseGeneration
+		DEMdemo_RoverWheel
 		DEMdemo_GRCPrep_Part1
 		DEMdemo_GRCPrep_Part2
 		DEMdemo_GRCPrep_Part3

@@ -134,6 +134,9 @@ int main() {
     DEMSim.InstructBoxDomainDimension(5, 5, 5);
     float step_size = 5e-6;
     DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetGPUTimersEnabled(true);
+    DEMSim.SetGPUTimerAccumulationDeferred(true);
+    //DEMSim.SetAdaptiveTimeStepType("hertz_const"); 
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.SetExpandSafetyType("auto");
     // If there is a velocity that an analytical object (i.e. the drum) has that you'd like the solver to take into
@@ -149,36 +152,35 @@ int main() {
 
     float time_end = 20.0;
     unsigned int fps = 20;
-    unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
+    float frame_time = 1.0 / fps;
+    //unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
     std::cout << "Output at " << fps << " FPS" << std::endl;
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
-    for (double t = 0; t < (double)time_end; t += step_size, curr_step++) {
-        if (curr_step % out_steps == 0) {
-            std::cout << "Frame: " << currframe << std::endl;
-            DEMSim.ShowThreadCollaborationStats();
-            char filename[100];
-            sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
-            DEMSim.WriteSphereFile(out_dir / filename);
-            currframe++;
-            max_v = max_v_finder->GetValue();
-            std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
+    for (double t = 0; t < (double)time_end; t += frame_time, curr_step++) {
+        std::cout << "Frame: " << currframe << std::endl;
+        DEMSim.ShowThreadCollaborationStats();
+        char filename[100];
+        sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+        DEMSim.WriteSphereFile(out_dir / filename);
+        currframe++;
+        max_v = max_v_finder->GetValue();
+        std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
 
-            // Torque on the side walls are?
-            float3 drum_moi = Drum_tracker->MOI();
-            float3 drum_acc = Drum_tracker->ContactAngAccLocal();
-            float3 drum_torque = drum_acc * drum_moi;
-            std::cout << "Contact torque on the side walls is " << drum_torque.x << ", " << drum_torque.y << ", "
-                      << drum_torque.z << std::endl;
+        // Torque on the side walls are?
+        float3 drum_moi = Drum_tracker->MOI();
+        float3 drum_acc = Drum_tracker->ContactAngAccLocal();
+        float3 drum_torque = drum_acc * drum_moi;
+        std::cout << "Contact torque on the side walls is " << drum_torque.x << ", " << drum_torque.y << ", "
+                    << drum_torque.z << std::endl;
 
-            // The force on the bottom plane?
-            float3 force_on_BC = planes_tracker->ContactAcc() * planes_tracker->Mass();
-            std::cout << "Contact force on bottom plane is " << force_on_BC.z << std::endl;
-        }
+        // The force on the bottom plane?
+        float3 force_on_BC = planes_tracker->ContactAcc() * planes_tracker->Mass();
+        std::cout << "Contact force on bottom plane is " << force_on_BC.z << std::endl;
 
-        DEMSim.DoDynamics(step_size);
+        DEMSim.DoDynamics(frame_time);
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);

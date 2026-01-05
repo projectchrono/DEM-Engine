@@ -46,16 +46,16 @@ __global__ void computeMarginFromAbsv(deme::DEMSimParams* simParams,
         if (!isfinite(absv)) {
             // May produce messy error messages, but it's still good to know what entities went wrong
             DEME_ABORT_KERNEL("Absolute velocity for ownerID %llu is not finite. This happened at time %.9g.\n",
-                              static_cast<unsigned long long>(ownerID), simParams->timeElapsed);
+                              static_cast<unsigned long long>(ownerID), simParams->dyn.timeElapsed);
         }
-        if (absv > simParams->approxMaxVel) {
-            absv = simParams->approxMaxVel;
+        if (absv > simParams->dyn.approxMaxVel) {
+            absv = simParams->dyn.approxMaxVel;
         }
         // User-specified extra margin also needs to be added here. This marginSize is used for bin--sph or bin--tri
         // contacts but not entirely the same as the one used for sph--sph or sph--tri contacts, since the latter is
         // stricter.
         granData->marginSize[ownerID] =
-            (double)(absv * simParams->expSafetyMulti + simParams->expSafetyAdder) * (*ts) * (*maxDrift) +
+            (double)(absv * simParams->dyn.expSafetyMulti + simParams->dyn.expSafetyAdder) * (*ts) * (*maxDrift) +
             granData->familyExtraMarginSize[my_family];
     }
 }
@@ -64,6 +64,13 @@ __global__ void fillMarginValues(deme::DEMSimParams* simParams, deme::DEMDataKT*
     size_t ownerID = blockIdx.x * blockDim.x + threadIdx.x;
     if (ownerID < n) {
         unsigned int my_family = granData->familyID[ownerID];
-        granData->marginSize[ownerID] = simParams->beta + granData->familyExtraMarginSize[my_family];
+        granData->marginSize[ownerID] = simParams->dyn.beta + granData->familyExtraMarginSize[my_family];
+    }
+}
+
+// Advance simulation time on device (avoid per-step host->device copies).
+__global__ void advanceTimeElapsed(deme::DEMSimParams* simParams) {
+    if (blockIdx.x == 0 && threadIdx.x == 0) {
+        simParams->dyn.timeElapsed += (double)simParams->dyn.h;
     }
 }

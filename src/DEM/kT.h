@@ -18,15 +18,13 @@
 #include "../core/utils/DataMigrationHelper.hpp"
 #include "../core/utils/GpuError.h"
 #include "../core/utils/Timer.hpp"
+#include "../core/utils/JitHelper.h"
+//#include "../core/ApiVersion.h"
+#include "../kernel/DEMHelperKernels.cuh"
 
 #include "BdrsAndObjs.h"
 #include "Defines.h"
 #include "Structs.h"
-
-// Forward declare jitify::Program to avoid downstream dependency
-namespace jitify {
-class Program;
-}
 
 namespace deme {
 
@@ -55,6 +53,10 @@ class DEMKinematicThread {
 
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
+    // Reusable event for stream barriers
+    cudaEvent_t streamSyncEvent = nullptr;
+    // Signals that kT finished writing the kT->dT transfer buffers (same-device fast path).
+    cudaEvent_t kT_to_dT_BufferReadyEvent = nullptr;
 
     // Memory usage recorder
     size_t m_approxDeviceBytesUsed = 0;
@@ -221,7 +223,12 @@ class DEMKinematicThread {
         // This is because in smaller problems, the array data transfer portion (which needs the stream) could even be
         // reached before the stream is created in the child thread. So we have to create the stream here before
         // spawning the child thread.
+
         DEME_GPU_CALL(cudaStreamCreate(&streamInfo.stream));
+        
+        DEME_GPU_CALL(cudaEventCreateWithFlags(&streamSyncEvent, cudaEventDisableTiming));
+        DEME_GPU_CALL(cudaEventCreateWithFlags(&kT_to_dT_BufferReadyEvent, cudaEventDisableTiming));
+        timers.InitGpuEvents();
 
         // Launch a worker thread bound to this instance
         th = std::move(std::thread([this]() { this->workerThread(); }));
@@ -238,6 +245,15 @@ class DEMKinematicThread {
         startThread();
         th.join();
 
+        timers.DestroyGpuEvents();
+        if (streamSyncEvent) {
+            cudaEventDestroy(streamSyncEvent);
+            streamSyncEvent = nullptr;
+        }
+        if (kT_to_dT_BufferReadyEvent) {
+            cudaEventDestroy(kT_to_dT_BufferReadyEvent);
+            kT_to_dT_BufferReadyEvent = nullptr;
+        }
         cudaStreamDestroy(streamInfo.stream);
 
         // deallocateEverything();
@@ -263,6 +279,13 @@ class DEMKinematicThread {
     /// Return the approximate RAM usage
     size_t estimateDeviceMemUsage() const;
     size_t estimateHostMemUsage() const;
+
+    // Record and sync a reusable event on the main stream
+    void recordAndSyncEvent();
+    // Record only; sync later
+    void recordEventOnly();
+    // Sync the previously recorded event
+    void syncRecordedEvent();
 
     /// Resize arrays
     void allocateGPUArrays(size_t nOwnerBodies,
@@ -398,7 +421,7 @@ class DEMKinematicThread {
     // Send produced data to dT-owned biffers
     void sendToTheirBuffer();
     // Resize dT's buffer arrays based on the number of contact pairs
-    inline void transferArraysResize(size_t nContactPairs);
+    inline void transferArraysResize(int buffer_idx, size_t nContactPairs);
     // Automatic adjustments to sim params
     void calibrateParams();
     // The kT-side allocations that can be done at initialization time
@@ -407,13 +430,13 @@ class DEMKinematicThread {
     void deallocateEverything();
 
     // Just-in-time compiled kernels
-    // jitify::Program bin_sphere_kernels = JitHelper::buildProgram("bin_sphere_kernels", " ");
-    std::shared_ptr<jitify::Program> bin_sphere_kernels;
-    std::shared_ptr<jitify::Program> bin_triangle_kernels;
-    std::shared_ptr<jitify::Program> sphTri_contact_kernels;
-    std::shared_ptr<jitify::Program> sphere_contact_kernels;
-    std::shared_ptr<jitify::Program> history_kernels;
-    std::shared_ptr<jitify::Program> misc_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> bin_sphere_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> bin_triangle_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> sphTri_contact_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> sphere_contact_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> history_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> misc_kernels;
+    void prewarmKernels();
 
     // Adjuster for bin size
     class AccumTimer {

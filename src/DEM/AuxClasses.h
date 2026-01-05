@@ -11,11 +11,6 @@
 #include "../core/utils/JitHelper.h"
 #include "Defines.h"
 
-// Forward declare jitify::Program to avoid downstream dependency
-namespace jitify {
-class Program;
-}
-
 namespace deme {
 
 class DEMSolver;
@@ -25,7 +20,7 @@ class DEMDynamicThread;
 /// their simulation entites, in a given region.
 class DEMInspector {
   private:
-    std::shared_ptr<jitify::Program> inspection_kernel;
+    std::shared_ptr<JitHelper::CachedProgram> inspection_kernel;
 
     std::string inspection_code;
     std::string in_region_code;
@@ -84,9 +79,8 @@ class DEMInspector {
 
     /// Get value directly within dT (returns host pointer by default)
     float* dT_GetValue();
-
-    /// Get value directly within dT (returns device pointer)
-    float* dT_GetDeviceValue();
+    /// Get values on device without forcing a host sync (internal use).
+    float* dT_GetDeviceValues();
 };
 
 // A struct to get or set tracked owner entities, mainly for co-simulation

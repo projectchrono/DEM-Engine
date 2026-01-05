@@ -13,6 +13,10 @@ target_include_directories(
 	PUBLIC ${ProjectIncludeGenerated}
 )
 
+if(DEME_ENABLE_NVTX)
+	target_compile_definitions(DEM PUBLIC DEME_ENABLE_NVTX)
+endif()
+
 if(USE_CHPF)
 	target_link_libraries(
 		DEM
@@ -83,4 +87,3 @@ install(
 		PATTERN "utils/*.h"
 		PATTERN "utils/*.hpp"
 )
-
