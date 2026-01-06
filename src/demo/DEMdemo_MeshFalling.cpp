@@ -52,11 +52,11 @@ int main() {
     std::vector<std::shared_ptr<DEMTracker>> trackers;
 
     // Random number generator for variations
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    const unsigned int seed = 12345u;
+    std::mt19937 gen(seed);
     std::uniform_real_distribution<> pos_dist(-0.1, 0.1);
     std::uniform_real_distribution<> rot_dist(-0.2, 0.2);
-    std::uniform_real_distribution<> scale_dist(0.8, 2.4);  // Scale variation
+    std::uniform_real_distribution<> scale_dist(0.8, 2.0);  // Scale variation
     std::uniform_int_distribution<> mesh_type_dist(0, 3);   // 4 mesh types
 
     for (int i = 0; i < num_particles_x; i++) {
@@ -98,6 +98,8 @@ int main() {
             } else if (mesh_type == 2) {
                 // Cone (height ~1, radius ~1 in mesh)
                 particle = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cone.obj").string(), mat_box);
+                // Unit cone's CoM is at this location...
+                particle->InformCentroidPrincipal(make_float3(0, 0, 3. / 4.), make_float4(0, 0, 0, 1));
                 float scale = base_size * scale_dist(gen);
                 particle->Scale(scale);
 
@@ -165,19 +167,14 @@ int main() {
             DEMSim.WriteMeshFile(out_dir / meshfilename);
 
             // Print some statistics
-            int particles_settled = 0;
             float avg_height = 0.0;
             for (size_t k = 0; k < trackers.size(); k++) {
                 float3 pos = trackers[k]->Pos();
                 avg_height += pos.z;
-                if (pos.z < 2.0) {  // Consider particles below 2m as settled
-                    particles_settled++;
-                }
             }
             avg_height /= trackers.size();
 
             std::cout << "  Average height: " << avg_height << " m" << std::endl;
-            std::cout << "  Particles settled: " << particles_settled << " / " << trackers.size() << std::endl;
 
             DEMSim.ShowMemStats();
             std::cout << "----------------------------------------" << std::endl;

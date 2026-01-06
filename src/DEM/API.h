@@ -1671,7 +1671,7 @@ class DEMSolver {
     bool collect_force_in_force_kernel = false;
 
     // Error-out avg num contacts
-    float threshold_error_out_num_cnts = 100.;
+    float threshold_error_out_num_cnts = 300.;
 
     // Integrator type
     TIME_INTEGRATOR m_integrator = TIME_INTEGRATOR::EXTENDED_TAYLOR;
