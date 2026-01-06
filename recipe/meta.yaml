@@ -1,0 +1,56 @@
+package:
+  name: deme
+  version: {{ environ.get('GIT_DESCRIBE_TAG', '2.1.0').replace('v', '') }}
+
+source:
+  path: ..
+
+build:
+  number: 0
+  script: {{ PYTHON }} -m pip install . -vvv
+  skip: true  # [not linux]
+
+requirements:
+  build:
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
+    - cmake >=3.18
+    - ninja
+    - cudatoolkit >=11.0
+    - make
+
+  host:
+    - python >=3.8
+    - pip
+    - scikit-build-core >=0.8.0
+    - pybind11 >=2.11.0
+    - numpy >=1.19.0
+    - cudatoolkit >=11.0
+
+  run:
+    - python >=3.8
+    - numpy >=1.19.0
+    - cudatoolkit >=11.0
+
+test:
+  imports:
+    - DEME
+  commands:
+    - python -c "import DEME; print('DEME version:', DEME.__file__)"
+
+about:
+  home: https://github.com/projectchrono/DEM-Engine
+  license: BSD-3-Clause
+  license_file: LICENSE.md
+  summary: Python bindings for DEM-Engine - a GPU-accelerated Discrete Element Method simulation engine
+  description: |
+    DEM-Engine is a GPU-accelerated discrete element method (DEM) simulation engine
+    that provides high-performance particle and granular dynamics simulations.
+    This package provides Python bindings to the DEM-Engine library, allowing
+    users to set up and run simulations from Python scripts.
+  doc_url: https://github.com/projectchrono/DEM-Engine
+  dev_url: https://github.com/projectchrono/DEM-Engine
+
+extra:
+  recipe-maintainers:
+    - Ruochun

@@ -584,22 +584,34 @@ PYBIND11_MODULE(DEME, obj) {
             "kernels (if set to true), rather than using flattened sphere component configuration arrays whose entries "
             "are associated with individual spheres.",
             py::arg("use") = true)
+        .def("DisableJitifyClumpTemplates", &deme::DEMSolver::DisableJitifyClumpTemplates,
+             "Disable jitification of clump templates (use flattened arrays instead).")
         .def("SetJitifyMassProperties", &deme::DEMSolver::SetJitifyMassProperties,
              "Instruct the solver to rearrange and consolidate mass property information (for all owner types), then "
              "jitify it into GPU kernels (if set to true), rather than using flattened mass property arrays whose "
              "entries are associated with individual owners.",
              py::arg("use") = true)
+        .def("DisableJitifyMassProperties", &deme::DEMSolver::DisableJitifyMassProperties,
+             "Disable jitification of mass properties (use flattened arrays instead).")
         .def("SetExpandFactor", &deme::DEMSolver::SetExpandFactor,
              "(Explicitly) set the amount by which the radii of the spheres (and the thickness of the boundaries) are "
              "expanded for the purpose of contact detection (safe, and creates false positives). If fix is set to "
              "true, then this expand factor does not change even if the user uses variable time step size.",
              py::arg("beta"), py::arg("fix") = true)
+        .def("UseCompactForceKernel", &deme::DEMSolver::UseCompactForceKernel,
+             "Set whether to use compact force calculation kernel.", py::arg("use_compact"))
+        .def("SetMeshUniversalContact", &deme::DEMSolver::SetMeshUniversalContact,
+             "Set whether mesh-mesh contacts should be universally detected. Set to false to speedup simulation if "
+             "meshes are not expected to have contacts. Default is false.", py::arg("use") = true)
+        .def("SetPersistentContact", &deme::DEMSolver::SetPersistentContact,
+             "Set whether the solver should expect the user to mark certain contacts as persistent across kT updates. "
+             "Set this to true if you later will call MarkPersistentContact series of methods.", py::arg("use") = true)
 
         .def("SetExpandSafetyType", &deme::DEMSolver::SetExpandSafetyType,
              "A string. If 'auto': the solver automatically derives.")
         .def("SetExpandSafetyAdder", &deme::DEMSolver::SetExpandSafetyAdder,
              "Set a `base' velocity, which we will always add to our estimated maximum system velocity, when deriving "
-             "the thinckness of the contact `safety' margin")
+             "the thickness of the contact `safety' margin")
         .def("SetMaxSphereInBin", &deme::DEMSolver::SetMaxSphereInBin,
              "Used to force the solver to error out when there are too many spheres in a bin. A huge number can be "
              "used to discourage this error type")
@@ -607,9 +619,21 @@ PYBIND11_MODULE(DEME, obj) {
              "Used to force the solver to error out when there are too many spheres in a bin. A huge number can be "
              "used to discourage this error type")
 
+        .def("SetErrorOutVelocity", &deme::DEMSolver::SetErrorOutVelocity,
+             "Set the velocity which when exceeded, the solver errors out. A huge number can be used to discourage this "
+             "error type. Defaulted to 1e3.")
+        .def("SetErrorOutAngularVelocity", &deme::DEMSolver::SetErrorOutAngularVelocity,
+             "Set the angular velocity which when exceeded, the solver errors out. A huge number can be used to "
+             "discourage this error type. Defaulted to 1e4.")
         .def("SetErrorOutAvgContacts", &deme::DEMSolver::SetErrorOutAvgContacts,
              "Set the average number of contacts a sphere has, before the solver errors out. A huge number can be used "
              "to discourage this error type. Defaulted to 100")
+        .def("SetTriTriPenetration", &deme::DEMSolver::SetTriTriPenetration,
+             "Manually set the current triangle-triangle penetration value in dT. This allows the user to directly "
+             "control the maxTriTriPenetration value which will ONLY be used in the NEXT contact detection run in kT.")
+        .def("SetMaxTriTriPenetration", &deme::DEMSolver::SetMaxTriTriPenetration,
+             "Set the maximum allowed triangle-triangle penetration used as the margin added in kT contact detection. "
+             "This value caps the penetration margin added to prevent excessively large values.")
         .def("GetAvgSphContacts", &deme::DEMSolver::GetAvgSphContacts,
              "Get the current number of contacts each sphere has")
         .def("UseAdaptiveBinSize", &deme::DEMSolver::UseAdaptiveBinSize,
@@ -674,6 +698,12 @@ PYBIND11_MODULE(DEME, obj) {
         .def("SetContactOutputFormat",
              static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetContactOutputFormat),
              "Specify the file format of contact pairs.")
+        .def("EnableOwnerWildcardOutput", &deme::DEMSolver::EnableOwnerWildcardOutput,
+             "Enable or disable owner wildcard output.", py::arg("enable") = true)
+        .def("EnableContactWildcardOutput", &deme::DEMSolver::EnableContactWildcardOutput,
+             "Enable or disable contact wildcard output.", py::arg("enable") = true)
+        .def("EnableGeometryWildcardOutput", &deme::DEMSolver::EnableGeometryWildcardOutput,
+             "Enable or disable geometry wildcard output.", py::arg("enable") = true)
         .def("SetVerbosity", static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetVerbosity),
              "Set the verbosity level of the solver.")
 
