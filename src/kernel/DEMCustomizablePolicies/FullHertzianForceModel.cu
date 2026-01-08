@@ -42,8 +42,12 @@ if (overlapDepth > 0) {
         }
     }
 
+    const bool tri_involved = (AType == deme::GEO_T_TRIANGLE) || (BType == deme::GEO_T_TRIANGLE);
+    float contact_radius = 0.f;        // area-based radius or sqrt(overlapDepth * R_eff)
+    float effective_radius = 0.f;      // geometric effective radius when no triangle is involved
+
     // A few re-usables
-    float mass_eff, beta, cnt_rad;
+    float mass_eff, beta;
     float3 vrel_tan;
     float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
 
@@ -64,9 +68,16 @@ if (overlapDepth > 0) {
 
         mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
 
-        // Contact radius (radial distance from contact center axis) called cnt_rad, computed from area
-        cnt_rad = sqrtf(overlapArea / deme::PI);
-        const float Sn = 2.f * E_cnt * cnt_rad;
+        // Contact radius: use area only when a triangle is involved; otherwise use classic Hertz form
+        if (tri_involved) {
+            contact_radius = sqrtf(overlapArea / deme::PI);
+        } else {
+            effective_radius =
+                (BType == deme::GEO_T_ANALYTICAL) ? ARadius : (ARadius * BRadius) / (ARadius + BRadius);
+            contact_radius = sqrtf(overlapDepth * effective_radius);
+        }
+
+        const float Sn = 2.f * E_cnt * contact_radius;
 
         const float loge = (CoR_cnt < DEME_TINY_FLOAT) ? log(DEME_TINY_FLOAT) : log(CoR_cnt);
         beta = loge / sqrt(loge * loge + deme::PI_SQUARED);
@@ -83,11 +94,12 @@ if (overlapDepth > 0) {
         // Figure out if we should apply rolling resistance force
         bool should_add_rolling_resistance = true;
         {
-            // Use geometric equivalence R_eff ≈ cnt_rad^2 / overlapDepth
-            const float R_eff = (cnt_rad * cnt_rad) / overlapDepth;
+            // Use area-based R_eff when triangles are involved; otherwise classic geometric effective radius
+            const float R_eff =
+                tri_involved ? ((contact_radius * contact_radius) / overlapDepth) : effective_radius;
 
-            const float kn_simple = (4.f / 3.f) * E_cnt * sqrtf(R_eff);
-            const float gn_simple = -2.f * sqrtf((5.f / 3.f) * mass_eff * E_cnt) * beta * powf(R_eff, 0.25f);
+            const float kn_simple = deme::FOUR_OVER_THREE * E_cnt * sqrtf(R_eff);
+            const float gn_simple = -2.f * sqrtf(deme::FIVE_OVER_THREE * mass_eff * E_cnt) * beta * powf(R_eff, 0.25f);
 
             const float d_coeff = gn_simple / (2.f * sqrtf(kn_simple * mass_eff));
 
@@ -117,8 +129,8 @@ if (overlapDepth > 0) {
 
     // Tangential force part
     if (mu_cnt > 0.f) {
-        const float kt = 8. * G_cnt * cnt_rad;
-        const float gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_THREE * beta * sqrtf(mass_eff * kt);
+        const float kt = 8.f * G_cnt * contact_radius;
+        const float gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrtf(mass_eff * kt); // do we neen higher damping?? 
         float3 tangent_force = -kt * delta_tan - gt * vrel_tan;
         const float ft = length(tangent_force);
         if (ft > DEME_TINY_FLOAT) {
