@@ -22,9 +22,12 @@ __device__ __forceinline__ float getApproxAbsVel(deme::DEMSimParams* simParams,
             "max-velocity-exceeded-allowance).\n",
             static_cast<unsigned long long>(ownerID));
     }
-    // Compute this primitive sphere's velocity including the contribution from its owner's angular velocity. This is an
-    // estimation as no direction is considered.
-    float vel = abs_v + length(myRelPos) * abs_angv;
+    // Compute this primitive sphere's velocity, optionally including the owner's angular velocity contribution.
+    float vel = abs_v;
+    if (simParams->useAngVelMargin) {
+        // This is an estimation as no direction is considered.
+        vel += length(myRelPos) * abs_angv;
+    }
 
     vel = fminf(vel, simParams->dyn.approxMaxVel);
     return vel;

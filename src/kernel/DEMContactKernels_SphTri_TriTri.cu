@@ -35,10 +35,10 @@ inline __device__ void fillSharedMemTriangles(deme::DEMSimParams* simParams,
     triIDs[myThreadID] = triID;
     triOwnerIDs[myThreadID] = ownerID;
     triOwnerFamilies[myThreadID] = granData->familyID[ownerID];
-    double3 ownerXYZ;
+    float3 ownerXYZ;
     float3 node1, node2, node3;
 
-    voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
+    voxelIDToPosition<float, deme::voxelID_t, deme::subVoxelPos_t>(
         ownerXYZ.x, ownerXYZ.y, ownerXYZ.z, granData->voxelID[ownerID], granData->locX[ownerID],
         granData->locY[ownerID], granData->locZ[ownerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
     float myOriQw = granData->oriQw[ownerID];
@@ -87,7 +87,7 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
     bodyIDs[myThreadID] = sphereID;
     ownerIDs[myThreadID] = ownerID;
     ownerFamilies[myThreadID] = granData->familyID[ownerID];
-    double ownerX, ownerY, ownerZ;
+    float ownerX, ownerY, ownerZ;
     float myRadius;
     float3 myRelPos;
 
@@ -100,7 +100,7 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
     }
 
     // These locations does not include the LBF offset
-    voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
+    voxelIDToPosition<float, deme::voxelID_t, deme::subVoxelPos_t>(
         ownerX, ownerY, ownerZ, granData->voxelID[ownerID], granData->locX[ownerID], granData->locY[ownerID],
         granData->locZ[ownerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
     float myOriQw = granData->oriQw[ownerID];
@@ -108,9 +108,9 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
     float myOriQy = granData->oriQy[ownerID];
     float myOriQz = granData->oriQz[ownerID];
     applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, myOriQw, myOriQx, myOriQy, myOriQz);
-    bodyX[myThreadID] = ownerX + (double)myRelPos.x;
-    bodyY[myThreadID] = ownerY + (double)myRelPos.y;
-    bodyZ[myThreadID] = ownerZ + (double)myRelPos.z;
+    bodyX[myThreadID] = ownerX + myRelPos.x;
+    bodyY[myThreadID] = ownerY + myRelPos.y;
+    bodyZ[myThreadID] = ownerZ + myRelPos.z;
     radii[myThreadID] = myRadius;
 }
 
@@ -283,7 +283,7 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                     if (in_contact_A || in_contact_B) {
                         snap_to_face(triANode1[ind], triANode2[ind], triANode3[ind], sphXYZ, cntPnt);
                         deme::binID_t contactPntBin = getPointBinID<deme::binID_t>(
-                            cntPnt.x, cntPnt.y, cntPnt.z, simParams->dyn.binSize, simParams->nbX, simParams->nbY);
+                            cntPnt.x, cntPnt.y, cntPnt.z, simParams->dyn.inv_binSize, simParams->nbX, simParams->nbY);
                         if (contactPntBin == binID) {
                             atomicAdd(&blockSphTriPairCnt, 1);
                         }
@@ -553,7 +553,7 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                     if (in_contact_A || in_contact_B) {
                         snap_to_face(triANode1[ind], triANode2[ind], triANode3[ind], sphXYZ, cntPnt);
                         deme::binID_t contactPntBin = getPointBinID<deme::binID_t>(
-                            cntPnt.x, cntPnt.y, cntPnt.z, simParams->dyn.binSize, simParams->nbX, simParams->nbY);
+                            cntPnt.x, cntPnt.y, cntPnt.z, simParams->dyn.inv_binSize, simParams->nbX, simParams->nbY);
                         if (contactPntBin == binID) {
                             deme::contactPairs_t inBlockOffset = smReportOffset + atomicAdd(&blockSphTriPairCnt, 1);
                             if (inBlockOffset < smReportOffset_end) {

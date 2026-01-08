@@ -1139,20 +1139,29 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
         if (*scratchPad.numPrimitiveContacts > 0) {
             size_t numTotalCnts = *scratchPad.numPrimitiveContacts;
             size_t total_ids_bytes = numTotalCnts * sizeof(bodyID_t);
-            size_t total_types_bytes = numTotalCnts * sizeof(contact_t);
             size_t total_persistency_bytes = numTotalCnts * sizeof(notStupidBool_t);
             size_t patch_arr_bytes = numTotalCnts * sizeof(patchIDPair_t);
+            size_t type_arr_bytes = numTotalCnts * sizeof(contact_t);
+            size_t idx_arr_bytes = numTotalCnts * sizeof(contactPairs_t);
 
             patchIDPair_t* contactPatchPairs =
                 (patchIDPair_t*)scratchPad.allocateTempVector("contactPatchPairs", patch_arr_bytes);
             patchIDPair_t* patchPairs_sorted =
                 (patchIDPair_t*)scratchPad.allocateTempVector("patchPairs_sorted", patch_arr_bytes);
+            contactPairs_t* sort_indices =
+                (contactPairs_t*)scratchPad.allocateTempVector("contactSortIndices", idx_arr_bytes);
+            contactPairs_t* sort_indices_sorted =
+                (contactPairs_t*)scratchPad.allocateTempVector("contactSortIndices_sorted", idx_arr_bytes);
             bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector("idA_sorted", total_ids_bytes);
             bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector("idB_sorted", total_ids_bytes);
             contact_t* contactType_sorted =
-                (contact_t*)scratchPad.allocateTempVector("contactType_sorted", total_types_bytes);
+                (contact_t*)scratchPad.allocateTempVector("contactType_sorted", type_arr_bytes);
             notStupidBool_t* contactPersistency_sorted = (notStupidBool_t*)scratchPad.allocateTempVector(
                 "contactPersistency_sorted", total_persistency_bytes);
+            contactPairs_t* type_indices =
+                (contactPairs_t*)scratchPad.allocateTempVector("contactTypeIndices", idx_arr_bytes);
+            contactPairs_t* type_indices_sorted =
+                (contactPairs_t*)scratchPad.allocateTempVector("contactTypeIndices_sorted", idx_arr_bytes);
 
             size_t blocks_needed_for_patch_ids =
                 (numTotalCnts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
@@ -1161,30 +1170,53 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                                                           dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
                     contactPatchPairs, granData->contactTypePrimitive, granData->idPrimitiveA, granData->idPrimitiveB,
                     granData->triPatchID, numTotalCnts);
+                lineNumbers<<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+                    sort_indices, numTotalCnts);
             }
 
-            // Sort by patch pair, then stable-sort by contact type so each type segment is ordered by patch pair.
-            cubDEMSortByKeys<patchIDPair_t, bodyID_t>(contactPatchPairs, patchPairs_sorted, granData->idPrimitiveA,
-                                                      idA_sorted, numTotalCnts, this_stream, scratchPad);
-            cubDEMSortByKeys<patchIDPair_t, bodyID_t>(contactPatchPairs, patchPairs_sorted, granData->idPrimitiveB,
-                                                      idB_sorted, numTotalCnts, this_stream, scratchPad);
-            cubDEMSortByKeys<patchIDPair_t, contact_t>(contactPatchPairs, patchPairs_sorted,
-                                                       granData->contactTypePrimitive, contactType_sorted, numTotalCnts,
-                                                       this_stream, scratchPad);
-            cubDEMSortByKeys<patchIDPair_t, notStupidBool_t>(
-                contactPatchPairs, patchPairs_sorted, granData->contactPersistency, contactPersistency_sorted,
-                numTotalCnts, this_stream, scratchPad);
+            // Sort by patch-pair first, then gather arrays into patch-pair order.
+            cubDEMSortByKeys<patchIDPair_t, contactPairs_t>(contactPatchPairs, patchPairs_sorted, sort_indices,
+                                                            sort_indices_sorted, numTotalCnts, this_stream, scratchPad);
 
-            cubDEMSortByKeys<contact_t, bodyID_t>(contactType_sorted, granData->contactTypePrimitive, idA_sorted,
-                                                  granData->idPrimitiveA, numTotalCnts, this_stream, scratchPad);
-            cubDEMSortByKeys<contact_t, bodyID_t>(contactType_sorted, granData->contactTypePrimitive, idB_sorted,
-                                                  granData->idPrimitiveB, numTotalCnts, this_stream, scratchPad);
-            cubDEMSortByKeys<contact_t, patchIDPair_t>(contactType_sorted, granData->contactTypePrimitive,
-                                                       patchPairs_sorted, contactPatchPairs, numTotalCnts,
-                                                       this_stream, scratchPad);
-            cubDEMSortByKeys<contact_t, notStupidBool_t>(
-                contactType_sorted, granData->contactTypePrimitive, contactPersistency_sorted,
-                granData->contactPersistency, numTotalCnts, this_stream, scratchPad);
+            if (blocks_needed_for_patch_ids > 0) {
+                gatherByIndex<bodyID_t><<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                          this_stream>>>(granData->idPrimitiveA, idA_sorted, sort_indices_sorted,
+                                                         numTotalCnts);
+                gatherByIndex<bodyID_t><<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                          this_stream>>>(granData->idPrimitiveB, idB_sorted, sort_indices_sorted,
+                                                         numTotalCnts);
+                gatherByIndex<contact_t><<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                           this_stream>>>(granData->contactTypePrimitive, contactType_sorted,
+                                                          sort_indices_sorted, numTotalCnts);
+                gatherByIndex<notStupidBool_t>
+                    <<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+                        granData->contactPersistency, contactPersistency_sorted, sort_indices_sorted, numTotalCnts);
+            }
+
+            if (blocks_needed_for_patch_ids > 0) {
+                lineNumbers<<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+                    type_indices, numTotalCnts);
+            }
+
+            // Stable sort by contact type to preserve patch-pair order within each type segment.
+            cubDEMSortByKeys<contact_t, contactPairs_t>(contactType_sorted, granData->contactTypePrimitive,
+                                                        type_indices, type_indices_sorted, numTotalCnts, this_stream,
+                                                        scratchPad);
+
+            if (blocks_needed_for_patch_ids > 0) {
+                gatherByIndex<bodyID_t><<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                          this_stream>>>(idA_sorted, granData->idPrimitiveA, type_indices_sorted,
+                                                         numTotalCnts);
+                gatherByIndex<bodyID_t><<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                          this_stream>>>(idB_sorted, granData->idPrimitiveB, type_indices_sorted,
+                                                         numTotalCnts);
+                gatherByIndex<notStupidBool_t>
+                    <<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+                        contactPersistency_sorted, granData->contactPersistency, type_indices_sorted, numTotalCnts);
+                gatherByIndex<patchIDPair_t>
+                    <<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+                        patchPairs_sorted, contactPatchPairs, type_indices_sorted, numTotalCnts);
+            }
 
             primitiveContactArraysAreSortedByType = true;
 
@@ -1234,7 +1266,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 cubDEMSelectFlagged<contact_t, contactPairs_t>(
                     granData->contactTypePrimitive, granData->contactTypePatch, isNewGroup,
                     scratchPad.getDualStructDevice("numUniquePatchPairs"), numTotalCnts, this_stream, scratchPad);
-
                 size_t blocks_needed_for_decode =
                     (numUniquePatchPairs + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
                 decodePatchPairsToSeparateArrays<<<dim3(blocks_needed_for_decode),
@@ -1286,10 +1317,14 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
             scratchPad.finishUsingDualStruct("numUniquePatchPairs");
             scratchPad.finishUsingTempVector("contactPatchPairs");
             scratchPad.finishUsingTempVector("patchPairs_sorted");
+            scratchPad.finishUsingTempVector("contactSortIndices");
+            scratchPad.finishUsingTempVector("contactSortIndices_sorted");
             scratchPad.finishUsingTempVector("idA_sorted");
             scratchPad.finishUsingTempVector("idB_sorted");
             scratchPad.finishUsingTempVector("contactType_sorted");
             scratchPad.finishUsingTempVector("contactPersistency_sorted");
+            scratchPad.finishUsingTempVector("contactTypeIndices");
+            scratchPad.finishUsingTempVector("contactTypeIndices_sorted");
             // std::cout << "Patch contacts:" << std::endl;
             // displayDeviceArray<bodyID_t>(granData->idPatchA, *scratchPad.numContacts);
             // displayDeviceArray<bodyID_t>(granData->idPatchB, *scratchPad.numContacts);

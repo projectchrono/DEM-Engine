@@ -545,6 +545,7 @@ void DEMKinematicThread::workerThread() {
             }
             const bool same_dev = (streamInfo.device == dT->streamInfo.device);
             if (same_dev && kT_to_dT_BufferReadyEvent) {
+                DEME_GPU_CALL(cudaEventRecord(kT_to_dT_BufferReadyEvent, streamInfo.stream));
                 auto* payload = new DynamicProduceReadyPayload{pSchedSupport};
                 DEME_GPU_CALL(cudaLaunchHostFunc(streamInfo.stream, NotifyDynamicProduceReady, payload));
             } else {
@@ -818,6 +819,7 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
                                       double max_tritri_penetration,
                                       float expand_safety_param,
                                       float expand_safety_adder,
+                                      bool use_angvel_margin,
                                       const std::set<std::string>& contact_wildcards,
                                       const std::set<std::string>& owner_wildcards,
                                       const std::set<std::string>& geo_wildcards) {
@@ -846,6 +848,7 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
     simParams->dyn.approxMaxVel = approx_max_vel;
     simParams->dyn.expSafetyMulti = expand_safety_param;
     simParams->dyn.expSafetyAdder = expand_safety_adder;
+    simParams->useAngVelMargin = use_angvel_margin ? 1 : 0;
 
     simParams->nContactWildcards = contact_wildcards.size();
     simParams->nOwnerWildcards = owner_wildcards.size();

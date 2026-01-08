@@ -40,9 +40,9 @@ constexpr double ONE_OVER_THREE = 1. / 3.;
 constexpr double TWO_OVER_THREE = 2. / 3.;
 constexpr double FOUR_OVER_THREE = 4. / 3.;
 constexpr double FIVE_OVER_THREE = 5. / 3.;
-constexpr double TWO_TIMES_SQRT_FIVE_OVER_SIX = 1.825741858350554;  // 2. * std::sqrt(5. / 6.)
 constexpr double PI = 3.1415926535897932385;
 constexpr double PI_SQUARED = 9.869604401089358;
+constexpr float TWO_TIMES_SQRT_FIVE_OVER_THREE = 2.58198889747161;  // 2. * std::sqrt(5. / 3.)
 
 constexpr uint8_t VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * DEME_BITS_PER_BYTE;
 constexpr uint8_t VOXEL_COUNT_POWER2 = sizeof(voxelID_t) * DEME_BITS_PER_BYTE;
@@ -308,6 +308,8 @@ struct DEMSimParams {
     unsigned int errOutBinSphNum = 32768;
     // The max num of triangles per bin before solver errors out
     unsigned int errOutBinTriNum = 32768;
+    // Whether angular velocity contributes to contact margin sizing (and sphere--sphere rot. velocity use).
+    notStupidBool_t useAngVelMargin = 1;
 };
 
 // A struct that holds pointers to data arrays that dT uses

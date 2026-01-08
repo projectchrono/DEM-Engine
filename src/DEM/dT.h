@@ -588,6 +588,7 @@ class DEMDynamicThread {
                       double max_tritri_penetration,
                       float expand_safety_param,
                       float expand_safety_adder,
+                      bool use_angvel_margin,
                       const std::set<std::string>& contact_wildcards,
                       const std::set<std::string>& owner_wildcards,
                       const std::set<std::string>& geo_wildcards);

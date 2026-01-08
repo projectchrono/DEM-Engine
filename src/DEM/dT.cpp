@@ -456,6 +456,7 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                     double max_tritri_penetration,
                                     float expand_safety_param,
                                     float expand_safety_adder,
+                                    bool use_angvel_margin,
                                     const std::set<std::string>& contact_wildcards,
                                     const std::set<std::string>& owner_wildcards,
                                     const std::set<std::string>& geo_wildcards) {
@@ -484,6 +485,7 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->dyn.expSafetyMulti = expand_safety_param;
     simParams->dyn.expSafetyAdder = expand_safety_adder;
     simParams->capTriTriPenetration = max_tritri_penetration;
+    simParams->useAngVelMargin = use_angvel_margin ? 1 : 0;
 
     simParams->nContactWildcards = contact_wildcards.size();
     simParams->nOwnerWildcards = owner_wildcards.size();
@@ -2758,11 +2760,13 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
 }
 
 void DEMDynamicThread::calculateForces() {
+    DEME_NVTX_RANGE("dT::calculateForces");
     // Reset force (acceleration) arrays for this time step
     size_t nContactPairs = *solverScratchSpace.numContacts;
 
     timers.StartGpuTimer("Clear force array", streamInfo.stream);
     {
+        DEME_NVTX_RANGE("dT::prepareAccArrays");
         prepareAccArrays(&simParams, &granData, simParams->nOwnerBodies, streamInfo.stream);
 
         // prepareForceArrays is no longer needed
@@ -2777,7 +2781,8 @@ void DEMDynamicThread::calculateForces() {
     // If no contact then we don't have to calculate forces. Note there might still be forces, coming from prescription
     // or other sources.
     if (nContactPairs > 0) {
-        timers.GetTimer("Calculate contact forces").start();
+        timers.StartGpuTimer("Calculate contact forces", streamInfo.stream);
+        DEME_NVTX_RANGE("dT::contactForces");
 
         // Call specialized kernels for each contact type that exists
         dispatchPrimitiveForceKernels(typeStartCountPrimitiveMap, contactTypePrimitiveKernelMap);

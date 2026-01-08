@@ -8,7 +8,6 @@ _clumpTemplateDefs_;
 // Definitions of analytical entites are below
 _analyticalEntityDefs_;
 
-
 __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                                                  deme::DEMDataKT* granData,
                                                  deme::binsSphereTouches_t* numBinsSphereTouches,
@@ -117,7 +116,7 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                                                     ownerOriQz);
             double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
 
-            double overlapDepth, overlapArea;  // overlapArea matters not here
+            double overlapDepth;
             deme::contact_t contact_type;
             {
                 double3 cntPnt;  // cntPnt here is a placeholder
@@ -125,7 +124,7 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                 contact_type = checkSphereEntityOverlap<double3, float, double>(
                     myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
                     objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
-                    granData->marginSizeAnalytical[objB], cntPnt, cntNorm, overlapDepth, overlapArea);
+                    granData->marginSizeAnalytical[objB], cntPnt, cntNorm, overlapDepth);
             }
             // overlapDepth (which has both entities' full margins) needs to be larger than the smaller one of the two
             // added margin to be considered in-contact.
@@ -264,7 +263,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                                                         ownerOriQz);
                 double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
 
-                double overlapDepth, overlapArea;  // overlapArea matters not here
+                double overlapDepth;
                 deme::contact_t contact_type;
                 {
                     double3 cntPnt;  // cntPnt here is a placeholder
@@ -272,7 +271,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                     contact_type = checkSphereEntityOverlap<double3, float, double>(
                         myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
                         objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
-                        granData->marginSizeAnalytical[objB], cntPnt, cntNorm, overlapDepth, overlapArea);
+                        granData->marginSizeAnalytical[objB], cntPnt, cntNorm, overlapDepth);
                 }
                 // overlapDepth (which has both entities' full margins) needs to be larger than the smaller one of the two
                 // added margin to be considered in-contact.

@@ -192,9 +192,10 @@ __host__ __device__ T1 magVector3(T1& x, T1& y, T1& z) {
 }
 
 // Normalize a 3-component vector
-inline __host__ __device__ void normalizeVector3(float& x, float& y, float& z) {
-    float r2 = x*x + y*y + z*z;
-    float invMag = rsqrtf(r2);
+template <typename T1>
+inline __host__ __device__ void normalizeVector3(T1& x, T1& y, T1& z) {
+    T1 r2 = x*x + y*y + z*z;
+    T1 invMag = rsqrtf(r2);
     invMag = invMag * (1.5f - 0.5f * r2 * invMag * invMag); // 1x Newton for acurrency
     // TODO: Think about whether this is safe
     // if (magnitude < DEME_TINY_FLOAT) {
@@ -205,13 +206,14 @@ inline __host__ __device__ void normalizeVector3(float& x, float& y, float& z) {
     z *= invMag;
 }
 // Normalize a 3-component vector safe (not used and maybe not needed)
-inline __host__ __device__ void normalizeVector3safe(float& x, float& y, float& z) {
-    float r2 = x*x + y*y + z*z;
-    const float tiny = 1e-30f;
-    float safe_r2 = fmaxf(r2, tiny);    
-    float invMag  = rsqrtf(safe_r2);
+template <typename T1>
+inline __host__ __device__ void normalizeVector3safe(T1& x, T1& y, T1& z) {
+    T1 r2 = x*x + y*y + z*z;
+    const T1 tiny = 1e-30f;
+    T1 safe_r2 = fmaxf(r2, tiny);    
+    T1 invMag  = rsqrtf(safe_r2);
     invMag = invMag * (1.5f - 0.5f * safe_r2 * invMag * invMag);
-    float m = r2 > tiny ? 1.0f : 0.0f;
+    T1 m = r2 > tiny ? 1.0f : 0.0f;
     x = x * invMag * m;
     y = y * invMag * m;
     z = z * invMag * m;
@@ -256,86 +258,6 @@ __host__ __device__ void HamiltonProduct(T1& A,
     D = a1 * d2 + b1 * c2 - c1 * b2 + d1 * a2;
 }
 
-/*
-// This version of checkSpheresOverlap is not used anymore for code clarity, and the fact that every use case now
-// requires overlapDepth.
-template <typename T1>
-inline __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
-                                                      const T1& YA,
-                                                      const T1& ZA,
-                                                      const T1& radA,
-                                                      const T1& XB,
-                                                      const T1& YB,
-                                                      const T1& ZB,
-                                                      const T1& radB,
-                                                      T1& CPX,
-                                                      T1& CPY,
-                                                      T1& CPZ) {
-    T1 centerDist2 = distSquared<T1>(XA, YA, ZA, XB, YB, ZB);
-    deme::contact_t contactType;
-    if (centerDist2 > (radA + radB) * (radA + radB)) {
-        contactType = deme::NOT_A_CONTACT;
-    } else {
-        contactType = deme::SPHERE_SPHERE_CONTACT;
-    }
-    // If getting this far, then 2 spheres have an intersection, let's calculate the intersection point
-    float B2AVecX = XA - XB;
-    float B2AVecY = YA - YB;
-    float B2AVecZ = ZA - ZB;
-    normalizeVector3<float>(B2AVecX, B2AVecY, B2AVecZ);
-    T1 halfOverlapDepth = (radA + radB - sqrt(centerDist2)) / (T1)2;
-    // From center of B, towards center of A, move a distance of radB, then backtrack a bit, for half the overlap depth
-    CPX = XB + (radB - halfOverlapDepth) * B2AVecX;
-    CPY = YB + (radB - halfOverlapDepth) * B2AVecY;
-    CPZ = ZB + (radB - halfOverlapDepth) * B2AVecZ;
-    return contactType;
-}
-*/
-
-/**
- * Template arguments:
- *   - T1: the floating point accuracy level for contact point location/penetration depth
- *   - T2: the floating point accuracy level for the relative position of 2 bodies involved
- *
- * Basic idea: determines whether 2 spheres intersect and the intersection point coordinates which also gives the
- * penetration length and bodyB's outward contact normal.
- *
- */
-template <typename T1, typename T2>
-inline __host__ __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
-                                                               const T1& YA,
-                                                               const T1& ZA,
-                                                               const T1& radA,
-                                                               const T1& XB,
-                                                               const T1& YB,
-                                                               const T1& ZB,
-                                                               const T1& radB,
-                                                               T1& CPX,
-                                                               T1& CPY,
-                                                               T1& CPZ,
-                                                               T2& normalX,
-                                                               T2& normalY,
-                                                               T2& normalZ,
-                                                               T1& overlapDepth) {
-    T1 centerDist2 = distSquared<T1>(XA, YA, ZA, XB, YB, ZB);
-    deme::contact_t contactType;
-    if (centerDist2 > (radA + radB) * (radA + radB)) {
-        contactType = deme::NOT_A_CONTACT;
-    } else {
-        contactType = deme::SPHERE_SPHERE_CONTACT;
-    }
-    // If getting this far, then 2 spheres have an intersection, let's calculate the intersection point
-    normalX = XA - XB;
-    normalY = YA - YB;
-    normalZ = ZA - ZB;
-    normalizeVector3(normalX, normalY, normalZ);
-    overlapDepth = radA + radB - sqrt(centerDist2);
-    // From center of B, towards center of A, move a distance of radB, then backtrack a bit, for half the overlap depth
-    CPX = XB + (radB - overlapDepth / (T1)2) * normalX;
-    CPY = YB + (radB - overlapDepth / (T1)2) * normalY;
-    CPZ = ZB + (radB - overlapDepth / (T1)2) * normalZ;
-    return contactType;
-}
 
 // Compute the binID for a point in space (mixed precision, fp32 with fp64 fallback)
 template <typename T1>

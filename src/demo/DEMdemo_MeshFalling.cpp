@@ -16,6 +16,7 @@
 
 #include <filesystem>
 #include <cstdio>
+#include <cmath>
 #include <time.h>
 #include <random>
 
@@ -31,6 +32,8 @@ int main() {
     DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT", "NORMAL", "TORQUE", "CNT_WILDCARD"});
     DEMSim.InstructBoxDomainDimension(20, 20, 15);
 
+    DEMSim.SetGPUTimersEnabled(true);
+    
     // Enable mesh-mesh contacts so boxes can collide with each other
     DEMSim.SetMeshUniversalContact(true);
 
@@ -52,11 +55,11 @@ int main() {
     std::vector<std::shared_ptr<DEMTracker>> trackers;
 
     // Random number generator for variations
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    const unsigned int seed = 12345u;
+    std::mt19937 gen(seed);
     std::uniform_real_distribution<> pos_dist(-0.1, 0.1);
     std::uniform_real_distribution<> rot_dist(-0.2, 0.2);
-    std::uniform_real_distribution<> scale_dist(0.8, 2.4);  // Scale variation
+    std::uniform_real_distribution<> scale_dist(0.8, 2.0);  // Scale variation
     std::uniform_int_distribution<> mesh_type_dist(0, 3);   // 4 mesh types
 
     for (int i = 0; i < num_particles_x; i++) {
@@ -98,6 +101,8 @@ int main() {
             } else if (mesh_type == 2) {
                 // Cone (height ~1, radius ~1 in mesh)
                 particle = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cone.obj").string(), mat_box);
+                // Unit cone's CoM is at this location...
+                particle->InformCentroidPrincipal(make_float3(0, 0, 3. / 4.), make_float4(0, 0, 0, 1));
                 float scale = base_size * scale_dist(gen);
                 particle->Scale(scale);
 
@@ -165,19 +170,27 @@ int main() {
             DEMSim.WriteMeshFile(out_dir / meshfilename);
 
             // Print some statistics
-            int particles_settled = 0;
             float avg_height = 0.0;
+            double sum_speed = 0.0;
+            double max_speed = 0.0;
             for (size_t k = 0; k < trackers.size(); k++) {
                 float3 pos = trackers[k]->Pos();
+                float3 vel = trackers[k]->Vel();
+                double speed = std::sqrt(static_cast<double>(vel.x) * vel.x +
+                                         static_cast<double>(vel.y) * vel.y +
+                                         static_cast<double>(vel.z) * vel.z);
                 avg_height += pos.z;
-                if (pos.z < 2.0) {  // Consider particles below 2m as settled
-                    particles_settled++;
+                sum_speed += speed;
+                if (speed > max_speed) {
+                    max_speed = speed;
                 }
             }
+            double mean_speed = (trackers.empty()) ? 0.0 : (sum_speed / trackers.size());
             avg_height /= trackers.size();
 
             std::cout << "  Average height: " << avg_height << " m" << std::endl;
-            std::cout << "  Particles settled: " << particles_settled << " / " << trackers.size() << std::endl;
+            std::cout << "  Mean speed: " << mean_speed << " m/s" << std::endl;
+            std::cout << "  Max speed: " << max_speed << " m/s" << std::endl;
 
             DEMSim.ShowMemStats();
             std::cout << "----------------------------------------" << std::endl;

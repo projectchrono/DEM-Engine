@@ -18,8 +18,9 @@ if (overlapDepth > 0) {
         Crr_cnt = Crr[bodyAMatType][bodyBMatType];
     }
 
-    float3 rotVelCPA, rotVelCPB;
-    {
+    float3 rotVelCPA = make_float3(0.f, 0.f, 0.f);
+    float3 rotVelCPB = make_float3(0.f, 0.f, 0.f);
+    if constexpr (AType != deme::GEO_T_SPHERE || BType != deme::GEO_T_SPHERE) {
         // We also need the relative velocity between A and B in global frame to use in the damping terms
         // To get that, we need contact points' rotational velocity in GLOBAL frame
         // This is local rotational velocity (the portion of linear vel contributed by rotation)
@@ -30,6 +31,15 @@ if (overlapDepth > 0) {
                                                 AOriQ.z);
         applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y,
                                                 BOriQ.z);
+    } else {
+        if (simParams->useAngVelMargin) {
+            rotVelCPA = cross(ARotVel, locCPA);
+            rotVelCPB = cross(BRotVel, locCPB);
+            applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x,
+                                                    AOriQ.y, AOriQ.z);
+            applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x,
+                                                    BOriQ.y, BOriQ.z);
+        }
     }
 
     // A few re-usables
@@ -108,7 +118,7 @@ if (overlapDepth > 0) {
     // Tangential force part
     if (mu_cnt > 0.f) {
         const float kt = 8. * G_cnt * cnt_rad;
-        const float gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrtf(mass_eff * kt);
+        const float gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_THREE * beta * sqrtf(mass_eff * kt);
         float3 tangent_force = -kt * delta_tan - gt * vrel_tan;
         const float ft = length(tangent_force);
         if (ft > DEME_TINY_FLOAT) {

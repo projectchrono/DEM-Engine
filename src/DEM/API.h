@@ -222,6 +222,10 @@ class DEMSolver {
     /// thinckness of the contact `safety' margin. This need not to be large unless the simulation velocity can increase
     /// significantly in one kT update cycle.
     void SetExpandSafetyAdder(float vel) { m_expand_base_vel = vel; }
+    /// @brief Control whether angular velocity contributes to the contact detection margin.
+    /// @details Default is auto: false for pure single-sphere clumps; true when multi-sphere clumps or meshes exist.
+    ///          If disabled, sphere--sphere contact uses only linear velocity when computing damping/friction terms.
+    void SetUseAngularVelocityMargin(bool use);
 
     /// @brief Manually set the current triangle--triangle penetration value in dT.
     /// @details This allows the user to directly control the maxTriTriPenetration value which will ONLY be used in the
@@ -1395,9 +1399,6 @@ class DEMSolver {
     void SetGPUTimersEnabled(bool enabled);
     /// Query whether GPU event-based timing is enabled.
     bool GetGPUTimersEnabled() const { return m_gpu_timers_enabled; }
-    /// Defer blocking GPU timer accumulation (reduces per-step sync overhead; pending spans are flushed in
-    /// ShowTimingStats).
-    void SetGPUTimerAccumulationDeferred(bool deferred);
 
     /// Reset the collaboration stats between dT and kT back to the initial value (0). You should call this if you want
     /// to start over and re-inspect the stats of the new run; otherwise, it is generally not needed, you can go ahead
@@ -1622,6 +1623,9 @@ class DEMSolver {
     // The `base' velocity we always consider entities to have, when determining the thickness of the margin to add for
     // contact detection.
     float m_expand_base_vel = 3.f;
+    // Whether angular velocity contributes to the contact margin (auto-detected if not user-set).
+    bool m_use_angvel_margin = true;
+    bool m_use_angvel_margin_user_set = false;
 
     // The method of determining the thickness of the margin added to CD
     // Default is using a max_vel inspector of the clumps to decide it

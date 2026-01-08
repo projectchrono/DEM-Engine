@@ -170,7 +170,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // If B is a sphere, then A can only be a sphere
         checkSpheresOverlap<double, float>(bodyAPos.x, bodyAPos.y, bodyAPos.z, ARadius, bodyBPos.x, bodyBPos.y,
                                            bodyBPos.z, BRadius, contactPnt.x, contactPnt.y, contactPnt.z, B2A.x, B2A.y,
-                                           B2A.z, overlapDepth, overlapArea);
+                                           B2A.z, overlapDepth);
         // If overlapDepth is negative then it might still be considered in contact, if the extra margins of A and B
         // combined is larger than abs(overlapDepth)
         if (overlapDepth <= -extraMarginSize) {
@@ -303,7 +303,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             checkSphereEntityOverlap<double3, float, double>(bodyAPos, ARadius, objType[analyticalID], bodyBPos,
                                                              bodyBRot, objSize1[analyticalID], objSize2[analyticalID],
                                                              objSize3[analyticalID], objNormal[analyticalID], 0.0,
-                                                             contactPnt, B2A, overlapDepth, overlapArea);
+                                                             contactPnt, B2A, overlapDepth);
             // Fix ContactType if needed
             if (overlapDepth <= -extraMarginSize) {
                 ContactType = deme::NOT_A_CONTACT;

@@ -134,7 +134,6 @@ int main() {
     float step_size = 5e-6;
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGPUTimersEnabled(true);
-    DEMSim.SetGPUTimerAccumulationDeferred(true);
     //DEMSim.SetAdaptiveTimeStepType("hertz_const"); 
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.SetExpandSafetyType("auto");

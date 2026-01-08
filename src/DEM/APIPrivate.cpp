@@ -1238,13 +1238,24 @@ void DEMSolver::setSimParams() {
             }
         }
     }
+    if (!m_use_angvel_margin_user_set) {
+        bool has_multi_sphere_clump = false;
+        for (const auto& radii : m_template_sp_radii) {
+            if (radii.size() > 1) {
+                has_multi_sphere_clump = true;
+                break;
+            }
+        }
+        const bool has_mesh = nTriGM > 0;
+        m_use_angvel_margin = has_multi_sphere_clump || has_mesh;
+    }
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
                      m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_max_tritri_penetration,
-                     m_expand_safety_multi, m_expand_base_vel, m_force_model->m_contact_wildcards,
+                     m_expand_safety_multi, m_expand_base_vel, m_use_angvel_margin, m_force_model->m_contact_wildcards,
                      m_force_model->m_owner_wildcards, m_force_model->m_geo_wildcards);
     kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
                      m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_max_tritri_penetration,
-                     m_expand_safety_multi, m_expand_base_vel, m_force_model->m_contact_wildcards,
+                     m_expand_safety_multi, m_expand_base_vel, m_use_angvel_margin, m_force_model->m_contact_wildcards,
                      m_force_model->m_owner_wildcards, m_force_model->m_geo_wildcards);
 }
 

@@ -98,16 +98,18 @@ bool __device__ tri_plane_penetration(const T1** tri,
         centroid - planeSignedDistance<T2>(centroid, entityLoc, entityDir) * to_real3<float3, T1>(entityDir);
 
     // Calculate the area of the clipping polygon using fan triangulation from centroid
-    overlapArea = 0.0;
+    float overlap_area_f = 0.0f;
     if (hasIntersection && nNode >= 3) {
+        const float3 centroid_f = to_float3(centroid);
         for (int i = 0; i < nNode; ++i) {
-            T1 v1 = poly[i] - centroid;
-            T1 v2 = poly[(i + 1) % nNode] - centroid;
-            T1 crossProd = cross(v1, v2);
-            overlapArea += sqrt(dot(crossProd, crossProd));
+            float3 v1 = to_float3(poly[i]) - centroid_f;
+            float3 v2 = to_float3(poly[(i + 1) % nNode]) - centroid_f;
+            float3 crossProd = cross(v1, v2);
+            overlap_area_f += sqrtf(dot(crossProd, crossProd));
         }
-        overlapArea *= 0.5;
+        overlap_area_f *= 0.5f;
     }
+    overlapArea = static_cast<T2>(overlap_area_f);
 
     // cntPnt is from the projection point, go half penetration depth.
     // Note this penetration depth is signed, so if no contact, we go positive plane normal; if in contact, we go
@@ -167,6 +169,47 @@ __host__ __device__ deme::contact_t checkTriEntityOverlap(const T1& A,
                 // Also, inward normal is 1, outward is -1, so it's the signed dist from point to cylinder wall
                 // (positive if same orientation, negative if opposite)
                 double signed_dist = (entitySize1 - length(vec)) * normal_sign;
+                if (signed_dist <= beta4Entity)
+                    return deme::TRIANGLE_ANALYTICAL_CONTACT;
+            }
+            return deme::NOT_A_CONTACT;
+        }
+        default:
+            return deme::NOT_A_CONTACT;
+    }
+}
+
+// Fast FP32-only overlap check for kT contact detection (no penetration/area outputs).
+template <typename T1>
+__host__ __device__ deme::contact_t checkTriEntityOverlapFP32(const T1& A,
+                                                              const T1& B,
+                                                              const T1& C,
+                                                              const deme::objType_t& typeB,
+                                                              const T1& entityLoc,
+                                                              const float3& entityDir,
+                                                              const float& entitySize1,
+                                                              const float& entitySize2,
+                                                              const float& entitySize3,
+                                                              const float& normal_sign,
+                                                              const float& beta4Entity) {
+    const T1* tri[] = {&A, &B, &C};
+    switch (typeB) {
+        case (deme::ANAL_OBJ_TYPE_PLANE): {
+            for (const T1*& v : tri) {
+                const float d = planeSignedDistance<float>(*v, entityLoc, entityDir);
+                const float overlapDepth = beta4Entity - d;
+                if (overlapDepth >= 0.0f)
+                    return deme::TRIANGLE_ANALYTICAL_CONTACT;
+            }
+            return deme::NOT_A_CONTACT;
+        }
+        case (deme::ANAL_OBJ_TYPE_PLATE): {
+            return deme::NOT_A_CONTACT;
+        }
+        case (deme::ANAL_OBJ_TYPE_CYL_INF): {
+            for (const T1*& v : tri) {
+                float3 vec = cylRadialDistanceVec<float3>(*v, entityLoc, entityDir);
+                const float signed_dist = (entitySize1 - length(vec)) * normal_sign;
                 if (signed_dist <= beta4Entity)
                     return deme::TRIANGLE_ANALYTICAL_CONTACT;
             }
@@ -374,7 +417,13 @@ __device__ bool checkTriSphereOverlap(const T1& A,           ///< First vertex o
         // In the edge case, overlapArea is a bit tricky to define accurately.
         // Here we still just approximate it as a circle area.
     }
-    overlapArea = deme::PI * (2.0 * radius * depth - depth * depth);
+    {
+        const float depth_f = static_cast<float>(depth);
+        const float radius_f = static_cast<float>(radius);
+        const float overlap_area_f =
+            static_cast<float>(deme::PI) * (2.0f * radius_f * depth_f - depth_f * depth_f);
+        overlapArea = static_cast<T2>(overlap_area_f);
+    }
     return in_contact;
 }
 
@@ -527,6 +576,7 @@ __device__ bool projectTriangleOntoTriangle(const T1* incTri,
                                             T2& area,
                                             T1& centroid) {
     // Compute signed distances of incident triangle vertices to reference plane
+    area = T2(0.0);
     T2 incDists[3];
     T2 maxPenetration = 0.0;
     int8_t numSubmerged = 0;
@@ -719,7 +769,6 @@ __device__ bool projectTriangleOntoTriangle(const T1* incTri,
     centroid.y = 0.0;
     centroid.z = 0.0;
 
-    area = 0.0;
     depth = maxPenetration;
     if (numInputVerts >= 3) {
         for (int8_t i = 0; i < numInputVerts; ++i) {
@@ -728,13 +777,15 @@ __device__ bool projectTriangleOntoTriangle(const T1* incTri,
         centroid = centroid / T2(numInputVerts);
 
         // Calculate area using fan triangulation from centroid
+        float area_f = 0.0f;
+        const float3 centroid_f = to_float3(centroid);
         for (int8_t i = 0; i < numInputVerts; ++i) {
-            T1 v1 = resultPoly[i] - centroid;
-            T1 v2 = resultPoly[(i + 1) % numInputVerts] - centroid;
-            T1 crossProd = cross(v1, v2);
-            area += sqrt(dot(crossProd, crossProd));
+            float3 v1 = to_float3(resultPoly[i]) - centroid_f;
+            float3 v2 = to_float3(resultPoly[(i + 1) % numInputVerts]) - centroid_f;
+            float3 crossProd = cross(v1, v2);
+            area_f += sqrtf(dot(crossProd, crossProd));
         }
-        area *= 0.5;
+        area = static_cast<T2>(area_f * 0.5f);
         return true;
     } else {
         // Degenerate intersection polygon

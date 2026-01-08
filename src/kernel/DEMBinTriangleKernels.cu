@@ -70,8 +70,8 @@ inline __device__ void figureOutNodeAndBoundingBox(deme::DEMSimParams* simParams
     // My sphere voxel ID and my relPos
     deme::bodyID_t myOwnerID = granData->ownerTriMesh[triID];
 
-    double3 ownerXYZ;
-    voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
+    float3 ownerXYZ;
+    voxelIDToPosition<float, deme::voxelID_t, deme::subVoxelPos_t>(
         ownerXYZ.x, ownerXYZ.y, ownerXYZ.z, granData->voxelID[myOwnerID], granData->locX[myOwnerID],
         granData->locY[myOwnerID], granData->locZ[myOwnerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
     const float myOriQw = granData->oriQw[myOwnerID];
@@ -158,8 +158,8 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
                 if (granData->familyMasks[maskMatID] != deme::DONT_PREVENT_CONTACT) {
                     continue;
                 }
-                double3 ownerXYZ;
-                voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
+                float3 ownerXYZ;
+                voxelIDToPosition<float, deme::voxelID_t, deme::subVoxelPos_t>(
                     ownerXYZ.x, ownerXYZ.y, ownerXYZ.z, granData->voxelID[objBOwner], granData->locX[objBOwner],
                     granData->locY[objBOwner], granData->locZ[objBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
                 const float ownerOriQw = granData->oriQw[objBOwner];
@@ -176,22 +176,15 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
                                                         ownerOriQy, ownerOriQz);
                 applyOriQToVector3<float, deme::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx,
                                                         ownerOriQy, ownerOriQz);
-                double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
+                float3 objBPosXYZ = ownerXYZ + make_float3(objBRelPosX, objBRelPosY, objBRelPosZ);
 
-                double3 nodeA, nodeB, nodeC;
-                nodeA = to_real3<float3, double3>(vA1);
-                nodeB = to_real3<float3, double3>(vB1);
-                nodeC = to_real3<float3, double3>(vC1);
-                deme::contact_t contact_type = checkTriEntityOverlap<double3>(
-                    nodeA, nodeB, nodeC, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                deme::contact_t contact_type = checkTriEntityOverlapFP32(
+                    vA1, vB1, vC1, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
                     objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
                     granData->marginSizeAnalytical[objB]);
                 if (contact_type == deme::NOT_A_CONTACT) {
-                    nodeA = to_real3<float3, double3>(vA2);
-                    nodeB = to_real3<float3, double3>(vB2);
-                    nodeC = to_real3<float3, double3>(vC2);
-                    contact_type = checkTriEntityOverlap<double3>(
-                        nodeA, nodeB, nodeC, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                    contact_type = checkTriEntityOverlapFP32(
+                        vA2, vB2, vC2, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
                         objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
                         granData->marginSizeAnalytical[objB]);
                 }
@@ -290,8 +283,8 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                 if (granData->familyMasks[maskMatID] != deme::DONT_PREVENT_CONTACT) {
                     continue;
                 }
-                double3 ownerXYZ;
-                voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
+                float3 ownerXYZ;
+                voxelIDToPosition<float, deme::voxelID_t, deme::subVoxelPos_t>(
                     ownerXYZ.x, ownerXYZ.y, ownerXYZ.z, granData->voxelID[objBOwner], granData->locX[objBOwner],
                     granData->locY[objBOwner], granData->locZ[objBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
                 const float ownerOriQw = granData->oriQw[objBOwner];
@@ -308,22 +301,15 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                                                         ownerOriQy, ownerOriQz);
                 applyOriQToVector3<float, deme::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx,
                                                         ownerOriQy, ownerOriQz);
-                double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
+                float3 objBPosXYZ = ownerXYZ + make_float3(objBRelPosX, objBRelPosY, objBRelPosZ);
 
-                double3 nodeA, nodeB, nodeC;
-                nodeA = to_real3<float3, double3>(vA1);
-                nodeB = to_real3<float3, double3>(vB1);
-                nodeC = to_real3<float3, double3>(vC1);
-                deme::contact_t contact_type = checkTriEntityOverlap<double3>(
-                    nodeA, nodeB, nodeC, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                deme::contact_t contact_type = checkTriEntityOverlapFP32(
+                    vA1, vB1, vC1, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
                     objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
                     granData->marginSizeAnalytical[objB]);
                 if (contact_type == deme::NOT_A_CONTACT) {
-                    nodeA = to_real3<float3, double3>(vA2);
-                    nodeB = to_real3<float3, double3>(vB2);
-                    nodeC = to_real3<float3, double3>(vC2);
-                    contact_type = checkTriEntityOverlap<double3>(
-                        nodeA, nodeB, nodeC, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                    contact_type = checkTriEntityOverlapFP32(
+                        vA2, vB2, vC2, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
                         objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
                         granData->marginSizeAnalytical[objB]);
                 }

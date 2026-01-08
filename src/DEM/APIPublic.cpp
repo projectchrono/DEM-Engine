@@ -796,6 +796,12 @@ void DEMSolver::SetExpandSafetyType(const std::string& insp_type) {
     }
 }
 
+void DEMSolver::SetUseAngularVelocityMargin(bool use) {
+    assertSysNotInit("SetUseAngularVelocityMargin");
+    m_use_angvel_margin = use;
+    m_use_angvel_margin_user_set = true;
+}
+
 void DEMSolver::InstructBoxDomainDimension(float x, float y, float z, const std::string& dir_exact) {
     m_user_box_min = make_float3(-x / 2., -y / 2., -z / 2.);
     m_user_box_max = make_float3(x / 2., y / 2., z / 2.);
@@ -2263,12 +2269,6 @@ void DEMSolver::SetGPUTimersEnabled(bool enabled) {
         DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
         kT->timers.DestroyGpuEvents();
     }
-}
-
-void DEMSolver::SetGPUTimerAccumulationDeferred(bool deferred) {
-    // No device changes needed; this only toggles host-side accumulation behavior.
-    dT->timers.SetDeferGpuTimerAccumulation(deferred);
-    kT->timers.SetDeferGpuTimerAccumulation(deferred);
 }
 
 void DEMSolver::ClearTimingStats() {

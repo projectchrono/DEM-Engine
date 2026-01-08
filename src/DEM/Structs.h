@@ -315,7 +315,7 @@ class SolverTimers {
     std::unordered_map<std::string, Timer<double>> m_timers;
     std::unordered_map<std::string, StreamEventTimerSpan> m_gpu_timers;
     bool gpu_timers_initialized = false;
-    bool defer_gpu_timer_accumulation = false;
+    bool defer_gpu_timer_accumulation = true;
 
   public:
     SolverTimers(const std::vector<std::string>& names) : num_timers(names.size()) {
