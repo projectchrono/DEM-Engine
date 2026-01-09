@@ -115,11 +115,7 @@ PYBIND11_MODULE(DEME, obj) {
                   "Data file loading may fail. Set DEME_DATA_PATH environment variable if you encounter issues.");
     }
     
-    deme::SetDEMEDataPath();
-
-    // Setting JitHelper variables
-    deme::SetDEMEKernelPath();
-    deme::SetDEMEIncludePath();
+    deme::SetDEMEDataPath(deme::DEME_data_path);
 
     // To define methods independent of a class, use obj.def() syntax to wrap them!
     obj.def("FrameTransformGlobalToLocal", &deme::FrameTransformGlobalToLocal,
