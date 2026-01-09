@@ -608,7 +608,7 @@ void DEMKinematicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, cons
     size_t ownerFactorSize = (size_t)simParams->nOwnerBodies * sizeof(float);
     // Bool table for whether this owner should change
     notStupidBool_t* idBool = (notStupidBool_t*)solverScratchSpace.allocateTempVector("idBool", idBoolSize);
-    DEME_GPU_CALL(cudaMemset(idBool, 0, idBoolSize));
+    DEME_GPU_CALL(cudaMemsetAsync(idBool, 0, idBoolSize, streamInfo.stream));
     float* ownerFactors = (float*)solverScratchSpace.allocateTempVector("ownerFactors", ownerFactorSize);
 
     // Mark on the bool array those owners that need a change

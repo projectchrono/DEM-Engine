@@ -514,7 +514,7 @@ void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const 
     size_t ownerFactorSize = (size_t)simParams->nOwnerBodies * sizeof(float);
     // Bool table for whether this owner should change
     notStupidBool_t* idBool = (notStupidBool_t*)solverScratchSpace.allocateTempVector("idBool", idBoolSize);
-    DEME_GPU_CALL(cudaMemset(idBool, 0, idBoolSize));
+    DEME_GPU_CALL(cudaMemsetAsync(idBool, 0, idBoolSize, streamInfo.stream));
     float* ownerFactors = (float*)solverScratchSpace.allocateTempVector("ownerFactors", ownerFactorSize);
 
     // Mark on the bool array those owners that need a change
@@ -632,7 +632,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     // maxTriTriPenetration usually keeps the max tri--tri penetration during the on-going simulation. But after
     // initialization, when it stores no meaningful values, dT will send a work order to kT, so maxTriTriPenetration's
     // value has to be initialized.
-    DEME_GPU_CALL(cudaMemset(maxTriTriPenetration.getDevicePointer(), 0, sizeof(double)));
+    DEME_GPU_CALL(cudaMemsetAsync(maxTriTriPenetration.getDevicePointer(), 0, sizeof(double), streamInfo.stream));
 
     // Resize to the number of analytical geometries
     DEME_DUAL_ARRAY_RESIZE(ownerAnalBody, nAnalGM, 0);
@@ -2495,8 +2495,26 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
     const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPrimitiveMap,
     const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
     const ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>>& typeKernelMap) {
-    // Reset max tri-tri penetration for this timestep on device (kT may need this info)
-    DEME_GPU_CALL(cudaMemset(maxTriTriPenetration.getDevicePointer(), 0, sizeof(double)));
+    // Reset max tri-tri penetration only when mesh contacts are present (avoid needless clears), async to overlap
+    bool needTriPenReset = false;
+    auto markIfTri = [&](contact_t c) {
+        auto itP = typeStartCountPrimitiveMap.find(c);
+        if (itP != typeStartCountPrimitiveMap.end() && itP->second.second > 0) {
+            needTriPenReset = true;
+            return;
+        }
+        auto itPatch = typeStartCountPatchMap.find(c);
+        if (itPatch != typeStartCountPatchMap.end() && itPatch->second.second > 0) {
+            needTriPenReset = true;
+        }
+    };
+    markIfTri(SPHERE_TRIANGLE_CONTACT);
+    markIfTri(TRIANGLE_TRIANGLE_CONTACT);
+    markIfTri(TRIANGLE_ANALYTICAL_CONTACT);
+    if (needTriPenReset) {
+        DEME_GPU_CALL(
+            cudaMemsetAsync(maxTriTriPenetration.getDevicePointer(), 0, sizeof(double), streamInfo.stream));
+    }
 
     // For each contact type that exists, check if it is patch(mesh)-related type...
     for (size_t i = 0; i < m_numExistingTypes; i++) {
@@ -3375,7 +3393,7 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<JitHelper::CachedProg
     // If this boolArrExclude is 1 at an element, that means this element is exluded in the reduction
     notStupidBool_t* boolArrExclude =
         (notStupidBool_t*)solverScratchSpace.allocateTempVector("boolArrExclude", regionTempSize);
-    DEME_GPU_CALL(cudaMemset(boolArrExclude, 0, regionTempSize));
+    DEME_GPU_CALL(cudaMemsetAsync(boolArrExclude, 0, regionTempSize, streamInfo.stream));
 
     // We may actually have 2 reduced returns: in regional reduction, key 0 and 1 give one return each.
     size_t returnSize = sizeof(float) * 2;
