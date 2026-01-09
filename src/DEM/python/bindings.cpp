@@ -1,11 +1,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/functional.h>
-#include <memory>
-#include "API.h"
-#include "AuxClasses.h"
-#include <core/utils/DEMEPaths.h>
-#include "VariableTypes.h"
+
 #include <vector>
 #include <string>
 #include <limits>
@@ -13,13 +9,18 @@
 #include <sstream>
 #include <array>
 #include <cmath>
+#include <memory>
 
-#include <core/utils/RuntimeData.h>
-#include <DEM/Defines.h>
-#include <DEM/Structs.h>
-#include <core/utils/DataMigrationHelper.hpp>
-#include <DEM/HostSideHelpers.hpp>
-#include <DEM/utils/Samplers.hpp>
+#include "core/utils/RuntimeData.h"
+#include "core/utils/DataMigrationHelper.hpp"
+#include "core/utils/DEMEPaths.h"
+#include "DEM/utils/HostSideHelpers.hpp"
+#include "DEM/utils/Samplers.hpp"
+#include "DEM/Defines.h"
+#include "DEM/Structs.h"
+#include "DEM/API.h"
+#include "DEM/AuxClasses.h"
+#include "DEM/VariableTypes.h"
 
 namespace py = pybind11;
 
