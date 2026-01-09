@@ -959,17 +959,18 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
             contact_t* total_types = (contact_t*)scratchPad.allocateTempVector("total_types", total_types_bytes);
             notStupidBool_t* total_persistency =
                 (notStupidBool_t*)scratchPad.allocateTempVector("total_persistency", total_persistency_bytes);
-            DEME_GPU_CALL(cudaMemcpy(total_idA, selected_idA, selected_ids_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(total_idA + *pNumPersistCnts, granData->idPrimitiveA,
-                                     total_ids_bytes - selected_ids_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(total_idB, selected_idB, selected_ids_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(total_idB + *pNumPersistCnts, granData->idPrimitiveB,
-                                     total_ids_bytes - selected_ids_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(total_types, selected_types, selected_types_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(total_types + *pNumPersistCnts, granData->contactTypePrimitive,
-                                     total_types_bytes - selected_types_bytes, cudaMemcpyDeviceToDevice));
+            int dev = 0;
+            DEME_GPU_CALL(cudaGetDevice(&dev));
+            xfer::XferList xt;
+            xt.add(total_idA, selected_idA, selected_ids_bytes);
+            xt.add(total_idA + *pNumPersistCnts, granData->idPrimitiveA, total_ids_bytes - selected_ids_bytes);
+            xt.add(total_idB, selected_idB, selected_ids_bytes);
+            xt.add(total_idB + *pNumPersistCnts, granData->idPrimitiveB, total_ids_bytes - selected_ids_bytes);
+            xt.add(total_types, selected_types, selected_types_bytes);
+            xt.add(total_types + *pNumPersistCnts, granData->contactTypePrimitive, total_types_bytes - selected_types_bytes);
+            xt.run(dev, dev, this_stream);
             // For the selected portion, persistency is all 1, the rest is all 0
-            DEME_GPU_CALL(cudaMemset(total_persistency, CONTACT_NOT_PERSISTENT, total_persistency_bytes));
+            DEME_GPU_CALL(cudaMemsetAsync(total_persistency, CONTACT_NOT_PERSISTENT, total_persistency_bytes, this_stream));
             size_t blocks_needed_for_setting_1 =
                 (*pNumPersistCnts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
             if (blocks_needed_for_setting_1 > 0) {
@@ -1403,12 +1404,15 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 patchArraysResize(*scratchPad.numContacts, previous_idPatchA, previous_idPatchB,
                                   previous_contactTypePatch, granData);
             }
-            DEME_GPU_CALL(cudaMemcpy(granData->previous_idPatchA, granData->idPatchA, patch_id_arr_bytes,
-                                     cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(granData->previous_idPatchB, granData->idPatchB, patch_id_arr_bytes,
-                                     cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(granData->previous_contactTypePatch, granData->contactTypePatch,
-                                     patch_type_arr_bytes, cudaMemcpyDeviceToDevice));
+            int dev = 0;
+            DEME_GPU_CALL(cudaGetDevice(&dev));
+            {
+                xfer::XferList xt;
+                xt.add(granData->previous_idPatchA, granData->idPatchA, patch_id_arr_bytes);
+                xt.add(granData->previous_idPatchB, granData->idPatchB, patch_id_arr_bytes);
+                xt.add(granData->previous_contactTypePatch, granData->contactTypePatch, patch_type_arr_bytes);
+                xt.run(dev, dev, this_stream);
+            }
 
             // Currently only when using persistent contacts we need to store enduring primitive contact info
             if (solverFlags.hasPersistentContacts) {
@@ -1422,12 +1426,12 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 // Copy current primitive contact arrays to previous arrays for the next iteration
                 size_t primitive_id_arr_bytes = (*scratchPad.numPrimitiveContacts) * sizeof(bodyID_t);
                 size_t primitive_type_arr_bytes = (*scratchPad.numPrimitiveContacts) * sizeof(contact_t);
-                DEME_GPU_CALL(cudaMemcpy(granData->previous_idPrimitiveA, granData->idPrimitiveA,
-                                         primitive_id_arr_bytes, cudaMemcpyDeviceToDevice));
-                DEME_GPU_CALL(cudaMemcpy(granData->previous_idPrimitiveB, granData->idPrimitiveB,
-                                         primitive_id_arr_bytes, cudaMemcpyDeviceToDevice));
-                DEME_GPU_CALL(cudaMemcpy(granData->previous_contactTypePrimitive, granData->contactTypePrimitive,
-                                         primitive_type_arr_bytes, cudaMemcpyDeviceToDevice));
+                xfer::XferList xt;
+                xt.add(granData->previous_idPrimitiveA, granData->idPrimitiveA, primitive_id_arr_bytes);
+                xt.add(granData->previous_idPrimitiveB, granData->idPrimitiveB, primitive_id_arr_bytes);
+                xt.add(granData->previous_contactTypePrimitive, granData->contactTypePrimitive,
+                       primitive_type_arr_bytes);
+                xt.run(dev, dev, this_stream);
             }
 
             // Update the patch contact map for the next iteration
@@ -1478,12 +1482,15 @@ void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
     }
 
     // No sort, copy over
-    DEME_GPU_CALL(cudaMemcpy(kT_data->previous_idPatchA, dT_data->idPatchA, nContacts * sizeof(bodyID_t),
-                             cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(kT_data->previous_idPatchB, dT_data->idPatchB, nContacts * sizeof(bodyID_t),
-                             cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(kT_data->previous_contactTypePatch, dT_data->contactTypePatch,
-                             nContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
+    int dev = 0;
+    DEME_GPU_CALL(cudaGetDevice(&dev));
+    {
+        xfer::XferList xt;
+        xt.add(kT_data->previous_idPatchA, dT_data->idPatchA, nContacts * sizeof(bodyID_t));
+        xt.add(kT_data->previous_idPatchB, dT_data->idPatchB, nContacts * sizeof(bodyID_t));
+        xt.add(kT_data->previous_contactTypePatch, dT_data->contactTypePatch, nContacts * sizeof(contact_t));
+        xt.run(dev, dev, this_stream);
+    }
 
     // Derive typeStartCountPatchMap from the loaded contact arrays
     // This is necessary for the persistent mapping process in the next contact detection step

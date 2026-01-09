@@ -2514,29 +2514,22 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
             // This reduce-by-key operation reduces primitive-recorded force pairs into patch/convex part-based
             // force pairs. All elements that share the same geomToPatchMap value vote together.
             if (countPrimitive > 0) {
+                contactPairs_t* keys = granData->geomToPatchMap + startOffsetPrimitive;
                 // Allocate temporary arrays for the voting process
                 float3* weightedNormals =
                     (float3*)solverScratchSpace.allocateTempVector("weightedNormals", countPrimitive * sizeof(float3));
-                double* areas =
-                    (double*)solverScratchSpace.allocateTempVector("areas", countPrimitive * sizeof(double));
-                // Keys extracted from geomToPatchMap - these map primitives to patch pairs
-                contactPairs_t* keys = (contactPairs_t*)solverScratchSpace.allocateTempVector(
-                    "votingKeys", countPrimitive * sizeof(contactPairs_t));
 
                 // Allocate arrays for reduce-by-key results (uniqueKeys uses contactPairs_t, not patchIDPair_t)
                 contactPairs_t* uniqueKeys = (contactPairs_t*)solverScratchSpace.allocateTempVector(
                     "uniqueKeys", countPrimitive * sizeof(contactPairs_t));
                 float3* votedWeightedNormals = (float3*)solverScratchSpace.allocateTempVector(
                     "votedWeightedNormals", countPrimitive * sizeof(float3));
-                double* totalAreas =
-                    (double*)solverScratchSpace.allocateTempVector("totalAreas", countPrimitive * sizeof(double));
                 solverScratchSpace.allocateDualStruct("numUniqueKeys");
                 size_t* numUniqueKeys = solverScratchSpace.getDualStructDevice("numUniqueKeys");
 
-                // Step 1: Prepare weighted normals, areas, and keys
-                // The kernel extracts keys from geomToPatchMap, computes weighted normals, and stores areas
-                prepareWeightedNormalsForVoting(&granData, weightedNormals, areas, keys, startOffsetPrimitive,
-                                                countPrimitive, streamInfo.stream);
+                // Step 1: Prepare weighted normals. Keys are read directly from geomToPatchMap.
+                prepareWeightedNormalsForVoting(&granData, weightedNormals, startOffsetPrimitive, countPrimitive,
+                                                streamInfo.stream);
 
                 // Step 2: Reduce-by-key for weighted normals (sum)
                 // The keys are geomToPatchMap values (contactPairs_t), which group primitives by patch pair
@@ -2558,82 +2551,39 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                         numUniqueKeysHost, countPatch, contact_type);
                 }
 
-                // Step 3: Reduce-by-key for areas (sum)
-                // Note: CUB's ReduceByKey requires an output array for unique keys, and the keys
-                // are the same as in Step 2.
-                cubSumReduceByKey<contactPairs_t, double>(keys, uniqueKeys, areas, totalAreas, numUniqueKeys,
-                                                          countPrimitive, streamInfo.stream, solverScratchSpace);
-
-                // Step 4: Normalize the voted normals by total area and scatter back to a temp array.
+                // Normalize the voted normals using unique keys and scatter to patch-local storage.
                 float3* votedNormals =
                     (float3*)solverScratchSpace.allocateTempVector("votedNormals", countPatch * sizeof(float3));
-                normalizeAndScatterVotedNormals(votedWeightedNormals, totalAreas, votedNormals, countPatch,
-                                                streamInfo.stream);
+                normalizeAndScatterVotedNormalsFromUniqueKeys(votedWeightedNormals, uniqueKeys, votedNormals,
+                                                              startOffsetPatch, numUniqueKeysHost, streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
-                solverScratchSpace.finishUsingTempVector("totalAreas");
                 // displayDeviceFloat3(votedNormals, countPatch);
 
-                // Step 5: Compute projected penetration and area for each primitive contact
-                // Both the penetration and area are projected onto the voted normal
-                // If the projected penetration becomes negative, both are set to 0
-                // Reuse keys array for the reduce-by-key operation
-                double* projectedPenetrations = (double*)solverScratchSpace.allocateTempVector(
-                    "projectedPenetrations", countPrimitive * sizeof(double));
-                double* projectedAreas =
-                    (double*)solverScratchSpace.allocateTempVector("projectedAreas", countPrimitive * sizeof(double));
-                computeWeightedUsefulPenetration(&granData, votedNormals, keys, areas, projectedPenetrations,
-                                                 projectedAreas, startOffsetPrimitive, startOffsetPatch, countPrimitive,
-                                                 streamInfo.stream);
-                solverScratchSpace.finishUsingTempVector("areas");
+                // Project penetration/area and accumulate weighted contact points in a single pass.
+                PatchContactAccum* primitivePatchAccumulators = (PatchContactAccum*)solverScratchSpace.allocateTempVector(
+                    "primitivePatchAccumulators", countPrimitive * sizeof(PatchContactAccum));
+                computePatchContactAccumulators(&granData, votedNormals, keys, primitivePatchAccumulators,
+                                                startOffsetPrimitive, startOffsetPatch, countPrimitive,
+                                                streamInfo.stream);
 
-                // Step 6: Reduce-by-key to get total projected area per patch pair (sum)
+                PatchContactAccum* patchContactAccumulators = (PatchContactAccum*)solverScratchSpace.allocateTempVector(
+                    "patchContactAccumulators", numUniqueKeysHost * sizeof(PatchContactAccum));
+                cubSumReduceByKey<contactPairs_t, PatchContactAccum>(keys, uniqueKeys, primitivePatchAccumulators,
+                                                                     patchContactAccumulators, numUniqueKeys,
+                                                                     countPrimitive, streamInfo.stream,
+                                                                     solverScratchSpace);
+                solverScratchSpace.finishUsingTempVector("primitivePatchAccumulators");
+
                 double* totalProjectedAreas =
                     (double*)solverScratchSpace.allocateTempVector("totalProjectedAreas", countPatch * sizeof(double));
-                cubSumReduceByKey<contactPairs_t, double>(keys, uniqueKeys, projectedAreas, totalProjectedAreas,
-                                                          numUniqueKeys, countPrimitive, streamInfo.stream,
-                                                          solverScratchSpace);
-
-                // Step 7: Reduce-by-key to get max projected penetration per patch pair (max).
-                // This result, maxProjectedPenetrations (total in the sense of per patch pair), is the max of projected
-                // penetration, aka the max pen in the physical overlap case, and it's not the same as maxPenetrations
-                // in step 9 which is a fallback primitive-derived penetration.
                 double* maxProjectedPenetrations = (double*)solverScratchSpace.allocateTempVector(
                     "maxProjectedPenetrations", countPatch * sizeof(double));
-                cubMaxReduceByKey<contactPairs_t, double>(keys, uniqueKeys, projectedPenetrations,
-                                                          maxProjectedPenetrations, numUniqueKeys, countPrimitive,
-                                                          streamInfo.stream, solverScratchSpace);
-
-                // Step 8: Compute weighted contact points for each primitive (normal case)
-                // The weight is: projected_penetration * projected_area
-                // Reuse keys, uniqueKeys, and numUniqueKeys that are still allocated
-                double3* weightedContactPoints = (double3*)solverScratchSpace.allocateTempVector(
-                    "weightedContactPoints", countPrimitive * sizeof(double3));
-                double* contactWeights =
-                    (double*)solverScratchSpace.allocateTempVector("contactWeights", countPrimitive * sizeof(double));
-                computeWeightedContactPoints(&granData, weightedContactPoints, contactWeights, projectedPenetrations,
-                                             projectedAreas, startOffsetPrimitive, countPrimitive, streamInfo.stream);
-                solverScratchSpace.finishUsingTempVector("projectedPenetrations");
-                solverScratchSpace.finishUsingTempVector("projectedAreas");
-                // Reduce-by-key to get total weighted contact points per patch pair
-                double3* totalWeightedContactPoints = (double3*)solverScratchSpace.allocateTempVector(
-                    "totalWeightedContactPoints", countPatch * sizeof(double3));
-                double* totalContactWeights =
-                    (double*)solverScratchSpace.allocateTempVector("totalContactWeights", countPatch * sizeof(double));
-                cubSumReduceByKey<contactPairs_t, double3>(keys, uniqueKeys, weightedContactPoints,
-                                                           totalWeightedContactPoints, numUniqueKeys, countPrimitive,
-                                                           streamInfo.stream, solverScratchSpace);
-                cubSumReduceByKey<contactPairs_t, double>(keys, uniqueKeys, contactWeights, totalContactWeights,
-                                                          numUniqueKeys, countPrimitive, streamInfo.stream,
-                                                          solverScratchSpace);
-                solverScratchSpace.finishUsingTempVector("weightedContactPoints");
-                solverScratchSpace.finishUsingTempVector("contactWeights");
-                // Compute voted contact points per patch pair by dividing by total weight
                 double3* votedContactPoints =
                     (double3*)solverScratchSpace.allocateTempVector("votedContactPoints", countPatch * sizeof(double3));
-                computeFinalContactPointsPerPatch(totalWeightedContactPoints, totalContactWeights, votedContactPoints,
-                                                  countPatch, streamInfo.stream);
-                solverScratchSpace.finishUsingTempVector("totalWeightedContactPoints");
-                solverScratchSpace.finishUsingTempVector("totalContactWeights");
+                scatterPatchContactAccumulators(patchContactAccumulators, uniqueKeys, totalProjectedAreas,
+                                                maxProjectedPenetrations, votedContactPoints, startOffsetPatch,
+                                                numUniqueKeysHost, streamInfo.stream);
+                solverScratchSpace.finishUsingTempVector("patchContactAccumulators");
 
                 // Step 9: Handle zero-area patches (all primitive areas are 0)
                 // For these patches, we need to find the max penetration primitive and use its normal/penetration
@@ -2678,8 +2628,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                                         streamInfo.stream);
                 }
 
-                // Clean up keys arrays now that we're done with reductions
-                solverScratchSpace.finishUsingTempVector("votingKeys");
+                // Clean up key bookkeeping now that we're done with reductions
                 solverScratchSpace.finishUsingTempVector("uniqueKeys");
                 solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
 
@@ -2708,7 +2657,9 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("zeroAreaPenetrations");
                 solverScratchSpace.finishUsingTempVector("votedContactPoints");
                 solverScratchSpace.finishUsingTempVector("zeroAreaContactPoints");
-                solverScratchSpace.finishUsingTempVector("patchHasSAT");
+                if (patchHasSAT != nullptr) {
+                    solverScratchSpace.finishUsingTempVector("patchHasSAT");
+                }
 
                 // Now we have:
                 // - finalAreas: final contact area per patch pair (countPatch elements)

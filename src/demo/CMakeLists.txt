@@ -25,6 +25,7 @@ SET(DEMOS
 		DEMdemo_TestRestart
 		DEMdemo_RotatingDrum
 		DEMdemo_Centrifuge
+		DEMdemo_DrumCubes
 		DEMdemo_GameOfLife
 		DEMdemo_BallDrop
 		DEMdemo_BallDrop2D
