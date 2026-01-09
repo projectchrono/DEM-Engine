@@ -515,46 +515,82 @@ __device__ bool checkTriSphereOverlap_directional(const T1& A,           ///< Fi
 ////////////////////////////////////////////////////////////////////////////////
 // Prism contact detection using the Separating Axis Theorem (SAT)
 //
-// A prism is formed by two parallel triangular faces (bases) connected by three
-// rectangular side faces. For proper contact detection between two prisms, SAT
-// requires testing multiple potential separating axes:
-//
-// 1. Face normals of both triangular bases (2 axes)
-// 2. Face normals of all rectangular side faces (6 axes, 3 per prism)
-// 3. Cross products of edges from different prisms to detect edge-edge contacts
-//    - Base edges × Base edges (9 axes)
-//    - Height edges × Base edges (18 axes)
-//
-// This comprehensive approach ensures detection of:
-// - Face-face contacts (parallel prisms)
-// - Edge-face contacts (side intersecting base/side)
-// - Edge-edge contacts
-// - Complete containment (one prism inside another)
+// For the extruded triangle "sandwich" prisms we only have 4 unique edge
+// directions (3 base edges + extrusion). This yields:
+// - 8 face normals (base + 3 side faces per prism)
+// - 16 edge-edge axes
+// Total: 24 axes, evaluated on the fly without normalization.
 ////////////////////////////////////////////////////////////////////////////////
 
-template <typename T1, typename T2>
-__device__ void select_projection(const T1& pts, const T1& axis, T2& min_p, T2& max_p) {
-    T2 p = dot(pts, axis);
-    if (p < min_p)
-        min_p = p;
-    if (p > max_p)
-        max_p = p;
+__device__ __forceinline__ float invSqrt(float x) {
+    return rsqrtf(x);
 }
 
-template <typename T1, typename T2>
-__device__ void project_points_on_axis(const T1* prism, const T1& axis, T2& out_min, T2& out_max) {
-    T2 min_p = dot(prism[0], axis);
-    T2 max_p = min_p;
-    for (int i = 1; i < 6; ++i) {
-        select_projection(prism[i], axis, min_p, max_p);
-    }
-    out_min = min_p;
-    out_max = max_p;
+__device__ __forceinline__ double invSqrt(double x) {
+    return 1.0 / sqrt(x);
 }
 
-template <typename T>
-__device__ bool projections_overlap(T minA, T maxA, T minB, T maxB) {
-    return !(maxA < minB || maxB < minA);
+#ifndef DEME_SAT_ENABLE_MIXED_PRECISION
+#define DEME_SAT_ENABLE_MIXED_PRECISION 0
+#endif
+
+template <typename Vec, typename Scalar>
+__device__ __forceinline__ void projectExtrudedTriPrism(const Vec& v0,
+                                                        const Vec& v1,
+                                                        const Vec& v2,
+                                                        const Vec& d,
+                                                        const Vec& axis,
+                                                        Scalar& outMin,
+                                                        Scalar& outMax) {
+    Scalar shift = dot(d, axis);
+
+    Scalar p0 = dot(v0, axis);
+    Scalar p1 = dot(v1, axis);
+    Scalar p2 = dot(v2, axis);
+
+    Scalar mn0 = (p0 < p0 + shift) ? p0 : (p0 + shift);
+    Scalar mx0 = (p0 > p0 + shift) ? p0 : (p0 + shift);
+    Scalar mn1 = (p1 < p1 + shift) ? p1 : (p1 + shift);
+    Scalar mx1 = (p1 > p1 + shift) ? p1 : (p1 + shift);
+    Scalar mn2 = (p2 < p2 + shift) ? p2 : (p2 + shift);
+    Scalar mx2 = (p2 > p2 + shift) ? p2 : (p2 + shift);
+
+    outMin = mn0;
+    if (mn1 < outMin)
+        outMin = mn1;
+    if (mn2 < outMin)
+        outMin = mn2;
+
+    outMax = mx0;
+    if (mx1 > outMax)
+        outMax = mx1;
+    if (mx2 > outMax)
+        outMax = mx2;
+}
+
+template <typename Vec, typename Scalar>
+__device__ __forceinline__ Scalar satSeparationOnAxis(const Vec& axis,
+                                                      const Vec& A0,
+                                                      const Vec& A1,
+                                                      const Vec& A2,
+                                                      const Vec& dA,
+                                                      const Vec& B0,
+                                                      const Vec& B1,
+                                                      const Vec& B2,
+                                                      const Vec& dB) {
+    Scalar len2 = dot(axis, axis);
+    if (len2 < Scalar(DEME_TINY_FLOAT))
+        return -Scalar(DEME_HUGE_FLOAT);
+
+    Scalar minA, maxA, minB, maxB;
+    projectExtrudedTriPrism<Vec, Scalar>(A0, A1, A2, dA, axis, minA, maxA);
+    projectExtrudedTriPrism<Vec, Scalar>(B0, B1, B2, dB, axis, minB, maxB);
+
+    Scalar sep1 = minB - maxA;
+    Scalar sep2 = minA - maxB;
+    Scalar sepProj = (sep1 > sep2) ? sep1 : sep2;
+    Scalar invLen = invSqrt(len2);
+    return sepProj * invLen;
 }
 
 /**
@@ -795,13 +831,10 @@ __device__ bool projectTriangleOntoTriangle(const T1* incTri,
 }
 
 /**
- * @brief Detect contact between two triangular prisms using comprehensive SAT.
+ * @brief Fast SAT contact check between two triangular prisms (triangle sandwiches).
  *
- * Each prism is defined by two triangular faces (Face A and Face B) with 3 vertices each.
- * Vertices are ordered: Face A nodes 1-3, then Face B nodes 1-3 (corresponding vertices).
- * The function tests up to 35 potential separating axes to ensure complete coverage
- * of all contact scenarios including parallel prisms, side-side intersections, and
- * containment cases.
+ * Evaluates 24 axes (8 face normals + 16 edge-edge) without normalization. Uses FP32 by
+ * default with a narrow mixed-precision recheck near zero overlap to avoid false positives.
  *
  * @return true if prisms are in contact (no separating axis found), false otherwise
  */
@@ -818,119 +851,157 @@ __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
                                    const T1& prismBFaceBNode1,
                                    const T1& prismBFaceBNode2,
                                    const T1& prismBFaceBNode3) {
-    // Increased axis count to accommodate additional side face normals and height edge tests
-    // Max axes: 2 base normals + 6 side face normals + 9 base edge-edge + 18 height edge cross products = 35
-    float3 axes[35];
-    int8_t axisCount = 0;
+    // Shared origin shrinks dynamic range for FP32 projections
+    const double3 origin = to_double3(prismAFaceANode1);
+    double3 Ad0 = to_double3(prismAFaceANode1) - origin;
+    double3 Ad1 = to_double3(prismAFaceANode2) - origin;
+    double3 Ad2 = to_double3(prismAFaceANode3) - origin;
+    double3 Bd0 = to_double3(prismBFaceANode1) - origin;
+    double3 Bd1 = to_double3(prismBFaceANode2) - origin;
+    double3 Bd2 = to_double3(prismBFaceANode3) - origin;
 
-    // Pack as stack arrays for easier looping
-    T1 prismA[6] = {prismAFaceANode1, prismAFaceANode2, prismAFaceANode3,
-                    prismAFaceBNode1, prismAFaceBNode2, prismAFaceBNode3};
-    T1 prismB[6] = {prismBFaceANode1, prismBFaceANode2, prismBFaceANode3,
-                    prismBFaceBNode1, prismBFaceBNode2, prismBFaceBNode3};
+    // Extrusion vectors (constant along corresponding vertices)
+    double3 dAd = to_double3(prismAFaceBNode1) - to_double3(prismAFaceANode1);
+    double3 dBd = to_double3(prismBFaceBNode1) - to_double3(prismBFaceANode1);
 
-    // Base triangle normals (both top and bottom faces)
-    T1 A_faceNormal = cross(prismA[1] - prismA[0], prismA[2] - prismA[0]);
-    T1 B_faceNormal = cross(prismB[1] - prismB[0], prismB[2] - prismB[0]);
+    float3 A0 = to_float3(Ad0);
+    float3 A1 = to_float3(Ad1);
+    float3 A2 = to_float3(Ad2);
+    float3 B0 = to_float3(Bd0);
+    float3 B1 = to_float3(Bd1);
+    float3 B2 = to_float3(Bd2);
+    float3 dA = to_float3(dAd);
+    float3 dB = to_float3(dBd);
 
-    axes[axisCount++] = normalize(A_faceNormal);
-    axes[axisCount++] = normalize(B_faceNormal);
+    float3 eA0 = A1 - A0;
+    float3 eA1 = A2 - A1;
+    float3 eA2 = A0 - A2;
+    float3 eB0 = B1 - B0;
+    float3 eB1 = B2 - B1;
+    float3 eB2 = B0 - B2;
 
-    // Edges of each prism base and height edges (connecting corresponding vertices of the two bases)
-    T1 A_baseEdges[3] = {prismA[1] - prismA[0], prismA[2] - prismA[1], prismA[0] - prismA[2]};
-    T1 B_baseEdges[3] = {prismB[1] - prismB[0], prismB[2] - prismB[1], prismB[0] - prismB[2]};
+    const float satMargin = 0.0f;  // set >0 for conservative FP32-only rejection
+    constexpr bool kEnableMixedPrecision = DEME_SAT_ENABLE_MIXED_PRECISION != 0;
+    constexpr float mixedPrecisionBand = kEnableMixedPrecision ? 1e-6f : 0.0f;
+    float maxSep = -DEME_HUGE_FLOAT;
 
-    // Height edges connecting corresponding vertices of the two triangular bases
-    // Note: Due to winding order to maintain opposite normals, the vertex correspondence is:
-    // FaceA[0,1,2] corresponds to FaceB[0,2,1] (i.e., Node1->Node1, Node2->Node3, Node3->Node2)
-    T1 A_heightEdges[3] = {prismA[3] - prismA[0], prismA[5] - prismA[1], prismA[4] - prismA[2]};
-    T1 B_heightEdges[3] = {prismB[3] - prismB[0], prismB[5] - prismB[1], prismB[4] - prismB[2]};
+    auto axisTest = [&](const float3& axis) {
+        float sep = satSeparationOnAxis<float3, float>(axis, A0, A1, A2, dA, B0, B1, B2, dB);
+        if (sep > maxSep)
+            maxSep = sep;
+        return sep > satMargin;
+    };
 
-    // Side face normals for prism A (3 rectangular side faces)
-    // Each side face is formed by an edge of the base and the corresponding height edges
-    for (int8_t i = 0; i < 3; ++i) {
-        // For each base edge, compute the normal of the rectangular side face
-        // The side face is formed by base edge i and the two height edges at its endpoints
-        T1 sideNormal = cross(A_baseEdges[i], A_heightEdges[i]);
-        float len = length(sideNormal);
-        if (len > DEME_TINY_FLOAT)
-            axes[axisCount++] = sideNormal / len;
-    }
+    // Face normals
+    if (axisTest(cross(eA0, A2 - A0)))
+        return false;
+    if (axisTest(cross(eB0, B2 - B0)))
+        return false;
 
-    // Side face normals for prism B (3 rectangular side faces)
-    for (int8_t i = 0; i < 3; ++i) {
-        T1 sideNormal = cross(B_baseEdges[i], B_heightEdges[i]);
-        float len = length(sideNormal);
-        if (len > DEME_TINY_FLOAT)
-            axes[axisCount++] = sideNormal / len;
-    }
+    // Side normals
+    if (axisTest(cross(eA0, dA)))
+        return false;
+    if (axisTest(cross(eA1, dA)))
+        return false;
+    if (axisTest(cross(eA2, dA)))
+        return false;
+    if (axisTest(cross(eB0, dB)))
+        return false;
+    if (axisTest(cross(eB1, dB)))
+        return false;
+    if (axisTest(cross(eB2, dB)))
+        return false;
 
-    // Edge-edge cross products: base edges of A with base edges of B
-    for (int8_t i = 0; i < 3; ++i) {
-        for (int8_t j = 0; j < 3; ++j) {
-            T1 cp = cross(A_baseEdges[i], B_baseEdges[j]);
-            float len = length(cp);
-            if (len > DEME_TINY_FLOAT)
-                axes[axisCount++] = cp / len;
+    // Edge-edge axes
+    float3 eA[3] = {eA0, eA1, eA2};
+    float3 eB[3] = {eB0, eB1, eB2};
+
+#pragma unroll
+    for (int i = 0; i < 3; ++i) {
+#pragma unroll
+        for (int j = 0; j < 3; ++j) {
+            if (axisTest(cross(eA[i], eB[j])))
+                return false;
         }
     }
 
-    // Edge-edge cross products: height edges of A with base edges of B
-    for (int8_t i = 0; i < 3; ++i) {
-        for (int8_t j = 0; j < 3; ++j) {
-            T1 cp = cross(A_heightEdges[i], B_baseEdges[j]);
-            float len = length(cp);
-            if (len > DEME_TINY_FLOAT)
-                axes[axisCount++] = cp / len;
-        }
+#pragma unroll
+    for (int i = 0; i < 3; ++i) {
+        if (axisTest(cross(eA[i], dB)))
+            return false;
     }
 
-    // Edge-edge cross products: base edges of A with height edges of B
-    for (int8_t i = 0; i < 3; ++i) {
-        for (int8_t j = 0; j < 3; ++j) {
-            T1 cp = cross(A_baseEdges[i], B_heightEdges[j]);
-            float len = length(cp);
-            if (len > DEME_TINY_FLOAT)
-                axes[axisCount++] = cp / len;
-        }
+#pragma unroll
+    for (int j = 0; j < 3; ++j) {
+        if (axisTest(cross(dA, eB[j])))
+            return false;
     }
 
-    // SAT test: check all computed axes
-    // Note: This correctly handles the containment case (one prism completely inside another).
-    // When prism A is inside prism B, for any axis, the projection range of A [minA, maxA]
-    // will be contained within the projection range of B [minB, maxB], causing all overlap
-    // checks to pass. With no separating axis found, the function returns true (in contact).
-    for (int8_t i = 0; i < axisCount; ++i) {
-        float minA, maxA, minB, maxB;
-        project_points_on_axis(prismA, axes[i], minA, maxA);
-        project_points_on_axis(prismB, axes[i], minB, maxB);
-        if (!projections_overlap(minA, maxA, minB, maxB))
-            return false;  // separating axis found -> no contact
-    }
+    if (axisTest(cross(dA, dB)))
+        return false;
 
-    /*
-    // Contact confirmed... find lex smallest point from both prisms, used for the contact point
-    // The contact point does not need to be accurate, but consistent in terms of two metrics:
-    // 1. It should be the same for the same pair of prisms, regardless of their order.
-    // 2. It should be in the bin that one of the triangles lives
-    // And we use the computed midpoint of closest vertex pair
-    T1 closestA = prismA[0];
-    T1 closestB = prismB[0];
-    float minDist2 = DEME_HUGE_FLOAT;
+    // Mixed-precision recheck near the decision boundary to suppress FP32 false positives
+    if constexpr (kEnableMixedPrecision) {
+        if (maxSep <= -mixedPrecisionBand)
+            return true;
 
-    for (int i = 0; i < 6; ++i) {
-        for (int j = 0; j < 6; ++j) {
-            T1 diff = prismA[i] - prismB[j];
-            float d2 = dot(diff, diff);
-            if (d2 < minDist2 || (d2 == minDist2 && (i < j))) {
-                minDist2 = d2;
-                closestA = prismA[i];
-                closestB = prismB[j];
+        double3 eAd0 = Ad1 - Ad0;
+        double3 eAd1 = Ad2 - Ad1;
+        double3 eAd2 = Ad0 - Ad2;
+        double3 eBd0 = Bd1 - Bd0;
+        double3 eBd1 = Bd2 - Bd1;
+        double3 eBd2 = Bd0 - Bd2;
+
+        auto axisTestD = [&](const double3& axis) {
+            double sep = satSeparationOnAxis<double3, double>(axis, Ad0, Ad1, Ad2, dAd, Bd0, Bd1, Bd2, dBd);
+            return sep > 0.0;
+        };
+
+        if (axisTestD(cross(eAd0, Ad2 - Ad0)))
+            return false;
+        if (axisTestD(cross(eBd0, Bd2 - Bd0)))
+            return false;
+
+        if (axisTestD(cross(eAd0, dAd)))
+            return false;
+        if (axisTestD(cross(eAd1, dAd)))
+            return false;
+        if (axisTestD(cross(eAd2, dAd)))
+            return false;
+        if (axisTestD(cross(eBd0, dBd)))
+            return false;
+        if (axisTestD(cross(eBd1, dBd)))
+            return false;
+        if (axisTestD(cross(eBd2, dBd)))
+            return false;
+
+        double3 eAd[3] = {eAd0, eAd1, eAd2};
+        double3 eBd[3] = {eBd0, eBd1, eBd2};
+
+#pragma unroll
+        for (int i = 0; i < 3; ++i) {
+#pragma unroll
+            for (int j = 0; j < 3; ++j) {
+                if (axisTestD(cross(eAd[i], eBd[j])))
+                    return false;
             }
         }
+
+#pragma unroll
+        for (int i = 0; i < 3; ++i) {
+            if (axisTestD(cross(eAd[i], dBd)))
+                return false;
+        }
+
+#pragma unroll
+        for (int j = 0; j < 3; ++j) {
+            if (axisTestD(cross(dAd, eBd[j])))
+                return false;
+        }
+
+        if (axisTestD(cross(dAd, dBd)))
+            return false;
     }
-    contactPointOut = (closestA + closestB) * 0.5;
-    */
 
     return true;
 }
