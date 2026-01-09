@@ -12,6 +12,7 @@
 
 #include "Logger.hpp"
 #include "BaseClasses.hpp"
+#include "CudaAllocator.hpp"
 #include "../../DEM/VariableTypes.h"
 
 namespace deme {
