@@ -1117,8 +1117,8 @@ void DEMSolver::setSolverParams() {
     // dT->solverFlags.should_sort_pairs = should_sort_contacts;
 
     // Error out policies
-    kT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
-    dT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
+    kT->solverFlags.errOutAvgPrimitiveCnts = threshold_error_out_num_cnts;
+    dT->solverFlags.errOutAvgPrimitiveCnts = threshold_error_out_num_cnts;
     // simParams-stored variables need to be sync-ed to device
     kT->simParams->errOutBinSphNum = threshold_too_many_spheres_in_bin;
     dT->simParams->errOutBinSphNum = threshold_too_many_spheres_in_bin;

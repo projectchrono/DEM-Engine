@@ -1110,7 +1110,7 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 (*pNumUniqueNewA > 0) ? (float)(*scratchPad.numPrimitiveContacts) / (float)(*pNumUniqueNewA) : 0.0;
 
             DEME_DEBUG_PRINTF("Average number of contacts for each geometry: %.7g", stateParams.avgCntsPerPrimitive);
-            if (stateParams.avgCntsPerPrimitive > solverFlags.errOutAvgSphCnts) {
+            if (stateParams.avgCntsPerPrimitive > solverFlags.errOutAvgPrimitiveCnts) {
                 DEME_ERROR(
                     "On average a primitive (spheres, triangle facets) has %.7g contacts with other primitives, more "
                     "than the max allowance (%.7g).\nIf you believe this number is expected with the physics you are "
@@ -1123,7 +1123,7 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                     "a.k.a. elements initialized inside walls.\nIf none works and you are going to discuss this on "
                     "forum https://groups.google.com/g/projectchrono, please include a visual rendering of the "
                     "simulation before crash in the post.\n",
-                    stateParams.avgCntsPerPrimitive, solverFlags.errOutAvgSphCnts);
+                    stateParams.avgCntsPerPrimitive, solverFlags.errOutAvgPrimitiveCnts);
             }
 
             scratchPad.finishUsingTempVector("new_idA_runlength");
