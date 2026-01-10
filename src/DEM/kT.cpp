@@ -19,17 +19,23 @@
 #include "algorithms/DEMStaticDeviceSubroutines.h"
 #include "kernel/DEMHelperKernels.cuh"
 
-
 #ifdef DEME_ENABLE_NVTX
-  #include <nvtx3/nvtx3.hpp>
-  #include <nvtx3/nvToolsExtCudaRt.h>
-  #define DEME_NVTX_CONCAT_IMPL(x, y) x##y
-  #define DEME_NVTX_CONCAT(x, y) DEME_NVTX_CONCAT_IMPL(x, y)
-  #define DEME_NVTX_RANGE(name) auto DEME_NVTX_CONCAT(__deme_nvtx_range_, __LINE__) = nvtx3::scoped_range{name}
-  #define DEME_NVTX_NAME_STREAM(stream, label) nvtxNameCudaStreamA((stream), (label))
+    #include <nvtx3/nvtx3.hpp>
+    #include <nvtx3/nvToolsExtCudaRt.h>
+    #define DEME_NVTX_CONCAT_IMPL(x, y) x##y
+    #define DEME_NVTX_CONCAT(x, y) DEME_NVTX_CONCAT_IMPL(x, y)
+    #define DEME_NVTX_RANGE(name)                                                   \
+        auto DEME_NVTX_CONCAT(__deme_nvtx_range_, __LINE__) = nvtx3::scoped_range { \
+            name                                                                    \
+        }
+    #define DEME_NVTX_NAME_STREAM(stream, label) nvtxNameCudaStreamA((stream), (label))
 #else
-  #define DEME_NVTX_RANGE(name) do {} while (0)
-  #define DEME_NVTX_NAME_STREAM(stream, label) do {} while (0)
+    #define DEME_NVTX_RANGE(name) \
+        do {                      \
+        } while (0)
+    #define DEME_NVTX_NAME_STREAM(stream, label) \
+        do {                                     \
+        } while (0)
 #endif
 
 namespace deme {
@@ -145,8 +151,8 @@ void DEMKinematicThread::calibrateParams() {
             // Register the new bin size
             simParams->dyn.inv_binSize = 1. / simParams->dyn.binSize;
             stateParams.numBins =
-                hostCalcBinNum(simParams->nbX, simParams->nbY, simParams->nbZ, simParams->voxelSize, simParams->dyn.binSize,
-                               simParams->nvXp2, simParams->nvYp2, simParams->nvZp2);
+                hostCalcBinNum(simParams->nbX, simParams->nbY, simParams->nbZ, simParams->voxelSize,
+                               simParams->dyn.binSize, simParams->nvXp2, simParams->nvYp2, simParams->nvZp2);
 
             DEME_DEBUG_PRINTF("Bin size is now: %.7g", simParams->dyn.binSize);
             DEME_DEBUG_PRINTF("Total num of bins is now: %zu", stateParams.numBins);
@@ -349,8 +355,8 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
     const size_t nPrimitive = *solverScratchSpace.numPrimitiveContacts;
     const size_t nPatch = *solverScratchSpace.numContacts;
 
-    const int srcDev = streamInfo.device;     // kT GPU
-    const int dstDev = dT->streamInfo.device; // dT GPU
+    const int srcDev = streamInfo.device;      // kT GPU
+    const int dstDev = dT->streamInfo.device;  // dT GPU
     const bool same_dev = (srcDev == dstDev);
     const cudaStream_t xfer_stream = same_dev ? streamInfo.stream : 0;
 
@@ -377,15 +383,13 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
         }
     }
 
-    bool need_resize_prim =
-        resize_prim > dT->idPrimitiveA_buffer[write_idx].size() ||
-        resize_prim > dT->idPrimitiveB_buffer[write_idx].size() ||
-        resize_prim > dT->contactTypePrimitive_buffer[write_idx].size() ||
-        resize_prim > dT->geomToPatchMap_buffer[write_idx].size();
-    bool need_resize_patch =
-        resize_patch > dT->idPatchA_buffer[write_idx].size() ||
-        resize_patch > dT->idPatchB_buffer[write_idx].size() ||
-        resize_patch > dT->contactTypePatch_buffer[write_idx].size();
+    bool need_resize_prim = resize_prim > dT->idPrimitiveA_buffer[write_idx].size() ||
+                            resize_prim > dT->idPrimitiveB_buffer[write_idx].size() ||
+                            resize_prim > dT->contactTypePrimitive_buffer[write_idx].size() ||
+                            resize_prim > dT->geomToPatchMap_buffer[write_idx].size();
+    bool need_resize_patch = resize_patch > dT->idPatchA_buffer[write_idx].size() ||
+                             resize_patch > dT->idPatchB_buffer[write_idx].size() ||
+                             resize_patch > dT->contactTypePatch_buffer[write_idx].size();
     if (!solverFlags.isHistoryless) {
         need_resize_patch = need_resize_patch || (resize_patch > dT->contactMapping_buffer[write_idx].size());
     }
@@ -437,8 +441,8 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
         DEME_GPU_CALL(cudaMemcpyAsync(granData->pDTOwnedBuffer_nPatchContacts, &(solverScratchSpace.numContacts),
                                       sizeof(size_t), cudaMemcpyDeviceToDevice, streamInfo.stream));
     } else {
-        DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_nPrimitiveContacts, &(solverScratchSpace.numPrimitiveContacts),
-                                 sizeof(size_t), cudaMemcpyDeviceToDevice));
+        DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_nPrimitiveContacts,
+                                 &(solverScratchSpace.numPrimitiveContacts), sizeof(size_t), cudaMemcpyDeviceToDevice));
         DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_nPatchContacts, &(solverScratchSpace.numContacts),
                                  sizeof(size_t), cudaMemcpyDeviceToDevice));
     }
@@ -506,7 +510,7 @@ void DEMKinematicThread::workerThread() {
                     break;
                 }
             }
-            DEME_NVTX_RANGE("kT::cycle"); // Do net consider waiting
+            DEME_NVTX_RANGE("kT::cycle");  // Do net consider waiting
             timers.GetTimer("Unpack updates from dT").start();
             // Getting here means that new `work order' data has been provided
             {
@@ -1197,9 +1201,9 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
     }
     // Then CD kernels
     {
-        sphere_contact_kernels = std::make_shared<JitHelper::CachedProgram>(JitHelper::buildProgram(
-            "DEMContactKernels_SphereSphere", JitHelper::KERNEL_DIR / "DEMContactKernels_SphereSphere.cu", Subs,
-            JitifyOptions));
+        sphere_contact_kernels = std::make_shared<JitHelper::CachedProgram>(
+            JitHelper::buildProgram("DEMContactKernels_SphereSphere",
+                                    JitHelper::KERNEL_DIR / "DEMContactKernels_SphereSphere.cu", Subs, JitifyOptions));
     }
     // Then triangle--bin intersection-related kernels
     {

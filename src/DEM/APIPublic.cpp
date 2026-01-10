@@ -739,7 +739,8 @@ void DEMSolver::SetIntegrator(const std::string& intg) {
 
 void DEMSolver::SetAdaptiveTimeStepType(const std::string& type) {
     DEME_WARNING(
-        "SetAdaptiveTimeStepType is a beta feature, currently hertz_const calculates a fixed timestep based on particle size, mass and contact E-modulus.");
+        std::string("SetAdaptiveTimeStepType is a beta feature, currently hertz_const calculates a fixed timestep "
+                    "based on particle size, mass and contact E-modulus."));
     switch (hash_charr(type.c_str())) {
         case ("none"_):
             adapt_ts_type = ADAPT_TS_TYPE::NONE;
@@ -748,10 +749,10 @@ void DEMSolver::SetAdaptiveTimeStepType(const std::string& type) {
             adapt_ts_type = ADAPT_TS_TYPE::HERTZ_CONST;
             break;
         case ("max_vel"_):
-            adapt_ts_type = ADAPT_TS_TYPE::MAX_VEL; // Not implemented yet
+            adapt_ts_type = ADAPT_TS_TYPE::MAX_VEL;  // Not implemented yet
             break;
         case ("int_diff"_):
-            adapt_ts_type = ADAPT_TS_TYPE::INT_DIFF; // Not implemented yet
+            adapt_ts_type = ADAPT_TS_TYPE::INT_DIFF;  // Not implemented yet
             break;
         default:
             DEME_ERROR("Adaptive time step type %s is unknown. Please select another via SetAdaptiveTimeStepType.",
@@ -2206,8 +2207,6 @@ void DEMSolver::Initialize(bool dry_run) {
     // Always clear cache after init
     ClearCache();
 
-
-
     //// TODO: Give a warning if sys_initialized is true and the system is re-initialized: in that case, the user should
     /// know what they are doing
     sys_initialized = true;
@@ -2257,7 +2256,8 @@ void DEMSolver::ShowTimingStats() {
 void DEMSolver::SetGPUTimersEnabled(bool enabled) {
     m_gpu_timers_enabled = enabled;
 
-    // Note: SolverTimers uses cudaEventCreate/Destroy, which are device-scoped. Ensure we operate on the correct device.
+    // Note: SolverTimers uses cudaEventCreate/Destroy, which are device-scoped. Ensure we operate on the correct
+    // device.
     if (enabled) {
         DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
         dT->timers.EnableGpuTimers();

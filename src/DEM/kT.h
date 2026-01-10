@@ -258,7 +258,7 @@ class DEMKinematicThread {
         // spawning the child thread.
 
         DEME_GPU_CALL(cudaStreamCreate(&streamInfo.stream));
-        
+
         DEME_GPU_CALL(cudaEventCreateWithFlags(&streamSyncEvent, cudaEventDisableTiming));
         DEME_GPU_CALL(cudaEventCreateWithFlags(&kT_to_dT_BufferReadyEvent, cudaEventDisableTiming));
         timers.InitGpuEvents();

@@ -83,18 +83,18 @@ __host__ __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
 // Overlap check without computing overlap area since no needed for sphere side.
 template <typename T1, typename T2, typename T3>
 __host__ __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
-                                                                   const T2& radA,
-                                                                   const deme::objType_t& typeB,
-                                                                   const T1& B,
-                                                                   const float3& dirB,
-                                                                   const float& size1B,
-                                                                   const float& size2B,
-                                                                   const float& size3B,
-                                                                   const float& normal_sign,
-                                                                   const float& beta4Entity,
-                                                                   T1& CP,
-                                                                   float3& cntNormal,
-                                                                   T3& overlapDepth) {
+                                                             const T2& radA,
+                                                             const deme::objType_t& typeB,
+                                                             const T1& B,
+                                                             const float3& dirB,
+                                                             const float& size1B,
+                                                             const float& size2B,
+                                                             const float& size3B,
+                                                             const float& normal_sign,
+                                                             const float& beta4Entity,
+                                                             T1& CP,
+                                                             float3& cntNormal,
+                                                             T3& overlapDepth) {
     deme::contact_t contactTypePrimitive;
     switch (typeB) {
         case (deme::ANAL_OBJ_TYPE_PLANE): {

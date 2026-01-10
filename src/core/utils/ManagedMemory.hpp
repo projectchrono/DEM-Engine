@@ -17,7 +17,7 @@ namespace deme {
 inline cudaMemLocation make_device_location(int device) {
     cudaMemLocation loc{};
     loc.type = cudaMemLocationTypeDevice;
-    loc.id   = device;
+    loc.id = device;
     return loc;
 }
 #endif
@@ -88,18 +88,12 @@ void __advise_impl(const T* data, std::size_t size, ManagedAdvice advice, int de
 #if CUDART_VERSION >= 13000
     cudaMemLocation loc{};
     loc.type = cudaMemLocationTypeDevice;
-    loc.id   = device;
+    loc.id = device;
     // CUDA 13.0+: cudaMemAdvise(const void*, size_t, cudaMemoryAdvise, cudaMemLocation)
-    cudaMemAdvise(static_cast<const void*>(data),
-                  size * sizeof(T),
-                  static_cast<cudaMemoryAdvise>(advice),
-                  loc);
+    cudaMemAdvise(static_cast<const void*>(data), size * sizeof(T), static_cast<cudaMemoryAdvise>(advice), loc);
 #else
     // Older toolkits: cudaMemAdvise(const void*, size_t, cudaMemoryAdvise, int)
-    cudaMemAdvise(static_cast<const void*>(data),
-                  size * sizeof(T),
-                  static_cast<cudaMemoryAdvise>(advice),
-                  device);
+    cudaMemAdvise(static_cast<const void*>(data), size * sizeof(T), static_cast<cudaMemoryAdvise>(advice), device);
 #endif
 }
 

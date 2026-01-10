@@ -355,7 +355,8 @@ class DEMSolver {
     void SetCDFutureDriftEffDriftSafetyFactor(float factor) {
         future_drift_eff_drift_safety_factor = clampBetween(factor, 1.0f, 10.0f);
     }
-    /// @brief Set bounds (as a fraction of max drift) that clamp dT's waiting behavior before sending a new kT work order.
+    /// @brief Set bounds (as a fraction of max drift) that clamp dT's waiting behavior before sending a new kT work
+    /// order.
     /// @details Default is lower=0, upper=1 (send as late as safely possible). `upper=0` makes dT send immediately
     /// (close to the old behavior, but still with the safety factor). Values must satisfy 0 <= lower <= upper <= 1.
     void SetCDFutureDriftSendBounds(float lower_ratio, float upper_ratio) {

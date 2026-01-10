@@ -52,27 +52,27 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
             {
                 // The bin number that I live in (with fractions)?
                 const double invBinSize = simParams->dyn.inv_binSize;
-                const int    nbX     = (int)simParams->nbX;
-                const int    nbY     = (int)simParams->nbY;
-                const int    nbZ     = (int)simParams->nbZ;
+                const int nbX = (int)simParams->nbX;
+                const int nbY = (int)simParams->nbY;
+                const int nbZ = (int)simParams->nbZ;
                 // Mixed precision counting with early exits
                 const deme::AxisBounds bx = axis_bounds(myPosXYZ.x, myRadius, nbX, invBinSize);
-                if (bx.imax < bx.imin) { 
+                if (bx.imax < bx.imin) {
                     numBinsSphereTouches[sphereID] = 0;
-                    numAnalGeoSphereTouches[sphereID] = 0;   // ← dazu
-                    return; 
+                    numAnalGeoSphereTouches[sphereID] = 0;  // ← dazu
+                    return;
                 }
                 const deme::AxisBounds by = axis_bounds(myPosXYZ.y, myRadius, nbY, invBinSize);
-                if (by.imax < by.imin) { 
+                if (by.imax < by.imin) {
                     numBinsSphereTouches[sphereID] = 0;
-                    numAnalGeoSphereTouches[sphereID] = 0;   // ← dazu
-                    return; 
+                    numAnalGeoSphereTouches[sphereID] = 0;  // ← dazu
+                    return;
                 }
                 const deme::AxisBounds bz = axis_bounds(myPosXYZ.z, myRadius, nbZ, invBinSize);
-                if (bz.imax < bz.imin) { 
+                if (bz.imax < bz.imin) {
                     numBinsSphereTouches[sphereID] = 0;
-                    numAnalGeoSphereTouches[sphereID] = 0;   // ← dazu
-                    return; 
+                    numAnalGeoSphereTouches[sphereID] = 0;  // ← dazu
+                    return;
                 }
                 numX = bx.imax - bx.imin + 1;
                 numY = by.imax - by.imin + 1;
@@ -195,11 +195,17 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
             const int nbXY = nbX * nbY;
             // Bounds and avoid unnecessary work
             const deme::AxisBounds bx = axis_bounds(myPosXYZ.x, myRadius, nbX, invBinSize);
-            if (bx.imax < bx.imin) { return; }
+            if (bx.imax < bx.imin) {
+                return;
+            }
             const deme::AxisBounds by = axis_bounds(myPosXYZ.y, myRadius, nbY, invBinSize);
-            if (by.imax < by.imin) { return; }
+            if (by.imax < by.imin) {
+                return;
+            }
             const deme::AxisBounds bz = axis_bounds(myPosXYZ.z, myRadius, nbZ, invBinSize);
-            if (bz.imax < bz.imin) { return; }
+            if (bz.imax < bz.imin) {
+                return;
+            }
             // Alias names for the loop
             const int ix0 = bx.imin, ix1 = bx.imax;
             const int iy0 = by.imin, iy1 = by.imax;
@@ -211,7 +217,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                     const int baseYZ = baseZ + j * nbX;
                     for (int i = ix0; i <= ix1; ++i) {
                         if (myReportOffset >= myReportOffset_end) {
-                            return; // No stepping on the next one's domain
+                            return;  // No stepping on the next one's domain
                         }
                         const deme::binID_t binLin = (deme::binID_t)(baseYZ + i);  // = i + nbX*(j + nbY*k)
                         binIDsEachSphereTouches[myReportOffset] = binLin;
@@ -229,7 +235,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
         }
 
         // ----- Analytical geometry contacts -----
-        deme::binSphereTouchPairs_t mySphereGeoReportOffset     = numAnalGeoSphereTouchesScan[sphereID];
+        deme::binSphereTouchPairs_t mySphereGeoReportOffset = numAnalGeoSphereTouchesScan[sphereID];
         deme::binSphereTouchPairs_t mySphereGeoReportOffset_end = numAnalGeoSphereTouchesScan[sphereID + 1];
         // Only check analytical geometry if capacity was reserved
         if (mySphereGeoReportOffset < mySphereGeoReportOffset_end) {
@@ -259,8 +265,8 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                 float objBRotZ = objRotZ[objB];
                 applyOriQToVector3<float, deme::oriQ_t>(objBRelPosX, objBRelPosY, objBRelPosZ, ownerOriQw, ownerOriQx,
                                                         ownerOriQy, ownerOriQz);
-                applyOriQToVector3<float, deme::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx, ownerOriQy,
-                                                        ownerOriQz);
+                applyOriQToVector3<float, deme::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx,
+                                                        ownerOriQy, ownerOriQz);
                 double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
 
                 double overlapDepth;
@@ -273,8 +279,8 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                         objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
                         granData->marginSizeAnalytical[objB], cntPnt, cntNorm, overlapDepth);
                 }
-                // overlapDepth (which has both entities' full margins) needs to be larger than the smaller one of the two
-                // added margin to be considered in-contact.
+                // overlapDepth (which has both entities' full margins) needs to be larger than the smaller one of the
+                // two added margin to be considered in-contact.
                 double marginThres =
                     (granData->familyExtraMarginSize[sphFamilyNum] < granData->familyExtraMarginSize[objFamilyNum])
                         ? granData->familyExtraMarginSize[sphFamilyNum]

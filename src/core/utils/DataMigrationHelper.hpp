@@ -16,7 +16,6 @@
 #include "CudaAllocator.hpp"
 #include "../../DEM/VariableTypes.h"
 
-
 namespace deme {
 
 template <typename T>
@@ -1057,111 +1056,177 @@ class DualStructPool : public ResourcePool<T, DualStruct<T>> {
 // device to host more freely and concern-free, but when copying from host to device, that's either in a centrialized
 // initialization stage, or we do piecemeal and fine-grain copying which reflects the user's forced system updates only.
 
-namespace xfer { // Memory Transfer Bundle Manager
+namespace xfer {  // Memory Transfer Bundle Manager
 
 enum class XferMode { Same, Peer, Stage };
 
 struct HostBounce {
-    void*  ptr = nullptr;
+    void* ptr = nullptr;
     size_t cap = 0;
-    ~HostBounce(){ if (ptr) cudaFreeHost(ptr); }
-    inline void ensure(size_t need){
-        if (cap >= need) return;
-        if (ptr) cudaFreeHost(ptr);
-        DEME_GPU_CALL(cudaMallocHost(&ptr, need)); // pinned
+    ~HostBounce() {
+        if (ptr)
+            cudaFreeHost(ptr);
+    }
+    inline void ensure(size_t need) {
+        if (cap >= need)
+            return;
+        if (ptr)
+            cudaFreeHost(ptr);
+        DEME_GPU_CALL(cudaMallocHost(&ptr, need));  // pinned
         cap = need;
     }
 };
 
-struct PeerCache { int dst{-1}, src{-1}; int can{-1}; }; // -1 unknown, 0 no, 1 yes
+struct PeerCache {
+    int dst{-1}, src{-1};
+    int can{-1};
+};  // -1 unknown, 0 no, 1 yes
 static thread_local HostBounce __bounce;
 static thread_local PeerCache __pc;
 
-
 inline XferMode plan_mode(int dstDev, int srcDev) {
-    if (dstDev == srcDev) return XferMode::Same;
+    if (dstDev == srcDev)
+        return XferMode::Same;
 
     if (__pc.dst != dstDev || __pc.src != srcDev || __pc.can < 0) {
-        __pc.dst = dstDev; __pc.src = srcDev; __pc.can = 0;
+        __pc.dst = dstDev;
+        __pc.src = srcDev;
+        __pc.can = 0;
         int can = 0;
         DEME_GPU_CALL(cudaDeviceCanAccessPeer(&can, dstDev, srcDev));
         if (can) {
-            int cur=-1; DEME_GPU_CALL(cudaGetDevice(&cur));
-            if (cur != dstDev) DEME_GPU_CALL(cudaSetDevice(dstDev));
+            int cur = -1;
+            DEME_GPU_CALL(cudaGetDevice(&cur));
+            if (cur != dstDev)
+                DEME_GPU_CALL(cudaSetDevice(dstDev));
             cudaError_t st = cudaDeviceEnablePeerAccess(srcDev, 0);
-            if (st == cudaErrorPeerAccessAlreadyEnabled) (void)cudaGetLastError();
-            else if (st != cudaSuccess) can = 0;
-            if (cur != dstDev) DEME_GPU_CALL(cudaSetDevice(cur));
+            if (st == cudaErrorPeerAccessAlreadyEnabled)
+                (void)cudaGetLastError();
+            else if (st != cudaSuccess)
+                can = 0;
+            if (cur != dstDev)
+                DEME_GPU_CALL(cudaSetDevice(cur));
         }
         __pc.can = can ? 1 : 0;
     }
     return __pc.can ? XferMode::Peer : XferMode::Stage;
 }
 
-inline size_t __sum_bytes(const size_t* bytes, int n){
-    size_t t=0; for (int i=0;i<n;++i) t += bytes[i]; return t;
+inline size_t __sum_bytes(const size_t* bytes, int n) {
+    size_t t = 0;
+    for (int i = 0; i < n; ++i)
+        t += bytes[i];
+    return t;
 }
-inline size_t __max_bytes(const size_t* bytes, int n){
-    size_t m=0; for (int i=0;i<n;++i) m = std::max(m, bytes[i]); return m;
+inline size_t __max_bytes(const size_t* bytes, int n) {
+    size_t m = 0;
+    for (int i = 0; i < n; ++i)
+        m = std::max(m, bytes[i]);
+    return m;
 }
 
 // Same device: D2D
-inline void xfer_same(int dev, void* const* dst, const void* const* src, const size_t* bytes, int n,
+inline void xfer_same(int dev,
+                      void* const* dst,
+                      const void* const* src,
+                      const size_t* bytes,
+                      int n,
                       cudaStream_t stream) {
-    int cur=-1; DEME_GPU_CALL(cudaGetDevice(&cur));
+    int cur = -1;
+    DEME_GPU_CALL(cudaGetDevice(&cur));
     int dev_sw = (cur != dev) ? 1 : 0;
-    if (dev_sw) DEME_GPU_CALL(cudaSetDevice(dev));
+    if (dev_sw)
+        DEME_GPU_CALL(cudaSetDevice(dev));
 
-    for (int i=0;i<n;++i) if (bytes[i]) {
-        DEME_GPU_CALL(cudaMemcpyAsync(dst[i], src[i], bytes[i], cudaMemcpyDeviceToDevice, stream));
-    }
-    if (dev_sw) DEME_GPU_CALL(cudaSetDevice(cur));
+    for (int i = 0; i < n; ++i)
+        if (bytes[i]) {
+            DEME_GPU_CALL(cudaMemcpyAsync(dst[i], src[i], bytes[i], cudaMemcpyDeviceToDevice, stream));
+        }
+    if (dev_sw)
+        DEME_GPU_CALL(cudaSetDevice(cur));
 }
 
 // Peer: cudaMemcpyPeer
-inline void xfer_peer(int dstDev, int srcDev, void* const* dst, const void* const* src, const size_t* bytes, int n,
+inline void xfer_peer(int dstDev,
+                      int srcDev,
+                      void* const* dst,
+                      const void* const* src,
+                      const size_t* bytes,
+                      int n,
                       cudaStream_t stream) {
-    int cur=-1; DEME_GPU_CALL(cudaGetDevice(&cur));
+    int cur = -1;
+    DEME_GPU_CALL(cudaGetDevice(&cur));
     int dev_sw = (cur != dstDev) ? 1 : 0;
-    if (dev_sw) DEME_GPU_CALL(cudaSetDevice(dstDev));
-    for (int i=0;i<n;++i) if (bytes[i]) {
-        DEME_GPU_CALL(cudaMemcpyPeerAsync(dst[i], dstDev, src[i], srcDev, bytes[i], stream));
-    }
-    if (dev_sw) DEME_GPU_CALL(cudaSetDevice(cur));
+    if (dev_sw)
+        DEME_GPU_CALL(cudaSetDevice(dstDev));
+    for (int i = 0; i < n; ++i)
+        if (bytes[i]) {
+            DEME_GPU_CALL(cudaMemcpyPeerAsync(dst[i], dstDev, src[i], srcDev, bytes[i], stream));
+        }
+    if (dev_sw)
+        DEME_GPU_CALL(cudaSetDevice(cur));
 }
 
 // Stage== No Peer
-inline void xfer_stage_as_d2d(int dstDev, int srcDev, void* const* dst, const void* const* src, const size_t* bytes,
-                              int n, cudaStream_t /*stream*/) {
-    for (int i=0;i<n;++i) if (bytes[i]) { DEME_GPU_CALL(cudaMemcpy(dst[i], src[i], bytes[i], cudaMemcpyDeviceToDevice));
-    }
+inline void xfer_stage_as_d2d(int dstDev,
+                              int srcDev,
+                              void* const* dst,
+                              const void* const* src,
+                              const size_t* bytes,
+                              int n,
+                              cudaStream_t /*stream*/) {
+    for (int i = 0; i < n; ++i)
+        if (bytes[i]) {
+            DEME_GPU_CALL(cudaMemcpy(dst[i], src[i], bytes[i], cudaMemcpyDeviceToDevice));
+        }
 }
 
 // Frontend
-inline void D2D_bundle(int dstDev, int srcDev, void* const* dst, const void* const* src, const size_t* bytes, int n,
+inline void D2D_bundle(int dstDev,
+                       int srcDev,
+                       void* const* dst,
+                       const void* const* src,
+                       const size_t* bytes,
+                       int n,
                        cudaStream_t stream = 0) {
-    if (n <= 0) return;
+    if (n <= 0)
+        return;
     XferMode mode = plan_mode(dstDev, srcDev);
 
     switch (mode) {
-        case XferMode::Same:  xfer_same(srcDev, dst, src, bytes, n, stream);              break;
-        case XferMode::Peer:  xfer_peer(dstDev, srcDev, dst, src, bytes, n, stream);      break;
-        case XferMode::Stage: xfer_stage_as_d2d(dstDev, srcDev, dst, src, bytes, n, stream); break;
+        case XferMode::Same:
+            xfer_same(srcDev, dst, src, bytes, n, stream);
+            break;
+        case XferMode::Peer:
+            xfer_peer(dstDev, srcDev, dst, src, bytes, n, stream);
+            break;
+        case XferMode::Stage:
+            xfer_stage_as_d2d(dstDev, srcDev, dst, src, bytes, n, stream);
+            break;
     }
 }
 
 // Builder
 struct XferList {
     static constexpr int MAX = 16;
-    void*       dst[MAX]{};
+    void* dst[MAX]{};
     const void* src[MAX]{};
-    size_t      sz[MAX]{};
-    int         n{0};
-    inline void add(void* d, const void* s, size_t b){ if (b && n<MAX){ dst[n]=d; src[n]=s; sz[n]=b; ++n; } }
-    inline void run(int dstDev, int srcDev, cudaStream_t stream = 0){ D2D_bundle(dstDev, srcDev, dst, src, sz, n, stream); }
+    size_t sz[MAX]{};
+    int n{0};
+    inline void add(void* d, const void* s, size_t b) {
+        if (b && n < MAX) {
+            dst[n] = d;
+            src[n] = s;
+            sz[n] = b;
+            ++n;
+        }
+    }
+    inline void run(int dstDev, int srcDev, cudaStream_t stream = 0) {
+        D2D_bundle(dstDev, srcDev, dst, src, sz, n, stream);
+    }
 };
 
-} // namespace xfer
+}  // namespace xfer
 
 }  // namespace deme
 
