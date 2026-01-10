@@ -520,7 +520,7 @@ void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const 
     size_t ownerFactorSize = (size_t)simParams->nOwnerBodies * sizeof(float);
     // Bool table for whether this owner should change
     notStupidBool_t* idBool = (notStupidBool_t*)solverScratchSpace.allocateTempVector("idBool", idBoolSize);
-    DEME_GPU_CALL(cudaMemsetAsync(idBool, 0, idBoolSize, streamInfo.stream));
+    DEME_GPU_CALL(cudaMemset(idBool, 0, idBoolSize));
     float* ownerFactors = (float*)solverScratchSpace.allocateTempVector("ownerFactors", ownerFactorSize);
 
     // Mark on the bool array those owners that need a change
@@ -638,7 +638,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     // maxTriTriPenetration usually keeps the max tri--tri penetration during the on-going simulation. But after
     // initialization, when it stores no meaningful values, dT will send a work order to kT, so maxTriTriPenetration's
     // value has to be initialized.
-    DEME_GPU_CALL(cudaMemsetAsync(maxTriTriPenetration.getDevicePointer(), 0, sizeof(double), streamInfo.stream));
+    DEME_GPU_CALL(cudaMemset(maxTriTriPenetration.getDevicePointer(), 0, sizeof(double)));
 
     // Resize to the number of analytical geometries
     DEME_DUAL_ARRAY_RESIZE(ownerAnalBody, nAnalGM, 0);
@@ -2499,25 +2499,8 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
     const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
     const ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>>&
         typeKernelMap) {
-    // Reset max tri-tri penetration only when mesh contacts are present (avoid needless clears), async to overlap
-    bool needTriPenReset = false;
-    auto markIfTri = [&](contact_t c) {
-        auto itP = typeStartCountPrimitiveMap.find(c);
-        if (itP != typeStartCountPrimitiveMap.end() && itP->second.second > 0) {
-            needTriPenReset = true;
-            return;
-        }
-        auto itPatch = typeStartCountPatchMap.find(c);
-        if (itPatch != typeStartCountPatchMap.end() && itPatch->second.second > 0) {
-            needTriPenReset = true;
-        }
-    };
-    markIfTri(SPHERE_TRIANGLE_CONTACT);
-    markIfTri(TRIANGLE_TRIANGLE_CONTACT);
-    markIfTri(TRIANGLE_ANALYTICAL_CONTACT);
-    if (needTriPenReset) {
-        DEME_GPU_CALL(cudaMemsetAsync(maxTriTriPenetration.getDevicePointer(), 0, sizeof(double), streamInfo.stream));
-    }
+    // Reset max tri-tri penetration for this timestep on device (kT may need this info)
+    DEME_GPU_CALL(cudaMemset(maxTriTriPenetration.getDevicePointer(), 0, sizeof(double)));
 
     // For each contact type that exists, check if it is patch(mesh)-related type...
     for (size_t i = 0; i < m_numExistingTypes; i++) {
@@ -2531,40 +2514,35 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
             contactPairs_t startOffsetPatch = start_count_patch.first;
             contactPairs_t countPatch = start_count_patch.second;
 
-            // Vote for the contact direction; voting power depends on the contact area
-            // This reduce-by-key operation reduces primitive-recorded force pairs into patch/convex part-based
-            // force pairs. All elements that share the same geomToPatchMap value vote together.
             if (countPrimitive > 0) {
                 contactPairs_t* keys = granData->geomToPatchMap + startOffsetPrimitive;
-                // Allocate temporary arrays for the voting process
-                float3* weightedNormals =
-                    (float3*)solverScratchSpace.allocateTempVector("weightedNormals", countPrimitive * sizeof(float3));
-
                 // Allocate arrays for reduce-by-key results (uniqueKeys uses contactPairs_t, not patchIDPair_t)
                 contactPairs_t* uniqueKeys = (contactPairs_t*)solverScratchSpace.allocateTempVector(
                     "uniqueKeys", countPrimitive * sizeof(contactPairs_t));
-                float3* votedWeightedNormals = (float3*)solverScratchSpace.allocateTempVector(
-                    "votedWeightedNormals", countPrimitive * sizeof(float3));
                 solverScratchSpace.allocateDualStruct("numUniqueKeys");
                 size_t* numUniqueKeys = solverScratchSpace.getDualStructDevice("numUniqueKeys");
 
-                // Step 1: Prepare weighted normals. Keys are read directly from geomToPatchMap.
+                // Step 1: Area-weighted normals for voting
+                float3* weightedNormals =
+                    (float3*)solverScratchSpace.allocateTempVector("weightedNormals", countPrimitive * sizeof(float3));
                 prepareWeightedNormalsForVoting(&granData, weightedNormals, startOffsetPrimitive, countPrimitive,
                                                 streamInfo.stream);
 
-                // Step 2: Reduce-by-key for weighted normals (sum)
-                // The keys are geomToPatchMap values (contactPairs_t), which group primitives by patch pair
+                float3* votedWeightedNormals = (float3*)solverScratchSpace.allocateTempVector(
+                    "votedWeightedNormals", countPrimitive * sizeof(float3));
                 cubSumReduceByKey<contactPairs_t, float3>(keys, uniqueKeys, weightedNormals, votedWeightedNormals,
                                                           numUniqueKeys, countPrimitive, streamInfo.stream,
                                                           solverScratchSpace);
                 solverScratchSpace.finishUsingTempVector("weightedNormals");
-                // For extra safety
+
+                // Normalize the voted normals using unique keys and scatter to patch-local storage.
+                float3* votedNormals =
+                    (float3*)solverScratchSpace.allocateTempVector("votedNormals", countPatch * sizeof(float3));
                 solverScratchSpace.syncDualStructDeviceToHost("numUniqueKeys");
                 size_t numUniqueKeysHost = *(solverScratchSpace.getDualStructHost("numUniqueKeys"));
-                // std::cout << "Keys:" << std::endl;
-                // displayDeviceArray<contactPairs_t>(keys, countPrimitive);
-                // std::cout << "Unique Keys:" << std::endl;
-                // displayDeviceArray<contactPairs_t>(uniqueKeys, numUniqueKeysHost);
+                normalizeAndScatterVotedNormalsFromUniqueKeys(votedWeightedNormals, uniqueKeys, votedNormals,
+                                                              startOffsetPatch, numUniqueKeysHost, streamInfo.stream);
+                solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
                 if (numUniqueKeysHost != countPatch) {
                     DEME_ERROR(
                         "Patch-based contact voting produced %zu unique patch pairs, but expected %zu pairs for "
@@ -2572,28 +2550,19 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                         numUniqueKeysHost, countPatch, contact_type);
                 }
 
-                // Normalize the voted normals using unique keys and scatter to patch-local storage.
-                float3* votedNormals =
-                    (float3*)solverScratchSpace.allocateTempVector("votedNormals", countPatch * sizeof(float3));
-                normalizeAndScatterVotedNormalsFromUniqueKeys(votedWeightedNormals, uniqueKeys, votedNormals,
-                                                              startOffsetPatch, numUniqueKeysHost, streamInfo.stream);
-                solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
-                // displayDeviceFloat3(votedNormals, countPatch);
+                // Step 2: Fused accumulation (sum + max) in a single reduce-by-key.
+                FusedPatchAccum* primitiveAccums = (FusedPatchAccum*)solverScratchSpace.allocateTempVector(
+                    "fusedPrimitiveAccums", countPrimitive * sizeof(FusedPatchAccum));
+                computeFusedPatchContactAccumulators(&granData, votedNormals, keys, primitiveAccums,
+                                                     startOffsetPrimitive, startOffsetPatch, countPrimitive,
+                                                     streamInfo.stream);
 
-                // Project penetration/area and accumulate weighted contact points in a single pass.
-                PatchContactAccum* primitivePatchAccumulators =
-                    (PatchContactAccum*)solverScratchSpace.allocateTempVector(
-                        "primitivePatchAccumulators", countPrimitive * sizeof(PatchContactAccum));
-                computePatchContactAccumulators(&granData, votedNormals, keys, primitivePatchAccumulators,
-                                                startOffsetPrimitive, startOffsetPatch, countPrimitive,
-                                                streamInfo.stream);
-
-                PatchContactAccum* patchContactAccumulators = (PatchContactAccum*)solverScratchSpace.allocateTempVector(
-                    "patchContactAccumulators", numUniqueKeysHost * sizeof(PatchContactAccum));
-                cubSumReduceByKey<contactPairs_t, PatchContactAccum>(
-                    keys, uniqueKeys, primitivePatchAccumulators, patchContactAccumulators, numUniqueKeys,
-                    countPrimitive, streamInfo.stream, solverScratchSpace);
-                solverScratchSpace.finishUsingTempVector("primitivePatchAccumulators");
+                FusedPatchAccum* patchAccums = (FusedPatchAccum*)solverScratchSpace.allocateTempVector(
+                    "fusedPatchAccums", numUniqueKeysHost * sizeof(FusedPatchAccum));
+                cubSumReduceByKey<contactPairs_t, FusedPatchAccum>(keys, uniqueKeys, primitiveAccums, patchAccums,
+                                                                   numUniqueKeys, countPrimitive, streamInfo.stream,
+                                                                   solverScratchSpace);
+                solverScratchSpace.finishUsingTempVector("fusedPrimitiveAccums");
 
                 double* totalProjectedAreas =
                     (double*)solverScratchSpace.allocateTempVector("totalProjectedAreas", countPatch * sizeof(double));
@@ -2601,42 +2570,18 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     "maxProjectedPenetrations", countPatch * sizeof(double));
                 double3* votedContactPoints =
                     (double3*)solverScratchSpace.allocateTempVector("votedContactPoints", countPatch * sizeof(double3));
-                scatterPatchContactAccumulators(patchContactAccumulators, uniqueKeys, totalProjectedAreas,
-                                                maxProjectedPenetrations, votedContactPoints, startOffsetPatch,
-                                                numUniqueKeysHost, streamInfo.stream);
-                solverScratchSpace.finishUsingTempVector("patchContactAccumulators");
-
-                // Step 9: Handle zero-area patches (all primitive areas are 0)
-                // For these patches, we need to find the max penetration primitive and use its normal/penetration
-
-                // 9a: Extract primitive penetrations for max-reduce
-                double* primitivePenetrations = (double*)solverScratchSpace.allocateTempVector(
-                    "primitivePenetrations", countPrimitive * sizeof(double));
-                extractPrimitivePenetrations(&granData, primitivePenetrations, startOffsetPrimitive, countPrimitive,
-                                             streamInfo.stream);
-
-                // 9b: Max-negative-reduce-by-key to get max negative penetration per patch
-                // This finds the largest negative value (smallest absolute value among negatives)
-                // Positive values are treated as very negative to indicate invalid/non-physical state
-                double* maxPenetrations =
-                    (double*)solverScratchSpace.allocateTempVector("maxPenetrations", countPatch * sizeof(double));
-                cubMaxNegativeReduceByKey<contactPairs_t, double>(keys, uniqueKeys, primitivePenetrations,
-                                                                  maxPenetrations, numUniqueKeys, countPrimitive,
-                                                                  streamInfo.stream, solverScratchSpace);
-                solverScratchSpace.finishUsingTempVector("primitivePenetrations");
-
-                // 9c: Find max-penetration primitives for zero-area patches and extract their normals, penetrations,
-                // and contact points
                 float3* zeroAreaNormals =
                     (float3*)solverScratchSpace.allocateTempVector("zeroAreaNormals", countPatch * sizeof(float3));
                 double* zeroAreaPenetrations =
                     (double*)solverScratchSpace.allocateTempVector("zeroAreaPenetrations", countPatch * sizeof(double));
                 double3* zeroAreaContactPoints = (double3*)solverScratchSpace.allocateTempVector(
                     "zeroAreaContactPoints", countPatch * sizeof(double3));
-                findMaxPenetrationPrimitiveForZeroAreaPatches(
-                    &granData, maxPenetrations, zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, keys,
-                    startOffsetPrimitive, startOffsetPatch, countPrimitive, streamInfo.stream);
-                solverScratchSpace.finishUsingTempVector("maxPenetrations");
+
+                scatterFusedPatchAccumulators(patchAccums, uniqueKeys, totalProjectedAreas, maxProjectedPenetrations,
+                                              votedContactPoints, votedNormals, zeroAreaNormals, zeroAreaPenetrations,
+                                              zeroAreaContactPoints, startOffsetPatch, numUniqueKeysHost,
+                                              streamInfo.stream);
+                solverScratchSpace.finishUsingTempVector("fusedPatchAccums");
 
                 // Step 9d: Check if each patch has any SAT-satisfying primitive (for tri-tri contacts)
                 // If no primitive satisfies SAT, the patch contact is non-physical and should use Step 9 fallback
@@ -3417,7 +3362,7 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<JitHelper::CachedProg
     // If this boolArrExclude is 1 at an element, that means this element is exluded in the reduction
     notStupidBool_t* boolArrExclude =
         (notStupidBool_t*)solverScratchSpace.allocateTempVector("boolArrExclude", regionTempSize);
-    DEME_GPU_CALL(cudaMemsetAsync(boolArrExclude, 0, regionTempSize, streamInfo.stream));
+    DEME_GPU_CALL(cudaMemset(boolArrExclude, 0, regionTempSize));
 
     // We may actually have 2 reduced returns: in regional reduction, key 0 and 1 give one return each.
     size_t returnSize = sizeof(float) * 2;
