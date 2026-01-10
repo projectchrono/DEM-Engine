@@ -36,14 +36,15 @@ namespace deme {
 #define DEME_BIN_ENLARGE_RATIO_FOR_FACETS 0.001
 
 // A few pre-computed constants
-constexpr double ONE_OVER_THREE = 1. / 3.; // double for accurancy, all other consts here are used for FP32 or less critical calculations
+constexpr double ONE_OVER_THREE =
+    1. / 3.;  // double for accurancy, all other consts here are used for FP32 or less critical calculations
 constexpr float TWO_OVER_THREE = 2. / 3.;
 constexpr float FOUR_OVER_THREE = 4. / 3.;
 constexpr float FIVE_OVER_THREE = 5. / 3.;
 constexpr float PI = 3.1415926535897932385f;
 constexpr float PI_SQUARED = 9.869604401089358f;
 constexpr float TWO_TIMES_SQRT_FIVE_OVER_THREE = 2.58198889747161f;  // 2. * std::sqrt(5. / 3.)
-constexpr float TWO_TIMES_SQRT_FIVE_OVER_SIX = 1.825741858350554f; // 2. * std::sqrt(5. / 6.)
+constexpr float TWO_TIMES_SQRT_FIVE_OVER_SIX = 1.825741858350554f;   // 2. * std::sqrt(5. / 6.)
 
 constexpr uint8_t VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * DEME_BITS_PER_BYTE;
 constexpr uint8_t VOXEL_COUNT_POWER2 = sizeof(voxelID_t) * DEME_BITS_PER_BYTE;
@@ -536,7 +537,9 @@ const float DEFAULT_BOX_DOMAIN_ENLARGE_RATIO = 0.2;
 // Initial contact array size; does not matter that much as they can be resized anytime in simulation
 const contactPairs_t INITIAL_CONTACT_ARRAY_SIZE = 1024;
 // For the bin collecting
-struct AxisBounds { int imin, imax; };
+struct AxisBounds {
+    int imin, imax;
+};
 
 // #ifndef CUB_IGNORE_DEPRECATED_API
 // #define CUB_IGNORE_DEPRECATED_API

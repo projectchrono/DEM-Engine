@@ -967,10 +967,12 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
             xt.add(total_idB, selected_idB, selected_ids_bytes);
             xt.add(total_idB + *pNumPersistCnts, granData->idPrimitiveB, total_ids_bytes - selected_ids_bytes);
             xt.add(total_types, selected_types, selected_types_bytes);
-            xt.add(total_types + *pNumPersistCnts, granData->contactTypePrimitive, total_types_bytes - selected_types_bytes);
+            xt.add(total_types + *pNumPersistCnts, granData->contactTypePrimitive,
+                   total_types_bytes - selected_types_bytes);
             xt.run(dev, dev, this_stream);
             // For the selected portion, persistency is all 1, the rest is all 0
-            DEME_GPU_CALL(cudaMemsetAsync(total_persistency, CONTACT_NOT_PERSISTENT, total_persistency_bytes, this_stream));
+            DEME_GPU_CALL(
+                cudaMemsetAsync(total_persistency, CONTACT_NOT_PERSISTENT, total_persistency_bytes, this_stream));
             size_t blocks_needed_for_setting_1 =
                 (*pNumPersistCnts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
             if (blocks_needed_for_setting_1 > 0) {
@@ -1157,8 +1159,8 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
             bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector("idB_sorted", total_ids_bytes);
             contact_t* contactType_sorted =
                 (contact_t*)scratchPad.allocateTempVector("contactType_sorted", type_arr_bytes);
-            notStupidBool_t* contactPersistency_sorted = (notStupidBool_t*)scratchPad.allocateTempVector(
-                "contactPersistency_sorted", total_persistency_bytes);
+            notStupidBool_t* contactPersistency_sorted =
+                (notStupidBool_t*)scratchPad.allocateTempVector("contactPersistency_sorted", total_persistency_bytes);
             contactPairs_t* type_indices =
                 (contactPairs_t*)scratchPad.allocateTempVector("contactTypeIndices", idx_arr_bytes);
             contactPairs_t* type_indices_sorted =
@@ -1180,15 +1182,15 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                                                             sort_indices_sorted, numTotalCnts, this_stream, scratchPad);
 
             if (blocks_needed_for_patch_ids > 0) {
-                gatherByIndex<bodyID_t><<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                          this_stream>>>(granData->idPrimitiveA, idA_sorted, sort_indices_sorted,
-                                                         numTotalCnts);
-                gatherByIndex<bodyID_t><<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                          this_stream>>>(granData->idPrimitiveB, idB_sorted, sort_indices_sorted,
-                                                         numTotalCnts);
-                gatherByIndex<contact_t><<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                           this_stream>>>(granData->contactTypePrimitive, contactType_sorted,
-                                                          sort_indices_sorted, numTotalCnts);
+                gatherByIndex<bodyID_t>
+                    <<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+                        granData->idPrimitiveA, idA_sorted, sort_indices_sorted, numTotalCnts);
+                gatherByIndex<bodyID_t>
+                    <<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+                        granData->idPrimitiveB, idB_sorted, sort_indices_sorted, numTotalCnts);
+                gatherByIndex<contact_t>
+                    <<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+                        granData->contactTypePrimitive, contactType_sorted, sort_indices_sorted, numTotalCnts);
                 gatherByIndex<notStupidBool_t>
                     <<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
                         granData->contactPersistency, contactPersistency_sorted, sort_indices_sorted, numTotalCnts);
@@ -1205,12 +1207,12 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                                                         scratchPad);
 
             if (blocks_needed_for_patch_ids > 0) {
-                gatherByIndex<bodyID_t><<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                          this_stream>>>(idA_sorted, granData->idPrimitiveA, type_indices_sorted,
-                                                         numTotalCnts);
-                gatherByIndex<bodyID_t><<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                          this_stream>>>(idB_sorted, granData->idPrimitiveB, type_indices_sorted,
-                                                         numTotalCnts);
+                gatherByIndex<bodyID_t>
+                    <<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+                        idA_sorted, granData->idPrimitiveA, type_indices_sorted, numTotalCnts);
+                gatherByIndex<bodyID_t>
+                    <<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+                        idB_sorted, granData->idPrimitiveB, type_indices_sorted, numTotalCnts);
                 gatherByIndex<notStupidBool_t>
                     <<<dim3(blocks_needed_for_patch_ids), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
                         contactPersistency_sorted, granData->contactPersistency, type_indices_sorted, numTotalCnts);
@@ -1269,9 +1271,9 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                     scratchPad.getDualStructDevice("numUniquePatchPairs"), numTotalCnts, this_stream, scratchPad);
                 size_t blocks_needed_for_decode =
                     (numUniquePatchPairs + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-                decodePatchPairsToSeparateArrays<<<dim3(blocks_needed_for_decode),
-                                                   dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
-                    unique_patch_pairs, granData->idPatchA, granData->idPatchB, numUniquePatchPairs);
+                decodePatchPairsToSeparateArrays<<<dim3(blocks_needed_for_decode), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                                   this_stream>>>(unique_patch_pairs, granData->idPatchA,
+                                                                  granData->idPatchB, numUniquePatchPairs);
             }
 
             *scratchPad.numContacts = numUniquePatchPairs;
@@ -1285,9 +1287,9 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                     "type_counts", NUM_SUPPORTED_CONTACT_TYPES * sizeof(contactPairs_t));
                 scratchPad.allocateDualStruct("numUniqueTypes");
 
-                cubDEMRunLengthEncode<contact_t, contactPairs_t>(
-                    granData->contactTypePatch, unique_types, type_counts,
-                    scratchPad.getDualStructDevice("numUniqueTypes"), numUniquePatchPairs, this_stream, scratchPad);
+                cubDEMRunLengthEncode<contact_t, contactPairs_t>(granData->contactTypePatch, unique_types, type_counts,
+                                                                 scratchPad.getDualStructDevice("numUniqueTypes"),
+                                                                 numUniquePatchPairs, this_stream, scratchPad);
                 scratchPad.syncDualStructDeviceToHost("numUniqueTypes");
                 size_t numTypes = *scratchPad.getDualStructHost("numUniqueTypes");
 

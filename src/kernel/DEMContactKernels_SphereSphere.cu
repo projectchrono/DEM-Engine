@@ -63,10 +63,10 @@ inline __device__ bool calcContactPoint(deme::DEMSimParams* simParams,
                                         const double& XB,
                                         const double& YB,
                                         const double& ZB,
-    const float& rB,
-    deme::binID_t& binID,
-    float artificialMarginA,
-    float artificialMarginB) {
+                                        const float& rB,
+                                        deme::binID_t& binID,
+                                        float artificialMarginA,
+                                        float artificialMarginB) {
     bool in_contact;
     double overlapDepth;  // overlapDepth is needed for making artificial contacts not too loose.
 

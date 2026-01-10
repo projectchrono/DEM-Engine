@@ -181,8 +181,8 @@ void normalizeAndScatterVotedNormalsFromUniqueKeys(float3* votedWeightedNormals,
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         normalizeAndScatterVotedNormalsFromUniqueKeys_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0,
-                                                            this_stream>>>(votedWeightedNormals, uniqueKeys, output,
-                                                                           startOffsetPatch, count);
+                                                             this_stream>>>(votedWeightedNormals, uniqueKeys, output,
+                                                                            startOffsetPatch, count);
     }
 }
 
@@ -266,9 +266,8 @@ __global__ void scatterPatchContactAccumulators_impl(const PatchContactAccum* ac
 
         if (acc.sumWeight > 0.0) {
             double invWeight = 1.0 / acc.sumWeight;
-            votedContactPoints[localIdx] =
-                make_double3(acc.sumWeightedCP.x * invWeight, acc.sumWeightedCP.y * invWeight,
-                             acc.sumWeightedCP.z * invWeight);
+            votedContactPoints[localIdx] = make_double3(
+                acc.sumWeightedCP.x * invWeight, acc.sumWeightedCP.y * invWeight, acc.sumWeightedCP.z * invWeight);
         } else {
             votedContactPoints[localIdx] = make_double3(0.0, 0.0, 0.0);
         }

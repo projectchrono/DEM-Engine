@@ -65,24 +65,22 @@ void JitHelper::Header::substitute(const std::string& symbol, const std::string&
     }
 }
 
-JitHelper::CachedProgram JitHelper::buildProgram(
-    const std::string& name,
-    const std::filesystem::path& source,
-    std::unordered_map<std::string, std::string> substitutions,
-    std::vector<std::string> flags) {
+JitHelper::CachedProgram JitHelper::buildProgram(const std::string& name,
+                                                 const std::filesystem::path& source,
+                                                 std::unordered_map<std::string, std::string> substitutions,
+                                                 std::vector<std::string> flags) {
     std::string code = name + "\n";
 
     code.append(JitHelper::loadSourceFile(source));
     // Apply the substitutions deterministically (unordered_map iteration is non-deterministic)
     std::vector<std::pair<std::string, std::string>> ordered_subs(substitutions.begin(), substitutions.end());
-    std::sort(ordered_subs.begin(), ordered_subs.end(),
-              [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::sort(ordered_subs.begin(), ordered_subs.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
     for (auto& subst : ordered_subs) {
         code = std::regex_replace(code, std::regex(subst.first), subst.second);
     }
 
-    if (std::find(flags.begin(), flags.end(), "--std=c++17") == flags.end()) {
-        flags.push_back("--std=c++17");
+    if (std::find(flags.begin(), flags.end(), "-std=c++17") == flags.end()) {
+        flags.push_back("-std=c++17");
     }
     {
         // Collect CUDA include paths from CMake and common fallbacks
@@ -124,9 +122,8 @@ JitHelper::CachedProgram JitHelper::buildProgram(
     std::vector<std::string> flags_sorted = flags;
     std::sort(flags_sorted.begin(), flags_sorted.end());
     const std::string flags_sig = jitify::reflection::reflect_list(flags_sorted);
-    const std::string fingerprint =
-        code + "|flags:" + flags_sig + "|api:" + std::to_string(DEME_API_VERSION) + "|cuda:" +
-        std::to_string(getCudaVersion()) + "|arch:" + arch_tag;
+    const std::string fingerprint = code + "|flags:" + flags_sig + "|api:" + std::to_string(DEME_API_VERSION) +
+                                    "|cuda:" + std::to_string(getCudaVersion()) + "|arch:" + arch_tag;
     std::string program_hash = hashString(fingerprint);
 
     const auto program_dir = CACHE_DIR / program_hash;
@@ -194,11 +191,10 @@ std::shared_ptr<jitify::experimental::KernelInstantiation> JitHelper::CachedProg
     const std::string options_sig = jitify::reflection::reflect_list(options_sorted);
 
     const std::string key_material = m_storage->programHash + "|" + m_name + "|" + template_suffix + "|" + options_sig +
-                                     "|cuda:" + std::to_string(getCudaVersion()) + "|api:" +
-                                     std::to_string(DEME_API_VERSION) + "|" + m_storage->archTag;
+                                     "|cuda:" + std::to_string(getCudaVersion()) +
+                                     "|api:" + std::to_string(DEME_API_VERSION) + "|" + m_storage->archTag;
     const std::string key = JitHelper::hashString(key_material);
-    const std::filesystem::path cache_file =
-        m_storage->cacheDir / (sanitizeFilename(m_name) + "_" + key + ".jit");
+    const std::filesystem::path cache_file = m_storage->cacheDir / (sanitizeFilename(m_name) + "_" + key + ".jit");
     std::lock_guard<std::mutex> storage_lock(m_storage->mutex);
     if (auto it = m_storage->kernelCache.find(key); it != m_storage->kernelCache.end()) {
         return it->second;
@@ -218,10 +214,11 @@ std::shared_ptr<jitify::experimental::KernelInstantiation> JitHelper::CachedProg
             }
         }
     }
-    if (!inst) { // Compile if changed and not already there and make user aware
+    if (!inst) {  // Compile if changed and not already there and make user aware
         std::cout << "jit-compiling for " << m_name << " ..." << std::endl;
         if (!m_storage->program) {
-            m_storage->program = std::make_unique<jitify::experimental::Program>(m_storage->code, std::vector<std::string>(), m_storage->flags);
+            m_storage->program = std::make_unique<jitify::experimental::Program>(
+                m_storage->code, std::vector<std::string>(), m_storage->flags);
         }
         auto kernel = m_storage->program->kernel(m_name, m_options);
         inst = std::make_shared<jitify::experimental::KernelInstantiation>(kernel, template_args);

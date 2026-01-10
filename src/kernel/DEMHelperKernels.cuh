@@ -194,9 +194,9 @@ __host__ __device__ T1 magVector3(T1& x, T1& y, T1& z) {
 // Normalize a 3-component vector
 template <typename T1>
 inline __host__ __device__ void normalizeVector3(T1& x, T1& y, T1& z) {
-    T1 r2 = x*x + y*y + z*z;
+    T1 r2 = x * x + y * y + z * z;
     T1 invMag = rsqrtf(r2);
-    invMag = invMag * (1.5f - 0.5f * r2 * invMag * invMag); // 1x Newton for acurrency
+    invMag = invMag * (1.5f - 0.5f * r2 * invMag * invMag);  // 1x Newton for acurrency
     // TODO: Think about whether this is safe
     // if (magnitude < DEME_TINY_FLOAT) {
     //     printf("Caution!\n");
@@ -208,10 +208,10 @@ inline __host__ __device__ void normalizeVector3(T1& x, T1& y, T1& z) {
 // Normalize a 3-component vector safe (not used and maybe not needed)
 template <typename T1>
 inline __host__ __device__ void normalizeVector3safe(T1& x, T1& y, T1& z) {
-    T1 r2 = x*x + y*y + z*z;
+    T1 r2 = x * x + y * y + z * z;
     const T1 tiny = 1e-30f;
-    T1 safe_r2 = fmaxf(r2, tiny);    
-    T1 invMag  = rsqrtf(safe_r2);
+    T1 safe_r2 = fmaxf(r2, tiny);
+    T1 invMag = rsqrtf(safe_r2);
     invMag = invMag * (1.5f - 0.5f * safe_r2 * invMag * invMag);
     T1 m = r2 > tiny ? 1.0f : 0.0f;
     x = x * invMag * m;
@@ -258,11 +258,14 @@ __host__ __device__ void HamiltonProduct(T1& A,
     D = a1 * d2 + b1 * c2 - c1 * b2 + d1 * a2;
 }
 
-
 // Compute the binID for a point in space (mixed precision, fp32 with fp64 fallback)
 template <typename T1>
-inline __host__ __device__ T1
-getPointBinID(const double& X, const double& Y, const double& Z, const double& inv_binSize, const T1& nbX, const T1& nbY) {
+inline __host__ __device__ T1 getPointBinID(const double& X,
+                                            const double& Y,
+                                            const double& Z,
+                                            const double& inv_binSize,
+                                            const T1& nbX,
+                                            const T1& nbY) {
     T1 binIDX = X * inv_binSize;
     T1 binIDY = Y * inv_binSize;
     T1 binIDZ = Z * inv_binSize;
@@ -287,37 +290,47 @@ inline __host__ __device__ bool near_edge(float b) {
     const float tau = 8.0f * fmaxf(fabsf(b) * 1.1920929e-7f, 1.1920929e-7f);
     return d <= tau;
 }
-// Computes the inclusive [imin, imax] bin range (clamped to [0, nb-1]) 
-// along one axis for a sphere at position p with radius r, 
+// Computes the inclusive [imin, imax] bin range (clamped to [0, nb-1])
+// along one axis for a sphere at position p with radius r,
 // using a fast FP32 path with near-edge detection and a precise FP64 fallback.
 inline __host__ __device__ deme::AxisBounds axis_bounds(double p, double r, int nb, double invBinSize) {
     // FP32 fast path
     const float invBinF = (float)invBinSize;
     const float pF = (float)p, rF = (float)r;
-    const float bPlusF  = fmaf(rF, invBinF, pF * invBinF); // (p+r)/B
-    const float bMinusF = (pF - rF) * invBinF;                  // (p-r)/B
+    const float bPlusF = fmaf(rF, invBinF, pF * invBinF);  // (p+r)/B
+    const float bMinusF = (pF - rF) * invBinF;             // (p-r)/B
     if (!(near_edge(bPlusF) || near_edge(bMinusF))) {
-        int imax = (int)fminf(bPlusF,  (float)(nb - 1));
+        int imax = (int)fminf(bPlusF, (float)(nb - 1));
         int imin = (int)fmaxf(bMinusF, 0.0f);
-        if (imax < imin) return {0, -1};
+        if (imax < imin)
+            return {0, -1};
         return {imin, imax};
     }
     // Double fallback for edge cases
-    const double bPlusD  = fma(r, invBinSize, p * invBinSize);
+    const double bPlusD = fma(r, invBinSize, p * invBinSize);
     const double bMinusD = (p - r) * invBinSize;
-    const int imax = (int)fmin(bPlusD,  (double)(nb - 1));
+    const int imax = (int)fmin(bPlusD, (double)(nb - 1));
     const int imin = (int)fmax(bMinusD, 0.0);
-    if (imax < imin) return {0, -1};
+    if (imax < imin)
+        return {0, -1};
     return {imin, imax};
 }
 
 // Is there a contact? And which binID does the contact point belong to?
 // Returns contact type, overlapDepth and binID.
-inline __host__ __device__ deme::contact_t
-checkSphereContactOverlapAndBin(const double& XA, const double& YA, const double& ZA, const double& radA,
-                        const double& XB, const double& YB, const double& ZB, const double& radB,
-                        const double& invBinSize, const deme::binID_t& nbX, const deme::binID_t& nbY,
-                        double& overlapDepth, deme::binID_t& binID) {
+inline __host__ __device__ deme::contact_t checkSphereContactOverlapAndBin(const double& XA,
+                                                                           const double& YA,
+                                                                           const double& ZA,
+                                                                           const double& radA,
+                                                                           const double& XB,
+                                                                           const double& YB,
+                                                                           const double& ZB,
+                                                                           const double& radB,
+                                                                           const double& invBinSize,
+                                                                           const deme::binID_t& nbX,
+                                                                           const deme::binID_t& nbY,
+                                                                           double& overlapDepth,
+                                                                           deme::binID_t& binID) {
     // ---- FP32 fast path for distance test and contact point ----
     const float xA = (float)XA, yA = (float)YA, zA = (float)ZA;
     const float xB = (float)XB, yB = (float)YB, zB = (float)ZB;
@@ -326,13 +339,13 @@ checkSphereContactOverlapAndBin(const double& XA, const double& YA, const double
     const float dz = zA - zB;
     // Distance^2 with FMAs (fast, stable in fp32)
     const float dist2f = fmaf(dz, dz, fmaf(dy, dy, dx * dx));
-    const float rsumf  = (float)radA + (float)radB;
-    const float r2f    = rsumf * rsumf;
+    const float rsumf = (float)radA + (float)radB;
+    const float r2f = rsumf * rsumf;
     {
         if (dist2f > r2f) {
             overlapDepth = 0.0;
             binID = (deme::binID_t)0;
-            return deme::NOT_A_CONTACT; // early exit! (safe, since we have a margin)
+            return deme::NOT_A_CONTACT;  // early exit! (safe, since we have a margin)
         }
     }
     // Contact! - in fp32: compute normal and contact point
@@ -340,20 +353,24 @@ checkSphereContactOverlapAndBin(const double& XA, const double& YA, const double
     if (dist2f > 0.0f) {
         distf = sqrtf(dist2f);
         const float invd = 1.0f / distf;
-        nx = dx * invd; ny = dy * invd; nz = dz * invd;
-    } else { // Should not occur....
-        nx = 1.0f; ny = 0.0f; nz = 0.0f;
-    } // now contact point
+        nx = dx * invd;
+        ny = dy * invd;
+        nz = dz * invd;
+    } else {  // Should not occur....
+        nx = 1.0f;
+        ny = 0.0f;
+        nz = 0.0f;
+    }  // now contact point
     const float overlapF = rsumf - distf;
-    const float stepF    = (float)radB - 0.5f * overlapF;
-    const float CPXf     = fmaf(stepF, nx, xB);
-    const float CPYf     = fmaf(stepF, ny, yB);
-    const float CPZf     = fmaf(stepF, nz, zB);
+    const float stepF = (float)radB - 0.5f * overlapF;
+    const float CPXf = fmaf(stepF, nx, xB);
+    const float CPYf = fmaf(stepF, ny, yB);
+    const float CPZf = fmaf(stepF, nz, zB);
     // Map contact point to binID using fp32, but guard against bin-edge cases.
     const float invF = (float)invBinSize;
-    const float bxF  = CPXf * invF;
-    const float byF  = CPYf * invF;
-    const float bzF  = CPZf * invF;
+    const float bxF = CPXf * invF;
+    const float byF = CPYf * invF;
+    const float bzF = CPZf * invF;
     // If not near any integer boundary in fp32, we can safely truncate in fp32.
     if (!(near_edge(bxF) || near_edge(byF) || near_edge(bzF))) {
         const deme::binID_t ix = (deme::binID_t)bxF;  // truncate toward zero (matches original)
@@ -379,7 +396,6 @@ checkSphereContactOverlapAndBin(const double& XA, const double& YA, const double
         return deme::SPHERE_SPHERE_CONTACT;
     }
 }
-
 
 // This utility function returns the normal to the triangular face defined by
 // the vertices A, B, and C. The face is assumed to be non-degenerate.

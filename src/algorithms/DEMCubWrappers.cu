@@ -8,16 +8,19 @@
 #include <DEM/Structs.h>
 
 #if CUDART_VERSION >= 13000
-    #define CUB_SUM_OP(T) cuda::std::plus<T>{}
+    #define CUB_SUM_OP(T) \
+        cuda::std::plus<T> {}
 #else
-    #define CUB_SUM_OP(T) cub::Sum{}
+    #define CUB_SUM_OP(T) \
+        cub::Sum {}
 #endif
 
-
 #if CUDART_VERSION >= 13000
-    #define CUB_SUM_OP(T) cuda::std::plus<T>{}
+    #define CUB_SUM_OP(T) \
+        cuda::std::plus<T> {}
 #else
-    #define CUB_SUM_OP(T) cub::Sum{}
+    #define CUB_SUM_OP(T) \
+        cub::Sum {}
 #endif
 
 namespace deme {

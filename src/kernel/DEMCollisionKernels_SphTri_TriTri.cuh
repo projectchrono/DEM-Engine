@@ -420,8 +420,7 @@ __device__ bool checkTriSphereOverlap(const T1& A,           ///< First vertex o
     {
         const float depth_f = static_cast<float>(depth);
         const float radius_f = static_cast<float>(radius);
-        const float overlap_area_f =
-            static_cast<float>(deme::PI) * (2.0f * radius_f * depth_f - depth_f * depth_f);
+        const float overlap_area_f = static_cast<float>(deme::PI) * (2.0f * radius_f * depth_f - depth_f * depth_f);
         overlapArea = static_cast<T2>(overlap_area_f);
     }
     return in_contact;
@@ -531,7 +530,7 @@ __device__ __forceinline__ double invSqrt(double x) {
 }
 
 #ifndef DEME_SAT_ENABLE_MIXED_PRECISION
-#define DEME_SAT_ENABLE_MIXED_PRECISION 0
+    #define DEME_SAT_ENABLE_MIXED_PRECISION 0
 #endif
 
 template <typename Vec, typename Scalar>

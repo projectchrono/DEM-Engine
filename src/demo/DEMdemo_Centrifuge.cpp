@@ -134,7 +134,7 @@ int main() {
     float step_size = 5e-6;
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGPUTimersEnabled(true);
-    //DEMSim.SetAdaptiveTimeStepType("hertz_const"); 
+    // DEMSim.SetAdaptiveTimeStepType("hertz_const");
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.SetExpandSafetyType("auto");
     // If there is a velocity that an analytical object (i.e. the drum) has that you'd like the solver to take into
@@ -151,7 +151,7 @@ int main() {
     float time_end = 20.0;
     unsigned int fps = 20;
     float frame_time = 1.0 / fps;
-    //unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
+    // unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
     std::cout << "Output at " << fps << " FPS" << std::endl;
     unsigned int currframe = 0;
@@ -172,7 +172,7 @@ int main() {
         float3 drum_acc = Drum_tracker->ContactAngAccLocal();
         float3 drum_torque = drum_acc * drum_moi;
         std::cout << "Contact torque on the side walls is " << drum_torque.x << ", " << drum_torque.y << ", "
-                    << drum_torque.z << std::endl;
+                  << drum_torque.z << std::endl;
 
         // The force on the bottom plane?
         float3 force_on_BC = planes_tracker->ContactAcc() * planes_tracker->Mass();

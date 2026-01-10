@@ -185,8 +185,7 @@ class JitHelper::CachedProgram::Kernel::KernelInstantiation::KernelLauncher {
 
     template <typename... ArgTypes>
     CUresult launch(const ArgTypes&... args) const {
-        return launch(std::vector<void*>({(void*)&args...}),
-                      {jitify::reflection::reflect<ArgTypes>()...});
+        return launch(std::vector<void*>({(void*)&args...}), {jitify::reflection::reflect<ArgTypes>()...});
     }
 
     void safe_launch(std::vector<void*> arg_ptrs = {}, std::vector<std::string> arg_types = {}) const {
@@ -195,8 +194,7 @@ class JitHelper::CachedProgram::Kernel::KernelInstantiation::KernelLauncher {
 
     template <typename... ArgTypes>
     void safe_launch(const ArgTypes&... args) const {
-        safe_launch(std::vector<void*>({(void*)&args...}),
-                    {jitify::reflection::reflect<ArgTypes>()...});
+        safe_launch(std::vector<void*>({(void*)&args...}), {jitify::reflection::reflect<ArgTypes>()...});
     }
 
   private:
@@ -205,8 +203,8 @@ class JitHelper::CachedProgram::Kernel::KernelInstantiation::KernelLauncher {
 };
 
 template <typename... TemplateArgs>
-inline JitHelper::CachedProgram::Kernel::KernelInstantiation
-JitHelper::CachedProgram::Kernel::instantiate(TemplateArgs... targs) const {
+inline JitHelper::CachedProgram::Kernel::KernelInstantiation JitHelper::CachedProgram::Kernel::instantiate(
+    TemplateArgs... targs) const {
     return instantiate(std::vector<std::string>({jitify::reflection::reflect(targs)...}));
 }
 
@@ -224,7 +222,8 @@ JitHelper::CachedProgram::Kernel::KernelInstantiation::configure_1d_max_occupanc
                                                                                   CUoccupancyB2DSize smem_callback,
                                                                                   cudaStream_t stream,
                                                                                   unsigned int flags) const {
-    return KernelLauncher(m_impl, m_impl->configure_1d_max_occupancy(max_block_size, smem, smem_callback, stream, flags));
+    return KernelLauncher(m_impl,
+                          m_impl->configure_1d_max_occupancy(max_block_size, smem, smem_callback, stream, flags));
 }
 
 #endif

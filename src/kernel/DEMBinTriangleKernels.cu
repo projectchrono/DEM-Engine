@@ -56,7 +56,6 @@ __global__ void makeTriangleSandwich(deme::DEMSimParams* simParams,
     }
 }
 
-
 // Compute triangle AABB -> bin index bounds using mixed precision (FP32 fast path + FP64 fallback).
 // This mirrors the sphere binning approach (axis_bounds) to avoid precision issues when a bound lies
 // close to a bin boundary.
@@ -90,17 +89,20 @@ inline __device__ bool boundingBoxIntersectBinAxisBounds(deme::binID_t* L,
     const double cx = 0.5 * ((double)min_pt.x + (double)max_pt.x);
     const double rx = 0.5 * ((double)max_pt.x - (double)min_pt.x);
     const deme::AxisBounds bx = axis_bounds(cx, rx, nbX, invBinSize);
-    if (bx.imax < bx.imin) return false;
+    if (bx.imax < bx.imin)
+        return false;
 
     const double cy = 0.5 * ((double)min_pt.y + (double)max_pt.y);
     const double ry = 0.5 * ((double)max_pt.y - (double)min_pt.y);
     const deme::AxisBounds by = axis_bounds(cy, ry, nbY, invBinSize);
-    if (by.imax < by.imin) return false;
+    if (by.imax < by.imin)
+        return false;
 
     const double cz = 0.5 * ((double)min_pt.z + (double)max_pt.z);
     const double rz = 0.5 * ((double)max_pt.z - (double)min_pt.z);
     const deme::AxisBounds bz = axis_bounds(cz, rz, nbZ, invBinSize);
-    if (bz.imax < bz.imin) return false;
+    if (bz.imax < bz.imin)
+        return false;
 
     L[0] = (deme::binID_t)bx.imin;
     U[0] = (deme::binID_t)bx.imax;
@@ -260,14 +262,13 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
                 float3 objBPosXYZ = ownerXYZ + make_float3(objBRelPosX, objBRelPosY, objBRelPosZ);
 
                 deme::contact_t contact_type = checkTriEntityOverlapFP32(
-                    vA1, vB1, vC1, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
-                    granData->marginSizeAnalytical[objB]);
+                    vA1, vB1, vC1, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ), objSize1[objB],
+                    objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSizeAnalytical[objB]);
                 if (contact_type == deme::NOT_A_CONTACT) {
-                    contact_type = checkTriEntityOverlapFP32(
-                        vA2, vB2, vC2, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                        objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
-                        granData->marginSizeAnalytical[objB]);
+                    contact_type = checkTriEntityOverlapFP32(vA2, vB2, vC2, objType[objB], objBPosXYZ,
+                                                             make_float3(objBRotX, objBRotY, objBRotZ), objSize1[objB],
+                                                             objSize2[objB], objSize3[objB], objNormal[objB],
+                                                             granData->marginSizeAnalytical[objB]);
                 }
                 // Unlike the sphere-X contact case, we do not test against family extra margin here. This may result in
                 // more fake contact pairs, but the efficiency in the mesh-based particle case is not our top priority
@@ -407,14 +408,13 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                 float3 objBPosXYZ = ownerXYZ + make_float3(objBRelPosX, objBRelPosY, objBRelPosZ);
 
                 deme::contact_t contact_type = checkTriEntityOverlapFP32(
-                    vA1, vB1, vC1, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
-                    granData->marginSizeAnalytical[objB]);
+                    vA1, vB1, vC1, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ), objSize1[objB],
+                    objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSizeAnalytical[objB]);
                 if (contact_type == deme::NOT_A_CONTACT) {
-                    contact_type = checkTriEntityOverlapFP32(
-                        vA2, vB2, vC2, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                        objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
-                        granData->marginSizeAnalytical[objB]);
+                    contact_type = checkTriEntityOverlapFP32(vA2, vB2, vC2, objType[objB], objBPosXYZ,
+                                                             make_float3(objBRotX, objBRotY, objBRotZ), objSize1[objB],
+                                                             objSize2[objB], objSize3[objB], objNormal[objB],
+                                                             granData->marginSizeAnalytical[objB]);
                 }
                 // Unlike the sphere-X contact case, we do not test against family extra margin here, which is more
                 // lenient and perhaps makes more fake contacts.

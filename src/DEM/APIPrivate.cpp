@@ -295,7 +295,7 @@ void DEMSolver::jitifyKernels() {
     equipIntegrationScheme(m_subs);
     equipKernelIncludes(m_subs);
 
-        // Jitify may require a defined device to derive the arch
+    // Jitify may require a defined device to derive the arch
     std::thread kT_build([&]() {
         DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
         kT->jitifyKernels(m_subs, m_jitify_options);
@@ -326,7 +326,6 @@ void DEMSolver::jitifyKernels() {
             }
         }
     }
-
 }
 
 void DEMSolver::getContacts_impl(std::vector<bodyID_t>& idA,
@@ -1196,29 +1195,32 @@ void DEMSolver::setSimParams() {
         // Silently bring down m_approx_max_vel
         m_approx_max_vel = threshold_error_out_vel;
     }
-    { // Adaptive Timestep -- currently only Hertz const. 
+    {  // Adaptive Timestep -- currently only Hertz const.
         if (adapt_ts_type == ADAPT_TS_TYPE::HERTZ_CONST) {
             auto sqr = [](double x) { return x * x; };
             auto effective_E = [&](double E1, double nu1, double E2, double nu2) -> double {
-                if (E1 <= 0.0 || E2 <= 0.0) return 0.0;
-                return 1.0 / ( ((1.0 - sqr(nu1)) / E1) + ((1.0 - sqr(nu2)) / E2) );
+                if (E1 <= 0.0 || E2 <= 0.0)
+                    return 0.0;
+                return 1.0 / (((1.0 - sqr(nu1)) / E1) + ((1.0 - sqr(nu2)) / E2));
             };  // max effektive E* over all material contacts
             double Eeff_max = 0.0;
             for (size_t i = 0; i < m_loaded_materials.size(); ++i) {
                 const auto& A = m_loaded_materials[i]->mat_prop;
-                const double E1  = (A.count("E")  ? (double)A.at("E")  : 0.0);
+                const double E1 = (A.count("E") ? (double)A.at("E") : 0.0);
                 const double nu1 = (A.count("nu") ? (double)A.at("nu") : 0.3);
                 for (size_t j = i; j < m_loaded_materials.size(); ++j) {
                     const auto& B = m_loaded_materials[j]->mat_prop;
-                    const double E2  = (B.count("E")  ? (double)B.at("E")  : 0.0);
+                    const double E2 = (B.count("E") ? (double)B.at("E") : 0.0);
                     const double nu2 = (B.count("nu") ? (double)B.at("nu") : 0.3);
                     const double Ee = effective_E(E1, nu1, E2, nu2);
-                    if (Ee > Eeff_max) Eeff_max = Ee;
+                    if (Ee > Eeff_max)
+                        Eeff_max = Ee;
                 }
-            } // lowest mass
+            }  // lowest mass
             double min_mass = std::numeric_limits<double>::infinity();
             for (double m : m_template_clump_mass)
-                if (m > 0.0 && m < min_mass) min_mass = m;
+                if (m > 0.0 && m < min_mass)
+                    min_mass = m;
             const double r_min = (double)m_smallest_radius;
             if (std::isfinite(min_mass) && r_min > 0.0 && Eeff_max > 0.0) {
                 const double R_eff = 0.5 * r_min;
@@ -1227,14 +1229,15 @@ void DEMSolver::setSimParams() {
                 const double dt_hertz = (PI / (2.0 * N_DT)) * std::sqrt(m_eff / KH);
                 if (dt_hertz > 0.0 && std::isfinite(dt_hertz)) {
                     m_ts_size = dt_hertz;  // <- set const. timestep
-                    DEME_INFO("Adaptive time step 'hertz_const': dt = %.9g  (m_min=%.6g, r_min=%.6g, E*=%.6g, N_DT=%.1f)",
-                            m_ts_size, min_mass, r_min, Eeff_max, N_DT);
+                    DEME_INFO(
+                        "Adaptive time step 'hertz_const': dt = %.9g  (m_min=%.6g, r_min=%.6g, E*=%.6g, N_DT=%.1f)",
+                        m_ts_size, min_mass, r_min, Eeff_max, N_DT);
                 } else {
                     DEME_WARNING("hertz_const erzeugte ungueltigen dt; behalte bisherigen Wert %.7g.", m_ts_size);
                 }
             } else {
                 DEME_WARNING("hertz_const: fehlende/ungueltige Daten (m_min=%g, r_min=%g, E*=%g); dt bleibt %.7g.",
-                            min_mass, r_min, Eeff_max, m_ts_size);
+                             min_mass, r_min, Eeff_max, m_ts_size);
             }
         }
     }

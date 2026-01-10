@@ -58,7 +58,8 @@ struct DriftRLS {
 
     static double dot(const double* a, const double* b) {
         double s = 0.0;
-        for (int i = 0; i < N; i++) s += a[i] * b[i];
+        for (int i = 0; i < N; i++)
+            s += a[i] * b[i];
         return s;
     }
 
@@ -67,13 +68,16 @@ struct DriftRLS {
         const double k = 2.5;
         const double t = k * sigma;
         const double ar = std::abs(r);
-        if (ar <= t) return 1.0;
+        if (ar <= t)
+            return 1.0;
         return t / ar;
     }
 
     void update(unsigned int d, double d0, double y) {
-        if (!initialized) reset();
-        if (!std::isfinite(y)) return;
+        if (!initialized)
+            reset();
+        if (!std::isfinite(y))
+            return;
 
         const double dd = static_cast<double>(std::max(1u, d));
         // Use a saturating normalization with an *external* scale d0 (typical drift),
@@ -92,7 +96,8 @@ struct DriftRLS {
         // Update residual variance estimate (EWMA)
         const double beta = 0.05;
         sigma2_ema = (1.0 - beta) * sigma2_ema + beta * (r * r);
-        if (!std::isfinite(sigma2_ema) || sigma2_ema < 0.0) sigma2_ema = 1e-6;
+        if (!std::isfinite(sigma2_ema) || sigma2_ema < 0.0)
+            sigma2_ema = 1e-6;
 
         // Robust weight
         const double w = huberWeight(r);
@@ -100,13 +105,15 @@ struct DriftRLS {
 
         // Weighted observation
         double phiw[N];
-        for (int i = 0; i < N; i++) phiw[i] = s * phi[i];
+        for (int i = 0; i < N; i++)
+            phiw[i] = s * phi[i];
         const double yw = s * y;
 
         // Compute P * phiw
         double Pphi[N] = {0.0, 0.0, 0.0, 0.0};
         for (int i = 0; i < N; i++) {
-            for (int j = 0; j < N; j++) Pphi[i] += P[i][j] * phiw[j];
+            for (int j = 0; j < N; j++)
+                Pphi[i] += P[i][j] * phiw[j];
         }
 
         const double denom = lambda + dot(phiw, Pphi);
@@ -117,7 +124,8 @@ struct DriftRLS {
 
         // Gain K = Pphi / denom
         double K[N];
-        for (int i = 0; i < N; i++) K[i] = Pphi[i] / denom;
+        for (int i = 0; i < N; i++)
+            K[i] = Pphi[i] / denom;
 
         // Innovation
         const double errw = yw - dot(theta, phiw);
@@ -125,12 +133,16 @@ struct DriftRLS {
             reset();
             return;
         }
-        for (int i = 0; i < N; i++) theta[i] += K[i] * errw;
+        for (int i = 0; i < N; i++)
+            theta[i] += K[i] * errw;
 
         // Light physical priors: prevent pathological fits under noise.
-        if (theta[1] < 0.0) theta[1] = 0.0;  // b >= 0
-        if (theta[2] < 0.0) theta[2] = 0.0;  // c >= 0
-        if (theta[3] < 0.0) theta[3] = 0.0;  // e >= 0
+        if (theta[1] < 0.0)
+            theta[1] = 0.0;  // b >= 0
+        if (theta[2] < 0.0)
+            theta[2] = 0.0;  // c >= 0
+        if (theta[3] < 0.0)
+            theta[3] = 0.0;  // e >= 0
         for (int i = 0; i < N; i++) {
             if (!std::isfinite(theta[i])) {
                 reset();
@@ -246,15 +258,15 @@ class DEMDynamicThread {
 
     // NEW: Buffer arrays for separate patch IDs and their mapping to geometry arrays (ping-pong)
     DeviceArray<bodyID_t> idPatchA_buffer[2] = {DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed),
-                                               DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed)};
+                                                DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed)};
     DeviceArray<bodyID_t> idPatchB_buffer[2] = {DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed),
-                                               DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed)};
+                                                DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed)};
     DeviceArray<contact_t> contactTypePatch_buffer[2] = {DeviceArray<contact_t>(&m_approxDeviceBytesUsed),
                                                          DeviceArray<contact_t>(&m_approxDeviceBytesUsed)};
     DeviceArray<contactPairs_t> geomToPatchMap_buffer[2] = {DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed),
-                                                           DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed)};
+                                                            DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed)};
     DeviceArray<contactPairs_t> contactMapping_buffer[2] = {DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed),
-                                                           DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed)};
+                                                            DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed)};
     int kt_write_buf = 0;  // which buffer kT writes to next
 
     // Permanent array for patch contact penetrations (used to compute max tri-tri penetration)
@@ -491,12 +503,14 @@ class DEMDynamicThread {
     ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>> typeStartCountPrimitiveMap;
     ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>> typeStartCountPatchMap;
     // A map that records the corresponding jitify program bundle and kernel name for each contact type
-    ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>> contactTypePrimitiveKernelMap;
-    ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>> contactTypePatchKernelMap;
+    ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>>
+        contactTypePrimitiveKernelMap;
+    ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>>
+        contactTypePatchKernelMap;
 
     // dT's timers
     std::vector<std::string> timer_names = {"Clear force array", "Calculate contact forces", "Optional force reduction",
-                                            "Integration", "Unpack updates from kT", "Send to kT buffer"};
+                                            "Integration",       "Unpack updates from kT",   "Send to kT buffer"};
     SolverTimers timers = SolverTimers(timer_names);
     std::chrono::steady_clock::time_point cycle_stopwatch_start;
     bool cycle_stopwatch_started = false;
@@ -945,11 +959,13 @@ class DEMDynamicThread {
     // Impl of calculateForces
     inline void dispatchPrimitiveForceKernels(
         const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountMap,
-        const ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>>& typeKernelMap);
+        const ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>>&
+            typeKernelMap);
     inline void dispatchPatchBasedForceCorrections(
         const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPrimitiveMap,
         const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
-        const ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>>& typeKernelMap);
+        const ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>>&
+            typeKernelMap);
     // Update clump-based acceleration array based on sphere-based force array
     void calculateForces();
 
@@ -1057,71 +1073,86 @@ class DEMDynamicThread {
         void Clear() { *this = FutureDriftRegulator{}; }
     };
     FutureDriftRegulator futureDriftRegulator;
-    // Helpers for future drift regulator - 
+    // Helpers for future drift regulator -
     static inline unsigned clamp_drift_u(unsigned v, unsigned maxv) {
         return (v < 1u) ? 1u : (v > maxv ? maxv : v);
     }
     static inline unsigned clamp_wait_i(int v, unsigned maxv) {
-        if (v <= 0) return 0u;
+        if (v <= 0)
+            return 0u;
         const unsigned u = (unsigned)v;
         return (u > maxv) ? maxv : u;
     }
-    static inline unsigned apply_wait_policy_u(
-        unsigned w, double lag_pred, double upper_ratio, double lower_ratio, unsigned maxv)
-    {
+    static inline unsigned apply_wait_policy_u(unsigned w,
+                                               double lag_pred,
+                                               double upper_ratio,
+                                               double lower_ratio,
+                                               unsigned maxv) {
         w = (w > maxv) ? maxv : w;
         double total = lag_pred + (double)w;
-        if (total < 1.0) total = 1.0;
-        if (upper_ratio <= 0.0) w = 0u;
+        if (total < 1.0)
+            total = 1.0;
+        if (upper_ratio <= 0.0)
+            w = 0u;
         else if (upper_ratio < 1.0) {
             const unsigned uw = clamp_wait_i((int)std::ceil(total * upper_ratio), maxv);
-            if (w > uw) w = uw;
+            if (w > uw)
+                w = uw;
         }
         if (lower_ratio > 0.0) {
             const unsigned lw = clamp_wait_i((int)std::floor(total * lower_ratio), maxv);
-            if (w <= lw) w = 0u;
+            if (w <= lw)
+                w = 0u;
         }
         return w;
     }
     static inline void ema_asym(double& ema, bool& init, double x, double a_up, double a_dn, double minv) {
-        if (!init) { init = true; ema = x; }
-        else {
+        if (!init) {
+            init = true;
+            ema = x;
+        } else {
             const double a = (x > ema) ? a_up : a_dn;
             ema = (1.0 - a) * ema + a * x;
         }
-        if (!std::isfinite(ema) || ema < minv) ema = std::max(minv, x);
+        if (!std::isfinite(ema) || ema < minv)
+            ema = std::max(minv, x);
     }
     static inline void ring_push(FutureDriftRegulator& r, double cost, unsigned obs) {
         const int W = FutureDriftRegulator::COST_WINDOW;
         const int i = r.window_pos;
-        r.cost_window[i]  = cost;
+        r.cost_window[i] = cost;
         r.drift_window[i] = obs;
-        if (r.window_size < W) r.window_size++;
+        if (r.window_size < W)
+            r.window_size++;
         r.window_pos = (i + 1) % W;
     }
     static inline double drift_ref_quantile(const FutureDriftRegulator& r, double floor_ref) {
         constexpr int WIN = 30;
         const int n = std::min(r.window_size, WIN);
-        if (n <= 0) return floor_ref;
-        std::array<unsigned, WIN> a; // no zero-init
+        if (n <= 0)
+            return floor_ref;
+        std::array<unsigned, WIN> a;  // no zero-init
         int idx = (r.window_pos > 0) ? (r.window_pos - 1) : (FutureDriftRegulator::COST_WINDOW - 1);
         for (int i = 0; i < n; ++i) {
             a[i] = r.drift_window[idx];
             idx = (idx > 0) ? (idx - 1) : (FutureDriftRegulator::COST_WINDOW - 1);
         }
-        const int q = n / 5; // Quantile - IMPRORTANT
+        const int q = n / 5;  // Quantile - IMPRORTANT
         std::nth_element(a.begin(), a.begin() + q, a.begin() + n);
         double qv = (double)a[q];
-        if (r.drift_scale_initialized) qv = std::min(qv, r.drift_scale_ema);
+        if (r.drift_scale_initialized)
+            qv = std::min(qv, r.drift_scale_ema);
         return std::max(floor_ref, qv);
     }
     static inline bool rls_is_bad(const DriftRLS& rls, unsigned obs, double drift_ref, double scale) {
         const double yhat = rls.predict(obs, drift_ref);
-        if (!std::isfinite(yhat) || std::abs(yhat) > 1000.0 * scale) return true;
+        if (!std::isfinite(yhat) || std::abs(yhat) > 1000.0 * scale)
+            return true;
         const double clip = std::max(1e-3, 1000.0 * scale);
         for (int i = 0; i < DriftRLS::N; ++i) {
             const double t = rls.theta[i];
-            if (!std::isfinite(t) || std::abs(t) > clip) return true;
+            if (!std::isfinite(t) || std::abs(t) > clip)
+                return true;
         }
         return false;
     }

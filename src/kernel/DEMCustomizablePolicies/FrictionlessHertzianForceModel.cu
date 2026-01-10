@@ -26,10 +26,10 @@ if (overlapDepth > 0) {
         if (simParams->useAngVelMargin) {
             rotVelCPA = cross(ARotVel, locCPA);
             rotVelCPB = cross(BRotVel, locCPB);
-            applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x,
-                                                    AOriQ.y, AOriQ.z);
-            applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x,
-                                                    BOriQ.y, BOriQ.z);
+            applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x, AOriQ.y,
+                                                    AOriQ.z);
+            applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y,
+                                                    BOriQ.z);
         }
     }
 
