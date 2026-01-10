@@ -22,12 +22,16 @@ SET(DEMOS
 		DEMdemo_MeshCollide
 		DEMdemo_MeshFalling
 		DEMdemo_TestPack
+		DEMdemo_TestRestart
 		DEMdemo_RotatingDrum
 		DEMdemo_Centrifuge
+		DEMdemo_DrumCubes
 		DEMdemo_GameOfLife
 		DEMdemo_BallDrop
 		DEMdemo_BallDrop2D
 		DEMdemo_Mixer
+		DEMdemo_PolydisperseGeneration
+		DEMdemo_RoverWheel
 		DEMdemo_GRCPrep_Part1
 		DEMdemo_GRCPrep_Part2
 		DEMdemo_GRCPrep_Part3

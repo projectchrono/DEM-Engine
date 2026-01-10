@@ -256,10 +256,10 @@ inline void equip_force_model_ingr_acq(std::string& definition,
                                        std::string& acquisition_B,
                                        std::unordered_map<std::string, bool>& added_ingredients) {
     if (added_ingredients["ts"]) {
-        definition += "float ts = simParams->h;\n";
+        definition += "float ts = simParams->dyn.h;\n";
     }
     if (added_ingredients["time"]) {
-        definition += "float time = simParams->timeElapsed;\n";
+        definition += "float time = simParams->dyn.timeElapsed;\n";
     }
     if (added_ingredients["AOwnerFamily"]) {
         definition += "deme::family_t AOwnerFamily;\n";

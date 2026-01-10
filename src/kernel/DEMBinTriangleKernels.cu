@@ -37,6 +37,7 @@ __global__ void makeTriangleSandwich(deme::DEMSimParams* simParams,
         const float3 p2 = granData->relPosNode2[triID];
         const float3 p3 = granData->relPosNode3[triID];
         const deme::bodyID_t myOwnerID = granData->ownerTriMesh[triID];
+        const float margin = granData->marginSizeTriangle[triID];
 
         // Get the incenter of this triangle.
         // This is because we use the incenter to enalrge a triangle. See for example, this
@@ -45,17 +46,72 @@ __global__ void makeTriangleSandwich(deme::DEMSimParams* simParams,
         // Generate normal using RHR from nodes 1, 2, and 3
         float3 triNormal = face_normal<float3>(p1, p2, p3);
 
-        sandwichANode1[triID] = sandwichVertex(p1, incenter, p2 - p1, triNormal, granData->marginSizeTriangle[triID]);
-        sandwichANode2[triID] = sandwichVertex(p2, incenter, p3 - p2, triNormal, granData->marginSizeTriangle[triID]);
-        sandwichANode3[triID] = sandwichVertex(p3, incenter, p1 - p3, triNormal, granData->marginSizeTriangle[triID]);
+        sandwichANode1[triID] = sandwichVertex(p1, incenter, p2 - p1, triNormal, margin);
+        sandwichANode2[triID] = sandwichVertex(p2, incenter, p3 - p2, triNormal, margin);
+        sandwichANode3[triID] = sandwichVertex(p3, incenter, p1 - p3, triNormal, margin);
         // The other sandwich triangle needs to have an opposite normal direction
-        sandwichBNode1[triID] = sandwichVertex(p1, incenter, p2 - p1, -triNormal, granData->marginSizeTriangle[triID]);
-        sandwichBNode2[triID] = sandwichVertex(p3, incenter, p1 - p3, -triNormal, granData->marginSizeTriangle[triID]);
-        sandwichBNode3[triID] = sandwichVertex(p2, incenter, p3 - p2, -triNormal, granData->marginSizeTriangle[triID]);
+        sandwichBNode1[triID] = sandwichVertex(p1, incenter, p2 - p1, -triNormal, margin);
+        sandwichBNode2[triID] = sandwichVertex(p3, incenter, p1 - p3, -triNormal, margin);
+        sandwichBNode3[triID] = sandwichVertex(p2, incenter, p3 - p2, -triNormal, margin);
     }
 }
 
-inline __device__ void figureOutNodeAndBoundingBox(deme::DEMSimParams* simParams,
+
+// Compute triangle AABB -> bin index bounds using mixed precision (FP32 fast path + FP64 fallback).
+// This mirrors the sphere binning approach (axis_bounds) to avoid precision issues when a bound lies
+// close to a bin boundary.
+inline __device__ bool boundingBoxIntersectBinAxisBounds(deme::binID_t* L,
+                                                         deme::binID_t* U,
+                                                         const float3& vA,
+                                                         const float3& vB,
+                                                         const float3& vC,
+                                                         deme::DEMSimParams* simParams) {
+    float3 min_pt;
+    min_pt.x = DEME_MIN(vA.x, DEME_MIN(vB.x, vC.x));
+    min_pt.y = DEME_MIN(vA.y, DEME_MIN(vB.y, vC.y));
+    min_pt.z = DEME_MIN(vA.z, DEME_MIN(vB.z, vC.z));
+
+    float3 max_pt;
+    max_pt.x = DEME_MAX(vA.x, DEME_MAX(vB.x, vC.x));
+    max_pt.y = DEME_MAX(vA.y, DEME_MAX(vB.y, vC.y));
+    max_pt.z = DEME_MAX(vA.z, DEME_MAX(vB.z, vC.z));
+
+    // Enlarge bounding box, so that no triangle lies right between 2 layers of bins
+    const float enlarge = (float)DEME_BIN_ENLARGE_RATIO_FOR_FACETS * (float)simParams->dyn.binSize;
+    min_pt -= enlarge;
+    max_pt += enlarge;
+
+    const double invBinSize = simParams->dyn.inv_binSize;
+    const int nbX = (int)simParams->nbX;
+    const int nbY = (int)simParams->nbY;
+    const int nbZ = (int)simParams->nbZ;
+
+    // Convert [min,max] to (center, half-range) and use axis_bounds (FP32 fast path with FP64 fallback).
+    const double cx = 0.5 * ((double)min_pt.x + (double)max_pt.x);
+    const double rx = 0.5 * ((double)max_pt.x - (double)min_pt.x);
+    const deme::AxisBounds bx = axis_bounds(cx, rx, nbX, invBinSize);
+    if (bx.imax < bx.imin) return false;
+
+    const double cy = 0.5 * ((double)min_pt.y + (double)max_pt.y);
+    const double ry = 0.5 * ((double)max_pt.y - (double)min_pt.y);
+    const deme::AxisBounds by = axis_bounds(cy, ry, nbY, invBinSize);
+    if (by.imax < by.imin) return false;
+
+    const double cz = 0.5 * ((double)min_pt.z + (double)max_pt.z);
+    const double rz = 0.5 * ((double)max_pt.z - (double)min_pt.z);
+    const deme::AxisBounds bz = axis_bounds(cz, rz, nbZ, invBinSize);
+    if (bz.imax < bz.imin) return false;
+
+    L[0] = (deme::binID_t)bx.imin;
+    U[0] = (deme::binID_t)bx.imax;
+    L[1] = (deme::binID_t)by.imin;
+    U[1] = (deme::binID_t)by.imax;
+    L[2] = (deme::binID_t)bz.imin;
+    U[2] = (deme::binID_t)bz.imax;
+    return true;
+}
+
+inline __device__ bool figureOutNodeAndBoundingBox(deme::DEMSimParams* simParams,
                                                    deme::DEMDataKT* granData,
                                                    const deme::bodyID_t& triID,
                                                    float3& vA,
@@ -69,8 +125,8 @@ inline __device__ void figureOutNodeAndBoundingBox(deme::DEMSimParams* simParams
     // My sphere voxel ID and my relPos
     deme::bodyID_t myOwnerID = granData->ownerTriMesh[triID];
 
-    double3 ownerXYZ;
-    voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
+    float3 ownerXYZ;
+    voxelIDToPosition<float, deme::voxelID_t, deme::subVoxelPos_t>(
         ownerXYZ.x, ownerXYZ.y, ownerXYZ.z, granData->voxelID[myOwnerID], granData->locX[myOwnerID],
         granData->locY[myOwnerID], granData->locZ[myOwnerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
     const float myOriQw = granData->oriQw[myOwnerID];
@@ -84,7 +140,7 @@ inline __device__ void figureOutNodeAndBoundingBox(deme::DEMSimParams* simParams
     vB = ownerXYZ + loc_vB;
     vC = ownerXYZ + loc_vC;
 
-    boundingBoxIntersectBin(L, U, vA, vB, vC, simParams);
+    return boundingBoxIntersectBinAxisBounds(L, U, vA, vB, vC, simParams);
 }
 
 __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams,
@@ -105,38 +161,64 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
         // bin-based locations don't need that)
         float3 vA1, vB1, vC1, vA2, vB2, vC2;
         deme::binID_t L1[3], L2[3], U1[3], U2[3];
-        figureOutNodeAndBoundingBox(simParams, granData, triID, vA1, vB1, vC1, L1, U1, nodeA1[triID], nodeB1[triID],
-                                    nodeC1[triID]);
-        figureOutNodeAndBoundingBox(simParams, granData, triID, vA2, vB2, vC2, L2, U2, nodeA2[triID], nodeB2[triID],
-                                    nodeC2[triID]);
-        L1[0] = DEME_MIN(L1[0], L2[0]);
-        L1[1] = DEME_MIN(L1[1], L2[1]);
-        L1[2] = DEME_MIN(L1[2], L2[2]);
-        U1[0] = DEME_MAX(U1[0], U2[0]);
-        U1[1] = DEME_MAX(U1[1], U2[1]);
-        U1[2] = DEME_MAX(U1[2], U2[2]);
+        const bool ok1 = figureOutNodeAndBoundingBox(simParams, granData, triID, vA1, vB1, vC1, L1, U1, nodeA1[triID],
+                                                     nodeB1[triID], nodeC1[triID]);
+        const bool ok2 = figureOutNodeAndBoundingBox(simParams, granData, triID, vA2, vB2, vC2, L2, U2, nodeA2[triID],
+                                                     nodeB2[triID], nodeC2[triID]);
+
+        // If neither triangle sandwich intersects the bin grid, it cannot touch any bin.
+        if (!ok1 && !ok2) {
+            numBinsTriTouches[triID] = 0;
+            if (meshUniversalContact) {
+                numAnalGeoTriTouches[triID] = 0;
+            }
+            return;
+        }
+
+        // Merge bounds (or take the valid one, if only one is valid).
+        if (ok1 && ok2) {
+            L1[0] = DEME_MIN(L1[0], L2[0]);
+            L1[1] = DEME_MIN(L1[1], L2[1]);
+            L1[2] = DEME_MIN(L1[2], L2[2]);
+            U1[0] = DEME_MAX(U1[0], U2[0]);
+            U1[1] = DEME_MAX(U1[1], U2[1]);
+            U1[2] = DEME_MAX(U1[2], U2[2]);
+        } else if (!ok1) {
+            L1[0] = L2[0];
+            L1[1] = L2[1];
+            L1[2] = L2[2];
+            U1[0] = U2[0];
+            U1[1] = U2[1];
+            U1[2] = U2[2];
+        }
 
         unsigned int numSDsTouched = 0;
         // Triangle may span a collection of bins...
         // BTW, I don't know why Chrono::GPU had to check the so-called 3 cases, and create thread divergence like that.
         // Just sweep through all potential bins and you are fine.
         float BinCenter[3];
-        float BinHalfSizes[3];
-        BinHalfSizes[0] = simParams->binSize / 2. + DEME_BIN_ENLARGE_RATIO_FOR_FACETS * simParams->binSize;
-        BinHalfSizes[1] = simParams->binSize / 2. + DEME_BIN_ENLARGE_RATIO_FOR_FACETS * simParams->binSize;
-        BinHalfSizes[2] = simParams->binSize / 2. + DEME_BIN_ENLARGE_RATIO_FOR_FACETS * simParams->binSize;
-        for (deme::binID_t i = L1[0]; i <= U1[0]; i++) {
+        const float binSizeF = (float)simParams->dyn.binSize;
+        const float binHalfSpan = binSizeF * (0.5f + (float)DEME_BIN_ENLARGE_RATIO_FOR_FACETS);
+        float BinHalfSizes[3] = {binHalfSpan, binHalfSpan, binHalfSpan};
+        const float startX = binSizeF * (float)L1[0] + 0.5f * binSizeF;
+        const float startY = binSizeF * (float)L1[1] + 0.5f * binSizeF;
+        const float startZ = binSizeF * (float)L1[2] + 0.5f * binSizeF;
+        for (deme::binID_t i = L1[0], ix = 0; i <= U1[0]; i++, ix++) {
+            float cy0 = startY;
+            BinCenter[0] = startX + ix * binSizeF;
             for (deme::binID_t j = L1[1]; j <= U1[1]; j++) {
+                float cz = startZ;
+                BinCenter[1] = cy0;
                 for (deme::binID_t k = L1[2]; k <= U1[2]; k++) {
-                    BinCenter[0] = simParams->binSize * i + simParams->binSize / 2.;
-                    BinCenter[1] = simParams->binSize * j + simParams->binSize / 2.;
-                    BinCenter[2] = simParams->binSize * k + simParams->binSize / 2.;
+                    BinCenter[2] = cz;
 
                     if (check_TriangleBoxOverlap(BinCenter, BinHalfSizes, vA1, vB1, vC1) ||
                         check_TriangleBoxOverlap(BinCenter, BinHalfSizes, vA2, vB2, vC2)) {
                         numSDsTouched++;
                     }
+                    cz += binSizeF;
                 }
+                cy0 += binSizeF;
             }
         }
         numBinsTriTouches[triID] = numSDsTouched;
@@ -157,8 +239,8 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
                 if (granData->familyMasks[maskMatID] != deme::DONT_PREVENT_CONTACT) {
                     continue;
                 }
-                double3 ownerXYZ;
-                voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
+                float3 ownerXYZ;
+                voxelIDToPosition<float, deme::voxelID_t, deme::subVoxelPos_t>(
                     ownerXYZ.x, ownerXYZ.y, ownerXYZ.z, granData->voxelID[objBOwner], granData->locX[objBOwner],
                     granData->locY[objBOwner], granData->locZ[objBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
                 const float ownerOriQw = granData->oriQw[objBOwner];
@@ -175,22 +257,15 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
                                                         ownerOriQy, ownerOriQz);
                 applyOriQToVector3<float, deme::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx,
                                                         ownerOriQy, ownerOriQz);
-                double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
+                float3 objBPosXYZ = ownerXYZ + make_float3(objBRelPosX, objBRelPosY, objBRelPosZ);
 
-                double3 nodeA, nodeB, nodeC;
-                nodeA = to_real3<float3, double3>(vA1);
-                nodeB = to_real3<float3, double3>(vB1);
-                nodeC = to_real3<float3, double3>(vC1);
-                deme::contact_t contact_type = checkTriEntityOverlap<double3>(
-                    nodeA, nodeB, nodeC, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                deme::contact_t contact_type = checkTriEntityOverlapFP32(
+                    vA1, vB1, vC1, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
                     objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
                     granData->marginSizeAnalytical[objB]);
                 if (contact_type == deme::NOT_A_CONTACT) {
-                    nodeA = to_real3<float3, double3>(vA2);
-                    nodeB = to_real3<float3, double3>(vB2);
-                    nodeC = to_real3<float3, double3>(vC2);
-                    contact_type = checkTriEntityOverlap<double3>(
-                        nodeA, nodeB, nodeC, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                    contact_type = checkTriEntityOverlapFP32(
+                        vA2, vB2, vC2, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
                         objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
                         granData->marginSizeAnalytical[objB]);
                 }
@@ -227,16 +302,32 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
         // 3 vertices of the triangle
         float3 vA1, vB1, vC1, vA2, vB2, vC2;
         deme::binID_t L1[3], L2[3], U1[3], U2[3];
-        figureOutNodeAndBoundingBox(simParams, granData, triID, vA1, vB1, vC1, L1, U1, nodeA1[triID], nodeB1[triID],
-                                    nodeC1[triID]);
-        figureOutNodeAndBoundingBox(simParams, granData, triID, vA2, vB2, vC2, L2, U2, nodeA2[triID], nodeB2[triID],
-                                    nodeC2[triID]);
-        L1[0] = DEME_MIN(L1[0], L2[0]);
-        L1[1] = DEME_MIN(L1[1], L2[1]);
-        L1[2] = DEME_MIN(L1[2], L2[2]);
-        U1[0] = DEME_MAX(U1[0], U2[0]);
-        U1[1] = DEME_MAX(U1[1], U2[1]);
-        U1[2] = DEME_MAX(U1[2], U2[2]);
+        const bool ok1 = figureOutNodeAndBoundingBox(simParams, granData, triID, vA1, vB1, vC1, L1, U1, nodeA1[triID],
+                                                     nodeB1[triID], nodeC1[triID]);
+        const bool ok2 = figureOutNodeAndBoundingBox(simParams, granData, triID, vA2, vB2, vC2, L2, U2, nodeA2[triID],
+                                                     nodeB2[triID], nodeC2[triID]);
+
+        // If neither triangle sandwich intersects the bin grid, it cannot touch any bin.
+        if (!ok1 && !ok2) {
+            return;
+        }
+
+        // Merge bounds (or take the valid one, if only one is valid).
+        if (ok1 && ok2) {
+            L1[0] = DEME_MIN(L1[0], L2[0]);
+            L1[1] = DEME_MIN(L1[1], L2[1]);
+            L1[2] = DEME_MIN(L1[2], L2[2]);
+            U1[0] = DEME_MAX(U1[0], U2[0]);
+            U1[1] = DEME_MAX(U1[1], U2[1]);
+            U1[2] = DEME_MAX(U1[2], U2[2]);
+        } else if (!ok1) {
+            L1[0] = L2[0];
+            L1[1] = L2[1];
+            L1[2] = L2[2];
+            U1[0] = U2[0];
+            U1[1] = U2[1];
+            U1[2] = U2[2];
+        }
 
         deme::binsTriangleTouchPairs_t myReportOffset = numBinsTriTouchesScan[triID];
         // In case this sweep does not agree with the previous one, we need to intercept such potential segfaults
@@ -244,19 +335,23 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
 
         // Triangle may span a collection of bins...
         float BinCenter[3];
-        float BinHalfSizes[3];
-        BinHalfSizes[0] = simParams->binSize / 2. + DEME_BIN_ENLARGE_RATIO_FOR_FACETS * simParams->binSize;
-        BinHalfSizes[1] = simParams->binSize / 2. + DEME_BIN_ENLARGE_RATIO_FOR_FACETS * simParams->binSize;
-        BinHalfSizes[2] = simParams->binSize / 2. + DEME_BIN_ENLARGE_RATIO_FOR_FACETS * simParams->binSize;
-        for (deme::binID_t i = L1[0]; i <= U1[0]; i++) {
+        const float binSizeF = (float)simParams->dyn.binSize;
+        const float binHalfSpan = binSizeF * (0.5f + (float)DEME_BIN_ENLARGE_RATIO_FOR_FACETS);
+        float BinHalfSizes[3] = {binHalfSpan, binHalfSpan, binHalfSpan};
+        const float startX = binSizeF * (float)L1[0] + 0.5f * binSizeF;
+        const float startY = binSizeF * (float)L1[1] + 0.5f * binSizeF;
+        const float startZ = binSizeF * (float)L1[2] + 0.5f * binSizeF;
+        for (deme::binID_t i = L1[0], ix = 0; i <= U1[0]; i++, ix++) {
+            BinCenter[0] = startX + ix * binSizeF;
+            float cy0 = startY;
             for (deme::binID_t j = L1[1]; j <= U1[1]; j++) {
+                BinCenter[1] = cy0;
+                float cz = startZ;
                 for (deme::binID_t k = L1[2]; k <= U1[2]; k++) {
                     if (myReportOffset >= myReportOffset_end) {
                         continue;  // Don't step on the next triangle's domain
                     }
-                    BinCenter[0] = simParams->binSize * i + simParams->binSize / 2.;
-                    BinCenter[1] = simParams->binSize * j + simParams->binSize / 2.;
-                    BinCenter[2] = simParams->binSize * k + simParams->binSize / 2.;
+                    BinCenter[2] = cz;
 
                     if (check_TriangleBoxOverlap(BinCenter, BinHalfSizes, vA1, vB1, vC1) ||
                         check_TriangleBoxOverlap(BinCenter, BinHalfSizes, vA2, vB2, vC2)) {
@@ -265,7 +360,9 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                         triIDsEachBinTouches[myReportOffset] = triID;
                         myReportOffset++;
                     }
+                    cz += binSizeF;
                 }
+                cy0 += binSizeF;
             }
         }
         // This can happen for like 1 in 10^9 chance, for the tri--bin contact algorithm has stochasticity on GPU
@@ -289,8 +386,8 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                 if (granData->familyMasks[maskMatID] != deme::DONT_PREVENT_CONTACT) {
                     continue;
                 }
-                double3 ownerXYZ;
-                voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
+                float3 ownerXYZ;
+                voxelIDToPosition<float, deme::voxelID_t, deme::subVoxelPos_t>(
                     ownerXYZ.x, ownerXYZ.y, ownerXYZ.z, granData->voxelID[objBOwner], granData->locX[objBOwner],
                     granData->locY[objBOwner], granData->locZ[objBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
                 const float ownerOriQw = granData->oriQw[objBOwner];
@@ -307,22 +404,15 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                                                         ownerOriQy, ownerOriQz);
                 applyOriQToVector3<float, deme::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx,
                                                         ownerOriQy, ownerOriQz);
-                double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
+                float3 objBPosXYZ = ownerXYZ + make_float3(objBRelPosX, objBRelPosY, objBRelPosZ);
 
-                double3 nodeA, nodeB, nodeC;
-                nodeA = to_real3<float3, double3>(vA1);
-                nodeB = to_real3<float3, double3>(vB1);
-                nodeC = to_real3<float3, double3>(vC1);
-                deme::contact_t contact_type = checkTriEntityOverlap<double3>(
-                    nodeA, nodeB, nodeC, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                deme::contact_t contact_type = checkTriEntityOverlapFP32(
+                    vA1, vB1, vC1, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
                     objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
                     granData->marginSizeAnalytical[objB]);
                 if (contact_type == deme::NOT_A_CONTACT) {
-                    nodeA = to_real3<float3, double3>(vA2);
-                    nodeB = to_real3<float3, double3>(vB2);
-                    nodeC = to_real3<float3, double3>(vC2);
-                    contact_type = checkTriEntityOverlap<double3>(
-                        nodeA, nodeB, nodeC, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                    contact_type = checkTriEntityOverlapFP32(
+                        vA2, vB2, vC2, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
                         objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
                         granData->marginSizeAnalytical[objB]);
                 }

@@ -16,6 +16,7 @@
 
 #include <filesystem>
 #include <cstdio>
+#include <cmath>
 #include <time.h>
 #include <random>
 
@@ -31,6 +32,8 @@ int main() {
     DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT", "NORMAL", "TORQUE", "CNT_WILDCARD"});
     DEMSim.InstructBoxDomainDimension(20, 20, 15);
 
+    DEMSim.SetGPUTimersEnabled(true);
+    
     // Enable mesh-mesh contacts so boxes can collide with each other
     DEMSim.SetMeshUniversalContact(true);
 
@@ -168,13 +171,26 @@ int main() {
 
             // Print some statistics
             float avg_height = 0.0;
+            double sum_speed = 0.0;
+            double max_speed = 0.0;
             for (size_t k = 0; k < trackers.size(); k++) {
                 float3 pos = trackers[k]->Pos();
+                float3 vel = trackers[k]->Vel();
+                double speed = std::sqrt(static_cast<double>(vel.x) * vel.x +
+                                         static_cast<double>(vel.y) * vel.y +
+                                         static_cast<double>(vel.z) * vel.z);
                 avg_height += pos.z;
+                sum_speed += speed;
+                if (speed > max_speed) {
+                    max_speed = speed;
+                }
             }
+            double mean_speed = (trackers.empty()) ? 0.0 : (sum_speed / trackers.size());
             avg_height /= trackers.size();
 
             std::cout << "  Average height: " << avg_height << " m" << std::endl;
+            std::cout << "  Mean speed: " << mean_speed << " m/s" << std::endl;
+            std::cout << "  Max speed: " << max_speed << " m/s" << std::endl;
 
             DEMSim.ShowMemStats();
             std::cout << "----------------------------------------" << std::endl;

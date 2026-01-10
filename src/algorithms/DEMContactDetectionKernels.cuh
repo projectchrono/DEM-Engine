@@ -170,6 +170,90 @@ __global__ void markNewPatchPairGroups(patchIDPair_t* sortedPatchPairs, contactP
     }
 }
 
+// Build geomToPatchMap by detecting boundaries of unique (patchPair, contactType) groups in a sorted array.
+// The array is expected to be sorted by contact type, then by patch pairs.
+__global__ void markNewPatchPairGroupsByType(const patchIDPair_t* sortedPatchPairs,
+                                             const contact_t* sortedContactTypes,
+                                             contactPairs_t* isNewGroup,
+                                             size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        if (myID == 0) {
+            isNewGroup[myID] = 0;
+        } else {
+            const bool new_pair = sortedPatchPairs[myID] != sortedPatchPairs[myID - 1];
+            const bool new_type = sortedContactTypes[myID] != sortedContactTypes[myID - 1];
+            isNewGroup[myID] = (new_pair || new_type) ? 1 : 0;
+        }
+    }
+}
+
+__global__ void buildCompositeKeys(const patchIDPair_t* patchPairs,
+                                   const contact_t* contactTypes,
+                                   ulonglong2* keys,
+                                   size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        keys[myID].x = static_cast<unsigned long long>(patchPairs[myID]);
+        keys[myID].y = static_cast<unsigned long long>(contactTypes[myID]);
+    }
+}
+
+__global__ void lineNumbers(contactPairs_t* arr, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        arr[myID] = myID;
+    }
+}
+
+__global__ void markNewCompositeGroups(const ulonglong2* keys, contactPairs_t* isNewGroup, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        if (myID == 0) {
+            isNewGroup[myID] = 0;
+        } else {
+            const ulonglong2 prev = keys[myID - 1];
+            const ulonglong2 curr = keys[myID];
+            isNewGroup[myID] = (prev.x != curr.x || prev.y != curr.y) ? 1 : 0;
+        }
+    }
+}
+
+__global__ void extractContactTypeFromCompositeKeys(const ulonglong2* keys, contact_t* types, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        types[myID] = static_cast<contact_t>(keys[myID].y);
+    }
+}
+
+__global__ void decodeCompositeKeysToPatchContacts(const ulonglong2* keys,
+                                                   bodyID_t* idPatchA,
+                                                   bodyID_t* idPatchB,
+                                                   contact_t* contactTypePatch,
+                                                   size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        patchIDPair_t patchPair = static_cast<patchIDPair_t>(keys[myID].x);
+        idPatchA[myID] = decodeTypeA<patchIDPair_t, bodyID_t>(patchPair);
+        idPatchB[myID] = decodeTypeB<patchIDPair_t, bodyID_t>(patchPair);
+        contactTypePatch[myID] = static_cast<contact_t>(keys[myID].y);
+    }
+}
+
+template <typename T>
+__global__ void gatherByIndex(const T* in, T* out, const contactPairs_t* idx, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        out[myID] = in[idx[myID]];
+    }
+}
+
+__global__ void setFirstFlagToOne(contactPairs_t* flags, size_t n) {
+    if (blockIdx.x == 0 && threadIdx.x == 0 && n > 0) {
+        flags[0] = 1;
+    }
+}
+
 // Set NULL_MAPPING_PARTNER for contacts of a specific type segment.
 // Used when current step has contacts of this type but previous step does not.
 //

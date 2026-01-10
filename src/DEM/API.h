@@ -108,7 +108,7 @@ class DEMSolver {
     /// Set the simulation time manually.
     void SetSimTime(double time);
     /// @brief Set the strategy for auto-adapting time step size (NOT implemented, no effect yet).
-    /// @param type "none" or "max_vel" or "int_diff".
+    /// @param type "none" or "hertz_const" or "max_vel" or "int_diff".
     void SetAdaptiveTimeStepType(const std::string& type);
 
     /// @brief Set the time integrator for this simulator.
@@ -222,6 +222,10 @@ class DEMSolver {
     /// thinckness of the contact `safety' margin. This need not to be large unless the simulation velocity can increase
     /// significantly in one kT update cycle.
     void SetExpandSafetyAdder(float vel) { m_expand_base_vel = vel; }
+    /// @brief Control whether angular velocity contributes to the contact detection margin.
+    /// @details Default is auto: false for pure single-sphere clumps; true when multi-sphere clumps or meshes exist.
+    ///          If disabled, sphere--sphere contact uses only linear velocity when computing damping/friction terms.
+    void SetUseAngularVelocityMargin(bool use);
 
     /// @brief Manually set the current triangle--triangle penetration value in dT.
     /// @details This allows the user to directly control the maxTriTriPenetration value which will ONLY be used in the
@@ -325,7 +329,7 @@ class DEMSolver {
     }
     /// @brief Get the current bin (for contact detection) size. Must be called from synchronized stance.
     /// @return Bin size.
-    double GetBinSize() { return kT->simParams->binSize; }
+    double GetBinSize() { return kT->simParams->dyn.binSize; }
     // NOTE: No need to get binSize from the device, as binSize is only changed on the host
 
     /// @brief Get the current number of bins (for contact detection). Must be called from synchronized stance.
@@ -346,6 +350,19 @@ class DEMSolver {
     /// @brief Set the number of past kT updates that dT will use to calibrate the max future drift limit.
     /// @param n Number of kT updates. Suggest using default.
     void SetCDNumStepsMaxDriftHistorySize(unsigned int n);
+    /// @brief Inflate observed kT lag (in units of dT steps) by this factor, for drift scheduling/calibration only.
+    /// @details Values < 1 can be unsafe. Default is 1.1.
+    void SetCDFutureDriftEffDriftSafetyFactor(float factor) {
+        future_drift_eff_drift_safety_factor = clampBetween(factor, 1.0f, 10.0f);
+    }
+    /// @brief Set bounds (as a fraction of max drift) that clamp dT's waiting behavior before sending a new kT work order.
+    /// @details Default is lower=0, upper=1 (send as late as safely possible). `upper=0` makes dT send immediately
+    /// (close to the old behavior, but still with the safety factor). Values must satisfy 0 <= lower <= upper <= 1.
+    void SetCDFutureDriftSendBounds(float lower_ratio, float upper_ratio) {
+        future_drift_send_upper_bound_ratio = clampBetween(upper_ratio, 0.0f, 1.0f);
+        future_drift_send_lower_bound_ratio =
+            clampBetween(lower_ratio, 0.0f, static_cast<float>(future_drift_send_upper_bound_ratio));
+    }
     /// @brief Get the current update frequency used by the solver.
     /// @return The current update frequency.
     float GetUpdateFreq() const;
@@ -1376,6 +1393,13 @@ class DEMSolver {
     /// Show the wall time and percentages of wall time spend on various solver tasks.
     void ShowTimingStats();
 
+    /// Enable/disable GPU event-based timing (StartGpuTimer/StopGpuTimer/AccumulateGpuTimer). Disabling this can
+    /// improve performance by avoiding per-step cudaEventRecord/cudaEventElapsedTime overhead. Call only when the
+    /// solver is not actively running (best: right after constructing the solver, or after DoDynamicsThenSync).
+    void SetGPUTimersEnabled(bool enabled);
+    /// Query whether GPU event-based timing is enabled.
+    bool GetGPUTimersEnabled() const { return m_gpu_timers_enabled; }
+
     /// Reset the collaboration stats between dT and kT back to the initial value (0). You should call this if you want
     /// to start over and re-inspect the stats of the new run; otherwise, it is generally not needed, you can go ahead
     /// and destroy DEMSolver.
@@ -1471,28 +1495,28 @@ class DEMSolver {
     void PrintKinematicScratchSpaceUsage() const { kT->printScratchSpaceUsage(); }
 
     /// Let dT do this call and return the reduce value of the inspected quantity.
-    float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
+    float dTInspectReduce(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                           const std::string& kernel_name,
                           INSPECT_ENTITY_TYPE thing_to_insp,
                           CUB_REDUCE_FLAVOR reduce_flavor,
                           bool all_domain,
                           DualArray<scratch_t>& reduceResArr,
                           DualArray<scratch_t>& reduceRes);
-    float* dTInspectNoReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
+    float* dTInspectNoReduce(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                              const std::string& kernel_name,
                              INSPECT_ENTITY_TYPE thing_to_insp,
                              CUB_REDUCE_FLAVOR reduce_flavor,
                              bool all_domain,
                              DualArray<scratch_t>& reduceResArr,
                              DualArray<scratch_t>& reduceRes);
-    float dTInspectReduceDevice(const std::shared_ptr<jitify::Program>& inspection_kernel,
+    float dTInspectReduceDevice(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                                 const std::string& kernel_name,
                                 INSPECT_ENTITY_TYPE thing_to_insp,
                                 CUB_REDUCE_FLAVOR reduce_flavor,
                                 bool all_domain,
                                 DualArray<scratch_t>& reduceResArr,
                                 DualArray<scratch_t>& reduceRes);
-    float* dTInspectNoReduceDevice(const std::shared_ptr<jitify::Program>& inspection_kernel,
+    float* dTInspectNoReduceDevice(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                                    const std::string& kernel_name,
                                    INSPECT_ENTITY_TYPE thing_to_insp,
                                    CUB_REDUCE_FLAVOR reduce_flavor,
@@ -1599,6 +1623,9 @@ class DEMSolver {
     // The `base' velocity we always consider entities to have, when determining the thickness of the margin to add for
     // contact detection.
     float m_expand_base_vel = 3.f;
+    // Whether angular velocity contributes to the contact margin (auto-detected if not user-set).
+    bool m_use_angvel_margin = true;
+    bool m_use_angvel_margin_user_set = false;
 
     // The method of determining the thickness of the margin added to CD
     // Default is using a max_vel inspector of the clumps to decide it
@@ -1664,11 +1691,17 @@ class DEMSolver {
     float max_drift_ahead_of_avg_drift = 4.;
     float max_drift_multiple_of_avg_drift = 1.05;
     unsigned int max_drift_gauge_history_size = 200;
+    float future_drift_eff_drift_safety_factor = 1.1;
+    float future_drift_send_upper_bound_ratio = 1.0;
+    float future_drift_send_lower_bound_ratio = 0.0;
 
     // See SetNoForceRecord
     bool no_recording_contact_forces = false;
     // See SetCollectAccRightAfterForceCalc
     bool collect_force_in_force_kernel = false;
+
+    // Controls event-based GPU timing for kT/dT timers.
+    bool m_gpu_timers_enabled = true;
 
     // Error-out avg num contacts
     float threshold_error_out_num_cnts = 300.;

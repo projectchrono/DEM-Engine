@@ -37,6 +37,9 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
     float AOwnerMass, ARadius, BOwnerMass, BRadius;
     float4 AOriQ, BOriQ;
     deme::materialsOffset_t bodyAMatType, bodyBMatType;
+    // Cache analytic entity info when B is analytical (used for on-the-fly area calc)
+    deme::objType_t analyticalType = deme::ANAL_OBJ_TYPE_PLANE;
+    float analyticalSize1 = 0.f;
     // The user-specified extra margin size (how much we should be lenient in determining `in-contact')
     float extraMarginSize = 0.;
     // Triangle A's three points are defined outside, as may be reused in B's acquisition and penetration calc.
@@ -170,7 +173,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // If B is a sphere, then A can only be a sphere
         checkSpheresOverlap<double, float>(bodyAPos.x, bodyAPos.y, bodyAPos.z, ARadius, bodyBPos.x, bodyBPos.y,
                                            bodyBPos.z, BRadius, contactPnt.x, contactPnt.y, contactPnt.z, B2A.x, B2A.y,
-                                           B2A.z, overlapDepth, overlapArea);
+                                           B2A.z, overlapDepth);
         // If overlapDepth is negative then it might still be considered in contact, if the extra margins of A and B
         // combined is larger than abs(overlapDepth)
         if (overlapDepth <= -extraMarginSize) {
@@ -270,6 +273,8 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // For analytical entity, its patch ID is just its own component ID (but myPatchID is hardly used in this
         // analytical case)
         deme::bodyID_t myPatchID = analyticalID;
+        analyticalType = objType[analyticalID];
+        analyticalSize1 = objSize1[analyticalID];
         // If B is analytical entity, its owner, relative location, material info is jitified.
         bodyBMatType = objMaterial[analyticalID];
         BOwnerMass = objMass[analyticalID];
@@ -303,7 +308,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             checkSphereEntityOverlap<double3, float, double>(bodyAPos, ARadius, objType[analyticalID], bodyBPos,
                                                              bodyBRot, objSize1[analyticalID], objSize2[analyticalID],
                                                              objSize3[analyticalID], objNormal[analyticalID], 0.0,
-                                                             contactPnt, B2A, overlapDepth, overlapArea);
+                                                             contactPnt, B2A, overlapDepth);
             // Fix ContactType if needed
             if (overlapDepth <= -extraMarginSize) {
                 ContactType = deme::NOT_A_CONTACT;

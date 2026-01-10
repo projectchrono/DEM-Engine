@@ -63,30 +63,20 @@ inline __device__ bool calcContactPoint(deme::DEMSimParams* simParams,
                                         const double& XB,
                                         const double& YB,
                                         const double& ZB,
-                                        const float& rB,
-                                        deme::binID_t& binID,
-                                        float artificialMarginA,
-                                        float artificialMarginB) {
-    double contactPntX;
-    double contactPntY;
-    double contactPntZ;
+    const float& rB,
+    deme::binID_t& binID,
+    float artificialMarginA,
+    float artificialMarginB) {
     bool in_contact;
-    float normX;  // Normal directions are placeholders here
-    float normY;
-    float normZ;
     double overlapDepth;  // overlapDepth is needed for making artificial contacts not too loose.
-    double overlapArea;   // overlapArea is just a placeholder for calling the function
 
-    //// TODO: I guess <float, float> is fine too.
-    in_contact = checkSpheresOverlap<double, float>(XA, YA, ZA, rA, XB, YB, ZB, rB, contactPntX, contactPntY,
-                                                    contactPntZ, normX, normY, normZ, overlapDepth, overlapArea);
+    in_contact = checkSphereContactOverlapAndBin(XA, YA, ZA, rA, XB, YB, ZB, rB, simParams->dyn.inv_binSize,
+                                                 simParams->nbX, simParams->nbY, overlapDepth, binID);
 
     // The contact needs to be larger than the smaller articifical margin so that we don't double count the artificially
     // added margin. This is a design choice, to avoid having too many contact pairs when adding artificial margins.
     float artificialMargin = (artificialMarginA < artificialMarginB) ? artificialMarginA : artificialMarginB;
     in_contact = in_contact && (overlapDepth > (double)artificialMargin);
-    binID = getPointBinID<deme::binID_t>(contactPntX, contactPntY, contactPntZ, simParams->binSize, simParams->nbX,
-                                         simParams->nbY);
     return in_contact;
 }
 

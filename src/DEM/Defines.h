@@ -26,7 +26,7 @@ namespace deme {
 // It is better to keep DEME_NUM_SPHERES_PER_CD_BATCH == DEME_KT_CD_NTHREADS_PER_BLOCK for better performance
 #define DEME_NUM_SPHERES_PER_CD_BATCH 512    ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
 #define DEME_NUM_TRIANGLES_PER_CD_BATCH 256  ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
-#define DEME_TINY_FLOAT 1e-12                ///< Appears to be very sensitive to even smaller values...
+#define DEME_TINY_FLOAT 1e-12f               ///< Appears to be very sensitive to even smaller values...
 #define DEME_HUGE_FLOAT 1e15
 #define DEME_BITS_PER_BYTE 8
 #define DEME_CUDA_WARP_SIZE 32
@@ -36,12 +36,14 @@ namespace deme {
 #define DEME_BIN_ENLARGE_RATIO_FOR_FACETS 0.001
 
 // A few pre-computed constants
-constexpr double TWO_OVER_THREE = 2. / 3.;
-constexpr double FOUR_OVER_THREE = 4. / 3.;
-constexpr double FIVE_OVER_THREE = 5. / 3.;
-constexpr double TWO_TIMES_SQRT_FIVE_OVER_SIX = 1.825741858350554;  // 2. * std::sqrt(5. / 6.)
-constexpr double PI = 3.1415926535897932385;
-constexpr double PI_SQUARED = 9.869604401089358;
+constexpr double ONE_OVER_THREE = 1. / 3.; // double for accurancy, all other consts here are used for FP32 or less critical calculations
+constexpr float TWO_OVER_THREE = 2. / 3.;
+constexpr float FOUR_OVER_THREE = 4. / 3.;
+constexpr float FIVE_OVER_THREE = 5. / 3.;
+constexpr float PI = 3.1415926535897932385f;
+constexpr float PI_SQUARED = 9.869604401089358f;
+constexpr float TWO_TIMES_SQRT_FIVE_OVER_THREE = 2.58198889747161f;  // 2. * std::sqrt(5. / 3.)
+constexpr float TWO_TIMES_SQRT_FIVE_OVER_SIX = 1.825741858350554f; // 2. * std::sqrt(5. / 6.)
 
 constexpr uint8_t VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * DEME_BITS_PER_BYTE;
 constexpr uint8_t VOXEL_COUNT_POWER2 = sizeof(voxelID_t) * DEME_BITS_PER_BYTE;
@@ -170,6 +172,8 @@ constexpr unsigned int THRESHOLD_CANT_JITIFY_ALL_COMP =
     DEME_MIN(DEME_MIN(RESERVED_CLUMP_COMPONENT_OFFSET, DEME_THRESHOLD_BIG_CLUMP), DEME_THRESHOLD_TOO_MANY_SPHERE_COMP);
 // Max size change the bin auto-adjust algorithm can apply to the bin size per step
 constexpr float BIN_SIZE_MAX_CHANGE_RATE = 0.2;
+// Safety factor for hertz const adative time step
+constexpr double N_DT = 16.0;
 
 // Some enums...
 // Stepping method
@@ -220,7 +224,26 @@ enum CNT_OUTPUT_CONTENT {
 // NOTE: All data structs here need to be simple enough to jitify. In general, if you need to include something much
 // more complex than DEMDefines for example, then do it in Structs.h.
 
-// A structure for storing simulation parameters.
+// A structure for storing frequently updated simulation parameters.
+struct DEMSimParamsDynamic {
+    // The edge length and inverse edge length of a bin (for contact detection)
+    double binSize;
+    double inv_binSize;
+    // Time step size
+    float h;
+    // Time elappsed since start of simulation
+    double timeElapsed = 0;
+    // Sphere radii/geometry thickness inflation amount (for safer contact detection)
+    float beta;
+    // Max velocity, user approximated, we verify during simulation
+    float approxMaxVel;
+    // Expand safety parameter (multiplier for the max vel)
+    float expSafetyMulti;
+    // Expand safety parameter (adder for the max vel)
+    float expSafetyAdder;
+};
+
+// A structure for storing mostly static simulation parameters.
 struct DEMSimParams {
     // Number of voxels in the X direction, expressed as a power of 2
     unsigned char nvXp2;
@@ -238,8 +261,8 @@ struct DEMSimParams {
     double l;
     // Double-precision single voxel size
     double voxelSize;
-    // The edge length of a bin (for contact detection)
-    double binSize;
+    // Frequently updated parameters (kept inline for device access)
+    DEMSimParamsDynamic dyn;
     // Number of clumps, spheres, triangles, mesh-represented objects, analytical components, external objs...
     bodyID_t nSpheresGM;
     bodyID_t nTriGM;
@@ -267,18 +290,6 @@ struct DEMSimParams {
     // User's box size
     float3 userBoxMin;
     float3 userBoxMax;
-    // Time step size
-    float h;
-    // Time elappsed since start of simulation
-    double timeElapsed = 0;
-    // Sphere radii/geometry thickness inflation amount (for safer contact detection)
-    float beta;
-    // Max velocity, user approximated, we verify during simulation
-    float approxMaxVel;
-    // Expand safety parameter (multiplier for the max vel)
-    float expSafetyMulti;
-    // Expand safety parameter (adder for the max vel)
-    float expSafetyAdder;
     // Stepping method
     TIME_INTEGRATOR stepping = TIME_INTEGRATOR::FORWARD_EULER;
 
@@ -298,6 +309,8 @@ struct DEMSimParams {
     unsigned int errOutBinSphNum = 32768;
     // The max num of triangles per bin before solver errors out
     unsigned int errOutBinTriNum = 32768;
+    // Whether angular velocity contributes to contact margin sizing (and sphere--sphere rot. velocity use).
+    notStupidBool_t useAngVelMargin = 1;
 };
 
 // A struct that holds pointers to data arrays that dT uses
@@ -493,6 +506,11 @@ struct DEMDataKT {
     float* relPosSphereX;
     float* relPosSphereY;
     float* relPosSphereZ;
+
+    // kT-side scalars used for contact margin computation on device
+    float* ts;
+    unsigned int* maxDrift;
+    unsigned int* useFixedMargin;
 };
 
 // typedef DEMDataDT* DEMDataDTPtr;
@@ -517,6 +535,8 @@ const float DEFAULT_BOX_DOMAIN_SIZE = 20.;
 const float DEFAULT_BOX_DOMAIN_ENLARGE_RATIO = 0.2;
 // Initial contact array size; does not matter that much as they can be resized anytime in simulation
 const contactPairs_t INITIAL_CONTACT_ARRAY_SIZE = 1024;
+// For the bin collecting
+struct AxisBounds { int imin, imax; };
 
 // #ifndef CUB_IGNORE_DEPRECATED_API
 // #define CUB_IGNORE_DEPRECATED_API

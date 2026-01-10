@@ -38,7 +38,6 @@ void markOwnerToChange(notStupidBool_t* idBool,
     if (blocks_needed > 0) {
         markOwnerToChange_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(idBool, ownerFactors,
                                                                                               dIDs, dFactors, n);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -66,7 +65,6 @@ void modifyComponents(DEMData* granData, notStupidBool_t* idBool, float* factors
     if (blocks_needed > 0) {
         modifyComponents_impl<DEMData>
             <<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(granData, idBool, factors, n);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 template void modifyComponents<DEMDataDT>(DEMDataDT* granData,
@@ -89,7 +87,7 @@ __global__ void fillMarginValues_impl(DEMSimParams* simParams,
     if (ID < n) {
         bodyID_t ownerID = ownerIDArr[ID];
         unsigned int my_family = granData->familyID[ownerID];
-        marginSizeArr[ID] = simParams->beta + granData->familyExtraMarginSize[my_family];
+        marginSizeArr[ID] = simParams->dyn.beta + granData->familyExtraMarginSize[my_family];
     }
 }
 
@@ -114,7 +112,6 @@ void fillMarginValues(DEMSimParams* simParams,
         fillMarginValues_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             simParams, granData, granData->marginSizeAnalytical, granData->ownerAnalBody, nAnal);
     }
-    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
 }  // namespace deme
