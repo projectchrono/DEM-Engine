@@ -168,6 +168,9 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
         const bool ok2 = figureOutNodeAndBoundingBox(simParams, granData, triID, vA2, vB2, vC2, L2, U2, nodeA2[triID],
                                                      nodeB2[triID], nodeC2[triID]);
 
+        // Precompute triangle edges/normal once per triangle (translation-invariant).
+        // We translate vertices per-bin (v - boxCenter) before calling triBoxOverlapBinFastLocalEdgesUnionShiftFP32().
+
         // If neither triangle sandwich intersects the bin grid, it cannot touch any bin.
         if (!ok1 && !ok2) {
             numBinsTriTouches[triID] = 0;
@@ -175,6 +178,36 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
                 numAnalGeoTriTouches[triID] = 0;
             }
             return;
+        }
+
+        // Preserve per-triangle bounds for cheap gating inside the union sweep (Option C).
+        // (We will overwrite L1/U1 when we merge into the union bounds.)
+        deme::binID_t LA[3], UA[3];
+        if (ok1) {
+            LA[0] = L1[0];
+            LA[1] = L1[1];
+            LA[2] = L1[2];
+            UA[0] = U1[0];
+            UA[1] = U1[1];
+            UA[2] = U1[2];
+        }
+
+        // Precompute the sandwich translation (B = A + shift_world) once per triangle, in a numerically safe way:
+        // compute in local coords (small numbers), then rotate into world.
+        float3 shift_world = make_float3(0.f, 0.f, 0.f);
+        if (ok2) {
+            const deme::bodyID_t myOwnerID_shift = granData->ownerTriMesh[triID];
+            const float myOriQw_shift = granData->oriQw[myOwnerID_shift];
+            const float myOriQx_shift = granData->oriQx[myOwnerID_shift];
+            const float myOriQy_shift = granData->oriQy[myOwnerID_shift];
+            const float myOriQz_shift = granData->oriQz[myOwnerID_shift];
+
+            // Use any vertex pair; for a sandwich it is a constant translation for all vertices.
+            float3 shift_local = make_float3(nodeA2[triID].x - nodeA1[triID].x, nodeA2[triID].y - nodeA1[triID].y,
+                                             nodeA2[triID].z - nodeA1[triID].z);
+            applyOriQToVector3<float, deme::oriQ_t>(shift_local.x, shift_local.y, shift_local.z, myOriQw_shift,
+                                                    myOriQx_shift, myOriQy_shift, myOriQz_shift);
+            shift_world = shift_local;
         }
 
         // Merge bounds (or take the valid one, if only one is valid).
@@ -213,9 +246,21 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
                 BinCenter[1] = cy0;
                 for (deme::binID_t k = L1[2]; k <= U1[2]; k++) {
                     BinCenter[2] = cz;
-
-                    if (check_TriangleBoxOverlap(BinCenter, BinHalfSizes, vA1, vB1, vC1) ||
-                        check_TriangleBoxOverlap(BinCenter, BinHalfSizes, vA2, vB2, vC2)) {
+                    const float3 c = make_float3(BinCenter[0], BinCenter[1], BinCenter[2]);
+                    // Bounds-gating, only test the triangle(s) that can possibly touch this bin.
+                    const bool inA =
+                        ok1 && (i >= LA[0] && i <= UA[0] && j >= LA[1] && j <= UA[1] && k >= LA[2] && k <= UA[2]);
+                    const bool inB =
+                        ok2 && (i >= L2[0] && i <= U2[0] && j >= L2[1] && j <= U2[1] && k >= L2[2] && k <= U2[2]);
+                    if (!inA && !inB) {
+                        continue;
+                    }
+                    const float3 a0 = make_float3(vA1.x - c.x, vA1.y - c.y, vA1.z - c.z);
+                    const float3 a1 = make_float3(vB1.x - c.x, vB1.y - c.y, vB1.z - c.z);
+                    const float3 a2 = make_float3(vC1.x - c.x, vC1.y - c.y, vC1.z - c.z);
+                    const bool hitFast =
+                        triBoxOverlapBinLocalEdgesUnionShiftFP32(a0, a1, a2, shift_world, binHalfSpan, inA, inB);
+                    if (hitFast) {
                         numSDsTouched++;
                     }
                     cz += binSizeF;
@@ -308,9 +353,42 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
         const bool ok2 = figureOutNodeAndBoundingBox(simParams, granData, triID, vA2, vB2, vC2, L2, U2, nodeA2[triID],
                                                      nodeB2[triID], nodeC2[triID]);
 
+        // Precompute triangle edges/normal once per triangle (translation-invariant).
+        // We translate vertices per-bin (v - boxCenter) before calling triBoxOverlapBinFastLocalEdgesUnionShiftFP32().
+
         // If neither triangle sandwich intersects the bin grid, it cannot touch any bin.
         if (!ok1 && !ok2) {
             return;
+        }
+
+        // Preserve per-triangle bounds for cheap gating inside the union sweep (Option C).
+        // (We will overwrite L1/U1 when we merge into the union bounds.)
+        deme::binID_t LA[3], UA[3];
+        if (ok1) {
+            LA[0] = L1[0];
+            LA[1] = L1[1];
+            LA[2] = L1[2];
+            UA[0] = U1[0];
+            UA[1] = U1[1];
+            UA[2] = U1[2];
+        }
+
+        // Precompute the sandwich translation (B = A + shift_world) once per triangle, in a numerically safe way:
+        // compute in local coords (small numbers), then rotate into world.
+        float3 shift_world = make_float3(0.f, 0.f, 0.f);
+        if (ok2) {
+            const deme::bodyID_t myOwnerID_shift = granData->ownerTriMesh[triID];
+            const float myOriQw_shift = granData->oriQw[myOwnerID_shift];
+            const float myOriQx_shift = granData->oriQx[myOwnerID_shift];
+            const float myOriQy_shift = granData->oriQy[myOwnerID_shift];
+            const float myOriQz_shift = granData->oriQz[myOwnerID_shift];
+
+            // Use any vertex pair; for a sandwich it is a constant translation for all vertices.
+            float3 shift_local = make_float3(nodeA2[triID].x - nodeA1[triID].x, nodeA2[triID].y - nodeA1[triID].y,
+                                             nodeA2[triID].z - nodeA1[triID].z);
+            applyOriQToVector3<float, deme::oriQ_t>(shift_local.x, shift_local.y, shift_local.z, myOriQw_shift,
+                                                    myOriQx_shift, myOriQy_shift, myOriQz_shift);
+            shift_world = shift_local;
         }
 
         // Merge bounds (or take the valid one, if only one is valid).
@@ -353,9 +431,21 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                         continue;  // Don't step on the next triangle's domain
                     }
                     BinCenter[2] = cz;
-
-                    if (check_TriangleBoxOverlap(BinCenter, BinHalfSizes, vA1, vB1, vC1) ||
-                        check_TriangleBoxOverlap(BinCenter, BinHalfSizes, vA2, vB2, vC2)) {
+                    const float3 c = make_float3(BinCenter[0], BinCenter[1], BinCenter[2]);
+                    // Bounds-gating, only test the triangle(s) that can possibly touch this bin.
+                    const bool inA =
+                        ok1 && (i >= LA[0] && i <= UA[0] && j >= LA[1] && j <= UA[1] && k >= LA[2] && k <= UA[2]);
+                    const bool inB =
+                        ok2 && (i >= L2[0] && i <= U2[0] && j >= L2[1] && j <= U2[1] && k >= L2[2] && k <= U2[2]);
+                    if (!inA && !inB) {
+                        continue;
+                    }
+                    const float3 a0 = make_float3(vA1.x - c.x, vA1.y - c.y, vA1.z - c.z);
+                    const float3 a1 = make_float3(vB1.x - c.x, vB1.y - c.y, vB1.z - c.z);
+                    const float3 a2 = make_float3(vC1.x - c.x, vC1.y - c.y, vC1.z - c.z);
+                    const bool hitFast =
+                        triBoxOverlapBinLocalEdgesUnionShiftFP32(a0, a1, a2, shift_world, binHalfSpan, inA, inB);
+                    if (hitFast) {
                         binIDsEachTriTouches[myReportOffset] =
                             binIDFrom3Indices<deme::binID_t>(i, j, k, simParams->nbX, simParams->nbY, simParams->nbZ);
                         triIDsEachBinTouches[myReportOffset] = triID;
