@@ -7,6 +7,7 @@
 #define DEME_DATA_MIGRATION_HPP
 
 #include <cassert>
+#include <limits>
 #include <optional>
 #include <utility>
 #include <unordered_map>
@@ -60,7 +61,30 @@ inline void DevicePtrDealloc(T*& ptr) {
 // You have to deal with it yourself if ptr is an already-used device pointer
 template <typename T>
 inline void DevicePtrAlloc(T*& ptr, size_t size) {
-    DEME_GPU_CALL(cudaMalloc((void**)&ptr, size * sizeof(T)));
+    if (size == 0) {
+        return;
+    }
+    if (size > (std::numeric_limits<size_t>::max() / sizeof(T))) {
+        DEME_ERROR("DevicePtrAlloc overflow: requested element count %zu is too large for element size %zu.", size,
+                   sizeof(T));
+    }
+
+    const size_t bytes = size * sizeof(T);
+    T* new_ptr = nullptr;
+    cudaError_t err = cudaMalloc((void**)&new_ptr, bytes);
+    if (err != cudaSuccess) {
+        size_t free_bytes = 0;
+        size_t total_bytes = 0;
+        cudaError_t info_err = cudaMemGetInfo(&free_bytes, &total_bytes);
+        if (info_err == cudaSuccess) {
+            DEME_ERROR("DevicePtrAlloc failed: requested %zu bytes, free %zu bytes, total %zu bytes. cudaMalloc: %s",
+                       bytes, free_bytes, total_bytes, cudaGetErrorString(err));
+        } else {
+            DEME_ERROR("DevicePtrAlloc failed: requested %zu bytes. cudaMalloc: %s. cudaMemGetInfo: %s", bytes,
+                       cudaGetErrorString(err), cudaGetErrorString(info_err));
+        }
+    }
+    ptr = new_ptr;
 }
 
 template <typename T>

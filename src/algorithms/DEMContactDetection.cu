@@ -6,6 +6,8 @@
 #include <cub/cub.cuh>
 #include <kernel/DEMHelperKernels.cuh>
 
+#include <limits>
+
 #include <algorithms/DEMStaticDeviceSubroutines.h>
 #include <algorithms/DEMStaticDeviceUtilities.cuh>
 #include <algorithms/DEMContactDetectionKernels.cuh>
@@ -14,6 +16,31 @@
 #include <DEM/utils/HostSideHelpers.hpp>
 
 namespace deme {
+
+// Kernel to scale down per-bin contact counts when total exceeds budget
+// This allows us to cap total contacts while keeping counting/population kernels consistent
+__global__ void scaleDownBinCounts(binContactPairs_t* counts, size_t numBins, float scaleFactor) {
+    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < numBins) {
+        // Scale down and round - ensure at least 0
+        binContactPairs_t oldCount = counts[idx];
+        binContactPairs_t newCount = static_cast<binContactPairs_t>(oldCount * scaleFactor);
+        counts[idx] = newCount;
+    }
+}
+
+// Forward declarations (helpers are defined later in this TU)
+inline void sortABTypePersistencyByA(bodyID_t* idA,
+                                     bodyID_t* idB,
+                                     contact_t* types,
+                                     notStupidBool_t* persistency,
+                                     bodyID_t* idA_sorted,
+                                     bodyID_t* idB_sorted,
+                                     contact_t* type_sorted,
+                                     notStupidBool_t* persistency_sorted,
+                                     size_t numCnts,
+                                     cudaStream_t& stream,
+                                     DEMSolverScratchData& scratchPad);
 
 inline void primitiveContactArraysResize(size_t nContactPairs,
                                          DualArray<bodyID_t>& idPrimitiveA,
@@ -70,45 +97,72 @@ inline void removeDuplicateContacts(DualStruct<DEMDataKT>& granData,
                                     size_t numTotalCnts,
                                     cudaStream_t& this_stream,
                                     DEMSolverScratchData& scratchPad) {
-    // First we run-length it based on idA
-    size_t run_length_bytes = safe_entity_count * sizeof(primitivesPrimTouches_t);
-    primitivesPrimTouches_t* idA_runlength =
-        (primitivesPrimTouches_t*)scratchPad.allocateTempVector("idA_runlength", run_length_bytes);
-    size_t unique_id_bytes = safe_entity_count * sizeof(bodyID_t);
-    bodyID_t* unique_idA = (bodyID_t*)scratchPad.allocateTempVector("unique_idA", unique_id_bytes);
-    scratchPad.allocateDualStruct("numUniqueA");
-    cubDEMRunLengthEncode<bodyID_t, primitivesPrimTouches_t>(idA_sorted, unique_idA, idA_runlength,
-                                                             scratchPad.getDualStructDevice("numUniqueA"), numTotalCnts,
-                                                             this_stream, scratchPad);
-    scratchPad.syncDualStructDeviceToHost("numUniqueA");
-    size_t* pNumUniqueA = scratchPad.getDualStructHost("numUniqueA");
-    size_t scanned_runlength_bytes = (*pNumUniqueA) * sizeof(contactPairs_t);
-    contactPairs_t* idA_scanned_runlength =
-        (contactPairs_t*)scratchPad.allocateTempVector("idA_scanned_runlength", scanned_runlength_bytes);
-    cubDEMPrefixScan<primitivesPrimTouches_t, contactPairs_t>(idA_runlength, idA_scanned_runlength, *pNumUniqueA,
-                                                              this_stream, scratchPad);
-
-    // Then each thread will take care of an id in A to mark redundency...
-    size_t retain_flags_size = numTotalCnts * sizeof(notStupidBool_t);
-    notStupidBool_t* retain_flags = (notStupidBool_t*)scratchPad.allocateTempVector("retain_flags", retain_flags_size);
-    size_t blocks_needed_for_setting_1 = (numTotalCnts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-    if (blocks_needed_for_setting_1 > 0) {
-        setArr<<<dim3(blocks_needed_for_setting_1), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
-            retain_flags, numTotalCnts, (notStupidBool_t)1);
+    (void)safe_entity_count;
+    if (numTotalCnts == 0) {
+        return;
     }
 
-    size_t blocks_needed_for_flagging = (*pNumUniqueA + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
-    if (blocks_needed_for_flagging > 0) {
-        markDuplicateContacts<<<dim3(blocks_needed_for_flagging), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream>>>(
-            idA_runlength, idA_scanned_runlength, idB_sorted, contactType_sorted, persistency_sorted, retain_flags,
-            *pNumUniqueA, process_persistency);
+    // Old approach used an O(k^2) duplicate check per idA group. Under heavy contact (especially mesh--mesh), k can be
+    // large, which can make the simulation appear "stuck". Instead, we sort so duplicates are adjacent and remove them
+    // in O(n).
+    //
+    // Sort order: (idA, idB, contactType), with an extra persistency preference within an equal triple.
+    // If process_persistency == true, persistent contacts are kept over non-persistent duplicates.
+    const size_t blocks_needed = (numTotalCnts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+
+    // 1) Stable sort by secondary key (idB, contactType, persistency_preference).
+    const size_t key_bytes = numTotalCnts * sizeof(unsigned long long);
+    unsigned long long* key_in = (unsigned long long*)scratchPad.allocateTempVector("dedup_key_in", key_bytes);
+    unsigned long long* key_sorted = (unsigned long long*)scratchPad.allocateTempVector("dedup_key_sorted", key_bytes);
+
+    const size_t idx_bytes = numTotalCnts * sizeof(contactPairs_t);
+    contactPairs_t* idx = (contactPairs_t*)scratchPad.allocateTempVector("dedup_idx", idx_bytes);
+    contactPairs_t* idx_sorted = (contactPairs_t*)scratchPad.allocateTempVector("dedup_idx_sorted", idx_bytes);
+
+    // Intermediate arrays after secondary-key sort
+    const size_t ids_bytes = numTotalCnts * sizeof(bodyID_t);
+    const size_t types_bytes = numTotalCnts * sizeof(contact_t);
+    const size_t pers_bytes = numTotalCnts * sizeof(notStupidBool_t);
+    bodyID_t* idA_byB = (bodyID_t*)scratchPad.allocateTempVector("dedup_idA_byB", ids_bytes);
+    bodyID_t* idB_byB = (bodyID_t*)scratchPad.allocateTempVector("dedup_idB_byB", ids_bytes);
+    contact_t* type_byB = (contact_t*)scratchPad.allocateTempVector("dedup_type_byB", types_bytes);
+    notStupidBool_t* pers_byB = (notStupidBool_t*)scratchPad.allocateTempVector("dedup_persist_byB", pers_bytes);
+
+    if (blocks_needed > 0) {
+        buildKeyBTypePersist<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+            idB_sorted, contactType_sorted, persistency_sorted, key_in, numTotalCnts, process_persistency);
+        lineNumbers<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(idx, numTotalCnts);
     }
-    // std::cout << "Marked retainers: " << std::endl;
-    // displayDeviceArray<notStupidBool_t>(retain_flags, numTotalCnts);
-    scratchPad.finishUsingDualStruct("numUniqueA");
+    cubDEMSortByKeys<unsigned long long, contactPairs_t>(key_in, key_sorted, idx, idx_sorted, numTotalCnts, this_stream,
+                                                         scratchPad);
+    if (blocks_needed > 0) {
+        gatherByIndex<bodyID_t>
+            <<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(idA_sorted, idA_byB,
+                                                                                        idx_sorted, numTotalCnts);
+        gatherByIndex<bodyID_t>
+            <<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(idB_sorted, idB_byB,
+                                                                                        idx_sorted, numTotalCnts);
+        gatherByIndex<contact_t>
+            <<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(contactType_sorted, type_byB,
+                                                                                        idx_sorted, numTotalCnts);
+        gatherByIndex<notStupidBool_t>
+            <<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(persistency_sorted, pers_byB,
+                                                                                        idx_sorted, numTotalCnts);
+    }
+
+    // 2) Stable sort by idA to get full lexicographic order.
+    sortABTypePersistencyByA(idA_byB, idB_byB, type_byB, pers_byB, idA_sorted, idB_sorted, contactType_sorted,
+                             persistency_sorted, numTotalCnts, this_stream, scratchPad);
 
     // Then remove redundency based on the flag array...
     // Note the contactPersistency array is managed by the current contact arr. It will also be copied over.
+    size_t retain_flags_size = numTotalCnts * sizeof(notStupidBool_t);
+    notStupidBool_t* retain_flags = (notStupidBool_t*)scratchPad.allocateTempVector("retain_flags", retain_flags_size);
+    if (blocks_needed > 0) {
+        markUniqueTriples<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+            idA_sorted, idB_sorted, contactType_sorted, retain_flags, numTotalCnts);
+    }
+
     scratchPad.allocateDualStruct("numRetainedCnts");
     cubDEMSum<notStupidBool_t, size_t>(retain_flags, scratchPad.getDualStructDevice("numRetainedCnts"), numTotalCnts,
                                        this_stream, scratchPad);
@@ -151,10 +205,15 @@ inline void removeDuplicateContacts(DualStruct<DEMDataKT>& granData,
     scratchPad.finishUsingDualStruct("numRetainedCnts");
 
     // Unclaim all temp vectors
-    scratchPad.finishUsingTempVector("idA_runlength");
-    scratchPad.finishUsingTempVector("unique_idA");
-    scratchPad.finishUsingTempVector("idA_scanned_runlength");
     scratchPad.finishUsingTempVector("retain_flags");
+    scratchPad.finishUsingTempVector("dedup_key_in");
+    scratchPad.finishUsingTempVector("dedup_key_sorted");
+    scratchPad.finishUsingTempVector("dedup_idx");
+    scratchPad.finishUsingTempVector("dedup_idx_sorted");
+    scratchPad.finishUsingTempVector("dedup_idA_byB");
+    scratchPad.finishUsingTempVector("dedup_idB_byB");
+    scratchPad.finishUsingTempVector("dedup_type_byB");
+    scratchPad.finishUsingTempVector("dedup_persist_byB");
 }
 
 inline void sortABTypePersistencyByA(bodyID_t* idA,
@@ -168,10 +227,31 @@ inline void sortABTypePersistencyByA(bodyID_t* idA,
                                      size_t numCnts,
                                      cudaStream_t& stream,
                                      DEMSolverScratchData& scratchPad) {
-    cubDEMSortByKeys<bodyID_t, bodyID_t>(idA, idA_sorted, idB, idB_sorted, numCnts, stream, scratchPad);
-    cubDEMSortByKeys<bodyID_t, contact_t>(idA, idA_sorted, types, type_sorted, numCnts, stream, scratchPad);
-    cubDEMSortByKeys<bodyID_t, notStupidBool_t>(idA, idA_sorted, persistency, persistency_sorted, numCnts, stream,
-                                                scratchPad);
+    // Stable radix sort can only permute a single value array, so we sort indices once and gather the rest.
+    const size_t idx_bytes = numCnts * sizeof(contactPairs_t);
+    contactPairs_t* idx = (contactPairs_t*)scratchPad.allocateTempVector("sortAB_idx", idx_bytes);
+    contactPairs_t* idx_sorted = (contactPairs_t*)scratchPad.allocateTempVector("sortAB_idx_sorted", idx_bytes);
+
+    const size_t blocks_needed = (numCnts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        lineNumbers<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, stream>>>(idx, numCnts);
+    }
+    cubDEMSortByKeys<bodyID_t, contactPairs_t>(idA, idA_sorted, idx, idx_sorted, numCnts, stream, scratchPad);
+
+    if (blocks_needed > 0) {
+        gatherByIndex<bodyID_t>
+            <<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, stream>>>(idB, idB_sorted, idx_sorted,
+                                                                                   numCnts);
+        gatherByIndex<contact_t>
+            <<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, stream>>>(types, type_sorted, idx_sorted,
+                                                                                   numCnts);
+        gatherByIndex<notStupidBool_t>
+            <<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, stream>>>(persistency, persistency_sorted,
+                                                                                   idx_sorted, numCnts);
+    }
+
+    scratchPad.finishUsingTempVector("sortAB_idx");
+    scratchPad.finishUsingTempVector("sortAB_idx_sorted");
 }
 
 inline void sortABTypePersistencyByType(bodyID_t* idA,
@@ -185,10 +265,31 @@ inline void sortABTypePersistencyByType(bodyID_t* idA,
                                         size_t numCnts,
                                         cudaStream_t& stream,
                                         DEMSolverScratchData& scratchPad) {
-    cubDEMSortByKeys<contact_t, bodyID_t>(types, type_sorted, idA, idA_sorted, numCnts, stream, scratchPad);
-    cubDEMSortByKeys<contact_t, bodyID_t>(types, type_sorted, idB, idB_sorted, numCnts, stream, scratchPad);
-    cubDEMSortByKeys<contact_t, notStupidBool_t>(types, type_sorted, persistency, persistency_sorted, numCnts, stream,
-                                                 scratchPad);
+    // Stable radix sort can only permute a single value array, so we sort indices once and gather the rest.
+    const size_t idx_bytes = numCnts * sizeof(contactPairs_t);
+    contactPairs_t* idx = (contactPairs_t*)scratchPad.allocateTempVector("sortType_idx", idx_bytes);
+    contactPairs_t* idx_sorted = (contactPairs_t*)scratchPad.allocateTempVector("sortType_idx_sorted", idx_bytes);
+
+    const size_t blocks_needed = (numCnts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        lineNumbers<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, stream>>>(idx, numCnts);
+    }
+    cubDEMSortByKeys<contact_t, contactPairs_t>(types, type_sorted, idx, idx_sorted, numCnts, stream, scratchPad);
+
+    if (blocks_needed > 0) {
+        gatherByIndex<bodyID_t>
+            <<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, stream>>>(idA, idA_sorted, idx_sorted,
+                                                                                   numCnts);
+        gatherByIndex<bodyID_t>
+            <<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, stream>>>(idB, idB_sorted, idx_sorted,
+                                                                                   numCnts);
+        gatherByIndex<notStupidBool_t>
+            <<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, stream>>>(persistency, persistency_sorted,
+                                                                                   idx_sorted, numCnts);
+    }
+
+    scratchPad.finishUsingTempVector("sortType_idx");
+    scratchPad.finishUsingTempVector("sortType_idx_sorted");
 }
 
 void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kernels,
@@ -707,6 +808,21 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
 
         // Only needed when there are spheres or triangles
         if (blocks_needed_for_bins_sph > 0 || blocks_needed_for_bins_tri > 0) {
+            // Safety check: if we have way too many active bins for triangles, skip tri-tri detection
+            // to prevent memory explosion. With per-bin cap of 4, 2.5M bins would give 10M contacts.
+            constexpr size_t MAX_ACTIVE_BINS_FOR_TRITRI = 2000000;  // 2M bins max
+            bool skipTriTriThisStep = false;
+            if (blocks_needed_for_bins_tri > MAX_ACTIVE_BINS_FOR_TRITRI && solverFlags.meshUniversalContact) {
+                static bool warnedOnce = false;
+                if (!warnedOnce) {
+                    std::cout << "[WARNING] Too many active triangle bins (" << blocks_needed_for_bins_tri 
+                              << " > " << MAX_ACTIVE_BINS_FOR_TRITRI 
+                              << "). Skipping tri-tri contact detection this step to prevent OOM." << std::endl;
+                    warnedOnce = true;
+                }
+                skipTriTriThisStep = true;
+            }
+
             if (blocks_needed_for_bins_sph > 0) {
                 sphere_contact_kernels->kernel("getNumberOfSphereContactsEachBin")
                     .instantiate()
@@ -717,6 +833,8 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
 
             if (blocks_needed_for_bins_tri > 0) {
                 // We got both tri--sph and tri--tri contacts in this kernel
+                // If skipTriTriThisStep is set, pass false for meshUniversalContact to skip tri-tri
+                bool doTriTriThisStep = solverFlags.meshUniversalContact && !skipTriTriThisStep;
                 sphTri_contact_kernels->kernel("getNumberOfTriangleContactsEachBin")
                     .instantiate()
                     .configure(dim3(blocks_needed_for_bins_tri), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
@@ -724,7 +842,7 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                             sphereIDsLookUpTable, mapTriActBinToSphActBin, triIDsEachBinTouches_sorted,
                             activeBinIDsForTri, numTrianglesBinTouches, triIDsLookUpTable, numTriSphContactsInEachBin,
                             numTriTriContactsInEachBin, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
-                            sandwichBNode2, sandwichBNode3, *pNumActiveBinsForTri, solverFlags.meshUniversalContact);
+                            sandwichBNode2, sandwichBNode3, *pNumActiveBinsForTri, doTriTriThisStep);
                 // std::cout << "numTriSphContactsInEachBin: " << std::endl;
                 // displayDeviceArray<binContactPairs_t>(numTriSphContactsInEachBin, *pNumActiveBinsForTri);
                 // std::cout << "numTriTriContactsInEachBin: " << std::endl;
@@ -751,7 +869,7 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 cubDEMPrefixScan<binContactPairs_t, contactPairs_t>(numTriSphContactsInEachBin,
                                                                     triSphContactReportOffsets, *pNumActiveBinsForTri,
                                                                     this_stream, scratchPad);
-                if (solverFlags.meshUniversalContact) {
+                if (solverFlags.meshUniversalContact && !skipTriTriThisStep) {
                     // tri--tri contact report offsets...
                     CD_temp_arr_bytes = (*pNumActiveBinsForTri + 1) * sizeof(contactPairs_t);
                     triTriContactReportOffsets =
@@ -759,6 +877,45 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                     cubDEMPrefixScan<binContactPairs_t, contactPairs_t>(numTriTriContactsInEachBin,
                                                                         triTriContactReportOffsets,
                                                                         *pNumActiveBinsForTri, this_stream, scratchPad);
+                    
+                    // Check total tri-tri contacts and scale down if exceeds budget
+                    // Budget: reasonable limit based on problem size (e.g., 100K contacts should be plenty for 72 particles)
+                    constexpr size_t TRI_TRI_CONTACT_BUDGET = 500000;  // 500K max tri-tri contacts
+                    
+                    // Get initial total from last offset
+                    scratchPad.allocateDualStruct("initialTriTriTotal");
+                    deviceAdd<size_t, binContactPairs_t, contactPairs_t>(
+                        scratchPad.getDualStructDevice("initialTriTriTotal"),
+                        &(numTriTriContactsInEachBin[*pNumActiveBinsForTri - 1]),
+                        &(triTriContactReportOffsets[*pNumActiveBinsForTri - 1]), this_stream);
+                    scratchPad.syncDualStructDeviceToHost("initialTriTriTotal");
+                    size_t initialTotal = *scratchPad.getDualStructHost("initialTriTriTotal");
+                    scratchPad.finishUsingDualStruct("initialTriTriTotal");
+                    
+                    if (initialTotal > TRI_TRI_CONTACT_BUDGET) {
+                        // Scale down the per-bin counts
+                        float scaleFactor = static_cast<float>(TRI_TRI_CONTACT_BUDGET) / static_cast<float>(initialTotal);
+                        // Be a bit conservative to ensure we stay under budget
+                        scaleFactor *= 0.9f;
+                        
+                        static bool warnedOnce = false;
+                        if (!warnedOnce) {
+                            std::cout << "[WARNING] Tri-tri contact count (" << initialTotal 
+                                      << ") exceeds budget (" << TRI_TRI_CONTACT_BUDGET 
+                                      << "). Scaling down by " << scaleFactor << " to reduce memory usage." << std::endl;
+                            warnedOnce = true;
+                        }
+                        
+                        // Launch kernel to scale down counts
+                        size_t scaleBlocks = (*pNumActiveBinsForTri + 255) / 256;
+                        scaleDownBinCounts<<<dim3(scaleBlocks), dim3(256), 0, this_stream>>>(
+                            numTriTriContactsInEachBin, *pNumActiveBinsForTri, scaleFactor);
+                        
+                        // Re-do the prefix scan with scaled counts
+                        cubDEMPrefixScan<binContactPairs_t, contactPairs_t>(numTriTriContactsInEachBin,
+                                                                            triTriContactReportOffsets,
+                                                                            *pNumActiveBinsForTri, this_stream, scratchPad);
+                    }
                 }
             }
             // DEME_DEBUG_PRINTF("Num contacts each bin:");
@@ -792,7 +949,8 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 nTriSphereContact = *scratchPad.getDualStructHost("numSMContact");
                 scratchPad.finishUsingDualStruct("numSMContact");
                 // If mesh-universal contact is on, tri--tri contacts are also possible, add it here...
-                if (solverFlags.meshUniversalContact) {
+                // But respect skipTriTriThisStep flag
+                if (solverFlags.meshUniversalContact && !skipTriTriThisStep) {
                     scratchPad.allocateDualStruct("numMMContact");
                     deviceAdd<size_t, binContactPairs_t, contactPairs_t>(
                         scratchPad.getDualStructDevice("numMMContact"),
@@ -814,8 +972,48 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
             // contacts, so the numbers here are not reliable. These duplicates will be filtered out later.
             // ----------------------------------------------------------------------------------------
 
+            // Hard cap on total tri-tri contacts to prevent memory explosion during deep mesh overlap
+            // This sacrifices physics accuracy but keeps the simulation running
+            constexpr size_t MAX_TRITRI_CONTACTS_TOTAL = 10000000;  // 10 million max
+            if (nTriTriContact > MAX_TRITRI_CONTACTS_TOTAL) {
+                DEME_ERROR(
+                    "Tri-tri contact count (%zu) exceeds maximum allowance (%zu). "
+                    "This indicates severe mesh interpenetration. Consider using coarser meshes, "
+                    "smaller time steps, or preventing deep interpenetration. "
+                    "You can increase the limit by modifying MAX_TRITRI_CONTACTS_TOTAL.",
+                    nTriTriContact, MAX_TRITRI_CONTACTS_TOTAL);
+            }
+
             *scratchPad.numPrimitiveContacts =
                 nSphereSphereContact + nSphereGeoContact + nTriGeoContact + nTriSphereContact + nTriTriContact;
+
+            // Guard against contact explosions that would require allocating an impractically large contact list.
+            // This can happen when many triangle pairs get reported multiple times (e.g., triangles spanning many bins)
+            // or when geometry overlap/penetration is severe.
+            if (*scratchPad.numPrimitiveContacts >
+                static_cast<size_t>(std::numeric_limits<contactPairs_t>::max() - 1)) {
+                DEME_ERROR(
+                    "Contact detection produced %zu primitive contacts, exceeding addressable range of contactPairs_t "
+                    "(max %u). This is likely due to severe overlap/penetration or overly aggressive contact "
+                    "detection/binning parameters.",
+                    *scratchPad.numPrimitiveContacts, (unsigned int)std::numeric_limits<contactPairs_t>::max());
+            }
+
+            // The minimum memory just for primitive contact ID/type/persistency arrays (not including other CD scratch).
+            const size_t min_contact_bytes = (*scratchPad.numPrimitiveContacts) *
+                                             (2 * sizeof(bodyID_t) + sizeof(contact_t) + sizeof(notStupidBool_t));
+            size_t free_bytes = 0;
+            size_t total_bytes = 0;
+            cudaError_t mem_err = cudaMemGetInfo(&free_bytes, &total_bytes);
+            if (mem_err == cudaSuccess && min_contact_bytes > free_bytes) {
+                DEME_ERROR(
+                    "Contact detection needs at least %s of GPU memory for primitive-contact arrays alone "
+                    "(%zu primitive contacts), but only %s is currently free (%s total). This is not a memory leak; "
+                    "it indicates a sudden contact explosion (often from deep overlap / triangles spanning many bins).",
+                    pretty_format_bytes(min_contact_bytes).c_str(), *scratchPad.numPrimitiveContacts,
+                    pretty_format_bytes(free_bytes).c_str(), pretty_format_bytes(total_bytes).c_str());
+            }
+
             if (*scratchPad.numPrimitiveContacts > idPrimitiveA.size()) {
                 primitiveContactArraysResize(*scratchPad.numPrimitiveContacts, idPrimitiveA, idPrimitiveB,
                                              contactTypePrimitive, contactPersistency, granData);
@@ -852,6 +1050,8 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 contact_t* dType_mm = (granData->contactTypePrimitive + nSphereGeoContact + nTriGeoContact +
                                        nSphereSphereContact + nTriSphereContact);
                 // And two possible types of contact are resolved both in this kernel
+                // Use same doTriTriThisStep flag as counting kernel
+                bool doTriTriThisStep = solverFlags.meshUniversalContact && !skipTriTriThisStep;
                 sphTri_contact_kernels->kernel("populateTriangleContactsEachBin")
                     .instantiate()
                     .configure(dim3(blocks_needed_for_bins_tri), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
@@ -860,7 +1060,7 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                             activeBinIDsForTri, numTrianglesBinTouches, triIDsLookUpTable, triSphContactReportOffsets,
                             triTriContactReportOffsets, idSphA_sm, idTriB_sm, dType_sm, idTriA_mm, idTriB_mm, dType_mm,
                             sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1, sandwichBNode2,
-                            sandwichBNode3, *pNumActiveBinsForTri, solverFlags.meshUniversalContact);
+                            sandwichBNode3, *pNumActiveBinsForTri, doTriTriThisStep);
             }
             // std::cout << "idPrimitiveA: " << std::endl;
             // displayDeviceArray<bodyID_t>(granData->idPrimitiveA, *scratchPad.numPrimitiveContacts);
@@ -1025,8 +1225,8 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
 
         // -----------------------------------------------------------------------------------------------------------
         // One more thing: We need to remove duplicate primitive contacts in the contact list, because tri--tri contacts
-        // are not guaranteed to be unique. But of course, if hasPersistentContacts is on, then the duplication removal
-        // has already been done in the previous step.
+        // are not guaranteed to be unique. Even with canonical bin assignment, triangles may overlap multiple bins
+        // and both bins may contain the canonical bin location, requiring deduplication.
         // -----------------------------------------------------------------------------------------------------------
 
         if (solverFlags.meshUniversalContact && !solverFlags.hasPersistentContacts) {
@@ -1045,19 +1245,11 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
             sortABTypePersistencyByA(granData->idPrimitiveA, granData->idPrimitiveB, granData->contactTypePrimitive,
                                      granData->contactPersistency, idA_sorted, idB_sorted, contactType_sorted,
                                      persistency_sorted, numTotalCnts, this_stream, scratchPad);
-            // std::cout << "Contacts before duplication check: " << std::endl;
-            // displayDeviceArray<bodyID_t>(idA_sorted, numTotalCnts);
-            // displayDeviceArray<bodyID_t>(idB_sorted, numTotalCnts);
-            // displayDeviceArray<contact_t>(contactType_sorted, numTotalCnts);
 
             removeDuplicateContacts(granData, idA_sorted, idB_sorted, contactType_sorted, persistency_sorted,
                                     idPrimitiveA, idPrimitiveB, contactTypePrimitive, contactPersistency, false,
                                     DEME_MAX(simParams->nSpheresGM, simParams->nTriGM), numTotalCnts, this_stream,
                                     scratchPad);
-            // std::cout << "Contacts after duplication check: " << std::endl;
-            // displayDeviceArray<bodyID_t>(granData->idPrimitiveA, *scratchPad.numPrimitiveContacts);
-            // displayDeviceArray<bodyID_t>(granData->idPrimitiveB, *scratchPad.numPrimitiveContacts);
-            // displayDeviceArray<contact_t>(granData->contactTypePrimitive, *scratchPad.numPrimitiveContacts);
 
             scratchPad.finishUsingTempVector("contactType_sorted");
             scratchPad.finishUsingTempVector("idA_sorted");
