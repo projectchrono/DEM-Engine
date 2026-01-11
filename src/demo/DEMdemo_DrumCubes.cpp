@@ -30,8 +30,8 @@ int main() {
     DEMSim.SetNoForceRecord();
     DEMSim.SetMeshUniversalContact(true);
 
-    auto mat_type_cube = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.01}});
-    auto mat_type_drum = DEMSim.LoadMaterial({{"E", 2e9}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.01}});
+    auto mat_type_cube = DEMSim.LoadMaterial({{"E", 1e6}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.01}});
+    auto mat_type_drum = DEMSim.LoadMaterial({{"E", 2e6}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.01}});
     DEMSim.SetMaterialPropertyPair("mu", mat_type_cube, mat_type_drum, 0.5);
 
     const float cube_size = 0.01f;
@@ -54,13 +54,17 @@ int main() {
     float IZZ = CylMass * CylRad * CylRad / 2;
     float IYY = (CylMass / 12) * (3 * CylRad * CylRad + CylHeight * CylHeight);
     auto Drum = DEMSim.AddExternalObject();
-    Drum->AddCylinder(CylCenter, CylAxis, CylRad, mat_type_drum, 0);
+    // Drum->AddCylinder(CylCenter, CylAxis, CylRad, mat_type_drum, 0);
+    Drum->AddPlane(make_float3(CylRad, 0, 0), make_float3(-1, 0, 0), mat_type_drum);
+    Drum->AddPlane(make_float3(-CylRad, 0, 0), make_float3(1, 0, 0), mat_type_drum);
+    Drum->AddPlane(make_float3(0, CylRad, 0), make_float3(0, -1, 0), mat_type_drum);
+    Drum->AddPlane(make_float3(0, -CylRad, 0), make_float3(0, 1, 0), mat_type_drum);
     Drum->SetMass(CylMass);
     Drum->SetMOI(make_float3(IYY, IYY, IZZ));
     auto Drum_tracker = DEMSim.Track(Drum);
     unsigned int drum_family = 100;
     Drum->SetFamily(drum_family);
-    const float rpm = 20.0f;
+    const float rpm = 200.0f;
     const float drum_ang_vel = rpm * 2.0f * PI / 60.0f;
     DEMSim.SetFamilyPrescribedAngVel(drum_family, "0", "0", to_string_with_precision(drum_ang_vel));
     auto top_bot_planes = DEMSim.AddExternalObject();
@@ -97,7 +101,7 @@ int main() {
     float max_v;
 
     DEMSim.InstructBoxDomainDimension(0.4, 0.4, 0.4);
-    float step_size = 5e-6f;
+    float step_size = 1e-4f;
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGPUTimersEnabled(true);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
@@ -134,7 +138,7 @@ int main() {
                   << drum_torque.z << std::endl;
 
         float3 force_on_BC = planes_tracker->ContactAcc() * planes_tracker->Mass();
-        std::cout << "Contact force on bottom plane is " << force_on_BC.z << std::endl;
+        std::cout << "Contact force on bottom plane is " << std::abs(force_on_BC.z) << std::endl;
 
         DEMSim.DoDynamics(frame_time);
     }
