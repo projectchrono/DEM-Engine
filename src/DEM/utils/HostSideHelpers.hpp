@@ -24,7 +24,7 @@
 #include <tuple>
 #include <type_traits>
 
-#include "../kernel/DEMHelperKernels.cuh"
+#include "../../kernel/DEMHelperKernels.cuh"
 #include "../VariableTypes.h"
 #include "../../core/utils/Logger.hpp"
 

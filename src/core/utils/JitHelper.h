@@ -54,9 +54,13 @@ class JitHelper {
     // 	std::vector<std::string> flags = 0
     // );
 
-    static const std::filesystem::path KERNEL_DIR;
-    static const std::filesystem::path KERNEL_INCLUDE_DIR;
-    static const std::filesystem::path CACHE_DIR;
+    // NOTE: These paths depend on `DEMERuntimeDataHelper::{data_path, include_path}`.
+    // Under Bazel + sandboxing the baked-in defaults may point into a sandbox
+    // path that doesn't exist at runtime, so keep these mutable to allow
+    // overriding from parent projects.
+    static std::filesystem::path KERNEL_DIR;
+    static std::filesystem::path KERNEL_INCLUDE_DIR;
+    static std::filesystem::path CACHE_DIR;
 
   private:
     static std::string hashString(const std::string& in);

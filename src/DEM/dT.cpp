@@ -4014,17 +4014,44 @@ void DEMDynamicThread::addOwnerNextStepAngAcc(bodyID_t ownerID, const std::vecto
 }
 
 void DEMDynamicThread::prewarmKernels() {
+    if (const char* disable = std::getenv("DEME_DISABLE_PREWARM")) {
+        if (std::strcmp(disable, "1") == 0) {
+            return;
+        }
+    }
+
+    const bool has_spheres = simParams->nSpheresGM > 0;
+    const bool has_tris = simParams->nTriGM > 0;
+    const bool has_anal = simParams->nAnalGM > 0;
+    const bool mesh_universal = solverFlags.meshUniversalContact;
+
     if (cal_force_kernels) {
-        cal_force_kernels->kernel("calculatePrimitiveContactForces_SphSph").instantiate();
-        cal_force_kernels->kernel("calculatePrimitiveContactForces_SphTri").instantiate();
-        cal_force_kernels->kernel("calculatePrimitiveContactForces_SphAnal").instantiate();
-        cal_force_kernels->kernel("calculatePrimitiveContactForces_TriTri").instantiate();
-        cal_force_kernels->kernel("calculatePrimitiveContactForces_TriAnal").instantiate();
+        if (has_spheres) {
+            cal_force_kernels->kernel("calculatePrimitiveContactForces_SphSph").instantiate();
+        }
+        if (has_spheres && has_tris) {
+            cal_force_kernels->kernel("calculatePrimitiveContactForces_SphTri").instantiate();
+        }
+        if (has_spheres && has_anal) {
+            cal_force_kernels->kernel("calculatePrimitiveContactForces_SphAnal").instantiate();
+        }
+        if (has_tris && mesh_universal) {
+            cal_force_kernels->kernel("calculatePrimitiveContactForces_TriTri").instantiate();
+        }
+        if (has_tris && has_anal && mesh_universal) {
+            cal_force_kernels->kernel("calculatePrimitiveContactForces_TriAnal").instantiate();
+        }
     }
     if (cal_patch_force_kernels) {
-        cal_patch_force_kernels->kernel("calculatePatchContactForces_SphTri").instantiate();
-        cal_patch_force_kernels->kernel("calculatePatchContactForces_TriTri").instantiate();
-        cal_patch_force_kernels->kernel("calculatePatchContactForces_TriAnal").instantiate();
+        if (has_spheres && has_tris) {
+            cal_patch_force_kernels->kernel("calculatePatchContactForces_SphTri").instantiate();
+        }
+        if (has_tris && mesh_universal) {
+            cal_patch_force_kernels->kernel("calculatePatchContactForces_TriTri").instantiate();
+        }
+        if (has_tris && has_anal && mesh_universal) {
+            cal_patch_force_kernels->kernel("calculatePatchContactForces_TriAnal").instantiate();
+        }
     }
     if (collect_force_kernels) {
         collect_force_kernels->kernel("forceToAcc").instantiate();

@@ -1280,19 +1280,33 @@ void DEMKinematicThread::updateTriNodeRelPos(size_t start, const std::vector<DEM
 }
 
 void DEMKinematicThread::prewarmKernels() {
-    if (bin_sphere_kernels) {
+    // Prewarming compiles kernels eagerly so first-step latency is lower, but in
+    // some embedding scenarios (e.g. mesh-only collision queries) this can
+    // compile many kernels that will never be launched. We gate prewarm by the
+    // actual loaded geometry types.
+    if (const char* disable = std::getenv("DEME_DISABLE_PREWARM")) {
+        if (std::strcmp(disable, "1") == 0) {
+            return;
+        }
+    }
+
+    const bool has_spheres = simParams->nSpheresGM > 0;
+    const bool has_tris = simParams->nTriGM > 0;
+    const bool has_anal = simParams->nAnalGM > 0;
+
+    if (bin_sphere_kernels && has_spheres) {
         bin_sphere_kernels->kernel("populateBinSphereTouchingPairs").instantiate();
         bin_sphere_kernels->kernel("getNumberOfBinsEachSphereTouches").instantiate();
     }
-    if (sphere_contact_kernels) {
+    if (sphere_contact_kernels && has_spheres) {
         sphere_contact_kernels->kernel("populateSphereContactPairsEachBin").instantiate();
         sphere_contact_kernels->kernel("getNumberOfSphereContactsEachBin").instantiate();
     }
-    if (bin_triangle_kernels) {
+    if (bin_triangle_kernels && has_tris) {
         bin_triangle_kernels->kernel("getNumberOfBinsEachTriangleTouches").instantiate();
         bin_triangle_kernels->kernel("populateBinTriangleTouchingPairs").instantiate();
     }
-    if (sphTri_contact_kernels) {
+    if (sphTri_contact_kernels && has_tris) {
         sphTri_contact_kernels->kernel("getNumberOfTriangleContactsEachBin").instantiate();
         sphTri_contact_kernels->kernel("populateTriangleContactsEachBin").instantiate();
     }
@@ -1303,9 +1317,13 @@ void DEMKinematicThread::prewarmKernels() {
         history_kernels->kernel("fillRunLengthArray").instantiate();
         history_kernels->kernel("convertToAndFrom").instantiate();
     }
-    if (misc_kernels) {
+    if (misc_kernels && has_spheres) {
         misc_kernels->kernel("computeMarginFromAbsv_implSph").instantiate();
+    }
+    if (misc_kernels && has_tris) {
         misc_kernels->kernel("computeMarginFromAbsv_implTri").instantiate();
+    }
+    if (misc_kernels && has_anal) {
         misc_kernels->kernel("computeMarginFromAbsv_implAnal").instantiate();
     }
 }
