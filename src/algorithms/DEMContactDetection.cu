@@ -6,8 +6,6 @@
 #include <cub/cub.cuh>
 #include <kernel/DEMHelperKernels.cuh>
 
-#include <limits>
-
 #include <algorithms/DEMStaticDeviceSubroutines.h>
 #include <algorithms/DEMStaticDeviceUtilities.cuh>
 #include <algorithms/DEMContactDetectionKernels.cuh>
@@ -16,18 +14,6 @@
 #include <DEM/utils/HostSideHelpers.hpp>
 
 namespace deme {
-
-// Kernel to scale down per-bin contact counts when total exceeds budget
-// This allows us to cap total contacts while keeping counting/population kernels consistent
-__global__ void scaleDownBinCounts(binContactPairs_t* counts, size_t numBins, float scaleFactor) {
-    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < numBins) {
-        // Scale down and round - ensure at least 0
-        binContactPairs_t oldCount = counts[idx];
-        binContactPairs_t newCount = static_cast<binContactPairs_t>(oldCount * scaleFactor);
-        counts[idx] = newCount;
-    }
-}
 
 // Forward declarations (helpers are defined later in this TU)
 inline void sortABTypePersistencyByA(bodyID_t* idA,
@@ -808,21 +794,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
 
         // Only needed when there are spheres or triangles
         if (blocks_needed_for_bins_sph > 0 || blocks_needed_for_bins_tri > 0) {
-            // Safety check: if we have way too many active bins for triangles, skip tri-tri detection
-            // to prevent memory explosion. With per-bin cap of 4, 2.5M bins would give 10M contacts.
-            constexpr size_t MAX_ACTIVE_BINS_FOR_TRITRI = 2000000;  // 2M bins max
-            bool skipTriTriThisStep = false;
-            if (blocks_needed_for_bins_tri > MAX_ACTIVE_BINS_FOR_TRITRI && solverFlags.meshUniversalContact) {
-                static bool warnedOnce = false;
-                if (!warnedOnce) {
-                    std::cout << "[WARNING] Too many active triangle bins (" << blocks_needed_for_bins_tri 
-                              << " > " << MAX_ACTIVE_BINS_FOR_TRITRI 
-                              << "). Skipping tri-tri contact detection this step to prevent OOM." << std::endl;
-                    warnedOnce = true;
-                }
-                skipTriTriThisStep = true;
-            }
-
             if (blocks_needed_for_bins_sph > 0) {
                 sphere_contact_kernels->kernel("getNumberOfSphereContactsEachBin")
                     .instantiate()
@@ -833,8 +804,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
 
             if (blocks_needed_for_bins_tri > 0) {
                 // We got both tri--sph and tri--tri contacts in this kernel
-                // If skipTriTriThisStep is set, pass false for meshUniversalContact to skip tri-tri
-                bool doTriTriThisStep = solverFlags.meshUniversalContact && !skipTriTriThisStep;
                 sphTri_contact_kernels->kernel("getNumberOfTriangleContactsEachBin")
                     .instantiate()
                     .configure(dim3(blocks_needed_for_bins_tri), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
@@ -842,7 +811,7 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                             sphereIDsLookUpTable, mapTriActBinToSphActBin, triIDsEachBinTouches_sorted,
                             activeBinIDsForTri, numTrianglesBinTouches, triIDsLookUpTable, numTriSphContactsInEachBin,
                             numTriTriContactsInEachBin, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
-                            sandwichBNode2, sandwichBNode3, *pNumActiveBinsForTri, doTriTriThisStep);
+                            sandwichBNode2, sandwichBNode3, *pNumActiveBinsForTri, solverFlags.meshUniversalContact);
                 // std::cout << "numTriSphContactsInEachBin: " << std::endl;
                 // displayDeviceArray<binContactPairs_t>(numTriSphContactsInEachBin, *pNumActiveBinsForTri);
                 // std::cout << "numTriTriContactsInEachBin: " << std::endl;
@@ -869,7 +838,7 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 cubDEMPrefixScan<binContactPairs_t, contactPairs_t>(numTriSphContactsInEachBin,
                                                                     triSphContactReportOffsets, *pNumActiveBinsForTri,
                                                                     this_stream, scratchPad);
-                if (solverFlags.meshUniversalContact && !skipTriTriThisStep) {
+                if (solverFlags.meshUniversalContact) {
                     // tri--tri contact report offsets...
                     CD_temp_arr_bytes = (*pNumActiveBinsForTri + 1) * sizeof(contactPairs_t);
                     triTriContactReportOffsets =
@@ -877,45 +846,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                     cubDEMPrefixScan<binContactPairs_t, contactPairs_t>(numTriTriContactsInEachBin,
                                                                         triTriContactReportOffsets,
                                                                         *pNumActiveBinsForTri, this_stream, scratchPad);
-                    
-                    // Check total tri-tri contacts and scale down if exceeds budget
-                    // Budget: reasonable limit based on problem size (e.g., 100K contacts should be plenty for 72 particles)
-                    constexpr size_t TRI_TRI_CONTACT_BUDGET = 500000;  // 500K max tri-tri contacts
-                    
-                    // Get initial total from last offset
-                    scratchPad.allocateDualStruct("initialTriTriTotal");
-                    deviceAdd<size_t, binContactPairs_t, contactPairs_t>(
-                        scratchPad.getDualStructDevice("initialTriTriTotal"),
-                        &(numTriTriContactsInEachBin[*pNumActiveBinsForTri - 1]),
-                        &(triTriContactReportOffsets[*pNumActiveBinsForTri - 1]), this_stream);
-                    scratchPad.syncDualStructDeviceToHost("initialTriTriTotal");
-                    size_t initialTotal = *scratchPad.getDualStructHost("initialTriTriTotal");
-                    scratchPad.finishUsingDualStruct("initialTriTriTotal");
-                    
-                    if (initialTotal > TRI_TRI_CONTACT_BUDGET) {
-                        // Scale down the per-bin counts
-                        float scaleFactor = static_cast<float>(TRI_TRI_CONTACT_BUDGET) / static_cast<float>(initialTotal);
-                        // Be a bit conservative to ensure we stay under budget
-                        scaleFactor *= 0.9f;
-                        
-                        static bool warnedOnce = false;
-                        if (!warnedOnce) {
-                            std::cout << "[WARNING] Tri-tri contact count (" << initialTotal 
-                                      << ") exceeds budget (" << TRI_TRI_CONTACT_BUDGET 
-                                      << "). Scaling down by " << scaleFactor << " to reduce memory usage." << std::endl;
-                            warnedOnce = true;
-                        }
-                        
-                        // Launch kernel to scale down counts
-                        size_t scaleBlocks = (*pNumActiveBinsForTri + 255) / 256;
-                        scaleDownBinCounts<<<dim3(scaleBlocks), dim3(256), 0, this_stream>>>(
-                            numTriTriContactsInEachBin, *pNumActiveBinsForTri, scaleFactor);
-                        
-                        // Re-do the prefix scan with scaled counts
-                        cubDEMPrefixScan<binContactPairs_t, contactPairs_t>(numTriTriContactsInEachBin,
-                                                                            triTriContactReportOffsets,
-                                                                            *pNumActiveBinsForTri, this_stream, scratchPad);
-                    }
                 }
             }
             // DEME_DEBUG_PRINTF("Num contacts each bin:");
@@ -949,8 +879,7 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 nTriSphereContact = *scratchPad.getDualStructHost("numSMContact");
                 scratchPad.finishUsingDualStruct("numSMContact");
                 // If mesh-universal contact is on, tri--tri contacts are also possible, add it here...
-                // But respect skipTriTriThisStep flag
-                if (solverFlags.meshUniversalContact && !skipTriTriThisStep) {
+                if (solverFlags.meshUniversalContact) {
                     scratchPad.allocateDualStruct("numMMContact");
                     deviceAdd<size_t, binContactPairs_t, contactPairs_t>(
                         scratchPad.getDualStructDevice("numMMContact"),
@@ -972,48 +901,8 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
             // contacts, so the numbers here are not reliable. These duplicates will be filtered out later.
             // ----------------------------------------------------------------------------------------
 
-            // Hard cap on total tri-tri contacts to prevent memory explosion during deep mesh overlap
-            // This sacrifices physics accuracy but keeps the simulation running
-            constexpr size_t MAX_TRITRI_CONTACTS_TOTAL = 10000000;  // 10 million max
-            if (nTriTriContact > MAX_TRITRI_CONTACTS_TOTAL) {
-                DEME_ERROR(
-                    "Tri-tri contact count (%zu) exceeds maximum allowance (%zu). "
-                    "This indicates severe mesh interpenetration. Consider using coarser meshes, "
-                    "smaller time steps, or preventing deep interpenetration. "
-                    "You can increase the limit by modifying MAX_TRITRI_CONTACTS_TOTAL.",
-                    nTriTriContact, MAX_TRITRI_CONTACTS_TOTAL);
-            }
-
             *scratchPad.numPrimitiveContacts =
                 nSphereSphereContact + nSphereGeoContact + nTriGeoContact + nTriSphereContact + nTriTriContact;
-
-            // Guard against contact explosions that would require allocating an impractically large contact list.
-            // This can happen when many triangle pairs get reported multiple times (e.g., triangles spanning many bins)
-            // or when geometry overlap/penetration is severe.
-            if (*scratchPad.numPrimitiveContacts >
-                static_cast<size_t>(std::numeric_limits<contactPairs_t>::max() - 1)) {
-                DEME_ERROR(
-                    "Contact detection produced %zu primitive contacts, exceeding addressable range of contactPairs_t "
-                    "(max %u). This is likely due to severe overlap/penetration or overly aggressive contact "
-                    "detection/binning parameters.",
-                    *scratchPad.numPrimitiveContacts, (unsigned int)std::numeric_limits<contactPairs_t>::max());
-            }
-
-            // The minimum memory just for primitive contact ID/type/persistency arrays (not including other CD scratch).
-            const size_t min_contact_bytes = (*scratchPad.numPrimitiveContacts) *
-                                             (2 * sizeof(bodyID_t) + sizeof(contact_t) + sizeof(notStupidBool_t));
-            size_t free_bytes = 0;
-            size_t total_bytes = 0;
-            cudaError_t mem_err = cudaMemGetInfo(&free_bytes, &total_bytes);
-            if (mem_err == cudaSuccess && min_contact_bytes > free_bytes) {
-                DEME_ERROR(
-                    "Contact detection needs at least %s of GPU memory for primitive-contact arrays alone "
-                    "(%zu primitive contacts), but only %s is currently free (%s total). This is not a memory leak; "
-                    "it indicates a sudden contact explosion (often from deep overlap / triangles spanning many bins).",
-                    pretty_format_bytes(min_contact_bytes).c_str(), *scratchPad.numPrimitiveContacts,
-                    pretty_format_bytes(free_bytes).c_str(), pretty_format_bytes(total_bytes).c_str());
-            }
-
             if (*scratchPad.numPrimitiveContacts > idPrimitiveA.size()) {
                 primitiveContactArraysResize(*scratchPad.numPrimitiveContacts, idPrimitiveA, idPrimitiveB,
                                              contactTypePrimitive, contactPersistency, granData);
@@ -1050,8 +939,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 contact_t* dType_mm = (granData->contactTypePrimitive + nSphereGeoContact + nTriGeoContact +
                                        nSphereSphereContact + nTriSphereContact);
                 // And two possible types of contact are resolved both in this kernel
-                // Use same doTriTriThisStep flag as counting kernel
-                bool doTriTriThisStep = solverFlags.meshUniversalContact && !skipTriTriThisStep;
                 sphTri_contact_kernels->kernel("populateTriangleContactsEachBin")
                     .instantiate()
                     .configure(dim3(blocks_needed_for_bins_tri), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
@@ -1060,7 +947,7 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                             activeBinIDsForTri, numTrianglesBinTouches, triIDsLookUpTable, triSphContactReportOffsets,
                             triTriContactReportOffsets, idSphA_sm, idTriB_sm, dType_sm, idTriA_mm, idTriB_mm, dType_mm,
                             sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1, sandwichBNode2,
-                            sandwichBNode3, *pNumActiveBinsForTri, doTriTriThisStep);
+                            sandwichBNode3, *pNumActiveBinsForTri, solverFlags.meshUniversalContact);
             }
             // std::cout << "idPrimitiveA: " << std::endl;
             // displayDeviceArray<bodyID_t>(granData->idPrimitiveA, *scratchPad.numPrimitiveContacts);

@@ -56,16 +56,6 @@ void CUDART_CB NotifyDynamicProduceReady(void* userData) {
 }  // namespace
 
 inline void DEMKinematicThread::transferPrimitivesArraysResize(int buffer_idx, size_t nContactPairs) {
-    const size_t bytes_id = nContactPairs * sizeof(bodyID_t);
-    const size_t bytes_type = nContactPairs * sizeof(contact_t);
-    const size_t bytes_map = nContactPairs * sizeof(contactPairs_t);
-    const size_t total_bytes = 2 * bytes_id + bytes_type + bytes_map;
-    if (total_bytes >= 256ull * 1024ull * 1024ull) {
-        DEME_WARNING(
-            "Resizing dT primitive-contact buffers to %zu entries (%s total across idA/idB/type/map). This indicates a "
-            "contact-candidate explosion (often tri--tri duplicates from small bins / deep overlap).",
-            nContactPairs, pretty_format_bytes(total_bytes).c_str());
-    }
     // These buffers are on dT
     DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
     DEME_DEVICE_ARRAY_RESIZE(dT->idPrimitiveA_buffer[buffer_idx], nContactPairs);
@@ -85,14 +75,6 @@ inline void DEMKinematicThread::transferPrimitivesArraysResize(int buffer_idx, s
 }
 
 inline void DEMKinematicThread::transferPatchArrayResize(int buffer_idx, size_t nContactPairs) {
-    const size_t bytes_id = nContactPairs * sizeof(bodyID_t);
-    const size_t bytes_type = nContactPairs * sizeof(contact_t);
-    const size_t bytes_map = (!solverFlags.isHistoryless) ? (nContactPairs * sizeof(contactPairs_t)) : 0;
-    const size_t total_bytes = 2 * bytes_id + bytes_type + bytes_map;
-    if (total_bytes >= 256ull * 1024ull * 1024ull) {
-        DEME_WARNING("Resizing dT patch-contact buffers to %zu entries (%s total).", nContactPairs,
-                     pretty_format_bytes(total_bytes).c_str());
-    }
     // These buffers are on dT
     DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
     DEME_DEVICE_ARRAY_RESIZE(dT->idPatchA_buffer[buffer_idx], nContactPairs);

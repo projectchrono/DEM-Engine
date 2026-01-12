@@ -602,25 +602,6 @@ class DEMSolverScratchData {
     DualArrayPool<scratch_t> m_dualArrPool;
     DualStructPool<size_t> m_dualStructPool;
 
-    static constexpr size_t kWarnLargeAllocBytes = 256ull * 1024ull * 1024ull;
-
-    void warnLargeAlloc(const std::string& name, size_t bytes) const {
-        if (bytes < kWarnLargeAllocBytes) {
-            return;
-        }
-        size_t free_bytes = 0;
-        size_t total_bytes = 0;
-        const cudaError_t err = cudaMemGetInfo(&free_bytes, &total_bytes);
-        if (err == cudaSuccess) {
-            DEME_WARNING("Large GPU allocation request '%s': %s (free %s / total %s)", name.c_str(),
-                         pretty_format_bytes(bytes).c_str(), pretty_format_bytes(free_bytes).c_str(),
-                         pretty_format_bytes(total_bytes).c_str());
-        } else {
-            DEME_WARNING("Large GPU allocation request '%s': %s (cudaMemGetInfo failed: %s)", name.c_str(),
-                         pretty_format_bytes(bytes).c_str(), cudaGetErrorString(err));
-        }
-    }
-
   public:
     // Number of contacts (in terms of convex patches) in this CD step
     DualStruct<size_t> numContacts = DualStruct<size_t>(0);
@@ -645,27 +626,23 @@ class DEMSolverScratchData {
 
     // Return raw pointer to swath of device memory that is at least "sizeNeeded" large
     scratch_t* allocateScratchSpace(size_t sizeNeeded) {
-        warnLargeAlloc("ScratchSpace", sizeNeeded);
         m_deviceVecPool.resize("ScratchSpace", sizeNeeded);
         return m_deviceVecPool.get("ScratchSpace");
     }
 
     // This flavor does not prevent you from forgeting to recycle before this time step ends
     scratch_t* allocateVector(const std::string& name, size_t sizeNeeded) {
-        warnLargeAlloc(name, sizeNeeded);
         return m_deviceVecPool.claim(name, sizeNeeded, /*allow_duplicate=*/true);
     }
 
     // This flavor prevents you from forgeting to recycle before this time step ends
     scratch_t* allocateTempVector(const std::string& name, size_t sizeNeeded) {
-        warnLargeAlloc(name, sizeNeeded);
         return m_deviceVecPool.claim(name, sizeNeeded);
     }
 
     // Dual arrays allocated here will always be temporary. If you need permanent dual array, create it as a member of
     // your worker.
     DualArray<scratch_t>* allocateDualArray(const std::string& name, size_t sizeNeeded) {
-        warnLargeAlloc(name, sizeNeeded);
         return m_dualArrPool.claim(name, sizeNeeded);
     }
     scratch_t* getDualArrayHost(const std::string& name) { return m_dualArrPool.getHost(name); }
