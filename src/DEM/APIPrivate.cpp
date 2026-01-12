@@ -15,6 +15,8 @@
 #include <cstring>
 #include <limits>
 #include <algorithm>
+#include <map>
+#include <tuple>
 
 namespace deme {
 
@@ -191,7 +193,8 @@ void DEMSolver::postResourceGen() {
 
 void DEMSolver::updateTotalEntityNum() {
     nDistinctClumpBodyTopologies = m_template_clump_mass.size();
-    nDistinctMassProperties = nDistinctClumpBodyTopologies + nExtObj + nTriMeshes;
+    const size_t mesh_mass_entries = jitify_mass_moi ? m_mesh_mass_jit.size() : m_mesh_obj_mass.size();
+    nDistinctMassProperties = nDistinctClumpBodyTopologies + nExtObj + mesh_mass_entries;
 
     // Also, external objects may introduce more material types
     nMatTuples = m_loaded_materials.size();
@@ -240,6 +243,33 @@ void DEMSolver::postResourceGenChecksAndTabKeeping() {
                 "properties",
                 nDistinctMassProperties, std::numeric_limits<inertiaOffset_t>::max() - 1,
                 std::numeric_limits<inertiaOffset_t>::max());
+        }
+        // Mass + MOI are jitified into constant memory (4 floats per entry across mass/moi arrays). Guard against
+        // over-subscribing the device constant memory, which results in CUDA_ERROR_INVALID_PTX at JIT time.
+        {
+            constexpr size_t kBytesPerMassEntry = 4 * sizeof(float);  // mass + 3 MOI components
+            // Use the most conservative constant memory size across the devices we will launch on.
+            int devices[] = {dT->streamInfo.device, kT->streamInfo.device};
+            size_t min_const_mem = std::numeric_limits<size_t>::max();
+            for (int dev : devices) {
+                cudaDeviceProp prop{};
+                if (cudaGetDeviceProperties(&prop, dev) == cudaSuccess) {
+                    min_const_mem = std::min(min_const_mem, static_cast<size_t>(prop.totalConstMem));
+                }
+            }
+            if (min_const_mem != std::numeric_limits<size_t>::max()) {
+                const size_t needed_bytes = kBytesPerMassEntry * nDistinctMassProperties;
+                // Keep a small safety margin for other constant symbols.
+                const size_t safety_margin = 1024;
+                if (needed_bytes + safety_margin > min_const_mem) {
+                    DEME_WARNING(
+                        "Mass/MOI jitification would require %zu bytes of constant memory for %u entries, "
+                        "exceeding device capacity (%zu bytes). Falling back to flattened mass properties. "
+                        "Call DisableJitifyMassProperties() to suppress this message.",
+                        needed_bytes, nDistinctMassProperties, min_const_mem);
+                    jitify_mass_moi = false;
+                }
+            }
         }
     }
 
@@ -759,6 +789,15 @@ void DEMSolver::preprocessClumps() {
 
 void DEMSolver::preprocessTriangleObjs() {
     nTriMeshes += cached_mesh_objs.size();
+    m_mesh_mass_jit.clear();
+    m_mesh_moi_jit.clear();
+    m_mesh_mass_offsets.clear();
+    // Build a map from (mass, MOI) -> jitify index so identical mesh instances share one constant entry.
+    std::map<std::tuple<float, float, float, float>, inertiaOffset_t> mesh_mass_map;
+    for (inertiaOffset_t idx = 0; idx < m_mesh_mass_jit.size(); idx++) {
+        const auto& moi = m_mesh_moi_jit.at(idx);
+        mesh_mass_map.emplace(std::make_tuple(m_mesh_mass_jit.at(idx), moi.x, moi.y, moi.z), idx);
+    }
     bodyID_t thisMeshObj =
         0;  // In preprocessing, this starts from 0 since if this is an update, the previous mesh objects are already
             // loaded and processed. This is the offset for the new ones being added in this update.
@@ -784,6 +823,14 @@ void DEMSolver::preprocessTriangleObjs() {
         }
         m_mesh_obj_mass.push_back(mesh_obj->mass);
         m_mesh_obj_moi.push_back(mesh_obj->MOI);
+        // Record jitify entry (dedup identical mesh mass/MOI combos)
+        const auto mass_moi_key = std::make_tuple(mesh_obj->mass, mesh_obj->MOI.x, mesh_obj->MOI.y, mesh_obj->MOI.z);
+        auto [it, inserted] = mesh_mass_map.emplace(mass_moi_key, static_cast<inertiaOffset_t>(mesh_mass_map.size()));
+        if (inserted) {
+            m_mesh_mass_jit.push_back(mesh_obj->mass);
+            m_mesh_moi_jit.push_back(mesh_obj->MOI);
+        }
+        m_mesh_mass_offsets.push_back(it->second);
 
         m_input_mesh_obj_xyz.push_back(mesh_obj->init_pos);
         m_input_mesh_obj_rot.push_back(mesh_obj->init_oriQ);
@@ -1302,7 +1349,7 @@ void DEMSolver::initializeGPUArrays() {
         // Analytical obj physics properties
         m_ext_obj_mass, m_ext_obj_moi, m_ext_obj_comp_num,
         // Meshed obj physics properties
-        m_mesh_obj_mass, m_mesh_obj_moi,
+        m_mesh_obj_mass, m_mesh_obj_moi, m_mesh_mass_jit, m_mesh_moi_jit, m_mesh_mass_offsets,
         // Universal template info
         m_loaded_materials,
         // Family mask
@@ -1353,7 +1400,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // Analytical obj physics properties
         m_ext_obj_mass, m_ext_obj_moi, m_ext_obj_comp_num,
         // Meshed obj physics properties
-        m_mesh_obj_mass, m_mesh_obj_moi,
+        m_mesh_obj_mass, m_mesh_obj_moi, m_mesh_mass_jit, m_mesh_moi_jit, m_mesh_mass_offsets,
         // Universal template info
         m_loaded_materials,
         // Family mask
@@ -1918,11 +1965,11 @@ inline void DEMSolver::equipMassMoiVolume(std::unordered_map<std::string, std::s
             moiY += to_string_with_precision(m_ext_obj_moi.at(i).y) + ",";
             moiZ += to_string_with_precision(m_ext_obj_moi.at(i).z) + ",";
         }
-        for (unsigned int i = 0; i < m_mesh_obj_mass.size(); i++) {
-            MassProperties += to_string_with_precision(m_mesh_obj_mass.at(i)) + ",";
-            moiX += to_string_with_precision(m_mesh_obj_moi.at(i).x) + ",";
-            moiY += to_string_with_precision(m_mesh_obj_moi.at(i).y) + ",";
-            moiZ += to_string_with_precision(m_mesh_obj_moi.at(i).z) + ",";
+        for (unsigned int i = 0; i < m_mesh_mass_jit.size(); i++) {
+            MassProperties += to_string_with_precision(m_mesh_mass_jit.at(i)) + ",";
+            moiX += to_string_with_precision(m_mesh_moi_jit.at(i).x) + ",";
+            moiY += to_string_with_precision(m_mesh_moi_jit.at(i).y) + ",";
+            moiZ += to_string_with_precision(m_mesh_moi_jit.at(i).z) + ",";
         }
         if (nDistinctMassProperties == 0) {
             MassProperties += "0";

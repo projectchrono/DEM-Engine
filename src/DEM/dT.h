@@ -758,12 +758,13 @@ class DEMDynamicThread {
                               const std::vector<float>& ext_obj_mass_types,
                               const std::vector<float3>& ext_obj_moi_types,
                               const std::vector<unsigned int>& ext_obj_comp_num,
-                              const std::vector<float>& mesh_obj_mass_types,
-                              const std::vector<float3>& mesh_obj_moi_types,
-                              size_t nExistOwners,
-                              size_t nExistSpheres,
-                              size_t nExistingFacets,
-                              size_t nExistingPatches);
+                             const std::vector<float>& mesh_obj_mass_types,
+                             const std::vector<float3>& mesh_obj_moi_types,
+                             const std::vector<inertiaOffset_t>& mesh_obj_mass_offsets,
+                             size_t nExistOwners,
+                             size_t nExistSpheres,
+                             size_t nExistingFacets,
+                             size_t nExistingPatches);
     void registerPolicies(const std::unordered_map<unsigned int, std::string>& template_number_name_map,
                           const ClumpTemplateFlatten& clump_templates,
                           const std::vector<float>& ext_obj_mass_types,
@@ -795,6 +796,9 @@ class DEMDynamicThread {
                        const std::vector<unsigned int>& ext_obj_comp_num,
                        const std::vector<float>& mesh_obj_mass_types,
                        const std::vector<float3>& mesh_obj_moi_types,
+                       const std::vector<float>& mesh_obj_mass_jit_types,
+                       const std::vector<float3>& mesh_obj_moi_jit_types,
+                       const std::vector<inertiaOffset_t>& mesh_obj_mass_offsets,
                        const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
                        const std::vector<notStupidBool_t>& family_mask_matrix,
                        const std::set<unsigned int>& no_output_families,
@@ -821,6 +825,9 @@ class DEMDynamicThread {
                                const std::vector<unsigned int>& ext_obj_comp_num,
                                const std::vector<float>& mesh_obj_mass_types,
                                const std::vector<float3>& mesh_obj_moi_types,
+                               const std::vector<float>& mesh_obj_mass_jit_types,
+                               const std::vector<float3>& mesh_obj_moi_jit_types,
+                               const std::vector<inertiaOffset_t>& mesh_obj_mass_offsets,
                                const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
                                const std::vector<notStupidBool_t>& family_mask_matrix,
                                const std::set<unsigned int>& no_output_families,
@@ -856,6 +863,8 @@ class DEMDynamicThread {
     void writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accuracy = 10);
     void writeContactsAsCsv(std::ofstream& ptFile, float force_thres = DEME_TINY_FLOAT);
     void writeMeshesAsVtk(std::ofstream& ptFile);
+    void writeMeshesAsStl(std::ofstream& ptFile);
+    void writeMeshesAsPly(std::ofstream& ptFile);
 
     /// Called each time when the user calls DoDynamicsThenSync.
     void startThread();

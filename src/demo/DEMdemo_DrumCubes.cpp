@@ -110,7 +110,7 @@ int main() {
     DEMSim.Initialize();
 
     path out_dir = current_path();
-    out_dir /= "DemoOutput_CentrifugeCubes";
+    out_dir /= "DemoOutput_DrumCubes";
     create_directory(out_dir);
 
     float time_end = 3.0f;

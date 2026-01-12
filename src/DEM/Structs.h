@@ -132,7 +132,7 @@ enum class CUB_REDUCE_FLAVOR { NONE, MAX, MIN, SUM };
 // Format of the output files
 enum class OUTPUT_FORMAT { CSV, BINARY, CHPF };
 // Mesh output format
-enum class MESH_FORMAT { VTK, OBJ };
+enum class MESH_FORMAT { VTK, OBJ, STL, PLY };
 // Adaptive time step size methods
 enum class ADAPT_TS_TYPE { NONE, HERTZ_CONST, MAX_VEL, INT_DIFF };
 

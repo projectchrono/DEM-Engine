@@ -26,6 +26,7 @@ SET(DEMOS
 		DEMdemo_RotatingDrum
 		DEMdemo_Centrifuge
 		DEMdemo_DrumCubes
+		DEMdemo_ResponseAngleMesh
 		DEMdemo_GameOfLife
 		DEMdemo_BallDrop
 		DEMdemo_BallDrop2D

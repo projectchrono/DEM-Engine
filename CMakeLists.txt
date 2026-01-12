@@ -283,6 +283,12 @@ install(
 # Copy data directory over
 # ---------------------------------------------------------------------------- #
 file(COPY ${CMAKE_CURRENT_LIST_DIR}/data/ DESTINATION ${CMAKE_BINARY_DIR}/data/)
+# Keep build-tree data in sync (so newly added meshes like STL assets are always available without re-running CMake)
+add_custom_target(sync_data ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_LIST_DIR}/data
+            ${CMAKE_BINARY_DIR}/data
+    COMMENT "Syncing data directory into build tree")
 install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/data/ DESTINATION ${CMAKE_INSTALL_DATADIR}/DEME/data/)
 
 # ---------------------------------------------------------------------------- #
@@ -297,4 +303,3 @@ install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/src/kernel/ DESTINATION ${CMAKE_INST
 # Build embedded demos
 # ---------------------------------------------------------------------------- #
 add_subdirectory(src/demo)
-

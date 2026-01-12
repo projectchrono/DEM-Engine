@@ -17,6 +17,8 @@
 #include <cstring>
 #include <limits>
 #include <algorithm>
+#include <filesystem>
+#include <cctype>
 
 namespace deme {
 
@@ -157,6 +159,12 @@ void DEMSolver::SetMeshOutputFormat(const std::string& format) {
             break;
         case ("OBJ"_):
             m_mesh_out_format = MESH_FORMAT::OBJ;
+            break;
+        case ("STL"_):
+            m_mesh_out_format = MESH_FORMAT::STL;
+            break;
+        case ("PLY"_):
+            m_mesh_out_format = MESH_FORMAT::PLY;
             break;
         default:
             DEME_ERROR("Instruction %s is unknown in SetMeshOutputFormat call.", format.c_str());
@@ -1922,12 +1930,29 @@ std::shared_ptr<DEMMesh> DEMSolver::AddMesh(DEMMesh& mesh) {
     return cached_mesh_objs.back();
 }
 
+namespace {
+
+bool loadMeshByExtension(DEMMesh& mesh, const std::string& filename, bool load_normals, bool load_uv) {
+    std::string ext = std::filesystem::path(filename).extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return std::tolower(c); });
+    if (ext == ".stl") {
+        return mesh.LoadSTLMesh(filename, load_normals);
+    }
+    if (ext == ".ply") {
+        return mesh.LoadPLYMesh(filename, load_normals);
+    }
+    // Default to OBJ/Wavefront path
+    return mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
+}
+
+}  // namespace
+
 std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
                                                            const std::shared_ptr<DEMMaterial>& mat,
                                                            bool load_normals,
                                                            bool load_uv) {
     DEMMesh mesh;
-    bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
+    bool flag = loadMeshByExtension(mesh, filename, load_normals, load_uv);
     if (!flag) {
         DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
     }
@@ -1939,7 +1964,7 @@ std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontMeshObject(const std::string& fi
                                                            bool load_normals,
                                                            bool load_uv) {
     DEMMesh mesh;
-    bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
+    bool flag = loadMeshByExtension(mesh, filename, load_normals, load_uv);
     if (!flag) {
         DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
     }
@@ -1963,7 +1988,7 @@ std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(const std::string& filename,
                                                  bool load_normals,
                                                  bool load_uv) {
     DEMMesh mesh;
-    bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
+    bool flag = loadMeshByExtension(mesh, filename, load_normals, load_uv);
     if (!flag) {
         DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
     }
@@ -1973,7 +1998,7 @@ std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(const std::string& filename,
 
 std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(const std::string& filename, bool load_normals, bool load_uv) {
     DEMMesh mesh;
-    bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
+    bool flag = loadMeshByExtension(mesh, filename, load_normals, load_uv);
     if (!flag) {
         DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
     }
@@ -2097,6 +2122,18 @@ void DEMSolver::WriteMeshFile(const std::string& outfilename) const {
         case (MESH_FORMAT::VTK): {
             std::ofstream ptFile(outfilename, std::ios::out);
             dT->writeMeshesAsVtk(ptFile);
+            ptFile.close();
+            break;
+        }
+        case (MESH_FORMAT::STL): {
+            std::ofstream ptFile(outfilename, std::ios::out);
+            dT->writeMeshesAsStl(ptFile);
+            ptFile.close();
+            break;
+        }
+        case (MESH_FORMAT::PLY): {
+            std::ofstream ptFile(outfilename, std::ios::out);
+            dT->writeMeshesAsPly(ptFile);
             ptFile.close();
             break;
         }
