@@ -154,6 +154,6 @@ int main() {
     DEMSim.ShowMemStats();
     std::cout << "----------------------------------------" << std::endl;
 
-    std::cout << "DEMdemo_CentrifugeCubes exiting..." << std::endl;
+    std::cout << "DEMdemo_DrumCubes exiting..." << std::endl;
     return 0;
 }
