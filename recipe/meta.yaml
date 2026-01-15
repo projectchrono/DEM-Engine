@@ -10,6 +10,9 @@ build:
   script: {{ PYTHON }} -m pip install . -vvv
   skip: true  # [not linux]
 
+# Note: Build with: conda build recipe/ -c conda-forge
+# The conda-forge channel is required for build dependencies
+
 requirements:
   build:
     - {{ compiler('c') }}

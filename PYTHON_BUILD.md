@@ -16,6 +16,23 @@ This document describes how to build the Python package for DEM-Engine.
 
 ### Option 1: Using pip (recommended)
 
+**Important for Conda Users:** If you're building in a conda environment, you need to install conda's compilers first to ensure compatibility:
+
+```bash
+# Activate your conda environment
+conda activate your_env_name
+
+# Install conda's compilers
+conda install -c conda-forge gxx_linux-64 gcc_linux-64
+
+# Then build/install
+pip install .
+```
+
+Without conda's compilers, the wheel will link against your system's libstdc++ which may cause import errors in conda environments.
+
+For non-conda environments:
+
 ```bash
 pip install .
 ```
@@ -23,6 +40,8 @@ pip install .
 This will use scikit-build-core to automatically configure CMake with the Python build options enabled, compile the C++/CUDA code, and install the package.
 
 ### Option 2: Building a wheel
+
+**Important for Conda Users:** If building in a conda environment, install conda's compilers first (see Option 1).
 
 ```bash
 pip install build
@@ -41,13 +60,18 @@ pip install -e .
 
 ### Option 4: Using conda
 
-For conda users, you can build and install using conda-build:
+For conda users, you can build and install using conda-build. This method automatically handles all dependencies including compilers:
 
 ```bash
-# Build the conda package
-conda build recipe/
+# Build the conda package (requires conda-build and access to conda-forge channel)
+conda install conda-build
+conda build recipe/ -c conda-forge
 
 # Install from local build
+conda install --use-local deme
+```
+
+**Note:** The `-c conda-forge` flag is required to access build dependencies like cmake, ninja, and the C/C++ compilers.
 conda install --use-local deme
 ```
 
@@ -95,6 +119,29 @@ The Python package provides bindings for:
 - Utility functions for transformations and sampling
 
 ## Troubleshooting
+
+### Compiler Issues in Conda Environments
+
+**Problem:** When building with `pip install .` in a conda environment, you get import errors like `GLIBCXX_3.4.30 not found`.
+
+**Solution:** Install conda's compilers before building:
+```bash
+conda install -c conda-forge gxx_linux-64 gcc_linux-64
+pip install .
+```
+
+This ensures the wheel is built with libraries compatible with your conda environment.
+
+### Conda Build: Packages Not Found Error
+
+**Problem:** `conda build recipe/` fails with "PackagesNotFoundError: cmake not available from current channels"
+
+**Solution:** Specify the conda-forge channel when building:
+```bash
+conda build recipe/ -c conda-forge
+```
+
+The conda-forge channel provides cmake, ninja, and other build dependencies.
 
 ### CUDA Not Found
 
