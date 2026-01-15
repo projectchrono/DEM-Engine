@@ -2403,9 +2403,9 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                                           solverScratchSpace);
 
                 // Step 7: Reduce-by-key to get max projected penetration per patch pair (max).
-                // This result, maxProjectedPenetrations (total in the sense of per patch pair), is the max of projected
-                // penetration, aka the max pen in the physical overlap case, and it's not the same as maxPenetrations
-                // in step 9 which is a fallback primitive-derived penetration.
+                // This result, maxProjectedPenetrations, is the max of projected penetration, aka the max pen in the
+                // physical overlap case, and it's not the same as maxPenetrations in step 9 which is a fallback
+                // primitive-derived penetration.
                 double* maxProjectedPenetrations = (double*)solverScratchSpace.allocateTempVector(
                     "maxProjectedPenetrations", countPatch * sizeof(double));
                 cubMaxReduceByKey<contactPairs_t, double>(keys, uniqueKeys, projectedPenetrations,
