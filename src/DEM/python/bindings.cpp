@@ -431,33 +431,37 @@ PYBIND11_MODULE(DEME, obj) {
              "Set a wildcard value of the geometry entities this tracker is tracking.", py::arg("name"), py::arg("wc"))
 
         .def("GetContactForcesAndLocalTorque",
-             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(size_t)>(
+             static_cast<size_t (deme::DEMTracker::*)(std::vector<float3>&, std::vector<float3>&, std::vector<float3>&, size_t)>(
                  &deme::DEMTracker::GetContactForcesAndLocalTorque),
-             "Get all contact forces and local torques that concern this tracked object, as a list.",
-             py::arg("offset") = 0)
+             "Get all contact forces and local torques that concern this tracked object. Returns number of force pairs.",
+             py::arg("points"), py::arg("forces"), py::arg("torques"), py::arg("offset") = 0)
         .def("GetContactForcesAndLocalTorqueForAll",
-             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)()>(
+             static_cast<size_t (deme::DEMTracker::*)(std::vector<float3>&, std::vector<float3>&, std::vector<float3>&)>(
                  &deme::DEMTracker::GetContactForcesAndLocalTorqueForAll),
-             "Get all contact forces and local torques that concern all objects tracked by this tracker, as a list.")
+             "Get all contact forces and local torques that concern all objects tracked by this tracker. Returns number of force pairs.",
+             py::arg("points"), py::arg("forces"), py::arg("torques"))
 
         .def("GetContactForcesAndGlobalTorque",
-             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(size_t)>(
+             static_cast<size_t (deme::DEMTracker::*)(std::vector<float3>&, std::vector<float3>&, std::vector<float3>&, size_t)>(
                  &deme::DEMTracker::GetContactForcesAndGlobalTorque),
-             "Get all contact forces and global torques that concern this tracked object, as a list.",
-             py::arg("offset") = 0)
+             "Get all contact forces and global torques that concern this tracked object. Returns number of force pairs.",
+             py::arg("points"), py::arg("forces"), py::arg("torques"), py::arg("offset") = 0)
         .def("GetContactForcesAndGlobalTorqueForAll",
-             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)()>(
+             static_cast<size_t (deme::DEMTracker::*)(std::vector<float3>&, std::vector<float3>&, std::vector<float3>&)>(
                  &deme::DEMTracker::GetContactForcesAndGlobalTorqueForAll),
-             "Get all contact forces and global torques that concern all objects tracked by this tracker, as a list.")
+             "Get all contact forces and global torques that concern all objects tracked by this tracker. Returns number of force pairs.",
+             py::arg("points"), py::arg("forces"), py::arg("torques"))
 
         .def("GetContactForces",
-             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(size_t)>(
+             static_cast<size_t (deme::DEMTracker::*)(std::vector<float3>&, std::vector<float3>&, size_t)>(
                  &deme::DEMTracker::GetContactForces),
-             "Get all contact forces that concern this tracked object, as a list.", py::arg("offset") = 0)
+             "Get all contact forces that concern this tracked object. Returns number of force pairs.",
+             py::arg("points"), py::arg("forces"), py::arg("offset") = 0)
         .def("GetContactForcesForAll",
-             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)()>(
+             static_cast<size_t (deme::DEMTracker::*)(std::vector<float3>&, std::vector<float3>&)>(
                  &deme::DEMTracker::GetContactForcesForAll),
-             "Get all contact forces that concern all objects tracked by this tracker, as a list.");
+             "Get all contact forces that concern all objects tracked by this tracker. Returns number of force pairs.",
+             py::arg("points"), py::arg("forces"));
 
     py::class_<deme::DEMForceModel, std::shared_ptr<deme::DEMForceModel>>(obj, "DEMForceModel")
         .def(py::init<deme::FORCE_MODEL>())
@@ -1059,7 +1063,7 @@ PYBIND11_MODULE(DEME, obj) {
              "Get all contact forces and torque that concern a list of owners.", py::arg("ownerIDs"), py::arg("points"),
              py::arg("forces"), py::arg("torques"), py::arg("torque_in_local") = false)
 
-        .def("SetTriWildcardValue", &deme::DEMSolver::SetTriWildcardValue, "Set the wildcard values of some triangles.")
+        .def("SetPatchWildcardValue", &deme::DEMSolver::SetPatchWildcardValue, "Set the wildcard values of some patches.")
         .def("SetSphereWildcardValue", &deme::DEMSolver::SetSphereWildcardValue,
              "Set the wildcard values of some spheres.")
         .def("SetAnalWildcardValue", &deme::DEMSolver::SetAnalWildcardValue,
