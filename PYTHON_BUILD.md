@@ -119,3 +119,17 @@ Make sure you're using the same Python version for building and running. You can
 ```bash
 cmake .. -DDEME_BUILD_PYTHON=ON -DPython_EXECUTABLE=/path/to/python
 ```
+
+### libstdc++ Version Issues (Conda)
+
+If you get an error like `GLIBCXX_3.4.30 not found` when importing in a conda environment:
+
+1. Make sure you built the package using conda-build (not pip) within the conda environment
+2. The conda recipe includes `libstdcxx-ng >=12` as a runtime dependency
+3. You can also try updating libstdcxx-ng in your environment:
+   ```bash
+   conda install -c conda-forge libstdcxx-ng
+   ```
+
+Alternatively, build with the system Python (outside conda) if you're using pip installation.
+```
