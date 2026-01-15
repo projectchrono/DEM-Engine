@@ -7,7 +7,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "deme"
-version = "2.2.0"
+version = "3.0.0"
 description = "Python bindings for DEM-Engine - a GPU-accelerated Discrete Element Method simulation engine"
 readme = "README.md"
 authors = [

@@ -84,7 +84,7 @@ PYBIND11_MODULE(DEME, obj) {
     try {
         py::module _site = py::module_::import("site");
         std::string loc;
-        
+
         // Try getsitepackages() first (works in most environments)
         if (py::hasattr(_site, "getsitepackages")) {
             py::object site_packages = _site.attr("getsitepackages")();
@@ -92,29 +92,30 @@ PYBIND11_MODULE(DEME, obj) {
                 loc = site_packages.cast<py::list>()[0].cast<std::string>();
             }
         }
-        
+
         // Fallback to USER_SITE if getsitepackages fails
         if (loc.empty() && py::hasattr(_site, "USER_SITE")) {
             loc = _site.attr("USER_SITE").cast<std::string>();
         }
-        
+
         // Last resort: use sys.prefix
         if (loc.empty()) {
             py::module sys = py::module_::import("sys");
             std::string prefix = sys.attr("prefix").cast<std::string>();
-            loc = prefix + "/lib/python" + sys.attr("version_info").attr("major").cast<std::string>() + 
-                  "." + sys.attr("version_info").attr("minor").cast<std::string>() + "/site-packages";
+            loc = prefix + "/lib/python" + sys.attr("version_info").attr("major").cast<std::string>() + "." +
+                  sys.attr("version_info").attr("minor").cast<std::string>() + "/site-packages";
         }
-        
+
         // Setting path prefix
         std::filesystem::path path = loc;
         DEMERuntimeDataHelper::SetPathPrefix(path);
     } catch (const py::error_already_set& e) {
         // If all else fails, don't set the prefix and let the system use default paths
-        py::print("Warning: Could not determine site-packages location for data files, using default paths. "
-                  "Data file loading may fail. Set DEME_DATA_PATH environment variable if you encounter issues.");
+        py::print(
+            "Warning: Could not determine site-packages location for data files, using default paths. "
+            "Data file loading may fail. Set DEME_DATA_PATH environment variable if you encounter issues.");
     }
-    
+
     deme::SetDEMEDataPath(deme::DEME_data_path);
 
     // To define methods independent of a class, use obj.def() syntax to wrap them!
@@ -124,15 +125,15 @@ PYBIND11_MODULE(DEME, obj) {
     obj.def("FrameTransformLocalToGlobal", &deme::FrameTransformLocalToGlobal,
             "Apply a local rotation then a translation, then return the result.");
     obj.def("GetDEMEDataFile", &deme::GetDEMEDataFile);
-    obj.def("DEMBoxGridSampler",
-            static_cast<std::vector<float3> (*)(const std::vector<float>&, const std::vector<float>&, float,
-                                                            float, float)>(&deme::DEMBoxGridSampler),
-            py::arg("BoxCenter"), py::arg("HalfDims"), py::arg("GridSizeX"), py::arg("GridSizeY") = -1.0,
-            py::arg("GridSizeZ") = -1.0);
     obj.def(
-        "DEMBoxHCPSampler",
-        static_cast<std::vector<float3> (*)(const std::vector<float>&, const std::vector<float>&, float)>(
-            &deme::DEMBoxHCPSampler));
+        "DEMBoxGridSampler",
+        static_cast<std::vector<float3> (*)(const std::vector<float>&, const std::vector<float>&, float, float, float)>(
+            &deme::DEMBoxGridSampler),
+        py::arg("BoxCenter"), py::arg("HalfDims"), py::arg("GridSizeX"), py::arg("GridSizeY") = -1.0,
+        py::arg("GridSizeZ") = -1.0);
+    obj.def("DEMBoxHCPSampler",
+            static_cast<std::vector<float3> (*)(const std::vector<float>&, const std::vector<float>&, float)>(
+                &deme::DEMBoxHCPSampler));
     obj.def("DEMCylSurfSampler",
             static_cast<std::vector<std::vector<float>> (*)(const std::vector<float>&, const std::vector<float>&, float,
                                                             float, float, float)>(&deme::DEMCylSurfSampler),
@@ -504,11 +505,6 @@ PYBIND11_MODULE(DEME, obj) {
              "the kernel compilation fails, the error meessage line number will reflex the actual spot where that "
              "happens (instead of some random number).",
              py::arg("flag") = true)
-        .def("UseCubForceCollection", &deme::DEMSolver::UseCubForceCollection,
-             "Whether the force collection (acceleration calc and reduction) process should be using CUB. If true, the "
-             "acceleration array is flattened and reduced using CUB; if false, the acceleration is computed and "
-             "directly applied to each body through atomic operations.",
-             py::arg("flag") = true)
         .def("SetCollectAccRightAfterForceCalc", &deme::DEMSolver::SetCollectAccRightAfterForceCalc,
              "Reduce contact forces to accelerations right after calculating them, in the same kernel. This may give "
              "some performance boost if you have only polydisperse spheres, no clumps.",
@@ -599,10 +595,12 @@ PYBIND11_MODULE(DEME, obj) {
              "Set whether to use compact force calculation kernel.", py::arg("use_compact"))
         .def("SetMeshUniversalContact", &deme::DEMSolver::SetMeshUniversalContact,
              "Set whether mesh-mesh contacts should be universally detected. Set to false to speedup simulation if "
-             "meshes are not expected to have contacts. Default is false.", py::arg("use") = true)
+             "meshes are not expected to have contacts. Default is false.",
+             py::arg("use") = true)
         .def("SetPersistentContact", &deme::DEMSolver::SetPersistentContact,
              "Set whether the solver should expect the user to mark certain contacts as persistent across kT updates. "
-             "Set this to true if you later will call MarkPersistentContact series of methods.", py::arg("use") = true)
+             "Set this to true if you later will call MarkPersistentContact series of methods.",
+             py::arg("use") = true)
 
         .def("SetExpandSafetyType", &deme::DEMSolver::SetExpandSafetyType,
              "A string. If 'auto': the solver automatically derives.")
@@ -616,9 +614,10 @@ PYBIND11_MODULE(DEME, obj) {
              "Used to force the solver to error out when there are too many spheres in a bin. A huge number can be "
              "used to discourage this error type")
 
-        .def("SetErrorOutVelocity", &deme::DEMSolver::SetErrorOutVelocity,
-             "Set the velocity which when exceeded, the solver errors out. A huge number can be used to discourage this "
-             "error type. Defaulted to 1e3.")
+        .def(
+            "SetErrorOutVelocity", &deme::DEMSolver::SetErrorOutVelocity,
+            "Set the velocity which when exceeded, the solver errors out. A huge number can be used to discourage this "
+            "error type. Defaulted to 1e3.")
         .def("SetErrorOutAngularVelocity", &deme::DEMSolver::SetErrorOutAngularVelocity,
              "Set the angular velocity which when exceeded, the solver errors out. A huge number can be used to "
              "discourage this error type. Defaulted to 1e4.")
@@ -1088,8 +1087,8 @@ PYBIND11_MODULE(DEME, obj) {
         .def("GetFamilyOwnerWildcardValue", &deme::DEMSolver::GetFamilyOwnerWildcardValue,
              "Get the owner wildcard's values of all entities in family N.")
 
-        .def("GetTriWildcardValue", &deme::DEMSolver::GetTriWildcardValue,
-             "Get the geometry wildcard's values of a series of triangles.")
+        .def("GetPatchWildcardValue", &deme::DEMSolver::GetPatchWildcardValue,
+             "Get the geometry wildcard's values of a series of mesh patches (convex components).")
         .def("GetSphereWildcardValue", &deme::DEMSolver::GetSphereWildcardValue,
              "Get the geometry wildcard's values of a series of spheres.")
         .def("GetAnalWildcardValue", &deme::DEMSolver::GetAnalWildcardValue,
@@ -1344,8 +1343,7 @@ PYBIND11_MODULE(DEME, obj) {
         .def_readwrite("load_order", &deme::DEMExternObj::load_order)
         .def_readwrite("entity_params", &deme::DEMExternObj::entity_params);
 
-    py::class_<deme::DEMMeshConnected, deme::DEMInitializer, std::shared_ptr<deme::DEMMeshConnected>>(
-        obj, "DEMMeshConnected")
+    py::class_<deme::DEMMeshConnected, deme::DEMInitializer, std::shared_ptr<deme::DEMMeshConnected>>(obj, "DEMMesh")
         .def(py::init<>())
         .def(py::init<std::string&>())
         .def(py::init<std::string, const std::shared_ptr<deme::DEMMaterial>&>())
@@ -1406,17 +1404,6 @@ PYBIND11_MODULE(DEME, obj) {
     //    .def("GetIndicesColors", &deme::DEMMeshConnected::GetIndicesColorsPython);
 
     //// TODO: Insert readwrite functions to access all public class objects!
-
-    py::enum_<deme::VERBOSITY>(obj, "VERBOSITY")
-        .value("QUIET", deme::VERBOSITY::QUIET)
-        .value("ERROR", deme::VERBOSITY::DEME_ERROR)
-        .value("WARNING", deme::VERBOSITY::WARNING)
-        .value("INFO", deme::VERBOSITY::INFO)
-        .value("STEP_ANOMALY", deme::VERBOSITY::STEP_ANOMALY)
-        .value("STEP_METRIC", deme::VERBOSITY::STEP_METRIC)
-        .value("DEBUG", deme::VERBOSITY::DEBUG)
-        .value("STEP_DEBUG", deme::VERBOSITY::STEP_DEBUG)
-        .export_values();
 
     py::enum_<deme::TIME_INTEGRATOR>(obj, "TIME_INTEGRATOR")
         .value("FORWARD_EULER", deme::TIME_INTEGRATOR::FORWARD_EULER)
