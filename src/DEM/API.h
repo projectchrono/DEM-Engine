@@ -708,8 +708,8 @@ class DEMSolver {
     /// @brief Load a mesh-represented object into the simulation, using the internal mesh format.
     std::shared_ptr<DEMMesh> AddMesh(DEMMesh& mesh);
 
-    /// @brief Load a mesh-represented object from a wavefront .obj file.
-    /// @param filename Path to the wavefront .obj file.
+    /// @brief Load a mesh-represented object from a mesh file (.obj or .stl).
+    /// @param filename Path to the mesh file.
     /// @param mat Material to assign to the mesh.
     /// @param load_normals Whether to load normals from the file.
     /// @param load_uv Whether to load UV coordinates from the file.
@@ -718,8 +718,8 @@ class DEMSolver {
                                                     const std::shared_ptr<DEMMaterial>& mat,
                                                     bool load_normals = true,
                                                     bool load_uv = false);
-    /// @brief Load a mesh-represented object from a wavefront .obj file.
-    /// @param filename Path to the wavefront .obj file.
+    /// @brief Load a mesh-represented object from a mesh file (.obj or .stl).
+    /// @param filename Path to the mesh file.
     /// @param load_normals Whether to load normals from the file.
     /// @param load_uv Whether to load UV coordinates from the file.
     /// @return A shared pointer to the loaded mesh object.
@@ -733,7 +733,7 @@ class DEMSolver {
     /// @details The mesh is not immediately added to the simulation, but stored as a template
     /// that can be instantiated multiple times at different locations. This is similar to LoadClumpType()
     /// for clump templates.
-    /// @param filename Path to the wavefront .obj file.
+    /// @param filename Path to the mesh file (.obj or .stl).
     /// @param mat Material to assign to the mesh.
     /// @param load_normals Whether to load normals from the file.
     /// @param load_uv Whether to load UV coordinates from the file.
@@ -743,7 +743,7 @@ class DEMSolver {
                                           bool load_normals = true,
                                           bool load_uv = false);
     /// @brief Load a mesh type into the API-level cache as a template.
-    /// @param filename Path to the wavefront .obj file.
+    /// @param filename Path to the mesh file (.obj or .stl).
     /// @param load_normals Whether to load normals from the file.
     /// @param load_uv Whether to load UV coordinates from the file.
     /// @return A shared pointer to the loaded mesh template.
@@ -1469,7 +1469,7 @@ class DEMSolver {
     /// "GEO_ID" and/or "NICKNAME".
     void SetContactOutputContent(const std::vector<std::string>& content);
     /// @brief Specify the output file format of meshes.
-    /// @param format A choice between "VTK", "OBJ".
+    /// @param format A choice between "VTK", "OBJ", "STL", "PLY".
     void SetMeshOutputFormat(const std::string& format);
     /// @brief Clear stored solver logs (errors, warnings, messages).
     void ClearLog() { Logger::GetInstance().Clear(); }
@@ -1953,6 +1953,10 @@ class DEMSolver {
     // Meshed objects that will be flatten and transferred into kernels upon Initialize()
     std::vector<float> m_mesh_obj_mass;
     std::vector<float3> m_mesh_obj_moi;
+    // Deduped mesh mass/MOI lists for jitify and per-mesh offsets into those lists
+    std::vector<float> m_mesh_mass_jit;
+    std::vector<float3> m_mesh_moi_jit;
+    std::vector<inertiaOffset_t> m_mesh_mass_offsets;
     /*
     // Dan and Ruochun decided NOT to extract unique input values.
     // Instead, we trust users: we simply store all clump template info users give.

@@ -181,8 +181,8 @@ void normalizeAndScatterVotedNormalsFromUniqueKeys(float3* votedWeightedNormals,
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         normalizeAndScatterVotedNormalsFromUniqueKeys_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0,
-                                                             this_stream>>>(votedWeightedNormals, uniqueKeys, output,
-                                                                            startOffsetPatch, count);
+                                                            this_stream>>>(votedWeightedNormals, uniqueKeys, output,
+                                                                           startOffsetPatch, count);
     }
 }
 
@@ -191,13 +191,13 @@ void normalizeAndScatterVotedNormalsFromUniqueKeys(float3* votedWeightedNormals,
 ////////////////////////////////////////////////////////////////////////////////
 
 // Kernel to compute per-primitive patch accumulators (projected area, max projected penetration, weighted CP sum).
-__global__ void computePatchContactAccumulators_impl(DEMDataDT* granData,
-                                                     float3* votedNormals,
-                                                     const contactPairs_t* keys,
-                                                     PatchContactAccum* accumulators,
-                                                     contactPairs_t startOffsetPrimitive,
-                                                     contactPairs_t startOffsetPatch,
-                                                     contactPairs_t count) {
+__global__ void computeFusedPatchContactAccumulators_impl(DEMDataDT* granData,
+                                                          float3* votedNormals,
+                                                          const contactPairs_t* keys,
+                                                          FusedPatchAccum* accumulators,
+                                                          contactPairs_t startOffsetPrimitive,
+                                                          contactPairs_t startOffsetPatch,
+                                                          contactPairs_t count) {
     contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
         contactPairs_t myContactID = startOffsetPrimitive + idx;
@@ -208,85 +208,107 @@ __global__ void computePatchContactAccumulators_impl(DEMDataDT* granData,
 
         float3 originalNormal = granData->contactForces[myContactID];
         float3 penetrationStorage = granData->contactPointGeometryA[myContactID];
-        double originalPenetration = float3StorageToDouble(penetrationStorage);
-        originalPenetration = (originalPenetration > 0.0) ? originalPenetration : 0.0;
+        double rawPenetration = float3StorageToDouble(penetrationStorage);
+        double clampedPenetration = (rawPenetration > 0.0) ? rawPenetration : 0.0;
 
         double area = float3StorageToDouble(granData->contactPointGeometryB[myContactID]);
 
         float dotProduct = dot(originalNormal, votedNormal);
         double cospos = (dotProduct > 0.f) ? (double)dotProduct : 0.0;
 
-        double projectedPenetration = originalPenetration * cospos;
+        double projectedPenetration = clampedPenetration * cospos;
         double projectedArea = area * cospos;
         double weight = projectedPenetration * projectedArea;
 
         double3 contactPoint = to_double3(granData->contactTorque_convToForce[myContactID]);
         double3 weightedCP = make_double3(contactPoint.x * weight, contactPoint.y * weight, contactPoint.z * weight);
 
-        PatchContactAccum acc;
+        FusedPatchAccum acc;
         acc.sumProjArea = projectedArea;
         acc.maxProjPen = projectedPenetration;
         acc.sumWeight = weight;
         acc.sumWeightedCP = weightedCP;
+        acc.sumWeightedNormal =
+            make_float3(originalNormal.x * area, originalNormal.y * area, originalNormal.z * area);
+        acc.maxPenRaw = rawPenetration;
+        acc.maxPenNormal = originalNormal;
+        acc.maxPenCP = contactPoint;
         accumulators[idx] = acc;
     }
 }
 
-void computePatchContactAccumulators(DEMDataDT* granData,
-                                     float3* votedNormals,
-                                     const contactPairs_t* keys,
-                                     PatchContactAccum* accumulators,
-                                     contactPairs_t startOffsetPrimitive,
-                                     contactPairs_t startOffsetPatch,
-                                     contactPairs_t count,
-                                     cudaStream_t& this_stream) {
+void computeFusedPatchContactAccumulators(DEMDataDT* granData,
+                                          float3* votedNormals,
+                                          const contactPairs_t* keys,
+                                          FusedPatchAccum* accumulators,
+                                          contactPairs_t startOffsetPrimitive,
+                                          contactPairs_t startOffsetPatch,
+                                          contactPairs_t count,
+                                          cudaStream_t& this_stream) {
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
-        computePatchContactAccumulators_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+        computeFusedPatchContactAccumulators_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             granData, votedNormals, keys, accumulators, startOffsetPrimitive, startOffsetPatch, count);
     }
 }
 
 // Kernel to scatter reduced patch accumulators to the final arrays expected by patch-based correction.
-__global__ void scatterPatchContactAccumulators_impl(const PatchContactAccum* accumulators,
-                                                     const contactPairs_t* uniqueKeys,
-                                                     double* totalProjectedAreas,
-                                                     double* maxProjectedPenetrations,
-                                                     double3* votedContactPoints,
-                                                     contactPairs_t startOffsetPatch,
-                                                     contactPairs_t count) {
+__global__ void scatterFusedPatchAccumulators_impl(const FusedPatchAccum* accumulators,
+                                                   const contactPairs_t* uniqueKeys,
+                                                   double* totalProjectedAreas,
+                                                   double* maxProjectedPenetrations,
+                                                   double3* votedContactPoints,
+                                                   float3* votedNormals,
+                                                   float3* zeroAreaNormals,
+                                                   double* zeroAreaPenetrations,
+                                                   double3* zeroAreaContactPoints,
+                                                   contactPairs_t startOffsetPatch,
+                                                   contactPairs_t count) {
     contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
         contactPairs_t patchIdx = uniqueKeys[idx];
         contactPairs_t localIdx = patchIdx - startOffsetPatch;
 
-        PatchContactAccum acc = accumulators[idx];
+        FusedPatchAccum acc = accumulators[idx];
         totalProjectedAreas[localIdx] = acc.sumProjArea;
         maxProjectedPenetrations[localIdx] = acc.maxProjPen;
 
+        float3 summedNormal = acc.sumWeightedNormal;
+        float len2 = summedNormal.x * summedNormal.x + summedNormal.y * summedNormal.y + summedNormal.z * summedNormal.z;
+        votedNormals[localIdx] = (len2 > 0.f) ? normalize(summedNormal) : make_float3(0, 0, 0);
+
         if (acc.sumWeight > 0.0) {
             double invWeight = 1.0 / acc.sumWeight;
-            votedContactPoints[localIdx] = make_double3(
-                acc.sumWeightedCP.x * invWeight, acc.sumWeightedCP.y * invWeight, acc.sumWeightedCP.z * invWeight);
+            votedContactPoints[localIdx] =
+                make_double3(acc.sumWeightedCP.x * invWeight, acc.sumWeightedCP.y * invWeight,
+                             acc.sumWeightedCP.z * invWeight);
         } else {
             votedContactPoints[localIdx] = make_double3(0.0, 0.0, 0.0);
         }
+
+        zeroAreaNormals[localIdx] = acc.maxPenNormal;
+        zeroAreaPenetrations[localIdx] = (acc.maxPenRaw < 0.0) ? acc.maxPenRaw : -DEME_HUGE_FLOAT;
+        zeroAreaContactPoints[localIdx] = acc.maxPenCP;
     }
 }
 
-void scatterPatchContactAccumulators(const PatchContactAccum* accumulators,
-                                     const contactPairs_t* uniqueKeys,
-                                     double* totalProjectedAreas,
-                                     double* maxProjectedPenetrations,
-                                     double3* votedContactPoints,
-                                     contactPairs_t startOffsetPatch,
-                                     contactPairs_t count,
-                                     cudaStream_t& this_stream) {
+void scatterFusedPatchAccumulators(const FusedPatchAccum* accumulators,
+                                   const contactPairs_t* uniqueKeys,
+                                   double* totalProjectedAreas,
+                                   double* maxProjectedPenetrations,
+                                   double3* votedContactPoints,
+                                   float3* votedNormals,
+                                   float3* zeroAreaNormals,
+                                   double* zeroAreaPenetrations,
+                                   double3* zeroAreaContactPoints,
+                                   contactPairs_t startOffsetPatch,
+                                   contactPairs_t count,
+                                   cudaStream_t& this_stream) {
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
-        scatterPatchContactAccumulators_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            accumulators, uniqueKeys, totalProjectedAreas, maxProjectedPenetrations, votedContactPoints,
-            startOffsetPatch, count);
+        scatterFusedPatchAccumulators_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            accumulators, uniqueKeys, totalProjectedAreas, maxProjectedPenetrations, votedContactPoints, votedNormals,
+            zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, startOffsetPatch, count);
     }
 }
 

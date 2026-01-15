@@ -248,6 +248,46 @@ __global__ void gatherByIndex(const T* in, T* out, const contactPairs_t* idx, si
     }
 }
 
+// Build a sortable 64-bit key from (idB, contactType, persistency_preference).
+// - High 32 bits: idB (so contacts with the same idB group together)
+// - Low bits: contactType then persistency (so within a duplicate group, the preferred contact comes first)
+//
+// If prefer_persistent is true, persistent contacts (CONTACT_IS_PERSISTENT) sort before non-persistent ones.
+__global__ void buildKeyBTypePersist(const bodyID_t* idB,
+                                     const contact_t* contactType,
+                                     const notStupidBool_t* persistency,
+                                     unsigned long long* keys,
+                                     size_t n,
+                                     bool prefer_persistent) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const unsigned long long high = (static_cast<unsigned long long>(idB[myID]) << 32);
+        const unsigned long long type_part = (static_cast<unsigned long long>(contactType[myID]) << 1);
+        const unsigned long long persist_part =
+            prefer_persistent ? static_cast<unsigned long long>(persistency[myID] == CONTACT_NOT_PERSISTENT) : 0ull;
+        keys[myID] = high | type_part | persist_part;
+    }
+}
+
+// Mark (idA, idB, contactType) duplicates in a lexicographically sorted contact list.
+// retain_flags[i] is set to 1 if this row should be kept, 0 if it's a duplicate of the previous row.
+__global__ void markUniqueTriples(const bodyID_t* idA,
+                                  const bodyID_t* idB,
+                                  const contact_t* contactType,
+                                  notStupidBool_t* retain_flags,
+                                  size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        if (myID == 0) {
+            retain_flags[myID] = (notStupidBool_t)1;
+            return;
+        }
+        const bool is_dup = (idA[myID] == idA[myID - 1]) && (idB[myID] == idB[myID - 1]) &&
+                            (contactType[myID] == contactType[myID - 1]);
+        retain_flags[myID] = is_dup ? (notStupidBool_t)0 : (notStupidBool_t)1;
+    }
+}
+
 __global__ void setFirstFlagToOne(contactPairs_t* flags, size_t n) {
     if (blockIdx.x == 0 && threadIdx.x == 0 && n > 0) {
         flags[0] = 1;

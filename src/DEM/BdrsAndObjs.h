@@ -335,6 +335,12 @@ class DEMMesh : public DEMInitializer {
     }
     ~DEMMesh() {}
 
+    /// Load a triangle mesh saved as an STL file (ASCII or binary)
+    bool LoadSTLMesh(std::string input_file, bool load_normals = true);
+
+    /// Load a triangle mesh saved as a PLY file (ASCII, triangulated or polygonal)
+    bool LoadPLYMesh(std::string input_file, bool load_normals = true);
+
     /// Load a triangle mesh saved as a Wavefront .obj file
     bool LoadWavefrontMesh(std::string input_file, bool load_normals = true, bool load_uv = false);
 

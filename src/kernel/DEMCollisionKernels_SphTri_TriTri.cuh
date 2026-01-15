@@ -533,6 +533,9 @@ __device__ __forceinline__ double invSqrt(double x) {
     #define DEME_SAT_ENABLE_MIXED_PRECISION 0
 #endif
 
+// minimal arithmetic for extruded-triangle prism projection.
+// Key identity: prism projection = [minTri, maxTri] union [minTri+shift, maxTri+shift]
+// => outMin = minTri + min(0,shift), outMax = maxTri + max(0,shift)
 template <typename Vec, typename Scalar>
 __device__ __forceinline__ void projectExtrudedTriPrism(const Vec& v0,
                                                         const Vec& v1,
@@ -541,30 +544,18 @@ __device__ __forceinline__ void projectExtrudedTriPrism(const Vec& v0,
                                                         const Vec& axis,
                                                         Scalar& outMin,
                                                         Scalar& outMax) {
-    Scalar shift = dot(d, axis);
+    const Scalar p0 = dot(v0, axis);
+    const Scalar p1 = dot(v1, axis);
+    const Scalar p2 = dot(v2, axis);
 
-    Scalar p0 = dot(v0, axis);
-    Scalar p1 = dot(v1, axis);
-    Scalar p2 = dot(v2, axis);
+    const Scalar triMin = fmin(p0, fmin(p1, p2));
+    const Scalar triMax = fmax(p0, fmax(p1, p2));
 
-    Scalar mn0 = (p0 < p0 + shift) ? p0 : (p0 + shift);
-    Scalar mx0 = (p0 > p0 + shift) ? p0 : (p0 + shift);
-    Scalar mn1 = (p1 < p1 + shift) ? p1 : (p1 + shift);
-    Scalar mx1 = (p1 > p1 + shift) ? p1 : (p1 + shift);
-    Scalar mn2 = (p2 < p2 + shift) ? p2 : (p2 + shift);
-    Scalar mx2 = (p2 > p2 + shift) ? p2 : (p2 + shift);
+    const Scalar shift = dot(d, axis);
+    const Scalar z = Scalar(0);
 
-    outMin = mn0;
-    if (mn1 < outMin)
-        outMin = mn1;
-    if (mn2 < outMin)
-        outMin = mn2;
-
-    outMax = mx0;
-    if (mx1 > outMax)
-        outMax = mx1;
-    if (mx2 > outMax)
-        outMax = mx2;
+    outMin = triMin + fmin(z, shift);
+    outMax = triMax + fmax(z, shift);
 }
 
 template <typename Vec, typename Scalar>
@@ -834,173 +825,159 @@ __device__ bool projectTriangleOntoTriangle(const T1* incTri,
  *
  * Evaluates 24 axes (8 face normals + 16 edge-edge) without normalization. Uses FP32 by
  * default with a narrow mixed-precision recheck near zero overlap to avoid false positives.
+ * 
+ * OPTIMIZED VERSION: 
+ * - Uses fused operations to reduce register pressure
+ * - Inline axis separation test to avoid lambda overhead
+ * - Early termination structure optimized for GPU SIMT execution
  *
  * @return true if prisms are in contact (no separating axis found), false otherwise
  */
 template <typename T1>
-__device__ bool calc_prism_contact(const T1& prismAFaceANode1,
-                                   const T1& prismAFaceANode2,
-                                   const T1& prismAFaceANode3,
-                                   const T1& prismAFaceBNode1,
-                                   const T1& prismAFaceBNode2,
-                                   const T1& prismAFaceBNode3,
-                                   const T1& prismBFaceANode1,
-                                   const T1& prismBFaceANode2,
-                                   const T1& prismBFaceANode3,
-                                   const T1& prismBFaceBNode1,
-                                   const T1& prismBFaceBNode2,
-                                   const T1& prismBFaceBNode3) {
-    // Shared origin shrinks dynamic range for FP32 projections
-    const double3 origin = to_double3(prismAFaceANode1);
-    double3 Ad0 = to_double3(prismAFaceANode1) - origin;
-    double3 Ad1 = to_double3(prismAFaceANode2) - origin;
-    double3 Ad2 = to_double3(prismAFaceANode3) - origin;
-    double3 Bd0 = to_double3(prismBFaceANode1) - origin;
-    double3 Bd1 = to_double3(prismBFaceANode2) - origin;
-    double3 Bd2 = to_double3(prismBFaceANode3) - origin;
+__device__ __forceinline__ bool calc_prism_contact(const T1& prismAFaceANode1,
+                                                   const T1& prismAFaceANode2,
+                                                   const T1& prismAFaceANode3,
+                                                   const T1& prismAFaceBNode1,
+                                                   const T1& prismAFaceBNode2,
+                                                   const T1& prismAFaceBNode3,
+                                                   const T1& prismBFaceANode1,
+                                                   const T1& prismBFaceANode2,
+                                                   const T1& prismBFaceANode3,
+                                                   const T1& prismBFaceBNode1,
+                                                   const T1& prismBFaceBNode2,
+                                                   const T1& prismBFaceBNode3) {
+    // Relative coordinates centered at prismAFaceANode1 reduce FP32 dynamic range issues.
+    const float3 origin = prismAFaceANode1;
 
-    // Extrusion vectors (constant along corresponding vertices)
-    double3 dAd = to_double3(prismAFaceBNode1) - to_double3(prismAFaceANode1);
-    double3 dBd = to_double3(prismBFaceBNode1) - to_double3(prismBFaceANode1);
+    // Prism A base triangle relative to origin (A0 is exactly zero)
+    const float3 A0 = make_float3(0.0f, 0.0f, 0.0f);
+    const float3 A1 = prismAFaceANode2 - origin;
+    const float3 A2 = prismAFaceANode3 - origin;
 
-    float3 A0 = to_float3(Ad0);
-    float3 A1 = to_float3(Ad1);
-    float3 A2 = to_float3(Ad2);
-    float3 B0 = to_float3(Bd0);
-    float3 B1 = to_float3(Bd1);
-    float3 B2 = to_float3(Bd2);
-    float3 dA = to_float3(dAd);
-    float3 dB = to_float3(dBd);
+    // Prism B base triangle relative to origin
+    const float3 B0 = prismBFaceANode1 - origin;
+    const float3 B1 = prismBFaceANode2 - origin;
+    const float3 B2 = prismBFaceANode3 - origin;
 
-    float3 eA0 = A1 - A0;
-    float3 eA1 = A2 - A1;
-    float3 eA2 = A0 - A2;
-    float3 eB0 = B1 - B0;
-    float3 eB1 = B2 - B1;
-    float3 eB2 = B0 - B2;
+    // Extrusion vectors (world differences; origin cancels)
+    const float3 dA = prismAFaceBNode1 - prismAFaceANode1;
+    const float3 dB = prismBFaceBNode1 - prismBFaceANode1;
 
-    const float satMargin = 0.0f;  // set >0 for conservative FP32-only rejection
-    constexpr bool kEnableMixedPrecision = DEME_SAT_ENABLE_MIXED_PRECISION != 0;
-    constexpr float mixedPrecisionBand = kEnableMixedPrecision ? 1e-6f : 0.0f;
-    float maxSep = -DEME_HUGE_FLOAT;
+    // ------------------------------------------------------------------
+    // Cheap AABB overlap test on world axes (X/Y/Z) for the full prisms.
+    // This rejects many non-contacts before the expensive SAT axes.
+    // Prism extents: triMin + min(0,d), triMax + max(0,d).
+    // ------------------------------------------------------------------
+    {
+        const float triMinAx = fminf(0.0f, fminf(A1.x, A2.x));
+        const float triMaxAx = fmaxf(0.0f, fmaxf(A1.x, A2.x));
+        const float triMinAy = fminf(0.0f, fminf(A1.y, A2.y));
+        const float triMaxAy = fmaxf(0.0f, fmaxf(A1.y, A2.y));
+        const float triMinAz = fminf(0.0f, fminf(A1.z, A2.z));
+        const float triMaxAz = fmaxf(0.0f, fmaxf(A1.z, A2.z));
 
-    auto axisTest = [&](const float3& axis) {
-        float sep = satSeparationOnAxis<float3, float>(axis, A0, A1, A2, dA, B0, B1, B2, dB);
-        if (sep > maxSep)
-            maxSep = sep;
-        return sep > satMargin;
-    };
+        const float minAx = triMinAx + fminf(0.0f, dA.x);
+        const float maxAx = triMaxAx + fmaxf(0.0f, dA.x);
+        const float minAy = triMinAy + fminf(0.0f, dA.y);
+        const float maxAy = triMaxAy + fmaxf(0.0f, dA.y);
+        const float minAz = triMinAz + fminf(0.0f, dA.z);
+        const float maxAz = triMaxAz + fmaxf(0.0f, dA.z);
 
-    // Face normals
-    if (axisTest(cross(eA0, A2 - A0)))
-        return false;
-    if (axisTest(cross(eB0, B2 - B0)))
-        return false;
+        const float triMinBx = fminf(B0.x, fminf(B1.x, B2.x));
+        const float triMaxBx = fmaxf(B0.x, fmaxf(B1.x, B2.x));
+        const float triMinBy = fminf(B0.y, fminf(B1.y, B2.y));
+        const float triMaxBy = fmaxf(B0.y, fmaxf(B1.y, B2.y));
+        const float triMinBz = fminf(B0.z, fminf(B1.z, B2.z));
+        const float triMaxBz = fmaxf(B0.z, fmaxf(B1.z, B2.z));
 
-    // Side normals
-    if (axisTest(cross(eA0, dA)))
-        return false;
-    if (axisTest(cross(eA1, dA)))
-        return false;
-    if (axisTest(cross(eA2, dA)))
-        return false;
-    if (axisTest(cross(eB0, dB)))
-        return false;
-    if (axisTest(cross(eB1, dB)))
-        return false;
-    if (axisTest(cross(eB2, dB)))
-        return false;
+        const float minBx = triMinBx + fminf(0.0f, dB.x);
+        const float maxBx = triMaxBx + fmaxf(0.0f, dB.x);
+        const float minBy = triMinBy + fminf(0.0f, dB.y);
+        const float maxBy = triMaxBy + fmaxf(0.0f, dB.y);
+        const float minBz = triMinBz + fminf(0.0f, dB.z);
+        const float maxBz = triMaxBz + fmaxf(0.0f, dB.z);
 
-    // Edge-edge axes
-    float3 eA[3] = {eA0, eA1, eA2};
-    float3 eB[3] = {eB0, eB1, eB2};
-
-#pragma unroll
-    for (int i = 0; i < 3; ++i) {
-#pragma unroll
-        for (int j = 0; j < 3; ++j) {
-            if (axisTest(cross(eA[i], eB[j])))
-                return false;
-        }
+        if (maxAx < minBx || maxBx < minAx) return false;
+        if (maxAy < minBy || maxBy < minAy) return false;
+        if (maxAz < minBz || maxBz < minAz) return false;
     }
 
-#pragma unroll
-    for (int i = 0; i < 3; ++i) {
-        if (axisTest(cross(eA[i], dB)))
-            return false;
-    }
+    // Edge vectors (triangle edges only; extrusion edges handled via dA/dB)
+    const float3 eA0 = A1 - A0;
+    const float3 eA1 = A2 - A1;
+    const float3 eA2 = A0 - A2;
 
-#pragma unroll
-    for (int j = 0; j < 3; ++j) {
-        if (axisTest(cross(dA, eB[j])))
-            return false;
-    }
+    const float3 eB0 = B1 - B0;
+    const float3 eB1 = B2 - B1;
+    const float3 eB2 = B0 - B2;
 
-    if (axisTest(cross(dA, dB)))
-        return false;
+    // Project an extruded triangle prism where the shift along axis is provided (can be forced to 0 cheaply).
+    // NOTE: We avoid any rsqrt normalization. Separation sign is invariant to axis scale.
+    #define PROJECT_PRISM_WITH_SHIFT(v0, v1, v2, shift, axis, outMin, outMax) do { \
+        const float p0 = dot((v0), (axis)); \
+        const float p1 = dot((v1), (axis)); \
+        const float p2 = dot((v2), (axis)); \
+        const float triMin = fminf(p0, fminf(p1, p2)); \
+        const float triMax = fmaxf(p0, fmaxf(p1, p2)); \
+        (outMin) = triMin + fminf(0.0f, (shift)); \
+        (outMax) = triMax + fmaxf(0.0f, (shift)); \
+    } while (0)
 
-    // Mixed-precision recheck near the decision boundary to suppress FP32 false positives
-    if constexpr (kEnableMixedPrecision) {
-        if (maxSep <= -mixedPrecisionBand)
-            return true;
+    // Test axis: caller can declare whether shiftA and/or shiftB are guaranteed zero for this axis.
+    // This saves a dot(d,axis) on the relevant prism.
+    #define TEST_AXIS(axis_expr, shiftA_zero, shiftB_zero) do { \
+        const float3 axis = (axis_expr); \
+        const float len2 = dot(axis, axis); \
+        if (len2 > DEME_TINY_FLOAT) { \
+            float minA, maxA, minB, maxB; \
+            const float shiftA = (shiftA_zero) ? 0.0f : dot(dA, axis); \
+            const float shiftB = (shiftB_zero) ? 0.0f : dot(dB, axis); \
+            PROJECT_PRISM_WITH_SHIFT(A0, A1, A2, shiftA, axis, minA, maxA); \
+            PROJECT_PRISM_WITH_SHIFT(B0, B1, B2, shiftB, axis, minB, maxB); \
+            if (maxA < minB || maxB < minA) return false; \
+        } \
+    } while (0)
 
-        double3 eAd0 = Ad1 - Ad0;
-        double3 eAd1 = Ad2 - Ad1;
-        double3 eAd2 = Ad0 - Ad2;
-        double3 eBd0 = Bd1 - Bd0;
-        double3 eBd1 = Bd2 - Bd1;
-        double3 eBd2 = Bd0 - Bd2;
+    // Face normals (2 axes): shifts generally non-zero for both prisms
+    TEST_AXIS(cross(eA0, A2 - A0), false, false);
+    TEST_AXIS(cross(eB0, B2 - B0), false, false);
 
-        auto axisTestD = [&](const double3& axis) {
-            double sep = satSeparationOnAxis<double3, double>(axis, Ad0, Ad1, Ad2, dAd, Bd0, Bd1, Bd2, dBd);
-            return sep > 0.0;
-        };
+    // Side normals (6 axes):
+    // For axis = cross(eA?, dA): dot(dA, axis) == 0 in exact arithmetic -> shiftA_zero = true.
+    // For axis = cross(eB?, dB): dot(dB, axis) == 0 -> shiftB_zero = true.
+    TEST_AXIS(cross(eA0, dA), true,  false);
+    TEST_AXIS(cross(eA1, dA), true,  false);
+    TEST_AXIS(cross(eA2, dA), true,  false);
+    TEST_AXIS(cross(eB0, dB), false, true);
+    TEST_AXIS(cross(eB1, dB), false, true);
+    TEST_AXIS(cross(eB2, dB), false, true);
 
-        if (axisTestD(cross(eAd0, Ad2 - Ad0)))
-            return false;
-        if (axisTestD(cross(eBd0, Bd2 - Bd0)))
-            return false;
+    // Edge-edge axes (9 axes): shifts generally non-zero for both prisms
+    TEST_AXIS(cross(eA0, eB0), false, false);
+    TEST_AXIS(cross(eA0, eB1), false, false);
+    TEST_AXIS(cross(eA0, eB2), false, false);
+    TEST_AXIS(cross(eA1, eB0), false, false);
+    TEST_AXIS(cross(eA1, eB1), false, false);
+    TEST_AXIS(cross(eA1, eB2), false, false);
+    TEST_AXIS(cross(eA2, eB0), false, false);
+    TEST_AXIS(cross(eA2, eB1), false, false);
+    TEST_AXIS(cross(eA2, eB2), false, false);
 
-        if (axisTestD(cross(eAd0, dAd)))
-            return false;
-        if (axisTestD(cross(eAd1, dAd)))
-            return false;
-        if (axisTestD(cross(eAd2, dAd)))
-            return false;
-        if (axisTestD(cross(eBd0, dBd)))
-            return false;
-        if (axisTestD(cross(eBd1, dBd)))
-            return false;
-        if (axisTestD(cross(eBd2, dBd)))
-            return false;
+    // Edge-extrusion cross products (6 axes):
+    // axis = cross(eA?, dB) => dot(dB,axis) == 0 -> shiftB_zero = true
+    // axis = cross(dA, eB?) => dot(dA,axis) == 0 -> shiftA_zero = true
+    TEST_AXIS(cross(eA0, dB), false, true);
+    TEST_AXIS(cross(eA1, dB), false, true);
+    TEST_AXIS(cross(eA2, dB), false, true);
+    TEST_AXIS(cross(dA, eB0), true,  false);
+    TEST_AXIS(cross(dA, eB1), true,  false);
+    TEST_AXIS(cross(dA, eB2), true,  false);
 
-        double3 eAd[3] = {eAd0, eAd1, eAd2};
-        double3 eBd[3] = {eBd0, eBd1, eBd2};
+    // Extrusion-extrusion (1 axis): dot(dA,cross(dA,dB)) == dot(dB,cross(dA,dB)) == 0
+    TEST_AXIS(cross(dA, dB), true, true);
 
-#pragma unroll
-        for (int i = 0; i < 3; ++i) {
-#pragma unroll
-            for (int j = 0; j < 3; ++j) {
-                if (axisTestD(cross(eAd[i], eBd[j])))
-                    return false;
-            }
-        }
-
-#pragma unroll
-        for (int i = 0; i < 3; ++i) {
-            if (axisTestD(cross(eAd[i], dBd)))
-                return false;
-        }
-
-#pragma unroll
-        for (int j = 0; j < 3; ++j) {
-            if (axisTestD(cross(dAd, eBd[j])))
-                return false;
-        }
-
-        if (axisTestD(cross(dAd, dBd)))
-            return false;
-    }
+    #undef TEST_AXIS
+    #undef PROJECT_PRISM_WITH_SHIFT
 
     return true;
 }
@@ -1008,142 +985,147 @@ __device__ bool calc_prism_contact(const T1& prismAFaceANode1,
 /// Lightweight SAT check for triangle-triangle contact (physical contact only)
 /// Returns true if triangles are in physical contact (no separating axis found), false otherwise
 /// This is a simplified version that only performs the SAT test without computing contact details
+
+// ---------- helpers
+template <typename T>
+__device__ __forceinline__ T tmin2(T a, T b) { return a < b ? a : b; }
+
+template <typename T>
+__device__ __forceinline__ T tmax2(T a, T b) { return a > b ? a : b; }
+
+template <typename T>
+__device__ __forceinline__ T tmin3(T a, T b, T c) { return tmin2(a, tmin2(b, c)); }
+
+template <typename T>
+__device__ __forceinline__ T tmax3(T a, T b, T c) { return tmax2(a, tmax2(b, c)); }
+
+__device__ __forceinline__ float3 make_zero3_float()  { return make_float3(0.f, 0.f, 0.f); }
+__device__ __forceinline__ double3 make_zero3_double(){ return make_double3(0.0, 0.0, 0.0); }
+
+template <typename T1>
+__device__ __forceinline__ T1 make_zero3();
+template <>
+__device__ __forceinline__ float3 make_zero3<float3>() { return make_zero3_float(); }
+template <>
+__device__ __forceinline__ double3 make_zero3<double3>() { return make_zero3_double(); }
+
+// axis separation test (no normalization)
 template <typename T1, typename T2>
-__device__ bool checkTriangleTriangleSAT(const T1& A1,
-                                         const T1& B1,
-                                         const T1& C1,
-                                         const T1& A2,
-                                         const T1& B2,
-                                         const T1& C2) {
-    // Triangle A vertices (tri1)
-    const T1 triA[3] = {A1, B1, C1};
-    // Triangle B vertices (tri2)
-    const T1 triB[3] = {A2, B2, C2};
+__device__ __forceinline__ bool axis_separates_skin(
+    const T1& axis,
+    const T1& a0, const T1& a1, const T1& a2,
+    const T1& b0, const T1& b1, const T1& b2,
+    const T2 skin,
+    const T2 tiny_axis2,
+    const T2 num_eps) {
 
-    // Compute face normals
-    T1 nA = normalize(cross(B1 - A1, C1 - A1));
-    T1 nB = normalize(cross(B2 - A2, C2 - A2));
+    const T2 len2 = (T2)dot(axis, axis);
+    if (len2 <= tiny_axis2) return false; // ignore degenerate axis
 
-    //// TODO: And degenerated triangles?
+    const T2 pa0 = (T2)dot(a0, axis);
+    const T2 pa1 = (T2)dot(a1, axis);
+    const T2 pa2 = (T2)dot(a2, axis);
+    const T2 minA = tmin3(pa0, pa1, pa2);
+    const T2 maxA = tmax3(pa0, pa1, pa2);
 
-    // Edge vectors
-    T1 edges1[3] = {triA[1] - triA[0], triA[2] - triA[1], triA[0] - triA[2]};
-    T1 edges2[3] = {triB[1] - triB[0], triB[2] - triB[1], triB[0] - triB[2]};
+    const T2 pb0 = (T2)dot(b0, axis);
+    const T2 pb1 = (T2)dot(b1, axis);
+    const T2 pb2 = (T2)dot(b2, axis);
+    const T2 minB = tmin3(pb0, pb1, pb2);
+    const T2 maxB = tmax3(pb0, pb1, pb2);
 
-    // Test face normal of triangle A
-    {
-        T1 axis = nA;
+    const T2 sep1 = minB - maxA;
+    const T2 sep2 = minA - maxB;
+    const T2 sep  = (sep1 > sep2) ? sep1 : sep2;
 
-        // Project triangle A vertices
-        T2 min1 = dot(triA[0], axis);
-        T2 max1 = min1;
-#pragma unroll
-        for (int i = 1; i < 3; ++i) {
-            T2 proj = dot(triA[i], axis);
-            if (proj < min1)
-                min1 = proj;
-            if (proj > max1)
-                max1 = proj;
-        }
-
-        // Project triangle B vertices
-        T2 min2 = dot(triB[0], axis);
-        T2 max2 = min2;
-#pragma unroll
-        for (int i = 1; i < 3; ++i) {
-            T2 proj = dot(triB[i], axis);
-            if (proj < min2)
-                min2 = proj;
-            if (proj > max2)
-                max2 = proj;
-        }
-
-        // Check for separation
-        if (max1 < min2 || max2 < min1) {
-            return false;  // Separating axis found
-        }
-    }
-
-    // Test face normal of triangle B
-    {
-        T1 axis = nB;
-
-        // Project triangle A vertices
-        T2 min1 = dot(triA[0], axis);
-        T2 max1 = min1;
-#pragma unroll
-        for (int i = 1; i < 3; ++i) {
-            T2 proj = dot(triA[i], axis);
-            if (proj < min1)
-                min1 = proj;
-            if (proj > max1)
-                max1 = proj;
-        }
-
-        // Project triangle B vertices
-        T2 min2 = dot(triB[0], axis);
-        T2 max2 = min2;
-#pragma unroll
-        for (int i = 1; i < 3; ++i) {
-            T2 proj = dot(triB[i], axis);
-            if (proj < min2)
-                min2 = proj;
-            if (proj > max2)
-                max2 = proj;
-        }
-
-        // Check for separation
-        if (max1 < min2 || max2 < min1) {
-            return false;  // Separating axis found
-        }
-    }
-
-    // Test 9 edge-edge cross products
-#pragma unroll
-    for (int i = 0; i < 3; ++i) {
-#pragma unroll
-        for (int j = 0; j < 3; ++j) {
-            T1 axis = cross(edges1[i], edges2[j]);
-            T2 len2 = dot(axis, axis);
-
-            if (len2 > DEME_TINY_FLOAT) {
-                axis = axis * rsqrt(len2);
-
-                // Project triangle A vertices
-                T2 min1 = dot(triA[0], axis);
-                T2 max1 = min1;
-#pragma unroll
-                for (int k = 1; k < 3; ++k) {
-                    T2 proj = dot(triA[k], axis);
-                    if (proj < min1)
-                        min1 = proj;
-                    if (proj > max1)
-                        max1 = proj;
-                }
-
-                // Project triangle B vertices
-                T2 min2 = dot(triB[0], axis);
-                T2 max2 = min2;
-#pragma unroll
-                for (int k = 1; k < 3; ++k) {
-                    T2 proj = dot(triB[k], axis);
-                    if (proj < min2)
-                        min2 = proj;
-                    if (proj > max2)
-                        max2 = proj;
-                }
-
-                // Check for separation
-                if (max1 < min2 || max2 < min1) {
-                    return false;  // Separating axis found
-                }
-            }
-        }
-    }
-
-    // No separating axis found - triangles are in contact
-    return true;
+    // Separation only if gap is strictly larger than skin (+ numeric cushion)
+    return sep > (skin + num_eps);
 }
+
+template <typename T1, typename T2>
+__device__ __forceinline__ bool checkTriangleTriangleSAT(
+    const T1& A1, const T1& B1, const T1& C1,
+    const T1& A2, const T1& B2, const T1& C2) {
+
+    // Contact skin in your length unit (e.g., mm)
+    constexpr T2 CONTACT_SKIN = (T2)0.05;  // adjust
+
+    // Degeneracy gate for axes (len^2). Keep very small.
+    //// TODO: Beyond this threshol the presence of degenerated tris should be warned!
+    constexpr T2 TINY_AXIS2   = (T2)1e-20;
+
+    // Small numerical cushion (should be << skin)
+    constexpr T2 NUM_EPS      = (T2)1e-12;
+
+    // ---------------------------------------------------------
+    // 1) Pair-local frame: shift by origin to shrink dynamic range
+    // ---------------------------------------------------------
+    const T1 O  = A1;
+    const T1 a0 = make_zero3<T1>();
+    const T1 a1 = B1 - O;
+    const T1 a2 = C1 - O;
+
+    const T1 b0 = A2 - O;
+    const T1 b1 = B2 - O;
+    const T1 b2 = C2 - O;
+
+    // ---------------------------------------------------------
+    // 2) AABB early-out on X/Y/Z with skin
+    // ---------------------------------------------------------
+    {
+        const T2 minAx = tmin3((T2)a0.x, (T2)a1.x, (T2)a2.x);
+        const T2 maxAx = tmax3((T2)a0.x, (T2)a1.x, (T2)a2.x);
+        const T2 minBx = tmin3((T2)b0.x, (T2)b1.x, (T2)b2.x);
+        const T2 maxBx = tmax3((T2)b0.x, (T2)b1.x, (T2)b2.x);
+        if (maxAx < (minBx - CONTACT_SKIN) || maxBx < (minAx - CONTACT_SKIN)) return false;
+
+        const T2 minAy = tmin3((T2)a0.y, (T2)a1.y, (T2)a2.y);
+        const T2 maxAy = tmax3((T2)a0.y, (T2)a1.y, (T2)a2.y);
+        const T2 minBy = tmin3((T2)b0.y, (T2)b1.y, (T2)b2.y);
+        const T2 maxBy = tmax3((T2)b0.y, (T2)b1.y, (T2)b2.y);
+        if (maxAy < (minBy - CONTACT_SKIN) || maxBy < (minAy - CONTACT_SKIN)) return false;
+
+        const T2 minAz = tmin3((T2)a0.z, (T2)a1.z, (T2)a2.z);
+        const T2 maxAz = tmax3((T2)a0.z, (T2)a1.z, (T2)a2.z);
+        const T2 minBz = tmin3((T2)b0.z, (T2)b1.z, (T2)b2.z);
+        const T2 maxBz = tmax3((T2)b0.z, (T2)b1.z, (T2)b2.z);
+        if (maxAz < (minBz - CONTACT_SKIN) || maxBz < (minAz - CONTACT_SKIN)) return false;
+    }
+
+    // ---------------------------------------------------------
+    // 3) SAT axes: 2 face normals + 9 edge×edge (no normalization)
+    // ---------------------------------------------------------
+    const T1 eA0 = a1 - a0;
+    const T1 eA1 = a2 - a1;
+    const T1 eA2 = a0 - a2;
+
+    const T1 eB0 = b1 - b0;
+    const T1 eB1 = b2 - b1;
+    const T1 eB2 = b0 - b2;
+
+    // Face normals (unnormalized)
+    const T1 nA = cross(eA0, a2 - a0);
+    if (axis_separates_skin<T1, T2>(nA, a0,a1,a2, b0,b1,b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS)) return false;
+
+    const T1 nB = cross(eB0, b2 - b0);
+    if (axis_separates_skin<T1, T2>(nB, a0,a1,a2, b0,b1,b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS)) return false;
+
+    // Edge×Edge (9)
+    if (axis_separates_skin<T1, T2>(cross(eA0,eB0), a0,a1,a2, b0,b1,b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS)) return false;
+    if (axis_separates_skin<T1, T2>(cross(eA0,eB1), a0,a1,a2, b0,b1,b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS)) return false;
+    if (axis_separates_skin<T1, T2>(cross(eA0,eB2), a0,a1,a2, b0,b1,b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS)) return false;
+
+    if (axis_separates_skin<T1, T2>(cross(eA1,eB0), a0,a1,a2, b0,b1,b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS)) return false;
+    if (axis_separates_skin<T1, T2>(cross(eA1,eB1), a0,a1,a2, b0,b1,b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS)) return false;
+    if (axis_separates_skin<T1, T2>(cross(eA1,eB2), a0,a1,a2, b0,b1,b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS)) return false;
+
+    if (axis_separates_skin<T1, T2>(cross(eA2,eB0), a0,a1,a2, b0,b1,b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS)) return false;
+    if (axis_separates_skin<T1, T2>(cross(eA2,eB1), a0,a1,a2, b0,b1,b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS)) return false;
+    if (axis_separates_skin<T1, T2>(cross(eA2,eB2), a0,a1,a2, b0,b1,b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS)) return false;
+
+    return true; // no axis with gap > skin => treat as contact candidate
+}
+
 
 /// Triangle-triangle contact detection using projection-based approach:
 /// 1. Project triangle A onto triangle B's plane and clip against B's edges

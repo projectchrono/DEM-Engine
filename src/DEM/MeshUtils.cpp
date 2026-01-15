@@ -30,12 +30,14 @@
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
+#include <cstdint>
 #include <map>
 #include <unordered_map>
 #include <cmath>
 #include <queue>
 #include <vector>
 #include <sstream>
+#include <cstring>
 
 #include "../kernel/DEMHelperKernels.cuh"
 #include "BdrsAndObjs.h"
@@ -63,6 +65,415 @@ std::vector<std::vector<int>> DEMMesh::GetIndicesVertexesAsVectorOfVectors() {
         res[i] = {vec[i].x, vec[i].y, vec[i].z};
     }
     return res;
+}
+
+bool DEMMesh::LoadSTLMesh(std::string input_file, bool load_normals) {
+    Clear();
+    filename = input_file;
+
+    std::ifstream file(filename, std::ios::binary);
+    if (!file) {
+        DEME_ERROR_NOTHROW("Error loading STL file %s", filename.c_str());
+        return false;
+    }
+    std::vector<char> buffer((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    if (buffer.size() < 84) {
+        DEME_ERROR_NOTHROW("STL file %s is too small to contain any triangles.", filename.c_str());
+        return false;
+    }
+
+    auto set_default_patch_info = [this]() {
+        this->nTri = m_face_v_indices.size();
+        this->m_patch_ids.clear();
+        this->m_patch_ids.resize(this->nTri, 0);
+        this->nPatches = 1;
+        this->patches_explicitly_set = false;
+    };
+
+    auto load_binary = [&](uint32_t tri_count) -> bool {
+        size_t expected_size = 84 + static_cast<size_t>(tri_count) * 50;
+        if (buffer.size() < expected_size) {
+            DEME_ERROR_NOTHROW("Binary STL file %s ended unexpectedly.", filename.c_str());
+            return false;
+        }
+        const unsigned char* data = reinterpret_cast<const unsigned char*>(buffer.data());
+        size_t offset = 84;
+        for (uint32_t i = 0; i < tri_count; i++) {
+            float floats[12];
+            std::memcpy(floats, data + offset, sizeof(float) * 12);
+            float3 v0 = make_float3(floats[3], floats[4], floats[5]);
+            float3 v1 = make_float3(floats[6], floats[7], floats[8]);
+            float3 v2 = make_float3(floats[9], floats[10], floats[11]);
+            size_t base = m_vertices.size();
+            m_vertices.push_back(v0);
+            m_vertices.push_back(v1);
+            m_vertices.push_back(v2);
+            m_face_v_indices.push_back(make_int3((int)base, (int)base + 1, (int)base + 2));
+            offset += 50;
+        }
+        set_default_patch_info();
+        return true;
+    };
+
+    // Heuristics to decide if STL is binary
+    uint32_t tri_count = 0;
+    std::memcpy(&tri_count, buffer.data() + 80, sizeof(uint32_t));
+    size_t expected_size = 84 + static_cast<size_t>(tri_count) * 50;
+    bool looks_binary = expected_size == buffer.size();
+    bool looks_ascii = false;
+    if (!looks_binary) {
+        std::string header(buffer.data(), buffer.data() + std::min<size_t>(buffer.size(), 5));
+        if (header == "solid") {
+            looks_ascii = true;
+        }
+    }
+
+    if (looks_binary && load_binary(tri_count)) {
+        return true;
+    }
+
+    // Fallback to ASCII parsing
+    std::istringstream iss(std::string(buffer.begin(), buffer.end()));
+    std::string line;
+    std::vector<float3> facet_vertices;
+    facet_vertices.reserve(3);
+    while (std::getline(iss, line)) {
+        std::istringstream ls(line);
+        std::string token;
+        ls >> token;
+        if (token == "vertex") {
+            float3 v{};
+            ls >> v.x >> v.y >> v.z;
+            facet_vertices.push_back(v);
+            if (facet_vertices.size() == 3) {
+                size_t base = m_vertices.size();
+                m_vertices.push_back(facet_vertices[0]);
+                m_vertices.push_back(facet_vertices[1]);
+                m_vertices.push_back(facet_vertices[2]);
+                m_face_v_indices.push_back(make_int3((int)base, (int)base + 1, (int)base + 2));
+                facet_vertices.clear();
+            }
+        }
+    }
+
+    if (m_face_v_indices.empty()) {
+        DEME_ERROR_NOTHROW("Failed to parse STL file %s.", filename.c_str());
+        return false;
+    }
+
+    // Compute simple per-facet normals (one normal per triangle) so downstream code can rely on normal data.
+    if (load_normals) {
+        m_normals.clear();
+        m_face_n_indices.clear();
+        m_normals.reserve(m_face_v_indices.size());
+        m_face_n_indices.reserve(m_face_v_indices.size());
+        for (size_t i = 0; i < m_face_v_indices.size(); ++i) {
+            const int3& f = m_face_v_indices[i];
+            const float3& v0 = m_vertices[f.x];
+            const float3& v1 = m_vertices[f.y];
+            const float3& v2 = m_vertices[f.z];
+            float3 n = face_normal(v0, v1, v2);
+            m_normals.push_back(n);
+            m_face_n_indices.push_back(make_int3((int)i, (int)i, (int)i));
+        }
+    } else {
+        m_normals.clear();
+        m_face_n_indices.clear();
+    }
+    // STL has no UV by design; clear to mirror OBJ loader when UVs are absent.
+    m_UV.clear();
+    m_face_uv_indices.clear();
+
+    set_default_patch_info();
+    return true;
+}
+
+bool DEMMesh::LoadPLYMesh(std::string input_file, bool load_normals) {
+    Clear();
+    filename = input_file;
+
+    std::ifstream file(filename, std::ios::binary);
+    if (!file) {
+        DEME_ERROR_NOTHROW("Error loading PLY file %s", filename.c_str());
+        return false;
+    }
+
+    std::string line;
+    if (!std::getline(file, line) || line != "ply") {
+        DEME_ERROR_NOTHROW("PLY file %s is missing magic header.", filename.c_str());
+        return false;
+    }
+
+    enum class PLYFormat { ASCII, BINARY_LE, BINARY_BE };
+    PLYFormat format = PLYFormat::ASCII;
+    size_t num_vertices = 0;
+    size_t num_faces = 0;
+    // Track vertex property order to find position/normal fields
+    std::vector<std::string> vertex_props;
+    std::vector<std::string> vertex_prop_types;
+    bool in_vertex = false;
+    // Face list types
+    std::string face_count_type;
+    std::string face_index_type;
+
+    while (std::getline(file, line)) {
+        if (line == "end_header") {
+            break;
+        }
+        std::istringstream ls(line);
+        std::string token;
+        ls >> token;
+        if (token == "format") {
+            std::string fmt;
+            ls >> fmt;
+            if (fmt.find("ascii") == 0) {
+                format = PLYFormat::ASCII;
+            } else if (fmt.find("binary_little_endian") == 0) {
+                format = PLYFormat::BINARY_LE;
+            } else if (fmt.find("binary_big_endian") == 0) {
+                format = PLYFormat::BINARY_BE;
+            }
+        } else if (token == "element") {
+            std::string elem;
+            ls >> elem;
+            if (elem == "vertex") {
+                ls >> num_vertices;
+                in_vertex = true;
+            } else if (elem == "face") {
+                ls >> num_faces;
+                in_vertex = false;
+            } else {
+                in_vertex = false;
+            }
+        } else if (token == "property" && in_vertex) {
+            std::string type, name;
+            ls >> type >> name;
+            if (!name.empty()) {
+                vertex_props.push_back(name);
+                vertex_prop_types.push_back(type);
+            }
+        } else if (token == "property" && !in_vertex) {
+            std::string maybe_list;
+            ls >> maybe_list;
+            if (maybe_list == "list") {
+                ls >> face_count_type >> face_index_type;
+                // ignore name
+            }
+        }
+    }
+
+    if (format == PLYFormat::BINARY_BE) {
+        DEME_ERROR_NOTHROW("PLY file %s uses big-endian binary, which is not supported.", filename.c_str());
+        return false;
+    }
+    if (num_vertices == 0 || num_faces == 0) {
+        DEME_ERROR_NOTHROW("PLY file %s does not contain vertices or faces.", filename.c_str());
+        return false;
+    }
+
+    auto find_prop = [&](const std::string& name) -> int {
+        for (int i = 0; i < static_cast<int>(vertex_props.size()); ++i) {
+            if (vertex_props[i] == name)
+                return i;
+        }
+        return -1;
+    };
+    const int idx_x = find_prop("x");
+    const int idx_y = find_prop("y");
+    const int idx_z = find_prop("z");
+    const int idx_nx = find_prop("nx");
+    const int idx_ny = find_prop("ny");
+    const int idx_nz = find_prop("nz");
+    const bool has_vertex_normals = idx_nx >= 0 && idx_ny >= 0 && idx_nz >= 0;
+
+    m_vertices.reserve(num_vertices);
+    m_face_v_indices.reserve(num_faces);
+
+    auto read_scalar_le = [&](std::istream& is, const std::string& type, double& out) -> bool {
+        if (type == "float" || type == "float32") {
+            float v;
+            if (!is.read(reinterpret_cast<char*>(&v), sizeof(float)))
+                return false;
+            out = static_cast<double>(v);
+            return true;
+        }
+        if (type == "double" || type == "float64") {
+            double v;
+            if (!is.read(reinterpret_cast<char*>(&v), sizeof(double)))
+                return false;
+            out = v;
+            return true;
+        }
+        if (type == "uchar" || type == "uint8") {
+            std::uint8_t v;
+            if (!is.read(reinterpret_cast<char*>(&v), sizeof(std::uint8_t)))
+                return false;
+            out = static_cast<double>(v);
+            return true;
+        }
+        if (type == "char" || type == "int8") {
+            std::int8_t v;
+            if (!is.read(reinterpret_cast<char*>(&v), sizeof(std::int8_t)))
+                return false;
+            out = static_cast<double>(v);
+            return true;
+        }
+        if (type == "int" || type == "int32") {
+            std::int32_t v;
+            if (!is.read(reinterpret_cast<char*>(&v), sizeof(std::int32_t)))
+                return false;
+            out = static_cast<double>(v);
+            return true;
+        }
+        if (type == "uint" || type == "uint32") {
+            std::uint32_t v;
+            if (!is.read(reinterpret_cast<char*>(&v), sizeof(std::uint32_t)))
+                return false;
+            out = static_cast<double>(v);
+            return true;
+        }
+        return false;
+    };
+
+    // Read vertices
+    for (size_t i = 0; i < num_vertices; ++i) {
+        if (format == PLYFormat::ASCII) {
+            if (!std::getline(file, line)) {
+                DEME_ERROR_NOTHROW("Unexpected EOF while reading vertices in %s.", filename.c_str());
+                return false;
+            }
+            std::istringstream ls(line);
+            std::vector<double> vals;
+            double v;
+            while (ls >> v) {
+                vals.push_back(v);
+            }
+            if (idx_x < 0 || idx_y < 0 || idx_z < 0 || vals.size() <= std::max({idx_x, idx_y, idx_z})) {
+                DEME_ERROR_NOTHROW("Vertex position data missing in %s.", filename.c_str());
+                return false;
+            }
+            float3 p = make_float3(static_cast<float>(vals[idx_x]), static_cast<float>(vals[idx_y]),
+                                   static_cast<float>(vals[idx_z]));
+            m_vertices.push_back(p);
+            if (has_vertex_normals && vals.size() > static_cast<size_t>(std::max({idx_nx, idx_ny, idx_nz}))) {
+                float3 n = make_float3(static_cast<float>(vals[idx_nx]), static_cast<float>(vals[idx_ny]),
+                                       static_cast<float>(vals[idx_nz]));
+                m_normals.push_back(n);
+            }
+        } else {
+            // Binary little-endian
+            std::vector<double> vals(vertex_props.size(), 0.0);
+            for (size_t p = 0; p < vertex_props.size(); ++p) {
+                if (!read_scalar_le(file, vertex_prop_types[p], vals[p])) {
+                    DEME_ERROR_NOTHROW("Failed to read vertex data in binary PLY %s.", filename.c_str());
+                    return false;
+                }
+            }
+            if (idx_x < 0 || idx_y < 0 || idx_z < 0) {
+                DEME_ERROR_NOTHROW("Vertex position data missing in %s.", filename.c_str());
+                return false;
+            }
+            float3 p = make_float3(static_cast<float>(vals[idx_x]), static_cast<float>(vals[idx_y]),
+                                   static_cast<float>(vals[idx_z]));
+            m_vertices.push_back(p);
+            if (has_vertex_normals && vals.size() > static_cast<size_t>(std::max({idx_nx, idx_ny, idx_nz}))) {
+                float3 n = make_float3(static_cast<float>(vals[idx_nx]), static_cast<float>(vals[idx_ny]),
+                                       static_cast<float>(vals[idx_nz]));
+                m_normals.push_back(n);
+            }
+        }
+    }
+
+    // Read faces
+    std::vector<int3> faces;
+    faces.reserve(num_faces);
+    for (size_t i = 0; i < num_faces; ++i) {
+        if (format == PLYFormat::ASCII) {
+            if (!std::getline(file, line)) {
+                DEME_ERROR_NOTHROW("Unexpected EOF while reading faces in %s.", filename.c_str());
+                return false;
+            }
+            std::istringstream ls(line);
+            int verts_in_face = 0;
+            ls >> verts_in_face;
+            if (verts_in_face < 3) {
+                continue;  // ignore degenerate
+            }
+            std::vector<int> idx(verts_in_face);
+            for (int j = 0; j < verts_in_face; ++j) {
+                ls >> idx[j];
+            }
+            for (int t = 1; t < verts_in_face - 1; ++t) {
+                faces.push_back(make_int3(idx[0], idx[t], idx[t + 1]));
+            }
+        } else {
+            // Binary little-endian faces: expect list uchar count, int indices
+            double count_d = 0.0;
+            if (!read_scalar_le(file, face_count_type.empty() ? "uchar" : face_count_type, count_d)) {
+                DEME_ERROR_NOTHROW("Failed to read face count in binary PLY %s.", filename.c_str());
+                return false;
+            }
+            int verts_in_face = static_cast<int>(count_d);
+            if (verts_in_face < 3) {
+                // Skip indices
+                for (int j = 0; j < verts_in_face; ++j) {
+                    double throwaway;
+                    if (!read_scalar_le(file, face_index_type.empty() ? "int" : face_index_type, throwaway)) {
+                        DEME_ERROR_NOTHROW("Failed to skip face indices in binary PLY %s.", filename.c_str());
+                        return false;
+                    }
+                }
+                continue;
+            }
+            std::vector<int> idx(verts_in_face);
+            for (int j = 0; j < verts_in_face; ++j) {
+                double v = 0.0;
+                if (!read_scalar_le(file, face_index_type.empty() ? "int" : face_index_type, v)) {
+                    DEME_ERROR_NOTHROW("Failed to read face indices in binary PLY %s.", filename.c_str());
+                    return false;
+                }
+                idx[j] = static_cast<int>(v);
+            }
+            for (int t = 1; t < verts_in_face - 1; ++t) {
+                faces.push_back(make_int3(idx[0], idx[t], idx[t + 1]));
+            }
+        }
+    }
+
+    if (faces.empty()) {
+        DEME_ERROR_NOTHROW("No faces parsed from PLY file %s.", filename.c_str());
+        return false;
+    }
+
+    m_face_v_indices = std::move(faces);
+    nTri = m_face_v_indices.size();
+
+    if (load_normals) {
+        m_normals.clear();
+        m_face_n_indices.clear();
+        m_normals.reserve(nTri);
+        m_face_n_indices.reserve(nTri);
+        for (size_t i = 0; i < nTri; ++i) {
+            const int3& f = m_face_v_indices[i];
+            const float3& v0 = m_vertices[f.x];
+            const float3& v1 = m_vertices[f.y];
+            const float3& v2 = m_vertices[f.z];
+            float3 n = face_normal(v0, v1, v2);
+            m_normals.push_back(n);
+            m_face_n_indices.push_back(make_int3((int)i, (int)i, (int)i));
+        }
+    } else {
+        m_normals.clear();
+        m_face_n_indices.clear();
+    }
+    m_UV.clear();
+    m_face_uv_indices.clear();
+
+    // Default patch info: one patch
+    m_patch_ids.assign(nTri, 0);
+    nPatches = 1;
+    patches_explicitly_set = false;
+    return true;
 }
 
 bool DEMMesh::LoadWavefrontMesh(std::string input_file, bool load_normals, bool load_uv) {

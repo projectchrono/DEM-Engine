@@ -520,7 +520,7 @@ void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const 
     size_t ownerFactorSize = (size_t)simParams->nOwnerBodies * sizeof(float);
     // Bool table for whether this owner should change
     notStupidBool_t* idBool = (notStupidBool_t*)solverScratchSpace.allocateTempVector("idBool", idBoolSize);
-    DEME_GPU_CALL(cudaMemsetAsync(idBool, 0, idBoolSize, streamInfo.stream));
+    DEME_GPU_CALL(cudaMemset(idBool, 0, idBoolSize));
     float* ownerFactors = (float*)solverScratchSpace.allocateTempVector("ownerFactors", ownerFactorSize);
 
     // Mark on the bool array those owners that need a change
@@ -638,7 +638,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     // maxTriTriPenetration usually keeps the max tri--tri penetration during the on-going simulation. But after
     // initialization, when it stores no meaningful values, dT will send a work order to kT, so maxTriTriPenetration's
     // value has to be initialized.
-    DEME_GPU_CALL(cudaMemsetAsync(maxTriTriPenetration.getDevicePointer(), 0, sizeof(double), streamInfo.stream));
+    DEME_GPU_CALL(cudaMemset(maxTriTriPenetration.getDevicePointer(), 0, sizeof(double)));
 
     // Resize to the number of analytical geometries
     DEME_DUAL_ARRAY_RESIZE(ownerAnalBody, nAnalGM, 0);
@@ -808,6 +808,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                                             const std::vector<unsigned int>& ext_obj_comp_num,
                                             const std::vector<float>& mesh_obj_mass_types,
                                             const std::vector<float3>& mesh_obj_moi_types,
+                                            const std::vector<inertiaOffset_t>& mesh_obj_mass_offsets,
                                             size_t nExistOwners,
                                             size_t nExistSpheres,
                                             size_t nExistingFacets,
@@ -1132,7 +1133,8 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         input_mesh_objs.at(i)->cache_offset = m_meshes.size();
         m_meshes.push_back(input_mesh_objs.at(i));
 
-        inertiaPropOffsets[i + owner_offset_for_mesh_obj] = i + offset_for_mesh_obj_mass_template;
+        inertiaPropOffsets[i + owner_offset_for_mesh_obj] =
+            offset_for_mesh_obj_mass_template + mesh_obj_mass_offsets.at(i);
         if (!solverFlags.useMassJitify) {
             massOwnerBody[i + owner_offset_for_mesh_obj] = mesh_obj_mass_types.at(i);
             const float3 this_moi = mesh_obj_moi_types.at(i);
@@ -1299,6 +1301,9 @@ void DEMDynamicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpB
                                      const std::vector<unsigned int>& ext_obj_comp_num,
                                      const std::vector<float>& mesh_obj_mass_types,
                                      const std::vector<float3>& mesh_obj_moi_types,
+                                     const std::vector<float>& mesh_obj_mass_jit_types,
+                                     const std::vector<float3>& mesh_obj_moi_jit_types,
+                                     const std::vector<inertiaOffset_t>& mesh_obj_mass_offsets,
                                      const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
                                      const std::vector<notStupidBool_t>& family_mask_matrix,
                                      const std::set<unsigned int>& no_output_families,
@@ -1307,14 +1312,15 @@ void DEMDynamicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpB
     // initialization anyway.
 
     registerPolicies(template_number_name_map, clump_templates, ext_obj_mass_types, ext_obj_moi_types,
-                     mesh_obj_mass_types, mesh_obj_moi_types, loaded_materials, family_mask_matrix, no_output_families);
+                     mesh_obj_mass_jit_types, mesh_obj_moi_jit_types, loaded_materials, family_mask_matrix,
+                     no_output_families);
 
     // For initialization, owner array offset is 0
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_rot, input_ext_obj_family,
                          input_mesh_objs, input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family,
                          mesh_facet_owner, mesh_facet_patch, mesh_facets, mesh_patch_owner, mesh_patch_materials,
                          clump_templates, ext_obj_mass_types, ext_obj_moi_types, ext_obj_comp_num, mesh_obj_mass_types,
-                         mesh_obj_moi_types, 0, 0, 0, 0);
+                         mesh_obj_moi_types, mesh_obj_mass_offsets, 0, 0, 0, 0);
 
     buildTrackedObjs(input_clump_batches, ext_obj_comp_num, input_mesh_objs, tracked_objs, 0, 0, 0, 0);
 }
@@ -1338,6 +1344,9 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                                              const std::vector<unsigned int>& ext_obj_comp_num,
                                              const std::vector<float>& mesh_obj_mass_types,
                                              const std::vector<float3>& mesh_obj_moi_types,
+                                             const std::vector<float>& mesh_obj_mass_jit_types,
+                                             const std::vector<float3>& mesh_obj_moi_jit_types,
+                                             const std::vector<inertiaOffset_t>& mesh_obj_mass_offsets,
                                              const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
                                              const std::vector<notStupidBool_t>& family_mask_matrix,
                                              const std::set<unsigned int>& no_output_families,
@@ -1351,13 +1360,16 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                                              unsigned int nExistingObj,
                                              unsigned int nExistingAnalGM) {
     // No policy changes here
+    (void)mesh_obj_mass_jit_types;
+    (void)mesh_obj_moi_jit_types;
 
     // Analytical objects-related arrays should be empty
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_rot, input_ext_obj_family,
                          input_mesh_objs, input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family,
                          mesh_facet_owner, mesh_facet_patch, mesh_facets, mesh_patch_owner, mesh_patch_materials,
                          clump_templates, ext_obj_mass_types, ext_obj_moi_types, ext_obj_comp_num, mesh_obj_mass_types,
-                         mesh_obj_moi_types, nExistingOwners, nExistingSpheres, nExistingFacets, nExistingPatches);
+                         mesh_obj_moi_types, mesh_obj_mass_offsets, nExistingOwners, nExistingSpheres, nExistingFacets,
+                         nExistingPatches);
 
     // Make changes to tracked objects (potentially add more)
     buildTrackedObjs(input_clump_batches, ext_obj_comp_num, input_mesh_objs, tracked_objs, nExistingOwners,
@@ -2126,6 +2138,125 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     ptFile << ostream.str();
 }
 
+void DEMDynamicThread::writeMeshesAsStl(std::ofstream& ptFile) {
+    std::ostringstream ostream;
+    migrateFamilyToHost();
+
+    std::vector<notStupidBool_t> thisMeshSkip(m_meshes.size(), 0);
+    unsigned int mesh_num = 0;
+    for (const auto& mmesh : m_meshes) {
+        bodyID_t mowner = mmesh->owner;
+        family_t this_family = familyID[mowner];
+        if (familiesNoOutput.find(this_family) != familiesNoOutput.end()) {
+            thisMeshSkip[mesh_num] = 1;
+        }
+        mesh_num++;
+    }
+
+    ostream << "solid DEMSimulation" << std::endl;
+    mesh_num = 0;
+    for (const auto& mmesh : m_meshes) {
+        if (!thisMeshSkip[mesh_num]) {
+            bodyID_t mowner = mmesh->owner;
+            float3 ownerPos = this->getOwnerPos(mowner)[0];
+            float4 ownerOriQ = this->getOwnerOriQ(mowner)[0];
+            const auto& vertices = mmesh->GetCoordsVertices();
+            const auto& faces = mmesh->GetIndicesVertexes();
+
+            for (const auto& f : faces) {
+                float3 v0 = vertices[f.x];
+                float3 v1 = vertices[f.y];
+                float3 v2 = vertices[f.z];
+
+                applyFrameTransformLocalToGlobal(v0, ownerPos, ownerOriQ);
+                applyFrameTransformLocalToGlobal(v1, ownerPos, ownerOriQ);
+                applyFrameTransformLocalToGlobal(v2, ownerPos, ownerOriQ);
+
+                float3 normal = face_normal(v0, v1, v2);
+                ostream << "  facet normal " << normal.x << " " << normal.y << " " << normal.z << std::endl;
+                ostream << "    outer loop" << std::endl;
+                ostream << "      vertex " << v0.x << " " << v0.y << " " << v0.z << std::endl;
+                ostream << "      vertex " << v1.x << " " << v1.y << " " << v1.z << std::endl;
+                ostream << "      vertex " << v2.x << " " << v2.y << " " << v2.z << std::endl;
+                ostream << "    endloop" << std::endl;
+                ostream << "  endfacet" << std::endl;
+            }
+        }
+        mesh_num++;
+    }
+    ostream << "endsolid DEMSimulation" << std::endl;
+    ptFile << ostream.str();
+}
+
+void DEMDynamicThread::writeMeshesAsPly(std::ofstream& ptFile) {
+    std::ostringstream ostream;
+    migrateFamilyToHost();
+
+    std::vector<size_t> vertexOffset(m_meshes.size() + 1, 0);
+    size_t total_f = 0;
+    size_t total_v = 0;
+    unsigned int mesh_num = 0;
+
+    std::vector<notStupidBool_t> thisMeshSkip(m_meshes.size(), 0);
+    for (const auto& mmesh : m_meshes) {
+        bodyID_t mowner = mmesh->owner;
+        family_t this_family = familyID[mowner];
+        if (familiesNoOutput.find(this_family) != familiesNoOutput.end()) {
+            thisMeshSkip[mesh_num] = 1;
+        } else {
+            vertexOffset[mesh_num + 1] = mmesh->GetCoordsVertices().size();
+            total_v += mmesh->GetCoordsVertices().size();
+            total_f += mmesh->GetIndicesVertexes().size();
+        }
+        mesh_num++;
+    }
+
+    for (unsigned int i = 1; i < m_meshes.size(); i++) {
+        vertexOffset[i] = vertexOffset[i] + vertexOffset[i - 1];
+    }
+
+    ostream << "ply" << std::endl;
+    ostream << "format ascii 1.0" << std::endl;
+    ostream << "comment DEM simulation mesh export" << std::endl;
+    ostream << "element vertex " << total_v << std::endl;
+    ostream << "property float x" << std::endl;
+    ostream << "property float y" << std::endl;
+    ostream << "property float z" << std::endl;
+    ostream << "element face " << total_f << std::endl;
+    ostream << "property list uchar int vertex_indices" << std::endl;
+    ostream << "end_header" << std::endl;
+
+    mesh_num = 0;
+    for (const auto& mmesh : m_meshes) {
+        if (!thisMeshSkip[mesh_num]) {
+            bodyID_t mowner = mmesh->owner;
+            float3 ownerPos = this->getOwnerPos(mowner)[0];
+            float4 ownerOriQ = this->getOwnerOriQ(mowner)[0];
+            for (const auto& v : mmesh->GetCoordsVertices()) {
+                float3 point = v;
+                applyFrameTransformLocalToGlobal(point, ownerPos, ownerOriQ);
+                ostream << point.x << " " << point.y << " " << point.z << std::endl;
+            }
+        }
+        mesh_num++;
+    }
+
+    ostream << std::endl;
+    mesh_num = 0;
+    for (const auto& mmesh : m_meshes) {
+        if (!thisMeshSkip[mesh_num]) {
+            for (const auto& f : mmesh->GetIndicesVertexes()) {
+                ostream << "3 " << (size_t)f.x + vertexOffset[mesh_num] << " "
+                        << (size_t)f.y + vertexOffset[mesh_num] << " "
+                        << (size_t)f.z + vertexOffset[mesh_num] << std::endl;
+            }
+        }
+        mesh_num++;
+    }
+
+    ptFile << ostream.str();
+}
+
 inline void DEMDynamicThread::contactPrimitivesArraysResize(size_t nContactPairs) {
     DEME_DUAL_ARRAY_RESIZE(idPrimitiveA, nContactPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(idPrimitiveB, nContactPairs, 0);
@@ -2499,25 +2630,8 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
     const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
     const ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>>&
         typeKernelMap) {
-    // Reset max tri-tri penetration only when mesh contacts are present (avoid needless clears), async to overlap
-    bool needTriPenReset = false;
-    auto markIfTri = [&](contact_t c) {
-        auto itP = typeStartCountPrimitiveMap.find(c);
-        if (itP != typeStartCountPrimitiveMap.end() && itP->second.second > 0) {
-            needTriPenReset = true;
-            return;
-        }
-        auto itPatch = typeStartCountPatchMap.find(c);
-        if (itPatch != typeStartCountPatchMap.end() && itPatch->second.second > 0) {
-            needTriPenReset = true;
-        }
-    };
-    markIfTri(SPHERE_TRIANGLE_CONTACT);
-    markIfTri(TRIANGLE_TRIANGLE_CONTACT);
-    markIfTri(TRIANGLE_ANALYTICAL_CONTACT);
-    if (needTriPenReset) {
-        DEME_GPU_CALL(cudaMemsetAsync(maxTriTriPenetration.getDevicePointer(), 0, sizeof(double), streamInfo.stream));
-    }
+    // Reset max tri-tri penetration for this timestep on device (kT may need this info)
+    DEME_GPU_CALL(cudaMemset(maxTriTriPenetration.getDevicePointer(), 0, sizeof(double)));
 
     // For each contact type that exists, check if it is patch(mesh)-related type...
     for (size_t i = 0; i < m_numExistingTypes; i++) {
@@ -2531,40 +2645,35 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
             contactPairs_t startOffsetPatch = start_count_patch.first;
             contactPairs_t countPatch = start_count_patch.second;
 
-            // Vote for the contact direction; voting power depends on the contact area
-            // This reduce-by-key operation reduces primitive-recorded force pairs into patch/convex part-based
-            // force pairs. All elements that share the same geomToPatchMap value vote together.
             if (countPrimitive > 0) {
                 contactPairs_t* keys = granData->geomToPatchMap + startOffsetPrimitive;
-                // Allocate temporary arrays for the voting process
-                float3* weightedNormals =
-                    (float3*)solverScratchSpace.allocateTempVector("weightedNormals", countPrimitive * sizeof(float3));
-
                 // Allocate arrays for reduce-by-key results (uniqueKeys uses contactPairs_t, not patchIDPair_t)
                 contactPairs_t* uniqueKeys = (contactPairs_t*)solverScratchSpace.allocateTempVector(
                     "uniqueKeys", countPrimitive * sizeof(contactPairs_t));
-                float3* votedWeightedNormals = (float3*)solverScratchSpace.allocateTempVector(
-                    "votedWeightedNormals", countPrimitive * sizeof(float3));
                 solverScratchSpace.allocateDualStruct("numUniqueKeys");
                 size_t* numUniqueKeys = solverScratchSpace.getDualStructDevice("numUniqueKeys");
 
-                // Step 1: Prepare weighted normals. Keys are read directly from geomToPatchMap.
+                // Step 1: Area-weighted normals for voting
+                float3* weightedNormals =
+                    (float3*)solverScratchSpace.allocateTempVector("weightedNormals", countPrimitive * sizeof(float3));
                 prepareWeightedNormalsForVoting(&granData, weightedNormals, startOffsetPrimitive, countPrimitive,
                                                 streamInfo.stream);
 
-                // Step 2: Reduce-by-key for weighted normals (sum)
-                // The keys are geomToPatchMap values (contactPairs_t), which group primitives by patch pair
+                float3* votedWeightedNormals = (float3*)solverScratchSpace.allocateTempVector(
+                    "votedWeightedNormals", countPrimitive * sizeof(float3));
                 cubSumReduceByKey<contactPairs_t, float3>(keys, uniqueKeys, weightedNormals, votedWeightedNormals,
                                                           numUniqueKeys, countPrimitive, streamInfo.stream,
                                                           solverScratchSpace);
                 solverScratchSpace.finishUsingTempVector("weightedNormals");
-                // For extra safety
+
+                // Normalize the voted normals using unique keys and scatter to patch-local storage.
+                float3* votedNormals =
+                    (float3*)solverScratchSpace.allocateTempVector("votedNormals", countPatch * sizeof(float3));
                 solverScratchSpace.syncDualStructDeviceToHost("numUniqueKeys");
                 size_t numUniqueKeysHost = *(solverScratchSpace.getDualStructHost("numUniqueKeys"));
-                // std::cout << "Keys:" << std::endl;
-                // displayDeviceArray<contactPairs_t>(keys, countPrimitive);
-                // std::cout << "Unique Keys:" << std::endl;
-                // displayDeviceArray<contactPairs_t>(uniqueKeys, numUniqueKeysHost);
+                normalizeAndScatterVotedNormalsFromUniqueKeys(votedWeightedNormals, uniqueKeys, votedNormals,
+                                                              startOffsetPatch, numUniqueKeysHost, streamInfo.stream);
+                solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
                 if (numUniqueKeysHost != countPatch) {
                     DEME_ERROR(
                         "Patch-based contact voting produced %zu unique patch pairs, but expected %zu pairs for "
@@ -2572,28 +2681,19 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                         numUniqueKeysHost, countPatch, contact_type);
                 }
 
-                // Normalize the voted normals using unique keys and scatter to patch-local storage.
-                float3* votedNormals =
-                    (float3*)solverScratchSpace.allocateTempVector("votedNormals", countPatch * sizeof(float3));
-                normalizeAndScatterVotedNormalsFromUniqueKeys(votedWeightedNormals, uniqueKeys, votedNormals,
-                                                              startOffsetPatch, numUniqueKeysHost, streamInfo.stream);
-                solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
-                // displayDeviceFloat3(votedNormals, countPatch);
+                // Step 2: Fused accumulation (sum + max) in a single reduce-by-key.
+                FusedPatchAccum* primitiveAccums = (FusedPatchAccum*)solverScratchSpace.allocateTempVector(
+                    "fusedPrimitiveAccums", countPrimitive * sizeof(FusedPatchAccum));
+                computeFusedPatchContactAccumulators(&granData, votedNormals, keys, primitiveAccums,
+                                                     startOffsetPrimitive, startOffsetPatch, countPrimitive,
+                                                     streamInfo.stream);
 
-                // Project penetration/area and accumulate weighted contact points in a single pass.
-                PatchContactAccum* primitivePatchAccumulators =
-                    (PatchContactAccum*)solverScratchSpace.allocateTempVector(
-                        "primitivePatchAccumulators", countPrimitive * sizeof(PatchContactAccum));
-                computePatchContactAccumulators(&granData, votedNormals, keys, primitivePatchAccumulators,
-                                                startOffsetPrimitive, startOffsetPatch, countPrimitive,
-                                                streamInfo.stream);
-
-                PatchContactAccum* patchContactAccumulators = (PatchContactAccum*)solverScratchSpace.allocateTempVector(
-                    "patchContactAccumulators", numUniqueKeysHost * sizeof(PatchContactAccum));
-                cubSumReduceByKey<contactPairs_t, PatchContactAccum>(
-                    keys, uniqueKeys, primitivePatchAccumulators, patchContactAccumulators, numUniqueKeys,
-                    countPrimitive, streamInfo.stream, solverScratchSpace);
-                solverScratchSpace.finishUsingTempVector("primitivePatchAccumulators");
+                FusedPatchAccum* patchAccums = (FusedPatchAccum*)solverScratchSpace.allocateTempVector(
+                    "fusedPatchAccums", numUniqueKeysHost * sizeof(FusedPatchAccum));
+                cubSumReduceByKey<contactPairs_t, FusedPatchAccum>(keys, uniqueKeys, primitiveAccums, patchAccums,
+                                                                   numUniqueKeys, countPrimitive, streamInfo.stream,
+                                                                   solverScratchSpace);
+                solverScratchSpace.finishUsingTempVector("fusedPrimitiveAccums");
 
                 double* totalProjectedAreas =
                     (double*)solverScratchSpace.allocateTempVector("totalProjectedAreas", countPatch * sizeof(double));
@@ -2601,42 +2701,18 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     "maxProjectedPenetrations", countPatch * sizeof(double));
                 double3* votedContactPoints =
                     (double3*)solverScratchSpace.allocateTempVector("votedContactPoints", countPatch * sizeof(double3));
-                scatterPatchContactAccumulators(patchContactAccumulators, uniqueKeys, totalProjectedAreas,
-                                                maxProjectedPenetrations, votedContactPoints, startOffsetPatch,
-                                                numUniqueKeysHost, streamInfo.stream);
-                solverScratchSpace.finishUsingTempVector("patchContactAccumulators");
-
-                // Step 9: Handle zero-area patches (all primitive areas are 0)
-                // For these patches, we need to find the max penetration primitive and use its normal/penetration
-
-                // 9a: Extract primitive penetrations for max-reduce
-                double* primitivePenetrations = (double*)solverScratchSpace.allocateTempVector(
-                    "primitivePenetrations", countPrimitive * sizeof(double));
-                extractPrimitivePenetrations(&granData, primitivePenetrations, startOffsetPrimitive, countPrimitive,
-                                             streamInfo.stream);
-
-                // 9b: Max-negative-reduce-by-key to get max negative penetration per patch
-                // This finds the largest negative value (smallest absolute value among negatives)
-                // Positive values are treated as very negative to indicate invalid/non-physical state
-                double* maxPenetrations =
-                    (double*)solverScratchSpace.allocateTempVector("maxPenetrations", countPatch * sizeof(double));
-                cubMaxNegativeReduceByKey<contactPairs_t, double>(keys, uniqueKeys, primitivePenetrations,
-                                                                  maxPenetrations, numUniqueKeys, countPrimitive,
-                                                                  streamInfo.stream, solverScratchSpace);
-                solverScratchSpace.finishUsingTempVector("primitivePenetrations");
-
-                // 9c: Find max-penetration primitives for zero-area patches and extract their normals, penetrations,
-                // and contact points
                 float3* zeroAreaNormals =
                     (float3*)solverScratchSpace.allocateTempVector("zeroAreaNormals", countPatch * sizeof(float3));
                 double* zeroAreaPenetrations =
                     (double*)solverScratchSpace.allocateTempVector("zeroAreaPenetrations", countPatch * sizeof(double));
                 double3* zeroAreaContactPoints = (double3*)solverScratchSpace.allocateTempVector(
                     "zeroAreaContactPoints", countPatch * sizeof(double3));
-                findMaxPenetrationPrimitiveForZeroAreaPatches(
-                    &granData, maxPenetrations, zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, keys,
-                    startOffsetPrimitive, startOffsetPatch, countPrimitive, streamInfo.stream);
-                solverScratchSpace.finishUsingTempVector("maxPenetrations");
+
+                scatterFusedPatchAccumulators(patchAccums, uniqueKeys, totalProjectedAreas, maxProjectedPenetrations,
+                                              votedContactPoints, votedNormals, zeroAreaNormals, zeroAreaPenetrations,
+                                              zeroAreaContactPoints, startOffsetPatch, numUniqueKeysHost,
+                                              streamInfo.stream);
+                solverScratchSpace.finishUsingTempVector("fusedPatchAccums");
 
                 // Step 9d: Check if each patch has any SAT-satisfying primitive (for tri-tri contacts)
                 // If no primitive satisfies SAT, the patch contact is non-physical and should use Step 9 fallback
@@ -3417,7 +3493,7 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<JitHelper::CachedProg
     // If this boolArrExclude is 1 at an element, that means this element is exluded in the reduction
     notStupidBool_t* boolArrExclude =
         (notStupidBool_t*)solverScratchSpace.allocateTempVector("boolArrExclude", regionTempSize);
-    DEME_GPU_CALL(cudaMemsetAsync(boolArrExclude, 0, regionTempSize, streamInfo.stream));
+    DEME_GPU_CALL(cudaMemset(boolArrExclude, 0, regionTempSize));
 
     // We may actually have 2 reduced returns: in regional reduction, key 0 and 1 give one return each.
     size_t returnSize = sizeof(float) * 2;

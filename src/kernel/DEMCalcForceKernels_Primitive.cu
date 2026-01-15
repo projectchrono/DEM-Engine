@@ -257,6 +257,11 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
                                                                           triBNode2, triBNode3);
             granData->contactSATSatisfied[myPrimitiveContactID] = satisfiesSAT ? 1 : 0;
 
+            // If SAT says no physical contact potential, drop this pair (projection can report non-physical overlaps)
+            if (!satisfiesSAT) {
+                ContactType = deme::NOT_A_CONTACT;
+            }
+
             // Fix ContactType if needed
             // If the solver says in contact, we do not question it
             if (!in_contact) {
