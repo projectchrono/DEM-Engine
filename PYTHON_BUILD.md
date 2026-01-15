@@ -84,7 +84,7 @@ The Python package provides bindings for:
 - `DEMSolver` - Main simulation solver class with full API including:
   - Contact detection control (`SetMaxTriTriPenetration`, `SetTriTriPenetration`)
   - Mesh contact settings (`SetMeshUniversalContact`, `SetPersistentContact`)
-  - Performance tuning (`UseCompactForceKernel`, `DisableJitifyClumpTemplates`)
+  - Performance tuning (`DisableJitifyClumpTemplates`)
   - Output control (`EnableOwnerWildcardOutput`, `EnableContactWildcardOutput`)
   - Error thresholds (`SetErrorOutAngularVelocity`, `SetErrorOutVelocity`)
 - `DEMMaterial` - Material properties
