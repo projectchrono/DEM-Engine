@@ -125,13 +125,13 @@ PYBIND11_MODULE(DEME, obj) {
             "Apply a local rotation then a translation, then return the result.");
     obj.def("GetDEMEDataFile", &deme::GetDEMEDataFile);
     obj.def("DEMBoxGridSampler",
-            static_cast<std::vector<std::vector<float>> (*)(const std::vector<float>&, const std::vector<float>&, float,
+            static_cast<std::vector<float3> (*)(const std::vector<float>&, const std::vector<float>&, float,
                                                             float, float)>(&deme::DEMBoxGridSampler),
             py::arg("BoxCenter"), py::arg("HalfDims"), py::arg("GridSizeX"), py::arg("GridSizeY") = -1.0,
             py::arg("GridSizeZ") = -1.0);
     obj.def(
         "DEMBoxHCPSampler",
-        static_cast<std::vector<std::vector<float>> (*)(const std::vector<float>&, const std::vector<float>&, float)>(
+        static_cast<std::vector<float3> (*)(const std::vector<float>&, const std::vector<float>&, float)>(
             &deme::DEMBoxHCPSampler));
     obj.def("DEMCylSurfSampler",
             static_cast<std::vector<std::vector<float>> (*)(const std::vector<float>&, const std::vector<float>&, float,
