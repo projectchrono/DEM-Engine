@@ -84,10 +84,16 @@ __global__ void computeMarginFromAbsv_implTri(deme::DEMSimParams* simParams,
         if (penetrationMargin > simParams->capTriTriPenetration) {
             penetrationMargin = simParams->capTriTriPenetration;
         }
-
-        granData->marginSizeTriangle[triID] =
+        // We hope that penetrationMargin is small, so it's absorbed into the velocity-induce margin.
+        // But if not, it should prevail to avoid losing contacts involving triangles inside another mesh.
+        double finalMargin =
             (double)(vel * simParams->expSafetyMulti + simParams->expSafetyAdder) * (*ts) * (*maxDrift) +
-            penetrationMargin + granData->familyExtraMarginSize[my_family];
+            granData->familyExtraMarginSize[my_family];
+        // if (finalMargin < penetrationMargin) {
+        //     finalMargin = penetrationMargin;
+        // }
+
+        granData->marginSizeTriangle[triID] = finalMargin;
     }
 }
 

@@ -23,6 +23,7 @@ SET(DEMOS
 		DEMdemo_MeshFalling
 		DEMdemo_TestPack
 		DEMdemo_RotatingDrum
+		DEMdemo_DrumCubes
 		DEMdemo_Centrifuge
 		DEMdemo_GameOfLife
 		DEMdemo_BallDrop

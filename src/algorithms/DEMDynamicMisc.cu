@@ -138,9 +138,15 @@ __global__ void prepareWeightedNormalsForVoting_impl(DEMDataDT* granData,
         // Extract the area (double) from contactPointGeometryB (stored as float3)
         float3 areaStorage = granData->contactPointGeometryB[myContactID];
         double area = float3StorageToDouble(areaStorage);
+        float3 penStorage = granData->contactPointGeometryA[myContactID];
+        double penetration = float3StorageToDouble(penStorage);
+        penetration = (penetration > DEME_TINY_FLOAT) ? penetration : DEME_TINY_FLOAT;
+        double recipPen = 1.0 / penetration;
 
         // Compute weighted normal (normal * area)
-        weightedNormals[idx] = make_float3(normal.x * area, normal.y * area, normal.z * area);
+        // Note that fake contacts do not affect as their area is 0
+        weightedNormals[idx] = make_float3((double)normal.x * area * recipPen, (double)normal.y * area * recipPen,
+                                           (double)normal.z * area * recipPen);
 
         // Store area for reduction
         areas[idx] = area;
@@ -170,23 +176,19 @@ void prepareWeightedNormalsForVoting(DEMDataDT* granData,
 // Assumes uniqueKeys are sorted (CUB's ReduceByKey maintains sort order)
 // Uses contactPairs_t keys (geomToPatchMap values)
 __global__ void normalizeAndScatterVotedNormals_impl(float3* votedWeightedNormals,
-                                                     double* totalAreas,
                                                      float3* output,
                                                      contactPairs_t count) {
     contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
-        float3 votedNormal = make_float3(0, 0, 0);
-        double totalArea = totalAreas[idx];
-        if (totalArea > 0.0) {
-            // Normalize by dividing by total area (use reciprocal multiplication for efficiency)
-            double invTotalArea = 1.0 / totalArea;
-            votedNormal.x = votedWeightedNormals[idx].x * invTotalArea;
-            votedNormal.y = votedWeightedNormals[idx].y * invTotalArea;
-            votedNormal.z = votedWeightedNormals[idx].z * invTotalArea;
-            // Normalization is needed, as voting by area can destroy unit length
-            votedNormal = normalize(votedNormal);
+        float3 votedNormal = votedWeightedNormals[idx];
+        float len2 = length2(votedNormal);
+        if (len2 > 0.f) {
+            // Normalize votedNormal
+            votedNormal *= rsqrtf(len2);
+        } else {
+            // If total area is 0, set to (0,0,0) to mark no real contact
+            votedNormal = make_float3(0.0f, 0.0f, 0.0f);
         }
-        // else: votedNormal remains (0,0,0)
 
         // Write to output at the correct position
         output[idx] = votedNormal;
@@ -194,14 +196,13 @@ __global__ void normalizeAndScatterVotedNormals_impl(float3* votedWeightedNormal
 }
 
 void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
-                                     double* totalAreas,
                                      float3* output,
                                      contactPairs_t count,
                                      cudaStream_t& this_stream) {
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         normalizeAndScatterVotedNormals_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            votedWeightedNormals, totalAreas, output, count);
+            votedWeightedNormals, output, count);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
