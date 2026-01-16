@@ -20,7 +20,6 @@
 # version of the CUDA Toolkit
 #
 # Minimum CUDA version: 7.0
-# Maximum CUDA version: 11.6
 
 function(cuda_supported_architectures)
 
@@ -31,7 +30,9 @@ function(cuda_supported_architectures)
 	set(cu10 30 35 50 52 60 61 70 72 75)
 	set(cu11 35 50 52 60 61 70 72 75 80)
 	set(cu11_x 35 50 52 60 61 70 72 75 80 86)
-	set(cu12_x 50 52 60 61 70 72 75 80 86)
+	set(cu12_x 50 52 60 61 70 72 75 80 86 89)
+	set(cu12_8 50 52 60 61 70 72 75 80 86 89 120)
+	set(cu13_x 75 80 86 89 90 100 120 121)
 
 	if (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 7)
 		set(CUDASUP_ARCHITECTURES ${cu7} CACHE INTERNAL "")
@@ -60,6 +61,14 @@ function(cuda_supported_architectures)
 	if (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12)
 		set(CUDASUP_ARCHITECTURES ${cu12_x} CACHE INTERNAL "")
 	endif()
+
+	if (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8)
+		set(CUDASUP_ARCHITECTURES ${cu12_8} CACHE INTERNAL "")
+	endif()
+	
+    if (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13)
+        set(CUDASUP_ARCHITECTURES ${cu13_x} CACHE INTERNAL "")
+    endif()
 
 	if (NOT DEFINED CUDASUP_ARCHITECTURES)
 		message(SEND_ERROR "[CUDASUP] Could not determine device architectures supported by the CUDA toolkit!")
