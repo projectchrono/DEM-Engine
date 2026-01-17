@@ -114,97 +114,6 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
     radii[myThreadID] = myRadius;
 }
 
-// Combined AABB overlap check and canonical bin assignment for tri-tri contacts.
-// This function does TWO things in one pass to avoid redundant AABB computation:
-// 1. Checks if the two prisms' AABBs overlap (early rejection if not)
-// 2. Determines if this bin is the canonical bin for this triangle pair
-//
-// Returns: true if AABBs overlap AND this is the canonical bin to process this pair
-//          false otherwise (either no overlap or should be processed in another bin)
-//
-// CANONICAL BIN ASSIGNMENT:
-// PROBLEM: Two triangles can be in many bins simultaneously. If we count this pair in
-// every bin where both are present, we get massive duplication.
-//
-// SOLUTION: For each unique triangle pair, assign it to EXACTLY ONE bin using a deterministic
-// rule that can be computed locally (without knowing all bins both triangles touch).
-//
-// APPROACH: Compute the AABB intersection of both prisms. The MINIMUM bin ID that touches
-// this intersection is the canonical bin. Since both triangles must touch this intersection
-// region, this bin is guaranteed to contain both triangles.
-inline __device__ bool shouldProcessTriTriInThisBin(deme::DEMSimParams* simParams,
-                                                    deme::binID_t currentBinID,
-                                                    deme::bodyID_t triID_A,
-                                                    deme::bodyID_t triID_B,
-                                                    const float3& triANode1,
-                                                    const float3& triANode2,
-                                                    const float3& triANode3,
-                                                    const float3& triBNode1,
-                                                    const float3& triBNode2,
-                                                    const float3& triBNode3,
-                                                    const float3& triANode1_other,
-                                                    const float3& triANode2_other,
-                                                    const float3& triANode3_other,
-                                                    const float3& triBNode1_other,
-                                                    const float3& triBNode2_other,
-                                                    const float3& triBNode3_other) {
-    (void)triID_A;
-    (void)triID_B;
-    
-    // Compute AABB of first prism (6 vertices)
-    float minX1 = fminf(fminf(fminf(triANode1.x, triANode2.x), fminf(triANode3.x, triBNode1.x)), fminf(triBNode2.x, triBNode3.x));
-    float maxX1 = fmaxf(fmaxf(fmaxf(triANode1.x, triANode2.x), fmaxf(triANode3.x, triBNode1.x)), fmaxf(triBNode2.x, triBNode3.x));
-    float minY1 = fminf(fminf(fminf(triANode1.y, triANode2.y), fminf(triANode3.y, triBNode1.y)), fminf(triBNode2.y, triBNode3.y));
-    float maxY1 = fmaxf(fmaxf(fmaxf(triANode1.y, triANode2.y), fmaxf(triANode3.y, triBNode1.y)), fmaxf(triBNode2.y, triBNode3.y));
-    float minZ1 = fminf(fminf(fminf(triANode1.z, triANode2.z), fminf(triANode3.z, triBNode1.z)), fminf(triBNode2.z, triBNode3.z));
-    float maxZ1 = fmaxf(fmaxf(fmaxf(triANode1.z, triANode2.z), fmaxf(triANode3.z, triBNode1.z)), fmaxf(triBNode2.z, triBNode3.z));
-    
-    // Compute AABB of second prism (6 vertices)
-    float minX2 = fminf(fminf(fminf(triANode1_other.x, triANode2_other.x), fminf(triANode3_other.x, triBNode1_other.x)), fminf(triBNode2_other.x, triBNode3_other.x));
-    float maxX2 = fmaxf(fmaxf(fmaxf(triANode1_other.x, triANode2_other.x), fmaxf(triANode3_other.x, triBNode1_other.x)), fmaxf(triBNode2_other.x, triBNode3_other.x));
-    float minY2 = fminf(fminf(fminf(triANode1_other.y, triANode2_other.y), fminf(triANode3_other.y, triBNode1_other.y)), fminf(triBNode2_other.y, triBNode3_other.y));
-    float maxY2 = fmaxf(fmaxf(fmaxf(triANode1_other.y, triANode2_other.y), fmaxf(triANode3_other.y, triBNode1_other.y)), fmaxf(triBNode2_other.y, triBNode3_other.y));
-    float minZ2 = fminf(fminf(fminf(triANode1_other.z, triANode2_other.z), fminf(triANode3_other.z, triBNode1_other.z)), fminf(triBNode2_other.z, triBNode3_other.z));
-    float maxZ2 = fmaxf(fmaxf(fmaxf(triANode1_other.z, triANode2_other.z), fmaxf(triANode3_other.z, triBNode1_other.z)), fmaxf(triBNode2_other.z, triBNode3_other.z));
-    
-    // EARLY REJECTION: Check AABB overlap first (avoids expensive SAT if no overlap)
-    const float margin = 1e-6f;
-    if (minX1 > maxX2 + margin || maxX1 < minX2 - margin ||
-        minY1 > maxY2 + margin || maxY1 < minY2 - margin ||
-        minZ1 > maxZ2 + margin || maxZ1 < minZ2 - margin) {
-        return false;  // AABBs don't overlap, no contact possible
-    }
-    
-    // AABBs overlap - now check if this is the canonical bin for this pair
-    const float inv_binSize = (float)simParams->dyn.inv_binSize;
-    
-    // Compute AABB intersection minimum corner
-    float intMinX = fmaxf(minX1, minX2);
-    float intMinY = fmaxf(minY1, minY2);
-    float intMinZ = fmaxf(minZ1, minZ2);
-    
-    // Find the minimum bin ID that touches this intersection
-    // This is the bin containing the minimum corner of the intersection
-    int binIdxX = (int)floorf(intMinX * inv_binSize);
-    int binIdxY = (int)floorf(intMinY * inv_binSize);
-    int binIdxZ = (int)floorf(intMinZ * inv_binSize);
-    
-    // Clamp to valid range
-    binIdxX = (binIdxX >= 0) ? ((binIdxX < (int)simParams->nbX) ? binIdxX : (int)simParams->nbX - 1) : 0;
-    binIdxY = (binIdxY >= 0) ? ((binIdxY < (int)simParams->nbY) ? binIdxY : (int)simParams->nbY - 1) : 0;
-    binIdxZ = (binIdxZ >= 0) ? ((binIdxZ < (int)simParams->nbZ) ? binIdxZ : (int)simParams->nbZ - 1) : 0;
-    
-    deme::binID_t canonicalBin = binIDFrom3Indices<deme::binID_t>(
-        (deme::binID_t)binIdxX, (deme::binID_t)binIdxY, (deme::binID_t)binIdxZ,
-        simParams->nbX, simParams->nbY, simParams->nbZ);
-    
-    // Process only if current bin is the canonical bin for this pair
-    return (currentBinID == canonicalBin);
-}
-
-// Full prism-prism contact check using SAT (Separating Axis Theorem).
-// NOTE: AABB overlap check is already done in shouldProcessTriTriInThisBin(),
-// so we skip it here and go directly to the full SAT test.
 inline __device__ bool checkPrismPrismContact(deme::DEMSimParams* simParams,
                                               const float3& triANode1,
                                               const float3& triANode2,
@@ -218,10 +127,7 @@ inline __device__ bool checkPrismPrismContact(deme::DEMSimParams* simParams,
                                               const float3& triBNode1_other,
                                               const float3& triBNode2_other,
                                               const float3& triBNode3_other) {
-    (void)simParams;  // simParams not needed since AABB check moved to shouldProcessTriTriInThisBin
-    
-    // Calculate the contact point between 2 prisms using full SAT check
-    // AABB pre-check already done in shouldProcessTriTriInThisBin
+    // Calculate the contact point between 2 prisms, and return whether they are in contact
     bool in_contact =
         calc_prism_contact(triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3, triANode1_other,
                            triANode2_other, triANode3_other, triBNode1_other, triBNode2_other, triBNode3_other);
@@ -272,7 +178,6 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
             "run despite this, set allowance higher via SetMaxTriangleInBin before simulation starts.",
             blockIdx.x, nTriInBin, simParams->errOutBinTriNum);
     }
-    
     const deme::spheresBinTouches_t myThreadID = threadIdx.x;
     // But what is the index of the same binID in array activeBinIDs? Well, mapTriActBinToSphActBin comes to rescure.
     const deme::binID_t indForAcqSphInfo = mapTriActBinToSphActBin[blockIdx.x];
@@ -418,19 +323,24 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                     continue;
                 }
 
-                // Use canonical bin assignment to avoid duplicate tri-tri contacts across bins.
-                // Pass full prism (both triA and triB faces) for correct AABB computation.
-                if (!shouldProcessTriTriInThisBin(simParams, binID, triIDs[bodyA], triIDs[bodyB],
-                                                   triANode1[bodyA], triANode2[bodyA], triANode3[bodyA],
-                                                   triBNode1[bodyA], triBNode2[bodyA], triBNode3[bodyA],
-                                                   triANode1[bodyB], triANode2[bodyB], triANode3[bodyB],
-                                                   triBNode1[bodyB], triBNode2[bodyB], triBNode3[bodyB]))
-                    continue;
-
+                // Tri--tri contact does not take into account bins, as duplicates will be removed in the end
                 bool in_contact = checkPrismPrismContact(
                     simParams, triANode1[bodyA], triANode2[bodyA], triANode3[bodyA], triBNode1[bodyA], triBNode2[bodyA],
                     triBNode3[bodyA], triANode1[bodyB], triANode2[bodyB], triANode3[bodyB], triBNode1[bodyB],
                     triBNode2[bodyB], triBNode3[bodyB]);
+
+                /*
+                if (in_contact && (contactPntBin != binID)) {
+                    unsigned int ZZ = binID/(simParams->nbX*simParams->nbY);
+                    unsigned int YY = binID%(simParams->nbX*simParams->nbY)/simParams->nbX;
+                    unsigned int XX = binID%(simParams->nbX*simParams->nbY)%simParams->nbX;
+                    double binLocX = (XX + 0.5) * simParams->binSize;
+                    double binLocY = (YY + 0.5) * simParams->binSize;
+                    double binLocZ = (ZZ + 0.5) * simParams->binSize;
+                    printf("binLoc: %f, %f, %f\n", binLocX, binLocY, binLocZ);
+                    printf("triANode1A: %f, %f, %f\n", triANode1[bodyA].x, triANode1[bodyA].y, triANode1[bodyA].z);
+                }
+                */
 
                 if (in_contact) {
                     atomicAdd(&blockTriTriPairCnt, 1);
@@ -468,15 +378,7 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                         continue;
                     }
 
-                    // Use canonical bin assignment to avoid duplicate tri-tri contacts across bins.
-                    // Pass full prism (both triA and triB faces) for correct AABB computation.
-                    if (!shouldProcessTriTriInThisBin(simParams, binID, triIDs[myThreadID], cur_bodyID,
-                                                       triANode1[myThreadID], triANode2[myThreadID], triANode3[myThreadID],
-                                                       triBNode1[myThreadID], triBNode2[myThreadID], triBNode3[myThreadID],
-                                                       cur_triANode1, cur_triANode2, cur_triANode3,
-                                                       cur_triBNode1, cur_triBNode2, cur_triBNode3))
-                        continue;
-
+                    // Tri--tri contact does not take into account bins, as duplicates will be removed in the end
                     bool in_contact = checkPrismPrismContact(
                         simParams, triANode1[myThreadID], triANode2[myThreadID], triANode3[myThreadID],
                         triBNode1[myThreadID], triBNode2[myThreadID], triBNode3[myThreadID], cur_triANode1,
@@ -696,15 +598,7 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                     continue;
                 }
 
-                // Use canonical bin assignment to avoid duplicate tri-tri contacts across bins.
-                // Pass full prism (both triA and triB faces) for correct AABB computation.
-                if (!shouldProcessTriTriInThisBin(simParams, binID, triIDs[bodyA], triIDs[bodyB],
-                                                   triANode1[bodyA], triANode2[bodyA], triANode3[bodyA],
-                                                   triBNode1[bodyA], triBNode2[bodyA], triBNode3[bodyA],
-                                                   triANode1[bodyB], triANode2[bodyB], triANode3[bodyB],
-                                                   triBNode1[bodyB], triBNode2[bodyB], triBNode3[bodyB]))
-                    continue;
-
+                // Tri--tri contact does not take into account bins, as duplicates will be removed in the end
                 bool in_contact = checkPrismPrismContact(
                     simParams, triANode1[bodyA], triANode2[bodyA], triANode3[bodyA], triBNode1[bodyA], triBNode2[bodyA],
                     triBNode3[bodyA], triANode1[bodyB], triANode2[bodyB], triANode3[bodyB], triBNode1[bodyB],
@@ -712,7 +606,8 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
 
                 if (in_contact) {
                     deme::contactPairs_t inBlockOffset = mmReportOffset + atomicAdd(&blockTriTriPairCnt, 1);
-                    // Respect the budget-limited offset range from the scaled counts
+                    // The chance of offset going out-of-bound is very low, lower than sph--bin CD step, but I put it
+                    // here anyway
                     if (inBlockOffset < mmReportOffset_end) {
                         // ----------------------------------------------------------------------------
                         // IMPORTANT NOTE: Here, we don't need to adjust A and B ids to ensure A < B, and it's
@@ -773,15 +668,7 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                         continue;
                     }
 
-                    // Use canonical bin assignment to avoid duplicate tri-tri contacts across bins.
-                    // Pass full prism (both triA and triB faces) for correct AABB computation.
-                    if (!shouldProcessTriTriInThisBin(simParams, binID, triIDs[myThreadID], cur_bodyID,
-                                                       triANode1[myThreadID], triANode2[myThreadID], triANode3[myThreadID],
-                                                       triBNode1[myThreadID], triBNode2[myThreadID], triBNode3[myThreadID],
-                                                       cur_triANode1, cur_triANode2, cur_triANode3,
-                                                       cur_triBNode1, cur_triBNode2, cur_triBNode3))
-                        continue;
-
+                    // Tri--tri contact does not take into account bins, as duplicates will be removed in the end
                     bool in_contact = checkPrismPrismContact(
                         simParams, triANode1[myThreadID], triANode2[myThreadID], triANode3[myThreadID],
                         triBNode1[myThreadID], triBNode2[myThreadID], triBNode3[myThreadID], cur_triANode1,
@@ -789,7 +676,8 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
 
                     if (in_contact) {
                         deme::contactPairs_t inBlockOffset = mmReportOffset + atomicAdd(&blockTriTriPairCnt, 1);
-                        // Respect the budget-limited offset range from the scaled counts
+                        // The chance of offset going out-of-bound is very low, lower than sph--bin CD step, but I put
+                        // it here anyway
                         if (inBlockOffset < mmReportOffset_end) {
                             deme::bodyID_t triA_ID, triB_ID;
                             if (triIDs[myThreadID] <= cur_bodyID) {

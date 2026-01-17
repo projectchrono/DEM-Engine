@@ -37,9 +37,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
     float AOwnerMass, ARadius, BOwnerMass, BRadius;
     float4 AOriQ, BOriQ;
     deme::materialsOffset_t bodyAMatType, bodyBMatType;
-    // Cache analytic entity info when B is analytical (used for on-the-fly area calc)
-    deme::objType_t analyticalType = deme::ANAL_OBJ_TYPE_PLANE;
-    float analyticalSize1 = 0.f;
     // The user-specified extra margin size (how much we should be lenient in determining `in-contact')
     float extraMarginSize = 0.;
     // Triangle A's three points are defined outside, as may be reused in B's acquisition and penetration calc.
@@ -278,8 +275,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // For analytical entity, its patch ID is just its own component ID (but myPatchID is hardly used in this
         // analytical case)
         deme::bodyID_t myPatchID = analyticalID;
-        analyticalType = objType[analyticalID];
-        analyticalSize1 = objSize1[analyticalID];
         // If B is analytical entity, its owner, relative location, material info is jitified.
         bodyBMatType = objMaterial[analyticalID];
         BOwnerMass = objMass[analyticalID];
