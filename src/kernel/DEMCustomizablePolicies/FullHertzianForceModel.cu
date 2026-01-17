@@ -42,7 +42,7 @@ if (overlapDepth > 0) {
         }
     }
 
-    const bool tri_involved = (AType == deme::GEO_T_TRIANGLE) || (BType == deme::GEO_T_TRIANGLE);
+    constexpr bool tri_involved = (AType == deme::GEO_T_TRIANGLE) || (BType == deme::GEO_T_TRIANGLE);
     float contact_radius = 0.f;    // area-based radius or sqrt(overlapDepth * R_eff)
     float effective_radius = 0.f;  // geometric effective radius when no triangle is involved
 
@@ -53,8 +53,19 @@ if (overlapDepth > 0) {
 
     // Normal force part
     {
-        // The (total) relative linear velocity of A relative to B
-        const float3 velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
+        // The (total) relative linear velocity of A relative to B at the
+        // contact point (global frame).
+        float3 velB2A = make_float3(0.f, 0.f, 0.f);
+        if constexpr (tri_involved) {
+            if (simParams->usePatchRelVelOverride) {
+                // `patchRelVel` is provided by patch voting for mesh contacts.
+                velB2A = patchRelVel;
+            } else {
+                velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
+            }
+        } else {
+            velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
+        }
         const float projection = dot(velB2A, B2A);
         vrel_tan = velB2A - projection * B2A;
 
@@ -90,37 +101,50 @@ if (overlapDepth > 0) {
 
     // Rolling resistance part
     if (Crr_cnt > 0.f) {
-        // Figure out if we should apply rolling resistance force
-        bool should_add_rolling_resistance = true;
-        {
-            // Use area-based R_eff when triangles are involved; otherwise classic geometric effective radius
-            const float R_eff = tri_involved ? ((contact_radius * contact_radius) / overlapDepth) : effective_radius;
-
-            const float kn_simple = deme::FOUR_OVER_THREE * E_cnt * sqrtf(R_eff);
-            const float gn_simple = -2.f * sqrtf(deme::FIVE_OVER_THREE * mass_eff * E_cnt) * beta * powf(R_eff, 0.25f);
-
-            const float d_coeff = gn_simple / (2.f * sqrtf(kn_simple * mass_eff));
-
-            if (d_coeff < 1.f) {
-                float t_collision = deme::PI * sqrtf(mass_eff / (kn_simple * (1.f - d_coeff * d_coeff)));
-                if (delta_time <= t_collision) {
-                    should_add_rolling_resistance = false;
-                }
+        bool allow_rolling_resistance = true;
+        if constexpr (tri_involved) {
+            // Rolling resistance depends on rotational velocity contributions.
+            // When overriding relative velocity for deformable mesh coupling,
+            // disable rolling resistance (it would be inconsistent with the
+            // overridden kinematics).
+            if (simParams->usePatchRelVelOverride) {
+                allow_rolling_resistance = false;
             }
         }
-        // If should, then compute it (using Schwartz model)
-        if (should_add_rolling_resistance) {
-            // Tangential velocity (only rolling contribution) of B relative to A, at contact point, in global
-            const float3 v_rot = rotVelCPB - rotVelCPA;
-            // This v_rot is only used for identifying resistance direction
-            const float v_rot_mag = length(v_rot);
-            if (v_rot_mag > DEME_TINY_FLOAT) {
-                // You should know that Crr_cnt * normal_force is the underlying formula, and in our model,
-                // it is a `force' that produces torque only, instead of also cancelling out friction.
-                // Its direction is that it `resists' rotation, see picture in
-                // https://en.wikipedia.org/wiki/Rolling_resistance.
-                torque_only_force = (v_rot / v_rot_mag) * (Crr_cnt * length(force));
-                // printf("torque force: %f, %f, %f\n", torque_only_force.x, torque_only_force.y, torque_only_force.z);
+        if (allow_rolling_resistance) {
+            // Figure out if we should apply rolling resistance force
+            bool should_add_rolling_resistance = true;
+            {
+                // Use area-based R_eff when triangles are involved; otherwise classic geometric effective radius
+                const float R_eff = tri_involved ? ((contact_radius * contact_radius) / overlapDepth) : effective_radius;
+
+                const float kn_simple = deme::FOUR_OVER_THREE * E_cnt * sqrtf(R_eff);
+                const float gn_simple =
+                    -2.f * sqrtf(deme::FIVE_OVER_THREE * mass_eff * E_cnt) * beta * powf(R_eff, 0.25f);
+
+                const float d_coeff = gn_simple / (2.f * sqrtf(kn_simple * mass_eff));
+
+                if (d_coeff < 1.f) {
+                    float t_collision = deme::PI * sqrtf(mass_eff / (kn_simple * (1.f - d_coeff * d_coeff)));
+                    if (delta_time <= t_collision) {
+                        should_add_rolling_resistance = false;
+                    }
+                }
+            }
+            // If should, then compute it (using Schwartz model)
+            if (should_add_rolling_resistance) {
+                // Tangential velocity (only rolling contribution) of B relative to A, at contact point, in global
+                const float3 v_rot = rotVelCPB - rotVelCPA;
+                // This v_rot is only used for identifying resistance direction
+                const float v_rot_mag = length(v_rot);
+                if (v_rot_mag > DEME_TINY_FLOAT) {
+                    // You should know that Crr_cnt * normal_force is the underlying formula, and in our model,
+                    // it is a `force' that produces torque only, instead of also cancelling out friction.
+                    // Its direction is that it `resists' rotation, see picture in
+                    // https://en.wikipedia.org/wiki/Rolling_resistance.
+                    torque_only_force = (v_rot / v_rot_mag) * (Crr_cnt * length(force));
+                    // printf("torque force: %f, %f, %f\n", torque_only_force.x, torque_only_force.y, torque_only_force.z);
+                }
             }
         }
     }

@@ -308,6 +308,8 @@ class DEMDynamicThread {
     DualArray<float3> relPosNode1 = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<float3> relPosNode2 = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<float3> relPosNode3 = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // Optional per-triangle velocity in GLOBAL frame (triangle center).
+    DualArray<float3> triVelCenter = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Relative position (to mesh CoM) of each mesh patch
     DualArray<float3> relPosPatch = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
@@ -603,6 +605,7 @@ class DEMDynamicThread {
                       float expand_safety_param,
                       float expand_safety_adder,
                       bool use_angvel_margin,
+                      bool use_patch_relvel_override,
                       const std::set<std::string>& contact_wildcards,
                       const std::set<std::string>& owner_wildcards,
                       const std::set<std::string>& geo_wildcards);
@@ -646,9 +649,16 @@ class DEMDynamicThread {
     /// Rewrite the relative positions of the flattened triangle soup, starting from `start', using triangle nodal
     /// positions in `triangles'.
     void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles);
+    void setTriNodeRelPosDevice(size_t start,
+                                const float3* d_relPosNode1,
+                                const float3* d_relPosNode2,
+                                const float3* d_relPosNode3,
+                                size_t count);
     /// Rewrite the relative positions of the flattened triangle soup, starting from `start' by the amount stipulated in
     /// updates.
     void updateTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& updates);
+    /// Set per-triangle velocity (GLOBAL frame, triangle center) from a device pointer.
+    void setTriVelCenterDevice(size_t start, const float3* d_vel_center, size_t count);
 
     /// @brief Globally modify a owner wildcard's value.
     void setOwnerWildcardValue(bodyID_t ownerID, unsigned int wc_num, const std::vector<float>& vals);
@@ -696,6 +706,11 @@ class DEMDynamicThread {
     size_t getOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
                                  std::vector<float3>& points,
                                  std::vector<float3>& forces);
+    size_t getOwnerContactForcesDevice(const std::vector<bodyID_t>& ownerIDs,
+                                       float3* d_points,
+                                       float3* d_forces,
+                                       bodyID_t* d_contact_owner,
+                                       size_t capacity);
     /// @brief Get all forces concerning all provided owners.
     size_t getOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
                                  std::vector<float3>& points,

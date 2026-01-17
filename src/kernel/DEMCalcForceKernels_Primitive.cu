@@ -337,6 +337,10 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // Now map this contact point location to bodies' local ref
         applyOriQToVector3<float, deme::oriQ_t>(locCPA.x, locCPA.y, locCPA.z, AOriQ.w, -AOriQ.x, -AOriQ.y, -AOriQ.z);
         applyOriQToVector3<float, deme::oriQ_t>(locCPB.x, locCPB.y, locCPB.z, BOriQ.w, -BOriQ.x, -BOriQ.y, -BOriQ.z);
+        // Some force models (used in patch-based mesh-mesh coupling) reference a
+        // variable named `patchRelVel`. Primitive-contact kernels never supply
+        // this quantity, but the name must exist for NVRTC compilation.
+        float3 patchRelVel = make_float3(0.f, 0.f, 0.f);
 
         if (ContactType != deme::NOT_A_CONTACT) {
             // The following part, the force model, is user-specifiable

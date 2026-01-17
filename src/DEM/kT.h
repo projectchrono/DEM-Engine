@@ -402,6 +402,7 @@ class DEMKinematicThread {
                       float expand_safety_param,
                       float expand_safety_adder,
                       bool use_angvel_margin,
+                      bool use_patch_relvel_override,
                       const std::set<std::string>& contact_wildcards,
                       const std::set<std::string>& owner_wildcards,
                       const std::set<std::string>& geo_wildcards);

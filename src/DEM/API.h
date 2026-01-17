@@ -226,6 +226,10 @@ class DEMSolver {
     /// @details Default is auto: false for pure single-sphere clumps; true when multi-sphere clumps or meshes exist.
     ///          If disabled, sphere--sphere contact uses only linear velocity when computing damping/friction terms.
     void SetUseAngularVelocityMargin(bool use);
+    /// @brief Enable using externally provided patch relative velocity for mesh contact friction/damping.
+    /// @details When enabled, patch-based mesh contact uses a relative velocity computed externally (e.g. from an FEA
+    ///          coupler) instead of owner rigid-body velocities.
+    void SetUsePatchRelativeVelocityOverride(bool use);
 
     /// @brief Manually set the current triangle--triangle penetration value in dT.
     /// @details This allows the user to directly control the maxTriTriPenetration value which will ONLY be used in the
@@ -558,8 +562,17 @@ class DEMSolver {
 
     /// @brief Rewrite the relative positions of the flattened triangle soup.
     void SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& new_nodes);
+    void SetTriNodeRelPosDevice(size_t triID_start,
+                                const float3* d_relPosNode1,
+                                const float3* d_relPosNode2,
+                                const float3* d_relPosNode3,
+                                size_t count);
     /// @brief Update the relative positions of the flattened triangle soup.
     void UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& updates);
+    /// @brief Set per-triangle (triangle center) velocity in global frame from a device pointer.
+    /// @details This is intended for deformable-mesh coupling where friction/damping depends on a better estimate of
+    ///          relative velocity at contacts.
+    void SetTriVelCenterDevice(size_t triID_start, const float3* d_vel_center, size_t count);
     /// @brief Get a handle for the mesh this tracker is tracking.
     /// @return Pointer to the mesh.
     std::shared_ptr<DEMMesh>& GetCachedMesh(bodyID_t ownerID);
@@ -1028,6 +1041,12 @@ class DEMSolver {
     size_t GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
                                  std::vector<float3>& points,
                                  std::vector<float3>& forces);
+
+    size_t GetOwnerContactForcesDevice(const std::vector<bodyID_t>& ownerIDs,
+                                       float3* d_points,
+                                       float3* d_forces,
+                                       bodyID_t* d_contact_owner,
+                                       size_t capacity);
 
     /// @brief Get all contact forces that concern a list of owners.
     /// @details If a contact involves at least one of the owner IDs provided as the first arg this method, it will be
@@ -1627,6 +1646,8 @@ class DEMSolver {
     // Whether angular velocity contributes to the contact margin (auto-detected if not user-set).
     bool m_use_angvel_margin = true;
     bool m_use_angvel_margin_user_set = false;
+    // Whether patch-based mesh contact uses externally provided relative velocity.
+    bool m_use_patch_relvel_override = false;
 
     // The method of determining the thickness of the margin added to CD
     // Default is using a max_vel inspector of the clumps to decide it

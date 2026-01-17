@@ -158,12 +158,14 @@ void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
 void getContactForcesConcerningOwners(float3* d_points,
                                       float3* d_forces,
                                       float3* d_torques,
+                                      bodyID_t* d_contact_owner,
                                       size_t* d_numUsefulCnt,
                                       bodyID_t* d_ownerIDs,
                                       size_t IDListSize,
                                       DEMSimParams* simParams,
                                       DEMDataDT* granData,
                                       size_t numCnt,
+                                      size_t capacity,
                                       bool need_torque,
                                       bool torque_in_local,
                                       cudaStream_t& this_stream);
@@ -192,6 +194,7 @@ struct PatchContactAccum {
     double maxProjPen;
     double sumWeight;
     double3 sumWeightedCP;
+    double3 sumWeightedRelVel;
 
     __host__ __device__ __forceinline__ PatchContactAccum operator+(const PatchContactAccum& other) const {
         PatchContactAccum out;
@@ -201,6 +204,9 @@ struct PatchContactAccum {
         out.sumWeightedCP =
             make_double3(sumWeightedCP.x + other.sumWeightedCP.x, sumWeightedCP.y + other.sumWeightedCP.y,
                          sumWeightedCP.z + other.sumWeightedCP.z);
+        out.sumWeightedRelVel =
+            make_double3(sumWeightedRelVel.x + other.sumWeightedRelVel.x, sumWeightedRelVel.y + other.sumWeightedRelVel.y,
+                         sumWeightedRelVel.z + other.sumWeightedRelVel.z);
         return out;
     }
 };
@@ -213,6 +219,7 @@ void computePatchContactAccumulators(DEMDataDT* granData,
                                      contactPairs_t startOffsetPrimitive,
                                      contactPairs_t startOffsetPatch,
                                      contactPairs_t count,
+                                     notStupidBool_t compute_relvel,
                                      cudaStream_t& this_stream);
 
 // Scatter reduced patch accumulators to arrays expected by finalizePatchResults
@@ -221,6 +228,7 @@ void scatterPatchContactAccumulators(const PatchContactAccum* accumulators,
                                      double* totalProjectedAreas,
                                      double* maxProjectedPenetrations,
                                      double3* votedContactPoints,
+                                     float3* votedRelVel,
                                      contactPairs_t startOffsetPatch,
                                      contactPairs_t count,
                                      cudaStream_t& this_stream);
@@ -239,10 +247,12 @@ void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
                                                    float3* zeroAreaNormals,
                                                    double* zeroAreaPenetrations,
                                                    double3* zeroAreaContactPoints,
+                                                   float3* zeroAreaRelVel,
                                                    contactPairs_t* keys,
                                                    contactPairs_t startOffsetPrimitive,
                                                    contactPairs_t startOffsetPatch,
                                                    contactPairs_t countPrimitive,
+                                                   notStupidBool_t compute_relvel,
                                                    cudaStream_t& this_stream);
 
 // Checks if any primitive in each patch satisfies SAT (for tri-tri contacts)
@@ -261,14 +271,17 @@ void finalizePatchResults(double* totalProjectedAreas,
                           float3* votedNormals,
                           double* votedPenetrations,
                           double3* votedContactPoints,
+                          float3* votedRelVel,
                           float3* zeroAreaNormals,
                           double* zeroAreaPenetrations,
                           double3* zeroAreaContactPoints,
+                          float3* zeroAreaRelVel,
                           notStupidBool_t* patchHasSAT,
                           double* finalAreas,
                           float3* finalNormals,
                           double* finalPenetrations,
                           double3* finalContactPoints,
+                          float3* finalRelVel,
                           contactPairs_t count,
                           cudaStream_t& this_stream);
 

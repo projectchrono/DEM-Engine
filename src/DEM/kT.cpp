@@ -842,6 +842,7 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
                                       float expand_safety_param,
                                       float expand_safety_adder,
                                       bool use_angvel_margin,
+                                      bool use_patch_relvel_override,
                                       const std::set<std::string>& contact_wildcards,
                                       const std::set<std::string>& owner_wildcards,
                                       const std::set<std::string>& geo_wildcards) {
@@ -871,6 +872,7 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
     simParams->dyn.expSafetyMulti = expand_safety_param;
     simParams->dyn.expSafetyAdder = expand_safety_adder;
     simParams->useAngVelMargin = use_angvel_margin ? 1 : 0;
+    simParams->usePatchRelVelOverride = use_patch_relvel_override ? 1 : 0;
 
     simParams->nContactWildcards = contact_wildcards.size();
     simParams->nOwnerWildcards = owner_wildcards.size();

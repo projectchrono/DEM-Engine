@@ -53,6 +53,18 @@ DEMSolver::DEMSolver(unsigned int nGPUs) {
     kT->dT = dT;
 }
 
+void DEMSolver::SetTriNodeRelPosDevice(size_t triID_start,
+                                       const float3* d_relPosNode1,
+                                       const float3* d_relPosNode2,
+                                       const float3* d_relPosNode3,
+                                       size_t count) {
+    if (!sys_initialized) {
+        DEME_ERROR("SetTriNodeRelPosDevice called before system initialization.");
+    }
+    dT->setTriNodeRelPosDevice(triID_start, d_relPosNode1, d_relPosNode2, d_relPosNode3, count);
+    dT->solverFlags.willMeshDeform = true;
+}
+
 DEMSolver::~DEMSolver() {
     if (sys_initialized)
         DoDynamicsThenSync(0.0);
@@ -574,6 +586,14 @@ size_t DEMSolver::GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
                                         std::vector<float3>& forces) {
     return dT->getOwnerContactForces(ownerIDs, points, forces);
 }
+
+size_t DEMSolver::GetOwnerContactForcesDevice(const std::vector<bodyID_t>& ownerIDs,
+                                              float3* d_points,
+                                              float3* d_forces,
+                                              bodyID_t* d_contact_owner,
+                                              size_t capacity) {
+    return dT->getOwnerContactForcesDevice(ownerIDs, d_points, d_forces, d_contact_owner, capacity);
+}
 size_t DEMSolver::GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
                                         std::vector<float3>& points,
                                         std::vector<float3>& forces,
@@ -689,6 +709,14 @@ void DEMSolver::UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vecto
     // kT just receives update from dT, to avoid mem hazards
     // kT->setTriNodeRelPos(triID, new_triangles);
 }
+
+void DEMSolver::SetTriVelCenterDevice(size_t triID_start, const float3* d_vel_center, size_t count) {
+    if (!sys_initialized) {
+        DEME_ERROR("SetTriVelCenterDevice called before system initialization.");
+    }
+    dT->setTriVelCenterDevice(triID_start, d_vel_center, count);
+}
+
 std::shared_ptr<DEMMesh>& DEMSolver::GetCachedMesh(bodyID_t ownerID) {
     if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
         DEME_ERROR("Owner %zu is not a mesh, you therefore cannot retrive a handle to mesh using it.", (size_t)ownerID);
@@ -801,6 +829,11 @@ void DEMSolver::SetUseAngularVelocityMargin(bool use) {
     assertSysNotInit("SetUseAngularVelocityMargin");
     m_use_angvel_margin = use;
     m_use_angvel_margin_user_set = true;
+}
+
+void DEMSolver::SetUsePatchRelativeVelocityOverride(bool use) {
+    assertSysNotInit("SetUsePatchRelativeVelocityOverride");
+    m_use_patch_relvel_override = use;
 }
 
 void DEMSolver::InstructBoxDomainDimension(float x, float y, float z, const std::string& dir_exact) {

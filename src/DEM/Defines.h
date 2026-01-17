@@ -312,6 +312,11 @@ struct DEMSimParams {
     unsigned int errOutBinTriNum = 32768;
     // Whether angular velocity contributes to contact margin sizing (and sphere--sphere rot. velocity use).
     notStupidBool_t useAngVelMargin = 1;
+
+    // If enabled, patch-based mesh contact uses externally provided relative
+    // velocity (e.g. from a deformable-body coupler) for damping/friction
+    // calculations, instead of owner rigid-body velocities.
+    notStupidBool_t usePatchRelVelOverride = 0;
 };
 
 // A struct that holds pointers to data arrays that dT uses
@@ -392,6 +397,10 @@ struct DEMDataDT {
     float3* relPosNode2;
     float3* relPosNode3;
     float3* relPosPatch;
+    // Optional per-triangle velocity in GLOBAL frame (triangle center). Used
+    // by patch-based contact voting to estimate relative velocity for
+    // deformable mesh coupling.
+    float3* triVelCenter;
     materialsOffset_t* patchMaterialOffset;
 
     // pointer to remote buffer where kinematic thread stores work-order data provided by the dynamic thread

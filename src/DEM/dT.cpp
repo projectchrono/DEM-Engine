@@ -122,6 +122,7 @@ void DEMDynamicThread::packDataPointers() {
     relPosNode2.bindDevicePointer(&(granData->relPosNode2));
     relPosNode3.bindDevicePointer(&(granData->relPosNode3));
     relPosPatch.bindDevicePointer(&(granData->relPosPatch));
+    triVelCenter.bindDevicePointer(&(granData->triVelCenter));
     patchMaterialOffset.bindDevicePointer(&(granData->patchMaterialOffset));
 
     // Template array pointers
@@ -463,6 +464,7 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                     float expand_safety_param,
                                     float expand_safety_adder,
                                     bool use_angvel_margin,
+                                    bool use_patch_relvel_override,
                                     const std::set<std::string>& contact_wildcards,
                                     const std::set<std::string>& owner_wildcards,
                                     const std::set<std::string>& geo_wildcards) {
@@ -492,6 +494,7 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->dyn.expSafetyAdder = expand_safety_adder;
     simParams->capTriTriPenetration = max_tritri_penetration;
     simParams->useAngVelMargin = use_angvel_margin ? 1 : 0;
+    simParams->usePatchRelVelOverride = use_patch_relvel_override ? 1 : 0;
 
     simParams->nContactWildcards = contact_wildcards.size();
     simParams->nOwnerWildcards = owner_wildcards.size();
@@ -629,6 +632,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(relPosNode1, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(relPosNode2, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(relPosNode3, nTriGM, make_float3(0));
+    DEME_DUAL_ARRAY_RESIZE(triVelCenter, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(triPatchID, nTriGM, 0);
 
     // Resize to the number of mesh patches
@@ -2581,11 +2585,12 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 // displayDeviceFloat3(votedNormals, countPatch);
 
                 // Project penetration/area and accumulate weighted contact points in a single pass.
+                const notStupidBool_t compute_relvel = simParams->usePatchRelVelOverride;
                 PatchContactAccum* primitivePatchAccumulators =
                     (PatchContactAccum*)solverScratchSpace.allocateTempVector(
                         "primitivePatchAccumulators", countPrimitive * sizeof(PatchContactAccum));
                 computePatchContactAccumulators(&granData, votedNormals, keys, primitivePatchAccumulators,
-                                                startOffsetPrimitive, startOffsetPatch, countPrimitive,
+                                                startOffsetPrimitive, startOffsetPatch, countPrimitive, compute_relvel,
                                                 streamInfo.stream);
 
                 PatchContactAccum* patchContactAccumulators = (PatchContactAccum*)solverScratchSpace.allocateTempVector(
@@ -2601,8 +2606,14 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     "maxProjectedPenetrations", countPatch * sizeof(double));
                 double3* votedContactPoints =
                     (double3*)solverScratchSpace.allocateTempVector("votedContactPoints", countPatch * sizeof(double3));
+                float3* votedRelVel = nullptr;
+                if (compute_relvel) {
+                    votedRelVel =
+                        (float3*)solverScratchSpace.allocateTempVector("votedRelVel", countPatch * sizeof(float3));
+                }
                 scatterPatchContactAccumulators(patchContactAccumulators, uniqueKeys, totalProjectedAreas,
-                                                maxProjectedPenetrations, votedContactPoints, startOffsetPatch,
+                                                maxProjectedPenetrations, votedContactPoints, votedRelVel,
+                                                startOffsetPatch,
                                                 numUniqueKeysHost, streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("patchContactAccumulators");
 
@@ -2633,9 +2644,15 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     (double*)solverScratchSpace.allocateTempVector("zeroAreaPenetrations", countPatch * sizeof(double));
                 double3* zeroAreaContactPoints = (double3*)solverScratchSpace.allocateTempVector(
                     "zeroAreaContactPoints", countPatch * sizeof(double3));
+                float3* zeroAreaRelVel = nullptr;
+                if (compute_relvel) {
+                    zeroAreaRelVel =
+                        (float3*)solverScratchSpace.allocateTempVector("zeroAreaRelVel", countPatch * sizeof(float3));
+                }
                 findMaxPenetrationPrimitiveForZeroAreaPatches(
-                    &granData, maxPenetrations, zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, keys,
-                    startOffsetPrimitive, startOffsetPatch, countPrimitive, streamInfo.stream);
+                    &granData, maxPenetrations, zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints,
+                    zeroAreaRelVel, keys, startOffsetPrimitive, startOffsetPatch, countPrimitive, compute_relvel,
+                    streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("maxPenetrations");
 
                 // Step 9d: Check if each patch has any SAT-satisfying primitive (for tri-tri contacts)
@@ -2667,17 +2684,28 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
 
                 double3* finalContactPoints =
                     (double3*)solverScratchSpace.allocateTempVector("finalContactPoints", countPatch * sizeof(double3));
+                float3* finalRelVel = nullptr;
+                if (compute_relvel) {
+                    finalRelVel =
+                        (float3*)solverScratchSpace.allocateTempVector("finalRelVel", countPatch * sizeof(float3));
+                }
                 finalizePatchResults(totalProjectedAreas, votedNormals, maxProjectedPenetrations, votedContactPoints,
-                                     zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, patchHasSAT,
-                                     finalAreas, finalNormals, finalPenetrations.data(), finalContactPoints, countPatch,
-                                     streamInfo.stream);
+                                     votedRelVel, zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints,
+                                     zeroAreaRelVel, patchHasSAT, finalAreas, finalNormals, finalPenetrations.data(),
+                                     finalContactPoints, finalRelVel, countPatch, streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("totalProjectedAreas");
                 solverScratchSpace.finishUsingTempVector("votedNormals");
                 solverScratchSpace.finishUsingTempVector("maxProjectedPenetrations");
                 solverScratchSpace.finishUsingTempVector("zeroAreaNormals");
                 solverScratchSpace.finishUsingTempVector("zeroAreaPenetrations");
                 solverScratchSpace.finishUsingTempVector("votedContactPoints");
+                if (votedRelVel != nullptr) {
+                    solverScratchSpace.finishUsingTempVector("votedRelVel");
+                }
                 solverScratchSpace.finishUsingTempVector("zeroAreaContactPoints");
+                if (zeroAreaRelVel != nullptr) {
+                    solverScratchSpace.finishUsingTempVector("zeroAreaRelVel");
+                }
                 if (patchHasSAT != nullptr) {
                     solverScratchSpace.finishUsingTempVector("patchHasSAT");
                 }
@@ -2706,7 +2734,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                 .instantiate()
                                 .configure(dim3(blocks), dim3(DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0, streamInfo.stream)
                                 .launch(&simParams, &granData, finalAreas, finalNormals, finalPenetrations.data(),
-                                        finalContactPoints, startOffsetPatch, countPatch);
+                                        finalContactPoints, finalRelVel, startOffsetPatch, countPatch);
                         }
                     }
                 }
@@ -2725,6 +2753,9 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("finalNormals");
                 // Note: finalPenetrations is now a permanent array, not freed here
                 solverScratchSpace.finishUsingTempVector("finalContactPoints");
+                if (finalRelVel != nullptr) {
+                    solverScratchSpace.finishUsingTempVector("finalRelVel");
+                }
             }
         }
     }
@@ -3604,8 +3635,9 @@ size_t DEMDynamicThread::getOwnerContactForces(const std::vector<bodyID_t>& owne
     float3* d_points = (float3*)solverScratchSpace.getDualArrayDevice("points");
     float3* d_forces = (float3*)solverScratchSpace.getDualArrayDevice("forces");
 
-    getContactForcesConcerningOwners(d_points, d_forces, nullptr, d_numUsefulCnt, d_ownerIDs, ownerIDs_sorted.size(),
-                                     &simParams, &granData, numCnt, false, false, streamInfo.stream);
+    getContactForcesConcerningOwners(d_points, d_forces, nullptr, nullptr, d_numUsefulCnt, d_ownerIDs,
+                                     ownerIDs_sorted.size(), &simParams, &granData, numCnt, numCnt, false, false,
+                                     streamInfo.stream);
 
     // Bring back to host
     solverScratchSpace.syncDualStructDeviceToHost("numUsefulCnt");
@@ -3661,8 +3693,9 @@ size_t DEMDynamicThread::getOwnerContactForces(const std::vector<bodyID_t>& owne
     float3* d_forces = (float3*)solverScratchSpace.getDualArrayDevice("forces");
     float3* d_torques = (float3*)solverScratchSpace.getDualArrayDevice("torques");
 
-    getContactForcesConcerningOwners(d_points, d_forces, d_torques, d_numUsefulCnt, d_ownerIDs, ownerIDs_sorted.size(),
-                                     &simParams, &granData, numCnt, true, torque_in_local, streamInfo.stream);
+    getContactForcesConcerningOwners(d_points, d_forces, d_torques, nullptr, d_numUsefulCnt, d_ownerIDs,
+                                     ownerIDs_sorted.size(), &simParams, &granData, numCnt, numCnt, true,
+                                     torque_in_local, streamInfo.stream);
 
     // Bring back to host
     solverScratchSpace.syncDualStructDeviceToHost("numUsefulCnt");
@@ -3687,6 +3720,78 @@ size_t DEMDynamicThread::getOwnerContactForces(const std::vector<bodyID_t>& owne
     solverScratchSpace.finishUsingDualArray("points");
     solverScratchSpace.finishUsingDualArray("forces");
     solverScratchSpace.finishUsingDualArray("torques");
+    solverScratchSpace.finishUsingDualArray("ownerIDs");
+    solverScratchSpace.finishUsingDualStruct("numUsefulCnt");
+    return numUsefulCnt;
+}
+
+void DEMDynamicThread::setTriNodeRelPosDevice(size_t start,
+                                              const float3* d_relPosNode1,
+                                              const float3* d_relPosNode2,
+                                              const float3* d_relPosNode3,
+                                              size_t count) {
+    if (count == 0) {
+        return;
+    }
+    if (!d_relPosNode1 || !d_relPosNode2 || !d_relPosNode3) {
+        DEME_ERROR("setTriNodeRelPosDevice called with null device pointer.");
+    }
+    if (start + count > relPosNode1.size() || start + count > relPosNode2.size() || start + count > relPosNode3.size()) {
+        DEME_ERROR("setTriNodeRelPosDevice out of range: start=%zu count=%zu relPosNode1.size()=%zu", start, count,
+                   relPosNode1.size());
+    }
+    DEME_GPU_CALL(cudaMemcpyAsync(relPosNode1.device() + start, d_relPosNode1, count * sizeof(float3),
+                                  cudaMemcpyDeviceToDevice, streamInfo.stream));
+    DEME_GPU_CALL(cudaMemcpyAsync(relPosNode2.device() + start, d_relPosNode2, count * sizeof(float3),
+                                  cudaMemcpyDeviceToDevice, streamInfo.stream));
+    DEME_GPU_CALL(cudaMemcpyAsync(relPosNode3.device() + start, d_relPosNode3, count * sizeof(float3),
+                                  cudaMemcpyDeviceToDevice, streamInfo.stream));
+    syncMemoryTransfer();
+}
+
+size_t DEMDynamicThread::getOwnerContactForcesDevice(const std::vector<bodyID_t>& ownerIDs,
+                                                     float3* d_points,
+                                                     float3* d_forces,
+                                                     bodyID_t* d_contact_owner,
+                                                     size_t capacity) {
+    DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
+    if (!d_points || !d_forces) {
+        DEME_ERROR("getOwnerContactForcesDevice called with null device pointer.");
+    }
+    if (capacity == 0) {
+        return 0;
+    }
+    if (ownerIDs.empty()) {
+        return 0;
+    }
+
+    size_t numCnt = *solverScratchSpace.numContacts;
+    solverScratchSpace.allocateDualArray("ownerIDs", ownerIDs.size() * sizeof(bodyID_t));
+    solverScratchSpace.allocateDualStruct("numUsefulCnt");
+
+    const std::vector<bodyID_t> ownerIDs_sorted = hostSort(ownerIDs);
+    bodyID_t* h_ownerIDs = (bodyID_t*)solverScratchSpace.getDualArrayHost("ownerIDs");
+    for (size_t i = 0; i < ownerIDs_sorted.size(); i++) {
+        h_ownerIDs[i] = ownerIDs_sorted[i];
+    }
+    solverScratchSpace.syncDualArrayHostToDevice("ownerIDs");
+
+    size_t* h_numUsefulCnt = solverScratchSpace.getDualStructHost("numUsefulCnt");
+    *h_numUsefulCnt = 0;
+    solverScratchSpace.syncDualStructHostToDevice("numUsefulCnt");
+    size_t* d_numUsefulCnt = solverScratchSpace.getDualStructDevice("numUsefulCnt");
+    bodyID_t* d_ownerIDs = (bodyID_t*)solverScratchSpace.getDualArrayDevice("ownerIDs");
+
+    getContactForcesConcerningOwners(d_points, d_forces, nullptr, d_contact_owner, d_numUsefulCnt, d_ownerIDs,
+                                     ownerIDs_sorted.size(), &simParams, &granData, numCnt, capacity, false, false,
+                                     streamInfo.stream);
+
+    solverScratchSpace.syncDualStructDeviceToHost("numUsefulCnt");
+    size_t numUsefulCnt = *h_numUsefulCnt;
+    if (numUsefulCnt > capacity) {
+        numUsefulCnt = capacity;
+    }
+
     solverScratchSpace.finishUsingDualArray("ownerIDs");
     solverScratchSpace.finishUsingDualStruct("numUsefulCnt");
     return numUsefulCnt;
@@ -3994,6 +4099,22 @@ void DEMDynamicThread::updateTriNodeRelPos(size_t start, const std::vector<DEMTr
     relPosNode1.toDeviceAsync(streamInfo.stream, start, updates.size());
     relPosNode2.toDeviceAsync(streamInfo.stream, start, updates.size());
     relPosNode3.toDeviceAsync(streamInfo.stream, start, updates.size());
+    syncMemoryTransfer();
+}
+
+void DEMDynamicThread::setTriVelCenterDevice(size_t start, const float3* d_vel_center, size_t count) {
+    if (count == 0) {
+        return;
+    }
+    if (!d_vel_center) {
+        DEME_ERROR("setTriVelCenterDevice called with null device pointer.");
+    }
+    if (start + count > triVelCenter.size()) {
+        DEME_ERROR("setTriVelCenterDevice out of range: start=%zu count=%zu triVelCenter.size()=%zu", start, count,
+                   triVelCenter.size());
+    }
+    DEME_GPU_CALL(cudaMemcpyAsync(triVelCenter.device() + start, d_vel_center, count * sizeof(float3),
+                                  cudaMemcpyDeviceToDevice, streamInfo.stream));
     syncMemoryTransfer();
 }
 
