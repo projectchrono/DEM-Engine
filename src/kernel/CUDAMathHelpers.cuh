@@ -69,6 +69,12 @@ inline float rsqrtf(float x) {
 }
 #endif
 
+#if defined(CUDA_VERSION) && (CUDA_VERSION >= 13000)
+using double4_t = double4_16a;
+#else
+using double4_t = double4;
+#endif
+
 ////////////////////////////////////////////////////////////////////////////////
 // constructors
 ////////////////////////////////////////////////////////////////////////////////
@@ -1199,17 +1205,17 @@ inline __host__ __device__ float dot(double3 a, float3 b) {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
-inline __host__ __device__ double dot(double4 a, double4 b) {
+inline __host__ __device__ double dot(double4_t a, double4_t b) {
     return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 }
-inline __host__ __device__ float dot(double4 a, float4 b) {
+inline __host__ __device__ float dot(double4_t a, float4 b) {
     return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 }
 
 inline __host__ __device__ double length(double3 v) {
     return sqrt(dot(v, v));
 }
-inline __host__ __device__ double length(double4 v) {
+inline __host__ __device__ double length(double4_t v) {
     return sqrt(dot(v, v));
 }
 
@@ -1344,13 +1350,13 @@ inline __host__ __device__ float4 operator/(float4 a, double b) {
     return make_float4(a.x / b, a.y / b, a.z / b, a.w / b);
 }
 
-inline __host__ __device__ double4 operator/(double4 a, float b) {
+inline __host__ __device__ double4_t operator/(double4_t a, float b) {
     return make_double4(a.x / b, a.y / b, a.z / b, a.w / b);
 }
-inline __host__ __device__ double4 operator/(double4 a, double b) {
+inline __host__ __device__ double4_t operator/(double4_t a, double b) {
     return make_double4(a.x / b, a.y / b, a.z / b, a.w / b);
 }
-inline __host__ __device__ void operator/=(double4& a, float b) {
+inline __host__ __device__ void operator/=(double4_t& a, float b) {
     a.x /= b;
     a.y /= b;
     a.z /= b;
