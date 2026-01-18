@@ -807,8 +807,8 @@ void DEMForceModel::SetForceModelType(FORCE_MODEL model_type) {
     type = model_type;
     switch (model_type) {
         case (FORCE_MODEL::HERTZIAN):
-            m_must_have_mat_props = {"E", "nu", "CoR", "mu", "Crr"};
-            m_pairwise_mat_props = {"CoR", "mu", "Crr"};
+            m_must_have_mat_props = {"E", "nu", "CoR", "mu_s", "mu_k", "Crr"};
+            m_pairwise_mat_props = {"CoR", "mu_s", "mu_k", "Crr"};
             m_force_model = HERTZIAN_FORCE_MODEL();
             // History-based model uses these history-related arrays
             m_contact_wildcards = {"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"};

@@ -4,7 +4,7 @@
 // when we added extra contact margins
 if (overlapDepth > 0) {
     // Material properties
-    float E_cnt, G_cnt, CoR_cnt, mu_cnt, Crr_cnt;
+    float E_cnt, G_cnt, CoR_cnt, mu_s_cnt, mu_k_cnt, Crr_cnt;
     {
         // E and nu are associated with each material, so obtain them this way
         float E_A = E[bodyAMatType];
@@ -14,7 +14,8 @@ if (overlapDepth > 0) {
         matProxy2ContactParam<float>(E_cnt, G_cnt, E_A, nu_A, E_B, nu_B);
         // CoR, mu and Crr are pair-wise, so obtain them this way
         CoR_cnt = CoR[bodyAMatType][bodyBMatType];
-        mu_cnt = mu[bodyAMatType][bodyBMatType];
+        mu_s_cnt = mu_s[bodyAMatType][bodyBMatType];
+        mu_k_cnt = mu_k[bodyAMatType][bodyBMatType];
         Crr_cnt = Crr[bodyAMatType][bodyBMatType];
     }
 
@@ -150,17 +151,22 @@ if (overlapDepth > 0) {
     }
 
     // Tangential force part
-    if (mu_cnt > 0.f) {
+    if (mu_s_cnt > 0.f || mu_k_cnt > 0.f) {
         const float kt = 8.f * G_cnt * contact_radius;
         const float gt =
             -deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrtf(mass_eff * kt);  // do we neen higher damping??
         float3 tangent_force = -kt * delta_tan - gt * vrel_tan;
         const float ft = length(tangent_force);
         if (ft > DEME_TINY_FLOAT) {
-            // Reverse-engineer to get tangential displacement
-            const float ft_max = length(force) * mu_cnt;
-            if (ft > ft_max) {
-                tangent_force = (ft_max / ft) * tangent_force;
+            const float fn = length(force);
+            const float ft_max_static = fn * mu_s_cnt;
+            if (ft > ft_max_static) {
+                const float ft_max_kinetic = fn * mu_k_cnt;
+                if (ft_max_kinetic > 0.f) {
+                    tangent_force = (ft_max_kinetic / ft) * tangent_force;
+                } else {
+                    tangent_force = make_float3(0.f, 0.f, 0.f);
+                }
                 delta_tan = (tangent_force + gt * vrel_tan) / (-kt);
             }
         } else {

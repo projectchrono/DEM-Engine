@@ -2038,11 +2038,18 @@ inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::strin
                 flag = flag && flags[i][i];
             }
             if (!flag) {
-                DEME_WARNING(
-                    "Material property %s is needed by the force model or is referred to by the user. However, at "
-                    "least one material does not have it defined, so it is defaulted to 0 for that material.\nPlease "
-                    "be sure this is intentional.",
-                    prop_name.c_str());
+                if (check_exist(mat_prop_that_must_exist, prop_name)) {
+                    DEME_ERROR(
+                        "Material property %s is required by the selected force model. However, at least one material "
+                        "does not have it defined.",
+                        prop_name.c_str());
+                } else {
+                    DEME_WARNING(
+                        "Material property %s is needed by the force model or is referred to by the user. However, at "
+                        "least one material does not have it defined, so it is defaulted to 0 for that material.\nPlease "
+                        "be sure this is intentional.",
+                        prop_name.c_str());
+                }
             }
         }
 
