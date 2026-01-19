@@ -134,6 +134,7 @@ constexpr contact_t ALL_CONTACT_TYPES[NUM_SUPPORTED_CONTACT_TYPES] = {
 const objType_t ANAL_OBJ_TYPE_PLANE = 0;
 const objType_t ANAL_OBJ_TYPE_PLATE = 1;
 const objType_t ANAL_OBJ_TYPE_CYL_INF = 2;
+const objType_t ANAL_OBJ_TYPE_PLANAR_CYL = 3;
 const objNormal_t ENTITY_NORMAL_INWARD = 0;
 const objNormal_t ENTITY_NORMAL_OUTWARD = 1;
 

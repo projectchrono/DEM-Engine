@@ -717,6 +717,11 @@ void DEMSolver::preprocessAnalyticalObjs() {
                     addAnalCompTemplate(ANAL_OBJ_TYPE_CYL_INF, comp_mat.at(i), thisLoadExtObj, param.cyl.center,
                                         param.cyl.dir, param.cyl.radius, 0, 0, param.cyl.normal);
                     break;
+                case OBJ_COMPONENT::PLANAR_CYL:
+                    addAnalCompTemplate(ANAL_OBJ_TYPE_PLANAR_CYL, comp_mat.at(i), thisLoadExtObj, param.cyl.center,
+                                        param.cyl.dir, param.cyl.radius, 0, 0,
+                                        param.cyl.normal);
+                    break;
                 default:
                     DEME_ERROR(std::string("There is at least one analytical boundary that has a type not supported."));
             }

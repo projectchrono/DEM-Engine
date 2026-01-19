@@ -118,6 +118,30 @@ bool __device__ tri_plane_penetration(const T1** tri,
     return in_contact;
 }
 
+template <typename T1>
+inline __host__ __device__ bool planar_cyl_plane_from_ref(const T1& ref,
+                                                          const T1& entityLoc,
+                                                          const float3& entityDir,
+                                                          const float& radius,
+                                                          const float& normal_sign,
+                                                          T1& plane_point,
+                                                          float3& plane_normal) {
+    T1 radial_vec = cylRadialDistanceVec<T1>(ref, entityLoc, entityDir);
+    const auto dist = length(radial_vec);
+    if (dist <= (decltype(dist))DEME_TINY_FLOAT) {
+        return false;
+    }
+    const T1 radial_dir = radial_vec / dist;
+    const float dist_plane = normal_sign * (radius - (float)dist);
+    if (dist_plane < 0) {
+        return false;
+    }
+    plane_normal = to_real3<T1, float3>(-normal_sign * radial_dir);
+    const T1 axis_point = ref - radial_vec;
+    plane_point = axis_point + radial_dir * radius;
+    return true;
+}
+
 template <typename T1, typename T2>
 bool __device__ tri_cyl_penetration(const T1** tri,
                                     const T1& entityLoc,
@@ -174,6 +198,22 @@ __host__ __device__ deme::contact_t checkTriEntityOverlap(const T1& A,
             }
             return deme::NOT_A_CONTACT;
         }
+        case (deme::ANAL_OBJ_TYPE_PLANAR_CYL): {
+            T1 centroid = (A + B + C) / 3.0;
+            T1 plane_point;
+            float3 plane_normal;
+            if (!planar_cyl_plane_from_ref(centroid, entityLoc, entityDir, entitySize1, normal_sign, plane_point,
+                                           plane_normal)) {
+                return deme::NOT_A_CONTACT;
+            }
+            for (const T1*& v : tri) {
+                double d = planeSignedDistance<double>(*v, plane_point, plane_normal);
+                double overlapDepth = beta4Entity - d;
+                if (overlapDepth >= 0.0)
+                    return deme::TRIANGLE_ANALYTICAL_CONTACT;
+            }
+            return deme::NOT_A_CONTACT;
+        }
         default:
             return deme::NOT_A_CONTACT;
     }
@@ -211,6 +251,22 @@ __host__ __device__ deme::contact_t checkTriEntityOverlapFP32(const T1& A,
                 float3 vec = cylRadialDistanceVec<float3>(*v, entityLoc, entityDir);
                 const float signed_dist = (entitySize1 - length(vec)) * normal_sign;
                 if (signed_dist <= beta4Entity)
+                    return deme::TRIANGLE_ANALYTICAL_CONTACT;
+            }
+            return deme::NOT_A_CONTACT;
+        }
+        case (deme::ANAL_OBJ_TYPE_PLANAR_CYL): {
+            T1 centroid = (A + B + C) / 3.0f;
+            T1 plane_point;
+            float3 plane_normal;
+            if (!planar_cyl_plane_from_ref(centroid, entityLoc, entityDir, entitySize1, normal_sign, plane_point,
+                                           plane_normal)) {
+                return deme::NOT_A_CONTACT;
+            }
+            for (const T1*& v : tri) {
+                const float d = planeSignedDistance<float>(*v, plane_point, plane_normal);
+                const float overlapDepth = beta4Entity - d;
+                if (overlapDepth >= 0.0f)
                     return deme::TRIANGLE_ANALYTICAL_CONTACT;
             }
             return deme::NOT_A_CONTACT;
@@ -253,6 +309,19 @@ bool __device__ calcTriEntityOverlap(const T1& A,
             in_contact = tri_cyl_penetration<T1, T2>(tri, entityLoc, entityDir, entitySize1, entitySize2, normal_sign,
                                                      contact_normal, overlapDepth, overlapArea, contactPnt);
             return in_contact;
+        case deme::ANAL_OBJ_TYPE_PLANAR_CYL: {
+            T1 centroid = (A + B + C) / 3.0;
+            T1 plane_point;
+            float3 plane_normal;
+            if (!planar_cyl_plane_from_ref(centroid, entityLoc, entityDir, entitySize1, normal_sign, plane_point,
+                                           plane_normal)) {
+                return false;
+            }
+            in_contact =
+                tri_plane_penetration<T1, T2>(tri, plane_point, plane_normal, overlapDepth, overlapArea, contactPnt);
+            contact_normal = plane_normal;
+            return in_contact;
+        }
         default:
             return false;
     }

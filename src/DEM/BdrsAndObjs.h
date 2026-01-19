@@ -25,7 +25,7 @@ namespace deme {
 /// External object type
 /// Note all of them are `shell', not solid objects. If you need a solid cylinder for example, then use one CYLINDER as
 /// the side plus 2 CIRCLE as the ends to emulate it. Please be sure to set OUTWARD CYLINDER normal in this case.
-enum class OBJ_COMPONENT { PLANE, SPHERE, PLATE, CIRCLE, CYL, CYL_INF, CONE, CONE_INF, TRIANGLE };
+enum class OBJ_COMPONENT { PLANE, SPHERE, PLATE, CIRCLE, CYL, CYL_INF, PLANAR_CYL, CONE, CONE_INF, TRIANGLE };
 
 /// Sphere
 struct DEMSphereParams_t {
@@ -223,6 +223,54 @@ class DEMExternObj : public DEMInitializer {
         assertThreeElements(pos, "AddCylinder", "pos");
         assertThreeElements(axis, "AddCylinder", "axis");
         AddCylinder(make_float3(pos[0], pos[1], pos[2]), make_float3(axis[0], axis[1], axis[2]), rad, material, normal);
+    }
+
+    /// Add a z-axis-aligned cylinder of infinite length with planar contact approximation
+    void AddZPlanarContactCylinder(const float3 pos,
+                                   const float rad,
+                                   const std::shared_ptr<DEMMaterial>& material,
+                                   const objNormal_t normal = ENTITY_NORMAL_INWARD) {
+        types.push_back(OBJ_COMPONENT::PLANAR_CYL);
+        materials.push_back(material);
+        DEMAnalEntParams params;
+        params.cyl.center = pos;
+        params.cyl.radius = rad;
+        params.cyl.dir = make_float3(0, 0, 1);
+        params.cyl.normal = normal;
+        entity_params.push_back(params);
+    }
+    void AddZPlanarContactCylinder(const std::vector<float>& pos,
+                                   const float rad,
+                                   const std::shared_ptr<DEMMaterial>& material,
+                                   const objNormal_t normal = ENTITY_NORMAL_INWARD) {
+        assertThreeElements(pos, "AddZPlanarContactCylinder", "pos");
+        AddZPlanarContactCylinder(make_float3(pos[0], pos[1], pos[2]), rad, material, normal);
+    }
+
+    /// Add a cylinder of infinite length with planar contact approximation, along a user-specific axis
+    void AddPlanarContactCylinder(const float3 pos,
+                                  const float3 axis,
+                                  const float rad,
+                                  const std::shared_ptr<DEMMaterial>& material,
+                                  const objNormal_t normal = ENTITY_NORMAL_INWARD) {
+        types.push_back(OBJ_COMPONENT::PLANAR_CYL);
+        materials.push_back(material);
+        DEMAnalEntParams params;
+        params.cyl.center = pos;
+        params.cyl.radius = rad;
+        params.cyl.dir = normalize(axis);
+        params.cyl.normal = normal;
+        entity_params.push_back(params);
+    }
+    void AddPlanarContactCylinder(const std::vector<float>& pos,
+                                  const std::vector<float>& axis,
+                                  const float rad,
+                                  const std::shared_ptr<DEMMaterial>& material,
+                                  const objNormal_t normal = ENTITY_NORMAL_INWARD) {
+        assertThreeElements(pos, "AddPlanarContactCylinder", "pos");
+        assertThreeElements(axis, "AddPlanarContactCylinder", "axis");
+        AddPlanarContactCylinder(make_float3(pos[0], pos[1], pos[2]), make_float3(axis[0], axis[1], axis[2]), rad,
+                                 material, normal);
     }
 };
 

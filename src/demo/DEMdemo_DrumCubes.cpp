@@ -54,11 +54,7 @@ int main() {
     float IZZ = CylMass * CylRad * CylRad / 2;
     float IYY = (CylMass / 12) * (3 * CylRad * CylRad + CylHeight * CylHeight);
     auto Drum = DEMSim.AddExternalObject();
-    // Drum->AddCylinder(CylCenter, CylAxis, CylRad, mat_type_drum, 0);
-    Drum->AddPlane(make_float3(CylRad, 0, 0), make_float3(-1, 0, 0), mat_type_drum);
-    Drum->AddPlane(make_float3(-CylRad, 0, 0), make_float3(1, 0, 0), mat_type_drum);
-    Drum->AddPlane(make_float3(0, CylRad, 0), make_float3(0, -1, 0), mat_type_drum);
-    Drum->AddPlane(make_float3(0, -CylRad, 0), make_float3(0, 1, 0), mat_type_drum);
+    Drum->AddPlanarContactCylinder(CylCenter, CylAxis, CylRad, mat_type_drum, ENTITY_NORMAL_INWARD);
     Drum->SetMass(CylMass);
     Drum->SetMOI(make_float3(IYY, IYY, IZZ));
     auto Drum_tracker = DEMSim.Track(Drum);
