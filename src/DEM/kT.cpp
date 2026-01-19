@@ -1271,6 +1271,7 @@ void DEMKinematicThread::prewarmKernels() {
         sphere_contact_kernels->kernel("getNumberOfSphereContactsEachBin").instantiate();
     }
     if (bin_triangle_kernels) {
+        bin_triangle_kernels->kernel("precomputeTriangleSandwichData").instantiate();
         bin_triangle_kernels->kernel("getNumberOfBinsEachTriangleTouches").instantiate();
         bin_triangle_kernels->kernel("populateBinTriangleTouchingPairs").instantiate();
     }

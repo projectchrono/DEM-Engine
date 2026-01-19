@@ -82,16 +82,21 @@ __global__ void computeMarginFromAbsv_implTri(deme::DEMSimParams* simParams,
         // as our meshed particle representation is surface only, so we need to account for existing penetration length
         // in our future-proof contact detection, always.
         double penetrationMargin = *maxTriTriPenetration;
-        //// TODO: Temporary measure
-        penetrationMargin = 0.;  // (meshUniversalContact && penetrationMargin > 0.0) ? penetrationMargin : 0.0;
+        penetrationMargin = (meshUniversalContact && penetrationMargin > 0.0) ? penetrationMargin : 0.0;
         // Clamp penetration margin to the maximum allowed value to prevent super large margins
         if (penetrationMargin > simParams->capTriTriPenetration) {
             penetrationMargin = simParams->capTriTriPenetration;
         }
-
-        granData->marginSizeTriangle[triID] =
+        // We hope that penetrationMargin is small, so it's absorbed into the velocity-induce margin.
+        // But if not, it should prevail to avoid losing contacts involving triangles inside another mesh.
+        double finalMargin =
             (double)(vel * simParams->dyn.expSafetyMulti + simParams->dyn.expSafetyAdder) * (*ts) * (*maxDrift) +
-            penetrationMargin + granData->familyExtraMarginSize[my_family];
+            granData->familyExtraMarginSize[my_family];
+        // if (finalMargin < penetrationMargin) {
+        //     finalMargin = penetrationMargin;
+        // }
+
+        granData->marginSizeTriangle[triID] = finalMargin;
     }
 }
 

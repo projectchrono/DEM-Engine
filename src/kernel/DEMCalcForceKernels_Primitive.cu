@@ -250,13 +250,22 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             // Use the dedicated SAT check function to determine if triangles are truly in physical contact
             // Note: checkTriangleTriangleOverlap uses projection which can report contact even for non-physical
             // "submerged" cases, so we need the actual SAT test for accurate physical contact determination
-            bool satisfiesSAT = checkTriangleTriangleSAT<double3, double>(triANode1, triANode2, triANode3, triBNode1,
-                                                                          triBNode2, triBNode3);
-            granData->contactSATSatisfied[myPrimitiveContactID] = satisfiesSAT ? 1 : 0;
-
-            // If SAT says no physical contact potential, drop this pair (projection can report non-physical overlaps)
-            if (!satisfiesSAT) {
+            bool check_sat = true;
+            if (!in_contact && overlapDepth <= -extraMarginSize) {
+                // This pair is already beyond the extra margin, SAT cannot make it a valid contact
+                check_sat = false;
+                granData->contactSATSatisfied[myPrimitiveContactID] = 0;
                 ContactType = deme::NOT_A_CONTACT;
+            }
+            if (check_sat) {
+                bool satisfiesSAT = checkTriangleTriangleSAT<double3, double>(triANode1, triANode2, triANode3, triBNode1,
+                                                                              triBNode2, triBNode3);
+                granData->contactSATSatisfied[myPrimitiveContactID] = satisfiesSAT ? 1 : 0;
+
+                // If SAT says no physical contact potential, drop this pair (projection can report non-physical overlaps)
+                if (!satisfiesSAT) {
+                    ContactType = deme::NOT_A_CONTACT;
+                }
             }
 
             // Fix ContactType if needed

@@ -574,11 +574,42 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 numAnalGeoTriTouches =
                     (objID_t*)scratchPad.allocateTempVector("numAnalGeoTriTouches", CD_temp_arr_bytes);
             }
+            
+            // Triangle prepass: compute world vertices/bounds/shift once, reuse in both sweeps.
+            CD_temp_arr_bytes = simParams->nTriGM * sizeof(float3);
+            float3* tri_vA1 = (float3*)scratchPad.allocateTempVector("tri_vA1", CD_temp_arr_bytes);
+            float3* tri_vB1 = (float3*)scratchPad.allocateTempVector("tri_vB1", CD_temp_arr_bytes);
+            float3* tri_vC1 = (float3*)scratchPad.allocateTempVector("tri_vC1", CD_temp_arr_bytes);
+            float3* tri_vA2 = (float3*)scratchPad.allocateTempVector("tri_vA2", CD_temp_arr_bytes);
+            float3* tri_vB2 = (float3*)scratchPad.allocateTempVector("tri_vB2", CD_temp_arr_bytes);
+            float3* tri_vC2 = (float3*)scratchPad.allocateTempVector("tri_vC2", CD_temp_arr_bytes);
+            float3* tri_shift = (float3*)scratchPad.allocateTempVector("tri_shift", CD_temp_arr_bytes);
+
+            CD_temp_arr_bytes = simParams->nTriGM * sizeof(int3);
+            int3* tri_L1 = (int3*)scratchPad.allocateTempVector("tri_L1", CD_temp_arr_bytes);
+            int3* tri_U1 = (int3*)scratchPad.allocateTempVector("tri_U1", CD_temp_arr_bytes);
+            int3* tri_L2 = (int3*)scratchPad.allocateTempVector("tri_L2", CD_temp_arr_bytes);
+            int3* tri_U2 = (int3*)scratchPad.allocateTempVector("tri_U2", CD_temp_arr_bytes);
+
+            CD_temp_arr_bytes = simParams->nTriGM * sizeof(uint8_t);
+            uint8_t* tri_ok1 = (uint8_t*)scratchPad.allocateTempVector("tri_ok1", CD_temp_arr_bytes);
+            uint8_t* tri_ok2 = (uint8_t*)scratchPad.allocateTempVector("tri_ok2", CD_temp_arr_bytes);
+
+            bin_triangle_kernels->kernel("precomputeTriangleSandwichData")
+                .instantiate()
+                .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
+                .launch(&simParams, &granData,
+                        tri_vA1, tri_vB1, tri_vC1, tri_vA2, tri_vB2, tri_vC2,
+                        tri_shift, tri_L1, tri_U1, tri_L2, tri_U2, tri_ok1, tri_ok2,
+                        sandwichANode1, sandwichANode2, sandwichANode3,
+                        sandwichBNode1, sandwichBNode2, sandwichBNode3);
+
             bin_triangle_kernels->kernel("getNumberOfBinsEachTriangleTouches")
                 .instantiate()
                 .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
-                .launch(&simParams, &granData, numBinsTriTouches, numAnalGeoTriTouches, sandwichANode1, sandwichANode2,
-                        sandwichANode3, sandwichBNode1, sandwichBNode2, sandwichBNode3,
+                .launch(&simParams, &granData, numBinsTriTouches, numAnalGeoTriTouches,
+                        tri_vA1, tri_vB1, tri_vC1, tri_vA2, tri_vB2, tri_vC2,
+                        tri_shift, tri_L1, tri_U1, tri_L2, tri_U2, tri_ok1, tri_ok2,
                         solverFlags.meshUniversalContact);
             // std::cout << "numBinsTriTouches: " << std::endl;
             // displayDeviceArray<binsTriangleTouches_t>(numBinsTriTouches, simParams->nTriGM);
@@ -651,9 +682,26 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
             bin_triangle_kernels->kernel("populateBinTriangleTouchingPairs")
                 .instantiate()
                 .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
-                .launch(&simParams, &granData, numBinsTriTouchesScan, numAnalGeoTriTouchesScan, binIDsEachTriTouches,
-                        triIDsEachBinTouches, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
-                        sandwichBNode2, sandwichBNode3, idTriA, idGeoB, dType, solverFlags.meshUniversalContact);
+                .launch(&simParams, &granData, numBinsTriTouchesScan, numAnalGeoTriTouchesScan,
+                        binIDsEachTriTouches, triIDsEachBinTouches,
+                        tri_vA1, tri_vB1, tri_vC1, tri_vA2, tri_vB2, tri_vC2,
+                        tri_shift, tri_L1, tri_U1, tri_L2, tri_U2, tri_ok1, tri_ok2,
+                        idTriA, idGeoB, dType, solverFlags.meshUniversalContact);
+
+            scratchPad.finishUsingTempVector("tri_vA1");
+            scratchPad.finishUsingTempVector("tri_vB1");
+            scratchPad.finishUsingTempVector("tri_vC1");
+            scratchPad.finishUsingTempVector("tri_vA2");
+            scratchPad.finishUsingTempVector("tri_vB2");
+            scratchPad.finishUsingTempVector("tri_vC2");
+            scratchPad.finishUsingTempVector("tri_shift");
+            scratchPad.finishUsingTempVector("tri_L1");
+            scratchPad.finishUsingTempVector("tri_U1");
+            scratchPad.finishUsingTempVector("tri_L2");
+            scratchPad.finishUsingTempVector("tri_U2");
+            scratchPad.finishUsingTempVector("tri_ok1");
+            scratchPad.finishUsingTempVector("tri_ok2");
+
             // std::cout << "binIDsEachTriTouches: " << std::endl;
             // displayDeviceArray<binsTriangleTouches_t>(binIDsEachTriTouches, *pNumBinTriTouchPairs);
             // std::cout << "dType: " << std::endl;

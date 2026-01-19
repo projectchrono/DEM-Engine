@@ -1149,9 +1149,8 @@ __device__ bool checkTriangleTriangleOverlap(
     // Triangle B vertices (tri2)
     const T1 triB[3] = {A2, B2, C2};
 
-    // Compute face normals
+    // Compute face normal for triangle A first; triangle B normal is only needed if B->A projection hits.
     T1 nA = normalize(cross(B1 - A1, C1 - A1));
-    T1 nB = normalize(cross(B2 - A2, C2 - A2));
 
     //// TODO: And degenerated triangles?
 
@@ -1163,17 +1162,36 @@ __device__ bool checkTriangleTriangleOverlap(
     // Project triangle B onto triangle A's plane and clip against A
     T2 depthBA, areaBA;
     T1 centroidBA;
-    bool contactBA = projectTriangleOntoTriangle<T1, T2>(triB, triA, nA, depthBA, areaBA, centroidBA);
+    const bool contactBA = projectTriangleOntoTriangle<T1, T2>(triB, triA, nA, depthBA, areaBA, centroidBA);
+
+    if (!contactBA) {
+        // No contact detected, Provide separation info
+        T1 centA = (triA[0] + triA[1] + triA[2]) / 3.0;
+        T1 centB = (triB[0] + triB[1] + triB[2]) / 3.0;
+        T1 sep = centA - centB;
+        T2 sepLen2 = dot(sep, sep);
+
+        if (sepLen2 > (DEME_TINY_FLOAT * DEME_TINY_FLOAT)) {
+            T2 sepLen = sqrt(sepLen2);
+            normal = sep / sepLen;
+            depth = -sepLen;  // Negative for separation
+            point = (centA + centB) * 0.5;
+        } else {
+            normal = nA;
+            depth = -DEME_TINY_FLOAT;
+            point = centA;
+        }
+        projectedArea = 0.0;
+        return false;
+    }
 
     // Project triangle A onto triangle B's plane and clip against B
+    T1 nB = normalize(cross(B2 - A2, C2 - A2));
     T2 depthAB, areaAB;
     T1 centroidAB;
-    bool contactAB = projectTriangleOntoTriangle<T1, T2>(triA, triB, nB, depthAB, areaAB, centroidAB);
+    const bool contactAB = projectTriangleOntoTriangle<T1, T2>(triA, triB, nB, depthAB, areaAB, centroidAB);
 
-    // Determine if there is contact
-    bool inContact = contactBA && contactAB;
-
-    if (!inContact) {
+    if (!contactAB) {
         // No contact detected, Provide separation info
         T1 centA = (triA[0] + triA[1] + triA[2]) / 3.0;
         T1 centB = (triB[0] + triB[1] + triB[2]) / 3.0;
