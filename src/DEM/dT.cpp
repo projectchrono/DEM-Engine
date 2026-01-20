@@ -1378,11 +1378,15 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
 
 #ifdef DEME_USE_CHPF
 void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) {
-    chpf::Writer pw;
-    // pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, mass);
     migrateFamilyToHost();
     migrateClumpPosInfoToHost();
     migrateClumpHighOrderInfoToHost();
+    writeSpheresAsChpfFromHost(ptFile);
+}
+
+void DEMDynamicThread::writeSpheresAsChpfFromHost(std::ofstream& ptFile) {
+    chpf::Writer pw;
+    // pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, mass);
 
     // simParams host version should not be different from device version, so no need to update
     std::vector<float> posX(simParams->nSpheresGM);
@@ -1458,13 +1462,16 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) {
 #endif
 
 void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) {
-    std::ostringstream outstrstream;
-
     migrateFamilyToHost();
     migrateClumpPosInfoToHost();
     migrateClumpHighOrderInfoToHost();
     migrateOwnerWildcardToHost();
     migrateSphGeoWildcardToHost();
+    writeSpheresAsCsvFromHost(ptFile);
+}
+
+void DEMDynamicThread::writeSpheresAsCsvFromHost(std::ofstream& ptFile) {
+    std::ostringstream outstrstream;
 
     outstrstream << OUTPUT_FILE_X_COL_NAME + "," + OUTPUT_FILE_Y_COL_NAME + "," + OUTPUT_FILE_Z_COL_NAME + "," +
                         OUTPUT_FILE_R_COL_NAME;
@@ -1611,11 +1618,15 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) {
 
 #ifdef DEME_USE_CHPF
 void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy) {
-    //// TODO: Note using accuracy
-    chpf::Writer pw;
     migrateFamilyToHost();
     migrateClumpPosInfoToHost();
     migrateClumpHighOrderInfoToHost();
+    writeClumpsAsChpfFromHost(ptFile, accuracy);
+}
+
+void DEMDynamicThread::writeClumpsAsChpfFromHost(std::ofstream& ptFile, unsigned int accuracy) {
+    //// TODO: Note using accuracy
+    chpf::Writer pw;
 
     // simParams host version should not be different from device version, so no need to update
     std::vector<float> posX(simParams->nOwnerBodies);
@@ -1695,13 +1706,16 @@ void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile, unsigned int acc
 #endif
 
 void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accuracy) {
-    std::ostringstream outstrstream;
-    outstrstream.precision(accuracy);
-
     migrateFamilyToHost();
     migrateClumpPosInfoToHost();
     migrateClumpHighOrderInfoToHost();
     migrateOwnerWildcardToHost();
+    writeClumpsAsCsvFromHost(ptFile, accuracy);
+}
+
+void DEMDynamicThread::writeClumpsAsCsvFromHost(std::ofstream& ptFile, unsigned int accuracy) {
+    std::ostringstream outstrstream;
+    outstrstream.precision(accuracy);
 
     // xyz and quaternion are always there
     outstrstream << OUTPUT_FILE_X_COL_NAME + "," + OUTPUT_FILE_Y_COL_NAME + "," + OUTPUT_FILE_Z_COL_NAME +
@@ -1823,11 +1837,13 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
 }
 
 std::shared_ptr<ContactInfoContainer> DEMDynamicThread::generateContactInfo(float force_thres) {
-    // Migrate contact info to host
     migrateFamilyToHost();
     migrateClumpPosInfoToHost();
     migrateContactInfoToHost();
+    return generateContactInfoFromHost(force_thres);
+}
 
+std::shared_ptr<ContactInfoContainer> DEMDynamicThread::generateContactInfoFromHost(float force_thres) {
     size_t total_contacts = *(solverScratchSpace.numContacts);
     // Wildcards supports only floats now
     std::vector<std::pair<std::string, std::string>> existing_wildcards(m_contact_wildcard_names.size());
@@ -2050,9 +2066,122 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
     ptFile << outstrstream.str();
 }
 
+void DEMDynamicThread::writeContactsAsCsvFromHost(std::ofstream& ptFile, float force_thres) {
+    std::ostringstream outstrstream;
+
+    std::shared_ptr<ContactInfoContainer> contactInfo = generateContactInfoFromHost(force_thres);
+
+    outstrstream << OUTPUT_FILE_CNT_TYPE_NAME;
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::OWNER) {
+        outstrstream << "," + OUTPUT_FILE_OWNER_1_NAME + "," + OUTPUT_FILE_OWNER_2_NAME;
+    }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::GEO_ID) {
+        outstrstream << "," + OUTPUT_FILE_GEO_ID_1_NAME + "," + OUTPUT_FILE_GEO_ID_2_NAME;
+    }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::FORCE) {
+        outstrstream << "," + OUTPUT_FILE_FORCE_X_NAME + "," + OUTPUT_FILE_FORCE_Y_NAME + "," +
+                            OUTPUT_FILE_FORCE_Z_NAME;
+    }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_POINT) {
+        outstrstream << "," + OUTPUT_FILE_X_COL_NAME + "," + OUTPUT_FILE_Y_COL_NAME + "," + OUTPUT_FILE_Z_COL_NAME;
+    }
+    // if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::COMPONENT) {
+    //     outstrstream << ","+OUTPUT_FILE_COMP_1_NAME+","+OUTPUT_FILE_COMP_2_NAME;
+    // }
+    // if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NICKNAME) {
+    //     outstrstream << ","+OUTPUT_FILE_OWNER_NICKNAME_1_NAME+","+OUTPUT_FILE_OWNER_NICKNAME_2_NAME;
+    // }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NORMAL) {
+        outstrstream << "," + OUTPUT_FILE_NORMAL_X_NAME + "," + OUTPUT_FILE_NORMAL_Y_NAME + "," +
+                            OUTPUT_FILE_NORMAL_Z_NAME;
+    }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE) {
+        outstrstream << "," + OUTPUT_FILE_TORQUE_X_NAME + "," + OUTPUT_FILE_TORQUE_Y_NAME + "," +
+                            OUTPUT_FILE_TORQUE_Z_NAME;
+    }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_WILDCARD) {
+        // Write all wildcard names as header
+        for (const auto& w_name : m_contact_wildcard_names) {
+            outstrstream << "," + w_name;
+        }
+    }
+    outstrstream << "\n";
+
+    for (size_t i = 0; i < contactInfo->Size(); i++) {
+        outstrstream << contactInfo->Get<std::string>("ContactType")[i];
+
+        // (Internal) ownerID and/or geometry ID
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::OWNER) {
+            outstrstream << "," << contactInfo->Get<bodyID_t>("AOwner")[i] << ","
+                         << contactInfo->Get<bodyID_t>("BOwner")[i];
+        }
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::GEO_ID) {
+            outstrstream << "," << contactInfo->Get<bodyID_t>("AGeo")[i] << ","
+                         << contactInfo->Get<bodyID_t>("BGeo")[i];
+        }
+
+        // Force is already in global...
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::FORCE) {
+            outstrstream << "," << contactInfo->Get<float3>("Force")[i].x << ","
+                         << contactInfo->Get<float3>("Force")[i].y << "," << contactInfo->Get<float3>("Force")[i].z;
+        }
+
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_POINT) {
+            // oriQ is updated already... whereas the contact point is effectively last step's... That's unfortunate.
+            // Should we do somthing ahout it?
+            outstrstream << "," << contactInfo->Get<float3>("Point")[i].x << ","
+                         << contactInfo->Get<float3>("Point")[i].y << "," << contactInfo->Get<float3>("Point")[i].z;
+        }
+
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NORMAL) {
+            outstrstream << "," << contactInfo->Get<float3>("Normal")[i].x << ","
+                         << contactInfo->Get<float3>("Normal")[i].y << "," << contactInfo->Get<float3>("Normal")[i].z;
+        }
+
+        // Torque is in global already...
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE) {
+            outstrstream << "," << contactInfo->Get<float3>("Torque")[i].x << ","
+                         << contactInfo->Get<float3>("Torque")[i].y << "," << contactInfo->Get<float3>("Torque")[i].z;
+        }
+
+        // Contact wildcards
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_WILDCARD) {
+            // The order shouldn't be an issue... the same set is being processed here and in equip_contact_wildcards,
+            // see Model.h
+            for (const auto& name : m_contact_wildcard_names) {
+                outstrstream << "," << contactInfo->Get<float>(name)[i];
+            }
+        }
+
+        outstrstream << "\n";
+    }
+
+    ptFile << outstrstream.str();
+}
+
 void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
-    std::ostringstream ostream;
     migrateFamilyToHost();
+    migrateClumpPosInfoToHost();
+    writeMeshesAsVtkFromHost(ptFile);
+}
+
+void DEMDynamicThread::writeMeshesAsVtkFromHost(std::ofstream& ptFile) {
+    std::ostringstream ostream;
+
+    auto ownerPosFromHost = [this](bodyID_t owner) {
+        double X, Y, Z;
+        voxelID_t voxel = voxelID[owner];
+        subVoxelPos_t subVoxX = locX[owner];
+        subVoxelPos_t subVoxY = locY[owner];
+        subVoxelPos_t subVoxZ = locZ[owner];
+        voxelIDToPosition<double, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ,
+                                                            simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
+                                                            simParams->l);
+        return make_float3(X + simParams->LBFX, Y + simParams->LBFY, Z + simParams->LBFZ);
+    };
+    auto ownerOriQFromHost = [this](bodyID_t owner) {
+        return make_float4(oriQx[owner], oriQy[owner], oriQz[owner], oriQw[owner]);
+    };
 
     std::vector<size_t> vertexOffset(m_meshes.size() + 1, 0);
     size_t total_f = 0;
@@ -2097,8 +2226,8 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     for (const auto& mmesh : m_meshes) {
         if (!thisMeshSkip[mesh_num]) {
             bodyID_t mowner = mmesh->owner;
-            float3 ownerPos = this->getOwnerPos(mowner)[0];
-            float4 ownerOriQ = this->getOwnerOriQ(mowner)[0];
+            float3 ownerPos = ownerPosFromHost(mowner);
+            float4 ownerOriQ = ownerOriQFromHost(mowner);
             for (const auto& v : mmesh->GetCoordsVertices()) {
                 float3 point = v;
                 applyFrameTransformLocalToGlobal(point, ownerPos, ownerOriQ);
@@ -2139,8 +2268,28 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
 }
 
 void DEMDynamicThread::writeMeshesAsStl(std::ofstream& ptFile) {
-    std::ostringstream ostream;
     migrateFamilyToHost();
+    migrateClumpPosInfoToHost();
+    writeMeshesAsStlFromHost(ptFile);
+}
+
+void DEMDynamicThread::writeMeshesAsStlFromHost(std::ofstream& ptFile) {
+    std::ostringstream ostream;
+
+    auto ownerPosFromHost = [this](bodyID_t owner) {
+        double X, Y, Z;
+        voxelID_t voxel = voxelID[owner];
+        subVoxelPos_t subVoxX = locX[owner];
+        subVoxelPos_t subVoxY = locY[owner];
+        subVoxelPos_t subVoxZ = locZ[owner];
+        voxelIDToPosition<double, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ,
+                                                            simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
+                                                            simParams->l);
+        return make_float3(X + simParams->LBFX, Y + simParams->LBFY, Z + simParams->LBFZ);
+    };
+    auto ownerOriQFromHost = [this](bodyID_t owner) {
+        return make_float4(oriQx[owner], oriQy[owner], oriQz[owner], oriQw[owner]);
+    };
 
     std::vector<notStupidBool_t> thisMeshSkip(m_meshes.size(), 0);
     unsigned int mesh_num = 0;
@@ -2158,8 +2307,8 @@ void DEMDynamicThread::writeMeshesAsStl(std::ofstream& ptFile) {
     for (const auto& mmesh : m_meshes) {
         if (!thisMeshSkip[mesh_num]) {
             bodyID_t mowner = mmesh->owner;
-            float3 ownerPos = this->getOwnerPos(mowner)[0];
-            float4 ownerOriQ = this->getOwnerOriQ(mowner)[0];
+            float3 ownerPos = ownerPosFromHost(mowner);
+            float4 ownerOriQ = ownerOriQFromHost(mowner);
             const auto& vertices = mmesh->GetCoordsVertices();
             const auto& faces = mmesh->GetIndicesVertexes();
 
@@ -2189,8 +2338,28 @@ void DEMDynamicThread::writeMeshesAsStl(std::ofstream& ptFile) {
 }
 
 void DEMDynamicThread::writeMeshesAsPly(std::ofstream& ptFile) {
-    std::ostringstream ostream;
     migrateFamilyToHost();
+    migrateClumpPosInfoToHost();
+    writeMeshesAsPlyFromHost(ptFile);
+}
+
+void DEMDynamicThread::writeMeshesAsPlyFromHost(std::ofstream& ptFile) {
+    std::ostringstream ostream;
+
+    auto ownerPosFromHost = [this](bodyID_t owner) {
+        double X, Y, Z;
+        voxelID_t voxel = voxelID[owner];
+        subVoxelPos_t subVoxX = locX[owner];
+        subVoxelPos_t subVoxY = locY[owner];
+        subVoxelPos_t subVoxZ = locZ[owner];
+        voxelIDToPosition<double, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ,
+                                                            simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
+                                                            simParams->l);
+        return make_float3(X + simParams->LBFX, Y + simParams->LBFY, Z + simParams->LBFZ);
+    };
+    auto ownerOriQFromHost = [this](bodyID_t owner) {
+        return make_float4(oriQx[owner], oriQy[owner], oriQz[owner], oriQw[owner]);
+    };
 
     std::vector<size_t> vertexOffset(m_meshes.size() + 1, 0);
     size_t total_f = 0;
@@ -2230,8 +2399,8 @@ void DEMDynamicThread::writeMeshesAsPly(std::ofstream& ptFile) {
     for (const auto& mmesh : m_meshes) {
         if (!thisMeshSkip[mesh_num]) {
             bodyID_t mowner = mmesh->owner;
-            float3 ownerPos = this->getOwnerPos(mowner)[0];
-            float4 ownerOriQ = this->getOwnerOriQ(mowner)[0];
+            float3 ownerPos = ownerPosFromHost(mowner);
+            float4 ownerOriQ = ownerOriQFromHost(mowner);
             for (const auto& v : mmesh->GetCoordsVertices()) {
                 float3 point = v;
                 applyFrameTransformLocalToGlobal(point, ownerPos, ownerOriQ);

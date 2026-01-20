@@ -854,10 +854,13 @@ class DEMDynamicThread {
 
     // Generate contact info container based on the current contact array, and return it.
     std::shared_ptr<ContactInfoContainer> generateContactInfo(float force_thres);
+    std::shared_ptr<ContactInfoContainer> generateContactInfoFromHost(float force_thres);
 
 #ifdef DEME_USE_CHPF
     void writeSpheresAsChpf(std::ofstream& ptFile);
     void writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy = 10);
+    void writeSpheresAsChpfFromHost(std::ofstream& ptFile);
+    void writeClumpsAsChpfFromHost(std::ofstream& ptFile, unsigned int accuracy = 10);
 #endif
     void writeSpheresAsCsv(std::ofstream& ptFile);
     void writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accuracy = 10);
@@ -865,6 +868,12 @@ class DEMDynamicThread {
     void writeMeshesAsVtk(std::ofstream& ptFile);
     void writeMeshesAsStl(std::ofstream& ptFile);
     void writeMeshesAsPly(std::ofstream& ptFile);
+    void writeSpheresAsCsvFromHost(std::ofstream& ptFile);
+    void writeClumpsAsCsvFromHost(std::ofstream& ptFile, unsigned int accuracy = 10);
+    void writeContactsAsCsvFromHost(std::ofstream& ptFile, float force_thres = DEME_TINY_FLOAT);
+    void writeMeshesAsVtkFromHost(std::ofstream& ptFile);
+    void writeMeshesAsStlFromHost(std::ofstream& ptFile);
+    void writeMeshesAsPlyFromHost(std::ofstream& ptFile);
 
     /// Called each time when the user calls DoDynamicsThenSync.
     void startThread();

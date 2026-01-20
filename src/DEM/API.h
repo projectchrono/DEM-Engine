@@ -10,6 +10,7 @@
 #include <set>
 #include <cfloat>
 #include <functional>
+#include <thread>
 
 #include "kT.h"
 #include "dT.h"
@@ -1203,6 +1204,7 @@ class DEMSolver {
     /// Remove host-side cached vectors (so you can re-define them, and then re-initialize system)
     void ClearCache();
 
+    /// Output methods enqueue asynchronous writes; call WaitForPendingOutput() to block for completion.
     /// Write the current status of clumps to a file
     void WriteClumpFile(const std::string& outfilename, unsigned int accuracy = 10) const;
     void WriteClumpFile(const std::filesystem::path& outfilename, unsigned int accuracy = 10) const {
@@ -1231,6 +1233,8 @@ class DEMSolver {
     /// Write the current status of all meshes to a file.
     void WriteMeshFile(const std::string& outfilename) const;
     void WriteMeshFile(const std::filesystem::path& outfilename) const { WriteMeshFile(outfilename.string()); }
+    /// Wait for any in-flight async output to finish.
+    void WaitForPendingOutput() const;
 
     /// @brief Read 3 columns of your choice from a CSV filem and group them by clump_header.
     /// @param infilename CSV filename.
@@ -1570,6 +1574,7 @@ class DEMSolver {
     bool m_is_out_owner_wildcards = false;
     bool m_is_out_cnt_wildcards = false;
     bool m_is_out_geo_wildcards = false;
+    mutable std::thread m_output_thread;
 
     // User-instructed simulation `world' size. Note it is an approximate of the true size and we will generate a world
     // not smaller than this. This is useful if the user want to automatically add BCs enclosing this user-defined

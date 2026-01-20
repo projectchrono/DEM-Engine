@@ -47,13 +47,6 @@ class JitHelper {
         std::unordered_map<std::string, std::string> substitutions = std::unordered_map<std::string, std::string>(),
         std::vector<std::string> flags = std::vector<std::string>());
 
-    //// I'm pretty sure C++17 auto-converts this
-    // static CachedProgram buildProgram(
-    // 	const std::string& name, const std::string& code,
-    // 	std::vector<Header> headers = 0,
-    // 	std::vector<std::string> flags = 0
-    // );
-
     static const std::filesystem::path KERNEL_DIR;
     static const std::filesystem::path KERNEL_INCLUDE_DIR;
     static const std::filesystem::path CACHE_DIR;
