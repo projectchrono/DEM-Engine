@@ -7,6 +7,10 @@
 #include <filesystem>
 #include <string>
 #include <regex>
+#include <vector>
+#include <sstream>
+#include <algorithm>
+#include <cstdlib>
 
 #include <core/ApiVersion.h>
 #include "RuntimeData.h"
@@ -41,6 +45,29 @@ jitify::Program JitHelper::buildProgram(
     std::unordered_map<std::string, std::string> substitutions,
     // std::vector<JitHelper::Header> headers, // THIS PARAMETER PROBABLY WON'T EVER BE USED
     std::vector<std::string> flags) {
+    // Double ensure include paths for runtime headers + CUDA/CCCL (cuda::std)
+    auto add_inc = [&](const std::filesystem::path& p) {
+        if (p.empty())
+            return;
+        std::error_code ec;
+        if (!std::filesystem::exists(p, ec))
+            return;
+        const std::string inc_flag = "-I" + p.string();
+        if (std::find(flags.begin(), flags.end(), inc_flag) == flags.end())
+            flags.push_back(inc_flag);
+    };
+
+    // Project/runtime includes
+    add_inc(KERNEL_INCLUDE_DIR);
+
+    // Common fallbacks
+    if (const char* cuda_home = std::getenv("CUDA_HOME")) {
+        add_inc(std::filesystem::path(cuda_home) / "include");
+        add_inc(std::filesystem::path(cuda_home) / "include" / "cccl");
+    }
+    add_inc("/usr/local/cuda/include");
+    add_inc("/usr/local/cuda/include/cccl");
+
     std::string code = name + "\n";
 
     code.append(JitHelper::loadSourceFile(source));

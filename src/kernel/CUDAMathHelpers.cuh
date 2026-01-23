@@ -69,6 +69,17 @@ inline float rsqrtf(float x) {
 }
 #endif
 
+#if defined(CUDART_VERSION) && CUDART_VERSION >= 13000
+///////////////////////////////////////////////////
+// New Toolkits
+using double4_vec = double4_16a;  // or  double4_32a, but 32 byte alignment is not good for GPUs before Blackwell
+                                  // (128bit  --> 256 bit register)
+#else
+////////////////////////////////////////////////////
+// Old Toolkits
+using double4_vec = double4;
+#endif
+
 ////////////////////////////////////////////////////////////////////////////////
 // constructors
 ////////////////////////////////////////////////////////////////////////////////
@@ -914,8 +925,11 @@ inline __host__ __device__ uint4 max(uint4 a, uint4 b) {
 // logical
 ////////////////////////////////////////////////////////////////////////////////
 
-inline __host__ __device__ bool floatNear(const float& a, const float& b, float tol = 1e-6f) {
+inline __host__ __device__ bool float_near(const float& a, const float& b, float tol = 1e-6f) {
     return fabs(a - b) < tol;
+}
+inline __host__ __device__ bool float3_near(const float3& a, const float3& b, float tol = 1e-6f) {
+    return float_near(a.x, b.x, tol) && float_near(a.y, b.y, tol) && float_near(a.z, b.z, tol);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1054,6 +1068,15 @@ inline __host__ __device__ float length(float3 v) {
 }
 inline __host__ __device__ float length(float4 v) {
     return sqrtf(dot(v, v));
+}
+inline __host__ __device__ float length2(float2 v) {
+    return dot(v, v);
+}
+inline __host__ __device__ float length2(float3 v) {
+    return dot(v, v);
+}
+inline __host__ __device__ float length2(float4 v) {
+    return dot(v, v);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1199,18 +1222,24 @@ inline __host__ __device__ float dot(double3 a, float3 b) {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
-inline __host__ __device__ double dot(double4 a, double4 b) {
+inline __host__ __device__ double dot(double4_vec a, double4_vec b) {
     return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 }
-inline __host__ __device__ float dot(double4 a, float4 b) {
+inline __host__ __device__ float dot(double4_vec a, float4 b) {
     return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 }
 
 inline __host__ __device__ double length(double3 v) {
     return sqrt(dot(v, v));
 }
-inline __host__ __device__ double length(double4 v) {
+inline __host__ __device__ double length(double4_vec v) {
     return sqrt(dot(v, v));
+}
+inline __host__ __device__ double length2(double3 v) {
+    return dot(v, v);
+}
+inline __host__ __device__ double length2(double4_vec v) {
+    return dot(v, v);
 }
 
 // Addition and subtraction
@@ -1343,14 +1372,27 @@ inline __host__ __device__ void operator/=(double3& a, double b) {
 inline __host__ __device__ float4 operator/(float4 a, double b) {
     return make_float4(a.x / b, a.y / b, a.z / b, a.w / b);
 }
-
+#if defined(CUDART_VERSION) && CUDART_VERSION >= 13000
+///////////////////////////////////////////////////
+// New Toolkits
+inline __host__ __device__ double4_vec operator/(double4_vec a, float b) {
+    return make_double4_16a(a.x / b, a.y / b, a.z / b, a.w / b);
+}
+inline __host__ __device__ double4_vec operator/(double4_vec a, double b) {
+    return make_double4_16a(a.x / b, a.y / b, a.z / b, a.w / b);
+}
+#else
+////////////////////////////////////////////////////
+// Old Toolkits
 inline __host__ __device__ double4 operator/(double4 a, float b) {
     return make_double4(a.x / b, a.y / b, a.z / b, a.w / b);
 }
 inline __host__ __device__ double4 operator/(double4 a, double b) {
     return make_double4(a.x / b, a.y / b, a.z / b, a.w / b);
 }
-inline __host__ __device__ void operator/=(double4& a, float b) {
+#endif
+
+inline __host__ __device__ void operator/=(double4_vec& a, float b) {
     a.x /= b;
     a.y /= b;
     a.z /= b;
@@ -1362,17 +1404,23 @@ inline __host__ __device__ double3 normalize(double3 v) {
     return v * invLen;
 }
 
+// Lexicographic comparator
+template <typename T>
+inline __host__ __device__ bool lex_less(T a, T b) {
+    if (a.x != b.x)
+        return a.x < b.x;
+    if (a.y != b.y)
+        return a.y < b.y;
+    return a.z < b.z;
+}
+
 // Float3 < is an element-wise comparison where x, y, z components are assigned priorities in that order.
 // Must be in global namespace for std::less to pick it up.
 inline __host__ __device__ bool operator<(const float3& a, const float3& b) {
-    if (floatNear(a.x, b.x))  // x component being different
-        return a.x < b.x;
-    else if (floatNear(a.y, b.y))  // x comp. same but y different
-        return a.y < b.y;
-    else if (floatNear(a.z, b.z))  // y comp. same but z different
-        return a.z < b.z;
-    else               // all components same
-        return false;  // for constructing a set
+    return lex_less(a, b);
+}
+inline __host__ __device__ bool operator<(const double3& a, const double3& b) {
+    return lex_less(a, b);
 }
 
 // Assignment

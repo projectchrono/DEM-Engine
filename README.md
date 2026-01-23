@@ -177,6 +177,7 @@ After the build process is done, you can start trying out the demos. On Windows,
 
 Some additional troubleshooting tips for running the demos:
 
+- If the program silently exits while creating the `DEMSolver` object, check if your NVIDIA driver supports your current CUDA version (`nvidia-smi`).
 - If errors similar to `CUDA_ERROR_UNSUPPORTED_PTX_VERSION` are encountered while you run the demos, or (rarely) the simulations proceed without detecting any contacts, then please make sure the CUDA installation is the same version as when the code is compiled.
 - Another cause for the simulations proceeding without detecting any contacts, could be the force kernel silently failed. This could also lead to a **too-many-geometries-in-bin** crash. The cause is usually that the force kernel was launched with too many threads per block, therefore not enough registers can be leveraged. This can be avoided by calling `SetForceCalcThreadsPerBlock` prior to the start of simulation with the argument being smaller choices like 128. **Note that you should only try this if you are using a custom force model**.
 - Used your own force model but got runtime compilation error like `expression must have pointer-to-object type but it has type "float"`, or `unknown variable "delta_time"`? Check out what we did in demo `DEMdemo_Electrostatic`. You may need to manually specify what material properties are pairwise and what contact wildcards you have using `SetMustPairwiseMatProp` and `SetPerContactWildcards`.
