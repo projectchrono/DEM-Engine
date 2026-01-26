@@ -89,9 +89,9 @@ __global__ void computeMarginFromAbsv_implTri(deme::DEMSimParams* simParams,
         double finalMargin =
             (double)(vel * simParams->expSafetyMulti + simParams->expSafetyAdder) * (*ts) * (*maxDrift) +
             granData->familyExtraMarginSize[my_family];
-        // if (finalMargin < penetrationMargin) {
-        //     finalMargin = penetrationMargin;
-        // }
+        if (finalMargin < penetrationMargin) {
+            finalMargin = penetrationMargin;
+        }
 
         granData->marginSizeTriangle[triID] = finalMargin;
     }

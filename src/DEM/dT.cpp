@@ -67,7 +67,7 @@ void DEMDynamicThread::packDataPointers() {
     contactTorque_convToForce.bindDevicePointer(&(granData->contactTorque_convToForce));
     contactPointGeometryA.bindDevicePointer(&(granData->contactPointGeometryA));
     contactPointGeometryB.bindDevicePointer(&(granData->contactPointGeometryB));
-    contactSATSatisfied.bindDevicePointer(&(granData->contactSATSatisfied));
+    contactPatchDirectionRespected.bindDevicePointer(&(granData->contactPatchDirectionRespected));
     // granData->contactHistory = contactHistory.data();
     // granData->contactDuration = contactDuration.data();
 
@@ -576,7 +576,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
         DEME_DUAL_ARRAY_RESIZE(idPrimitiveB, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(contactTypePrimitive, cnt_arr_size, NOT_A_CONTACT);
         DEME_DUAL_ARRAY_RESIZE(geomToPatchMap, cnt_arr_size, 0);
-        DEME_DUAL_ARRAY_RESIZE(contactSATSatisfied, cnt_arr_size, 0);
+        DEME_DUAL_ARRAY_RESIZE(contactPatchDirectionRespected, cnt_arr_size, 0);
 
         DEME_DUAL_ARRAY_RESIZE(idPatchA, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(idPatchB, cnt_arr_size, 0);
@@ -2042,7 +2042,7 @@ inline void DEMDynamicThread::contactPrimitivesArraysResize(size_t nContactPairs
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryB, nContactPairs, make_float3(0));
         // NEW: Resize SAT satisfaction array for tracking tri-tri physical contact
-        DEME_DUAL_ARRAY_RESIZE(contactSATSatisfied, nContactPairs, 0);
+        DEME_DUAL_ARRAY_RESIZE(contactPatchDirectionRespected, nContactPairs, 0);
     }
 
     // Re-packing pointers now is automatic
@@ -2466,17 +2466,6 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     startOffsetPrimitive, startOffsetPatch, countPrimitive, streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("maxPenetrations");
 
-                // Step 8d: Check if each patch has any SAT-satisfying primitive (for tri-tri contacts)
-                // If no primitive satisfies SAT, the patch contact is non-physical and should use Step 9 fallback
-                notStupidBool_t* patchHasSAT = nullptr;
-                if (contact_type == TRIANGLE_TRIANGLE_CONTACT) {
-                    patchHasSAT = (notStupidBool_t*)solverScratchSpace.allocateTempVector(
-                        "patchHasSAT", countPatch * sizeof(notStupidBool_t));
-                    checkPatchHasSATSatisfyingPrimitive(&granData, patchHasSAT, keys, startOffsetPrimitive,
-                                                        startOffsetPatch, countPrimitive, countPatch,
-                                                        streamInfo.stream);
-                }
-
                 // Clean up keys arrays now that we're done with reductions
                 solverScratchSpace.finishUsingTempVector("votingKeys");
                 solverScratchSpace.finishUsingTempVector("uniqueKeys");
@@ -2497,8 +2486,8 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 double3* finalContactPoints =
                     (double3*)solverScratchSpace.allocateTempVector("finalContactPoints", countPatch * sizeof(double3));
                 finalizePatchResults(totalProjectedAreas, votedNormals, maxProjectedPenetrations, votedContactPoints,
-                                     zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, patchHasSAT,
-                                     finalAreas, finalNormals, finalPenetrations.data(), finalContactPoints, countPatch,
+                                     zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, finalAreas,
+                                     finalNormals, finalPenetrations.data(), finalContactPoints, countPatch,
                                      streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("totalProjectedAreas");
                 solverScratchSpace.finishUsingTempVector("votedNormals");
@@ -2507,7 +2496,6 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("zeroAreaPenetrations");
                 solverScratchSpace.finishUsingTempVector("votedContactPoints");
                 solverScratchSpace.finishUsingTempVector("zeroAreaContactPoints");
-                solverScratchSpace.finishUsingTempVector("patchHasSAT");
 
                 // Now we have:
                 // - finalAreas: final contact area per patch pair (countPatch elements)
