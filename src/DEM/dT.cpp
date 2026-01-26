@@ -2337,13 +2337,13 @@ void DEMDynamicThread::writeMeshesAsStlFromHost(std::ofstream& ptFile) {
     ptFile << ostream.str();
 }
 
-void DEMDynamicThread::writeMeshesAsPly(std::ofstream& ptFile) {
+void DEMDynamicThread::writeMeshesAsPly(std::ofstream& ptFile, bool patch_colors) {
     migrateFamilyToHost();
     migrateClumpPosInfoToHost();
-    writeMeshesAsPlyFromHost(ptFile);
+    writeMeshesAsPlyFromHost(ptFile, patch_colors);
 }
 
-void DEMDynamicThread::writeMeshesAsPlyFromHost(std::ofstream& ptFile) {
+void DEMDynamicThread::writeMeshesAsPlyFromHost(std::ofstream& ptFile, bool patch_colors) {
     std::ostringstream ostream;
 
     auto ownerPosFromHost = [this](bodyID_t owner) {
@@ -2393,6 +2393,11 @@ void DEMDynamicThread::writeMeshesAsPlyFromHost(std::ofstream& ptFile) {
     ostream << "property float z" << std::endl;
     ostream << "element face " << total_f << std::endl;
     ostream << "property list uchar int vertex_indices" << std::endl;
+    if (patch_colors) {
+        ostream << "property uchar red" << std::endl;
+        ostream << "property uchar green" << std::endl;
+        ostream << "property uchar blue" << std::endl;
+    }
     ostream << "end_header" << std::endl;
 
     mesh_num = 0;
@@ -2411,13 +2416,37 @@ void DEMDynamicThread::writeMeshesAsPlyFromHost(std::ofstream& ptFile) {
     }
 
     ostream << std::endl;
+    auto hash32 = [](uint32_t x) {
+        x ^= x >> 16;
+        x *= 0x7feb352d;
+        x ^= x >> 15;
+        x *= 0x846ca68b;
+        x ^= x >> 16;
+        return x;
+    };
+
     mesh_num = 0;
     for (const auto& mmesh : m_meshes) {
         if (!thisMeshSkip[mesh_num]) {
-            for (const auto& f : mmesh->GetIndicesVertexes()) {
+            const auto& faces = mmesh->GetIndicesVertexes();
+            const auto& patch_ids = mmesh->GetPatchIDs();
+            bool has_patch_ids = (patch_ids.size() == faces.size());
+
+            for (size_t fi = 0; fi < faces.size(); ++fi) {
+                const auto& f = faces[fi];
                 ostream << "3 " << (size_t)f.x + vertexOffset[mesh_num] << " "
                         << (size_t)f.y + vertexOffset[mesh_num] << " "
-                        << (size_t)f.z + vertexOffset[mesh_num] << std::endl;
+                        << (size_t)f.z + vertexOffset[mesh_num];
+                if (patch_colors) {
+                    uint32_t patch_id = has_patch_ids ? static_cast<uint32_t>(patch_ids[fi]) : 0u;
+                    uint32_t key = patch_id + 0x9e3779b9u * (mesh_num + 1u);
+                    uint32_t h = hash32(key);
+                    unsigned int r = (h >> 16) & 0xFFu;
+                    unsigned int g = (h >> 8) & 0xFFu;
+                    unsigned int b = h & 0xFFu;
+                    ostream << " " << r << " " << g << " " << b;
+                }
+                ostream << std::endl;
             }
         }
         mesh_num++;

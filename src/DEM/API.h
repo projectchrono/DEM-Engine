@@ -1475,6 +1475,8 @@ class DEMSolver {
     /// @brief Specify the output file format of meshes.
     /// @param format A choice between "VTK", "OBJ", "STL", "PLY".
     void SetMeshOutputFormat(const std::string& format);
+    /// @brief Enable/disable per-patch face colors in PLY mesh output (for testing auto patch splitting only).
+    void EnableMeshPatchColorOutput(bool enable = true);
     /// @brief Clear stored solver logs (errors, warnings, messages).
     void ClearLog() { Logger::GetInstance().Clear(); }
     /// @brief Show error and warnings.
@@ -1570,6 +1572,8 @@ class DEMSolver {
                                      CNT_OUTPUT_CONTENT::CNT_WILDCARD;
     // The output file format for meshes
     MESH_FORMAT m_mesh_out_format = MESH_FORMAT::VTK;
+    // If PLY mesh output should include per-patch face colors
+    bool m_mesh_out_ply_patch_colors = false;
     // If the solver should output wildcards to file
     bool m_is_out_owner_wildcards = false;
     bool m_is_out_cnt_wildcards = false;

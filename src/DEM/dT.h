@@ -867,13 +867,13 @@ class DEMDynamicThread {
     void writeContactsAsCsv(std::ofstream& ptFile, float force_thres = DEME_TINY_FLOAT);
     void writeMeshesAsVtk(std::ofstream& ptFile);
     void writeMeshesAsStl(std::ofstream& ptFile);
-    void writeMeshesAsPly(std::ofstream& ptFile);
+    void writeMeshesAsPly(std::ofstream& ptFile, bool patch_colors = false);
     void writeSpheresAsCsvFromHost(std::ofstream& ptFile);
     void writeClumpsAsCsvFromHost(std::ofstream& ptFile, unsigned int accuracy = 10);
     void writeContactsAsCsvFromHost(std::ofstream& ptFile, float force_thres = DEME_TINY_FLOAT);
     void writeMeshesAsVtkFromHost(std::ofstream& ptFile);
     void writeMeshesAsStlFromHost(std::ofstream& ptFile);
-    void writeMeshesAsPlyFromHost(std::ofstream& ptFile);
+    void writeMeshesAsPlyFromHost(std::ofstream& ptFile, bool patch_colors = false);
 
     /// Called each time when the user calls DoDynamicsThenSync.
     void startThread();

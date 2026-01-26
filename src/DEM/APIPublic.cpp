@@ -172,6 +172,10 @@ void DEMSolver::SetMeshOutputFormat(const std::string& format) {
     }
 }
 
+void DEMSolver::EnableMeshPatchColorOutput(bool enable) {
+    m_mesh_out_ply_patch_colors = enable;
+}
+
 void DEMSolver::SetOutputContent(const std::vector<std::string>& content) {
     std::vector<std::string> u_content(content.size());
     for (unsigned int i = 0; i < content.size(); i++) {
@@ -2185,7 +2189,7 @@ void DEMSolver::WriteMeshFile(const std::string& outfilename) const {
             dT->migrateClumpPosInfoToHost();
             m_output_thread = std::thread([this, outfilename]() {
                 std::ofstream ptFile(outfilename, std::ios::out);
-                dT->writeMeshesAsPlyFromHost(ptFile);
+                dT->writeMeshesAsPlyFromHost(ptFile, m_mesh_out_ply_patch_colors);
             });
             break;
         }
