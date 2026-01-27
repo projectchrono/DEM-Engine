@@ -185,6 +185,15 @@ bool DEMMesh::LoadSTLMesh(std::string input_file, bool load_normals) {
     m_face_uv_indices.clear();
 
     set_default_patch_info();
+    {
+        size_t boundary_edges = 0;
+        size_t nonmanifold_edges = 0;
+        if (!IsWatertight(&boundary_edges, &nonmanifold_edges)) {
+            DEME_WARNING(
+                "Mesh %s is not watertight (boundary edges: %zu, non-manifold edges: %zu). Auto Volume/MOI may be inaccurate.",
+                filename.c_str(), boundary_edges, nonmanifold_edges);
+        }
+    }
     return true;
 }
 
@@ -552,6 +561,16 @@ bool DEMMesh::LoadWavefrontMesh(std::string input_file, bool load_normals, bool 
     this->m_patch_ids.resize(this->nTri, 0);
     this->nPatches = 1;
     this->patches_explicitly_set = false;
+
+    {
+        size_t boundary_edges = 0;
+        size_t nonmanifold_edges = 0;
+        if (!IsWatertight(&boundary_edges, &nonmanifold_edges)) {
+            DEME_WARNING(
+                "Mesh %s is not watertight (boundary edges: %zu, non-manifold edges: %zu). Volume/MOI may be inaccurate.",
+                filename.c_str(), boundary_edges, nonmanifold_edges);
+        }
+    }
 
     return true;
 }
@@ -1618,6 +1637,142 @@ std::vector<float3> DEMMesh::ComputePatchLocations() const {
     }
 
     return patch_locations;
+}
+
+// Compute volume, centroid and MOI in CoM frame (unit density).
+// ATTENTION: Only correct for "watertight" meshes with fine and non-degenerated triangles.
+void DEMMesh::ComputeMassProperties(double& volume, float3& center, float3& inertia) const {
+    double vol = 0.0;
+    double mx = 0.0;
+    double my = 0.0;
+    double mz = 0.0;
+    double ix2 = 0.0;
+    double iy2 = 0.0;
+    double iz2 = 0.0;
+    double ixy = 0.0;
+    double iyz = 0.0;
+    double izx = 0.0;
+
+    for (const auto& face : m_face_v_indices) {
+        const float3& a = m_vertices[face.x];
+        const float3& b = m_vertices[face.y];
+        const float3& c = m_vertices[face.z];
+
+        const float3 bcross = cross(b, c);
+        const double v = static_cast<double>(dot(a, bcross)) / 6.0;
+
+        vol += v;
+        mx += v * (static_cast<double>(a.x) + b.x + c.x) / 4.0;
+        my += v * (static_cast<double>(a.y) + b.y + c.y) / 4.0;
+        mz += v * (static_cast<double>(a.z) + b.z + c.z) / 4.0;
+
+        const double ax = a.x, ay = a.y, az = a.z;
+        const double bx = b.x, by = b.y, bz = b.z;
+        const double cx = c.x, cy = c.y, cz = c.z;
+
+        const double f1x = ax * ax + bx * bx + cx * cx + ax * bx + bx * cx + cx * ax;
+        const double f1y = ay * ay + by * by + cy * cy + ay * by + by * cy + cy * ay;
+        const double f1z = az * az + bz * bz + cz * cz + az * bz + bz * cz + cz * az;
+
+        ix2 += v * f1x / 10.0;
+        iy2 += v * f1y / 10.0;
+        iz2 += v * f1z / 10.0;
+
+        const double fxy = 2.0 * (ax * ay + bx * by + cx * cy) +
+                           (ax * by + ay * bx + bx * cy + by * cx + cx * ay + cy * ax);
+        const double fyz = 2.0 * (ay * az + by * bz + cy * cz) +
+                           (ay * bz + az * by + by * cz + bz * cy + cy * az + cz * ay);
+        const double fzx = 2.0 * (az * ax + bz * bx + cz * cx) +
+                           (az * bx + ax * bz + bz * cx + bx * cz + cz * ax + cx * az);
+
+        ixy += v * fxy / 20.0;
+        iyz += v * fyz / 20.0;
+        izx += v * fzx / 20.0;
+    }
+
+    if (vol == 0.0) {
+        volume = 0.0;
+        center = make_float3(0, 0, 0);
+        inertia = make_float3(0, 0, 0);
+        return;
+    }
+
+    if (vol < 0.0) {
+        vol = -vol;
+        mx = -mx;
+        my = -my;
+        mz = -mz;
+        ix2 = -ix2;
+        iy2 = -iy2;
+        iz2 = -iz2;
+        ixy = -ixy;
+        iyz = -iyz;
+        izx = -izx;
+    }
+
+    const double cx = mx / vol;
+    const double cy = my / vol;
+    const double cz = mz / vol;
+
+    double Ixx = iy2 + iz2;
+    double Iyy = ix2 + iz2;
+    double Izz = ix2 + iy2;
+    double Ixy = -ixy;
+    double Iyz = -iyz;
+    double Izx = -izx;
+
+    // Shift to center of mass.
+    Ixx -= vol * (cy * cy + cz * cz);
+    Iyy -= vol * (cx * cx + cz * cz);
+    Izz -= vol * (cx * cx + cy * cy);
+    Ixy += vol * cx * cy;
+    Iyz += vol * cy * cz;
+    Izx += vol * cz * cx;
+
+    volume = vol;
+    center = make_float3(static_cast<float>(cx), static_cast<float>(cy), static_cast<float>(cz));
+    inertia = make_float3(static_cast<float>(Ixx), static_cast<float>(Iyy), static_cast<float>(Izz));
+}
+
+bool DEMMesh::IsWatertight(size_t* boundary_edges, size_t* nonmanifold_edges) const {
+    if (boundary_edges) {
+        *boundary_edges = 0;
+    }
+    if (nonmanifold_edges) {
+        *nonmanifold_edges = 0;
+    }
+    if (m_face_v_indices.empty()) {
+        return true;
+    }
+
+    std::map<std::pair<int, int>, size_t> edge_counts;
+    for (const auto& face : m_face_v_indices) {
+        std::pair<int, int> edges[3] = {{std::min(face.x, face.y), std::max(face.x, face.y)},
+                                        {std::min(face.y, face.z), std::max(face.y, face.z)},
+                                        {std::min(face.z, face.x), std::max(face.z, face.x)}};
+        for (int e = 0; e < 3; ++e) {
+            edge_counts[edges[e]]++;
+        }
+    }
+
+    size_t boundary = 0;
+    size_t nonmanifold = 0;
+    for (const auto& kv : edge_counts) {
+        if (kv.second == 1) {
+            boundary++;
+        } else if (kv.second > 2) {
+            nonmanifold++;
+        }
+    }
+
+    if (boundary_edges) {
+        *boundary_edges = boundary;
+    }
+    if (nonmanifold_edges) {
+        *nonmanifold_edges = nonmanifold;
+    }
+
+    return boundary == 0 && nonmanifold == 0;
 }
 
 }  // end namespace deme

@@ -57,14 +57,6 @@ std::shared_ptr<DEMMesh> LoadStlMesh(DEMSolver& sim,
     return sim.AddMesh(mesh);
 }
 
-float3 ComputeBoxMOI(const float3& dims, float mass) {
-    // MOI of a box about its center: Ixx = 1/12 m (b^2 + c^2), etc.
-    float ix = mass / 12.f * (dims.y * dims.y + dims.z * dims.z);
-    float iy = mass / 12.f * (dims.x * dims.x + dims.z * dims.z);
-    float iz = mass / 12.f * (dims.x * dims.x + dims.y * dims.y);
-    return make_float3(ix, iy, iz);
-}
-
 std::pair<float3, float3> ComputeBounds(const std::vector<float3>& vertices) {
     float3 vmin = make_float3(std::numeric_limits<float>::max());
     float3 vmax = make_float3(std::numeric_limits<float>::lowest());
@@ -107,9 +99,17 @@ int main() {
     const float tri_diag = std::sqrt(tri_dims.x * tri_dims.x + tri_dims.y * tri_dims.y + tri_dims.z * tri_dims.z);
     const float tri_radius = 0.5f * tri_diag;
     const float particle_density = 2600.0f;
-    const float particle_volume = tri_dims.x * tri_dims.y * tri_dims.z;
-    const float particle_mass = particle_density * particle_volume;
-    const float3 particle_moi = ComputeBoxMOI(tri_dims, particle_mass);
+    double tri_volume = 0.0;
+    float3 tri_center = make_float3(0, 0, 0);
+    float3 tri_inertia = make_float3(0, 0, 0);
+    tri_template->ComputeMassProperties(tri_volume, tri_center, tri_inertia);
+    const float particle_mass = static_cast<float>(tri_volume * particle_density);
+    const float3 particle_moi = tri_inertia * particle_density;
+    std::cout << "Particle STL volume (m^3): " << tri_volume << std::endl;
+    std::cout << "Particle STL MOI (unit density, CoM): " << tri_inertia.x << ", " << tri_inertia.y << ", "
+              << tri_inertia.z << std::endl;
+    const double cube_vol = std::pow(4.0e-3, 3);
+    std::cout << "Particle mass (kg): " << particle_mass << std::endl;
 
     // Load drum mantle from STL; STL units are mm with z in [0, 100]
     path drum_path = GET_DATA_PATH() / "mesh" / "drum.stl";
@@ -118,14 +118,18 @@ int main() {
     const float drum_height = drum_max.z - drum_min.z;
     unsigned int drum_family = 100;
     drum_mesh->SetFamily(drum_family);
-    const float drum_mass = 5.0f;
+    const float drum_density = 2600.0f;
+    double drum_volume = 0.0;
+    float3 drum_center = make_float3(0, 0, 0);
+    float3 drum_inertia = make_float3(0, 0, 0);
+    drum_mesh->ComputeMassProperties(drum_volume, drum_center, drum_inertia);
+    const float drum_mass = static_cast<float>(drum_volume * drum_density);
     drum_mesh->SetMass(drum_mass);
-    const float drum_outer_radius =
-        std::max(std::max(std::abs(drum_min.x), std::abs(drum_max.x)),
-                 std::max(std::abs(drum_min.y), std::abs(drum_max.y)));
-    float izz = 0.5f * drum_mass * drum_outer_radius * drum_outer_radius;
-    float ixx = (drum_mass / 12.0f) * (3 * drum_outer_radius * drum_outer_radius + drum_height * drum_height);
-    drum_mesh->SetMOI(make_float3(ixx, ixx, izz));
+    drum_mesh->SetMOI(drum_inertia * drum_density);
+    std::cout << "Drum STL volume (m^3): " << drum_volume << std::endl;
+    std::cout << "Drum STL MOI (unit density, CoM): " << drum_inertia.x << ", " << drum_inertia.y << ", "
+              << drum_inertia.z << std::endl;
+    std::cout << "Drum mass (kg): " << drum_mass << std::endl;
     DEMSim.SetFamilyPrescribedAngVel(drum_family, "0", "0", to_string_with_precision(drum_ang_vel));
 
     // Add top and bottom planes at z = 0 and z = 0.1 m. They rotate with the drum family (axis-aligned so rotation

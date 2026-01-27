@@ -441,6 +441,10 @@ class DEMMesh : public DEMInitializer {
         assertThreeElements(MOI, "SetMOI", "MOI");
         SetMOI(make_float3(MOI[0], MOI[1], MOI[2]));
     }
+    /// Compute volume, centroid and MOI in CoM frame (unit density).
+    void ComputeMassProperties(double& volume, float3& center, float3& inertia) const;
+    /// Check if mesh is watertight (closed, manifold). Returns true if no boundary/non-manifold edges.
+    bool IsWatertight(size_t* boundary_edges = nullptr, size_t* nonmanifold_edges = nullptr) const;
     /// Set mesh family number.
     void SetFamily(unsigned int num) { this->family_code = num; }
 
@@ -459,9 +463,6 @@ class DEMMesh : public DEMInitializer {
     }
 
     /*
-    /// Compute barycenter, mass and MOI in CoM frame
-    void ComputeMassProperties(double& mass, float3& center, float3& inertia);
-
     /// Create a map of neighboring triangles, vector of:
     /// [Ti TieA TieB TieC]
     /// (the free sides have triangle id = -1).

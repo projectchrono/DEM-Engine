@@ -127,9 +127,13 @@ if (overlapDepth > 0) {
 
     // Tangential force part
     if (mu_cnt > 0.f) {
+        float gt;
         const float kt = 8.f * G_cnt * contact_radius;
-        const float gt =
-            -deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrtf(mass_eff * kt);  // do we neen higher damping??
+        if (tri_involved) {
+            gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_THREE * beta * sqrtf(mass_eff * kt);
+        } else {
+            gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrtf(mass_eff * kt);
+        }
         float3 tangent_force = -kt * delta_tan - gt * vrel_tan;
         const float ft = length(tangent_force);
         if (ft > DEME_TINY_FLOAT) {
