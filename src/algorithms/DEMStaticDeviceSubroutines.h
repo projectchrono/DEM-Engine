@@ -248,7 +248,6 @@ void finalizePatchResultsFromAccumulators(const PatchContactAccum* patchAccumula
                                           const float3* zeroAreaNormals,
                                           const double* zeroAreaPenetrations,
                                           const double3* zeroAreaContactPoints,
-                                          const notStupidBool_t* patchHasSAT,
                                           double* finalAreas,
                                           float3* finalNormals,
                                           double* finalPenetrations,

@@ -150,7 +150,6 @@ void prepareWeightedNormalsForVoting(DEMDataDT* granData,
                                      float3* weightedNormals,
                                      contactPairs_t startOffset,
                                      contactPairs_t count,
-                                     contact_t contactType,
                                      cudaStream_t& this_stream) {
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {

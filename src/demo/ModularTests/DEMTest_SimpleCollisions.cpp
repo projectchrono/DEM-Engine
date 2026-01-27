@@ -31,6 +31,10 @@ using namespace deme;
 
 namespace {
 
+constexpr bool kUseTriangleParticles = true; // toggle to run the STL-based triangle setup
+constexpr float kMmToMeters = 0.001f;
+constexpr double kTriangleParticleDensity = 2600.0;
+
 constexpr int kNumRuns = 10;
 constexpr double kGap = 0.01;        // 10 mm
 constexpr double kSpeed = 1.0;       // 1 m/s
@@ -97,6 +101,23 @@ double compute_min_z_rotated(const std::shared_ptr<DEMMesh>& mesh, const float4&
     return min_z;
 }
 
+void assign_patch_ids(const std::shared_ptr<DEMMesh>& mesh_template,
+                      bool per_triangle_patches,
+                      const std::shared_ptr<DEMMaterial>& mat_type) {
+    if (!mesh_template) {
+        return;
+    }
+    const size_t num_tris = mesh_template->GetNumTriangles();
+    std::vector<patchID_t> patch_ids(num_tris, 0);
+    if (per_triangle_patches) {
+        for (size_t i = 0; i < num_tris; ++i) {
+            patch_ids[i] = static_cast<patchID_t>(i);
+        }
+    }
+    mesh_template->SetPatchIDs(patch_ids);
+    mesh_template->SetMaterial(mat_type);
+}
+
 std::shared_ptr<DEMMesh> load_cube_template(DEMSolver& DEMSim,
                                             const std::shared_ptr<DEMMaterial>& mat_type,
                                             bool per_triangle_patches) {
@@ -107,21 +128,37 @@ std::shared_ptr<DEMMesh> load_cube_template(DEMSolver& DEMSim,
         return nullptr;
     }
 
-    const size_t num_tris = mesh_template->GetNumTriangles();
-    std::vector<patchID_t> patch_ids(num_tris, 0);
-    if (per_triangle_patches) {
-        for (size_t i = 0; i < num_tris; ++i) {
-            patch_ids[i] = static_cast<patchID_t>(i);
-        }
+    assign_patch_ids(mesh_template, per_triangle_patches, mat_type);
+    return mesh_template;
+}
+
+std::shared_ptr<DEMMesh> load_triangle_template(DEMSolver& DEMSim,
+                                                const std::shared_ptr<DEMMaterial>& mat_type,
+                                                bool per_triangle_patches,
+                                                float& out_mass,
+                                                float3& out_moi) {
+    std::shared_ptr<DEMMesh> mesh_template =
+        DEMSim.LoadMeshType((GET_DATA_PATH() / "mesh/simpleTriangleShape4mm.stl").string(), mat_type, true, false);
+    if (!mesh_template) {
+        return nullptr;
     }
-    mesh_template->SetPatchIDs(patch_ids);
-    // Ensure material vector matches patch count after overriding patch IDs.
-    mesh_template->SetMaterial(mat_type);
+    mesh_template->Scale(kMmToMeters);
+
+    double volume = 0.0;
+    float3 center = make_float3(0, 0, 0);
+    float3 inertia = make_float3(0, 0, 0);
+    mesh_template->ComputeMassProperties(volume, center, inertia);
+
+    out_mass = static_cast<float>(volume * kTriangleParticleDensity);
+    out_moi = inertia * static_cast<float>(kTriangleParticleDensity);
+
+    assign_patch_ids(mesh_template, per_triangle_patches, mat_type);
     return mesh_template;
 }
 
 RunResult run_single_collision(const float4& init_rot,
                                bool per_triangle_patches,
+                               bool use_triangle_particles,
                                const std::string& label,
                                int run_id) {
     RunResult result;
@@ -139,9 +176,18 @@ RunResult run_single_collision(const float4& init_rot,
     float3 plane_normal = make_float3(0, 0, 1);
     auto plane = DEMSim.AddBCPlane(make_float3(0, 0, 0), plane_normal, mat_type);
     auto plane_tracker = DEMSim.Track(plane);
-    auto mesh_template = load_cube_template(DEMSim, mat_type, per_triangle_patches);
+    const char* mesh_desc = use_triangle_particles ? "triangle mesh" : "cube mesh";
+    auto mesh_template = std::shared_ptr<DEMMesh>{};
+    float particle_mass = 1.0f;
+    float3 particle_moi = make_float3(1.0f / 6.0f, 1.0f / 6.0f, 1.0f / 6.0f);
+
+    if (use_triangle_particles) {
+        mesh_template = load_triangle_template(DEMSim, mat_type, per_triangle_patches, particle_mass, particle_moi);
+    } else {
+        mesh_template = load_cube_template(DEMSim, mat_type, per_triangle_patches);
+    }
     if (!mesh_template) {
-        std::cout << "[" << label << "] Run " << run_id << ": failed to load cube mesh" << std::endl;
+        std::cout << "[" << label << "] Run " << run_id << ": failed to load " << mesh_desc << std::endl;
         return result;
     }
     double min_z = compute_min_z_rotated(mesh_template, init_rot);
@@ -149,8 +195,8 @@ RunResult run_single_collision(const float4& init_rot,
 
     auto cube = DEMSim.AddMeshFromTemplate(mesh_template, make_float3(0, 0, 0));
     cube->SetFamily(0);
-    cube->SetMass(1.0);
-    cube->SetMOI(make_float3(1.0 / 6.0, 1.0 / 6.0, 1.0 / 6.0));
+    cube->SetMass(particle_mass);
+    cube->SetMOI(particle_moi);
     cube->SetInitQuat(init_rot);
     cube->SetInitPos(make_float3(0, 0, static_cast<float>(init_z)));
     auto cube_tracker = DEMSim.Track(cube);
@@ -251,16 +297,20 @@ float4 corner_quat() {
     return q;
 }
 
-void run_scenario(const std::string& label, const float4& rot, bool per_triangle_patches) {
+void run_scenario(const std::string& label,
+                  const float4& rot,
+                  bool per_triangle_patches,
+                  bool use_triangle_particles) {
     std::cout << "\n========================================" << std::endl;
     std::cout << label << std::endl;
     std::cout << "========================================" << std::endl;
+    std::cout << "Using mesh: " << (use_triangle_particles ? "simpleTriangleShape4mm.stl" : "cube.obj") << std::endl;
 
     std::vector<RunResult> results;
     results.reserve(kNumRuns);
 
     for (int i = 0; i < kNumRuns; ++i) {
-        RunResult r = run_single_collision(rot, per_triangle_patches, label, i);
+        RunResult r = run_single_collision(rot, per_triangle_patches, use_triangle_particles, label, i);
         results.push_back(r);
         if (r.ok) {
             std::cout << "Run " << i << ": speed=" << r.rebound_speed << " dir=(" << r.rebound_dir.x << ", "
@@ -278,14 +328,16 @@ int main() {
     std::cout << "========================================" << std::endl;
     std::cout << "DEM Simple Collisions Test" << std::endl;
     std::cout << "========================================" << std::endl;
+    std::cout << "Particle mesh mode: "
+              << (kUseTriangleParticles ? "simpleTriangleShape4mm.stl" : "cube.obj") << std::endl;
 
     float4 q_edge = edge_quat();
     float4 q_corner = corner_quat();
 
-    run_scenario("Edge impact - single patch", q_edge, false);
-    run_scenario("Edge impact - 12 patches", q_edge, true);
-    run_scenario("Corner impact - single patch", q_corner, false);
-    run_scenario("Corner impact - 12 patches", q_corner, true);
+    run_scenario("Edge impact - single patch", q_edge, false, kUseTriangleParticles);
+    run_scenario("Edge impact - 12 patches", q_edge, true, kUseTriangleParticles);
+    run_scenario("Corner impact - single patch", q_corner, false, kUseTriangleParticles);
+    run_scenario("Corner impact - 12 patches", q_corner, true, kUseTriangleParticles);
 
     std::cout << "\n========================================" << std::endl;
     std::cout << "Test completed" << std::endl;
