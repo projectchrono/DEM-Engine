@@ -179,6 +179,7 @@ void prepareWeightedNormalsForVoting(DEMDataDT* granData,
                                      contactPairs_t* keys,
                                      contactPairs_t startOffset,
                                      contactPairs_t count,
+                                     contact_t contactType,
                                      cudaStream_t& this_stream);
 
 // Normalizes voted normals by total area and scatters to output

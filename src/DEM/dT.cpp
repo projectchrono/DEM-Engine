@@ -2343,7 +2343,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 // Step 1: Prepare weighted normals, areas, and keys
                 // The kernel extracts keys from geomToPatchMap, computes weighted normals, and stores areas
                 prepareWeightedNormalsForVoting(&granData, weightedNormals, areas, keys, startOffsetPrimitive,
-                                                countPrimitive, streamInfo.stream);
+                                                countPrimitive, contact_type, streamInfo.stream);
 
                 // Step 2: Reduce-by-key for weighted normals (sum)
                 // The keys are geomToPatchMap values (contactPairs_t), which group primitives by patch pair

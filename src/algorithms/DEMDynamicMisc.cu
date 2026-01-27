@@ -127,7 +127,8 @@ __global__ void prepareWeightedNormalsForVoting_impl(DEMDataDT* granData,
                                                      double* areas,
                                                      contactPairs_t* keys,
                                                      contactPairs_t startOffset,
-                                                     contactPairs_t count) {
+                                                     contactPairs_t count,
+                                                     contact_t contactType) {
     contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
         contactPairs_t myContactID = startOffset + idx;
@@ -139,10 +140,12 @@ __global__ void prepareWeightedNormalsForVoting_impl(DEMDataDT* granData,
         float3 areaStorage = granData->contactPointGeometryB[myContactID];
         double area = float3StorageToDouble(areaStorage);
         // But primitive contacts that do not respect the patch general direction have no right in deciding the contact
-        // normal
-        notStupidBool_t directionRespected = granData->contactPatchDirectionRespected[myContactID];
-        if (!directionRespected) {
-            area = 0.0;
+        // normal (in mesh--mesh contact)
+        if (contactType == TRIANGLE_TRIANGLE_CONTACT) {
+            notStupidBool_t directionRespected = granData->contactPatchDirectionRespected[myContactID];
+            if (!directionRespected) {
+                area = 0.0;
+            }
         }
 
         // Compute weighted normal (normal * area)
@@ -163,11 +166,12 @@ void prepareWeightedNormalsForVoting(DEMDataDT* granData,
                                      contactPairs_t* keys,
                                      contactPairs_t startOffset,
                                      contactPairs_t count,
+                                     contact_t contactType,
                                      cudaStream_t& this_stream) {
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         prepareWeightedNormalsForVoting_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            granData, weightedNormals, areas, keys, startOffset, count);
+            granData, weightedNormals, areas, keys, startOffset, count, contactType);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }

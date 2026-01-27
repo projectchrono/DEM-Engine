@@ -35,8 +35,8 @@ int main() {
     DEMSim.SetMeshUniversalContact(true);
 
     // Define material properties
-    auto mat_box = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.4}, {"Crr", 0.1}});
-    auto mat_plane = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.3}, {"Crr", 0.1}});
+    auto mat_box = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", 0.4}, {"Crr", 0.1}});
+    auto mat_plane = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", 0.3}, {"Crr", 0.1}});
 
     // Add a bottom plane at z = 0
     DEMSim.AddBCPlane(make_float3(0, 0, 0), make_float3(0, 0, 1), mat_plane);
@@ -45,7 +45,7 @@ int main() {
     const int num_particles_x = 6;
     const int num_particles_y = 6;
     const float particle_spacing = 2.0;
-    const float initial_height = 8.0;
+    const float initial_height = 2.0;
     const float base_size = 0.5;              // Base scale for all meshes
     const float cylinder_scale_factor = 0.5;  // Cylinders scaled down since they're taller
 
@@ -61,82 +61,85 @@ int main() {
 
     for (int i = 0; i < num_particles_x; i++) {
         for (int j = 0; j < num_particles_y; j++) {
-            float x = (i - num_particles_x / 2.0 + 0.5) * particle_spacing + pos_dist(gen);
-            float y = (j - num_particles_y / 2.0 + 0.5) * particle_spacing + pos_dist(gen);
-            float z = initial_height + (i + j) * 0.5 + pos_dist(gen) * 2;
+            for (int k = 0; k < 2; k++) {
+                float x = (i - num_particles_x / 2.0 + 0.5) * particle_spacing + pos_dist(gen);
+                float y = (j - num_particles_y / 2.0 + 0.5) * particle_spacing + pos_dist(gen);
+                float z = initial_height + (i + j) * 0.5 + pos_dist(gen) * 2 + k * 2.5;
 
-            // Select mesh type randomly: 0=cube, 1=sphere, 2=cone, 3=cylinder
-            int mesh_type = mesh_type_dist(gen);
-            std::shared_ptr<DEMMesh> particle;
+                // Select mesh type randomly: 0=cube, 1=sphere, 2=cone, 3=cylinder
+                int mesh_type = mesh_type_dist(gen);
+                std::shared_ptr<DEMMesh> particle;
 
-            if (mesh_type == 0) {
-                // Cube with non-uniform scaling
-                particle = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cube.obj").string(), mat_box);
-                float scale_x = base_size * scale_dist(gen);
-                float scale_y = base_size * scale_dist(gen);
-                float scale_z = base_size * scale_dist(gen);
-                particle->Scale(make_float3(scale_x, scale_y, scale_z));  // Non-uniform scaling
+                if (mesh_type == 0) {
+                    // Cube with non-uniform scaling
+                    particle = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cube.obj").string(), mat_box);
+                    float scale_x = base_size * scale_dist(gen);
+                    float scale_y = base_size * scale_dist(gen);
+                    float scale_z = base_size * scale_dist(gen);
+                    particle->Scale(make_float3(scale_x, scale_y, scale_z));  // Non-uniform scaling
 
-                // Set mass and MOI for the box (approximate as uniform density)
-                float mass = 1000.0 * scale_x * scale_y * scale_z;
-                float moi_x = mass * (scale_y * scale_y + scale_z * scale_z) / 12.0;
-                float moi_y = mass * (scale_x * scale_x + scale_z * scale_z) / 12.0;
-                float moi_z = mass * (scale_x * scale_x + scale_y * scale_y) / 12.0;
-                particle->SetMass(mass);
-                particle->SetMOI(make_float3(moi_x, moi_y, moi_z));
-            } else if (mesh_type == 1) {
-                // Sphere (unit sphere in mesh)
-                particle = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/sphere.obj").string(), mat_box);
-                float scale = base_size * scale_dist(gen);
-                particle->Scale(scale);
+                    // Set mass and MOI for the box (approximate as uniform density)
+                    float mass = 1000.0 * scale_x * scale_y * scale_z;
+                    float moi_x = mass * (scale_y * scale_y + scale_z * scale_z) / 12.0;
+                    float moi_y = mass * (scale_x * scale_x + scale_z * scale_z) / 12.0;
+                    float moi_z = mass * (scale_x * scale_x + scale_y * scale_y) / 12.0;
+                    particle->SetMass(mass);
+                    particle->SetMOI(make_float3(moi_x, moi_y, moi_z));
+                } else if (mesh_type == 1) {
+                    // Sphere (unit sphere in mesh)
+                    particle = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/sphere.obj").string(), mat_box);
+                    float scale = base_size * scale_dist(gen);
+                    particle->Scale(scale);
 
-                // Set mass and MOI for sphere
-                float mass = 1000.0 * (4.0 / 3.0) * math_PI * scale * scale * scale;
-                float moi = 0.4 * mass * scale * scale;  // MOI for sphere
-                particle->SetMass(mass);
-                particle->SetMOI(make_float3(moi, moi, moi));
-            } else if (mesh_type == 2) {
-                // Cone (height ~1, radius ~1 in mesh)
-                particle = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cone.obj").string(), mat_box);
-                // Unit cone's CoM is at this location...
-                particle->InformCentroidPrincipal(make_float3(0, 0, 3. / 4.), make_float4(0, 0, 0, 1));
-                float scale = base_size * scale_dist(gen);
-                particle->Scale(scale);
+                    // Set mass and MOI for sphere
+                    float mass = 1000.0 * (4.0 / 3.0) * math_PI * scale * scale * scale;
+                    float moi = 0.4 * mass * scale * scale;  // MOI for sphere
+                    particle->SetMass(mass);
+                    particle->SetMOI(make_float3(moi, moi, moi));
+                } else if (mesh_type == 2) {
+                    // Cone (height ~1, radius ~1 in mesh)
+                    particle = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cone.obj").string(), mat_box);
+                    // Unit cone's CoM is at this location...
+                    particle->InformCentroidPrincipal(make_float3(0, 0, 3. / 4.), make_float4(0, 0, 0, 1));
+                    float scale = base_size * scale_dist(gen);
+                    particle->Scale(scale);
 
-                // Set mass and MOI for cone (approximate)
-                float mass = 1000.0 * (1.0 / 3.0) * math_PI * scale * scale * scale;
-                float moi_base = 0.3 * mass * scale * scale;  // Approximate MOI
-                float moi_height = 0.15 * mass * scale * scale;
-                particle->SetMass(mass);
-                particle->SetMOI(make_float3(moi_base, moi_base, moi_height));
-            } else {
-                // Cylinder (radius ~1, height ~2 in mesh)
-                particle = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cyl_r1_h2.obj").string(), mat_box);
-                float scale = base_size * cylinder_scale_factor * scale_dist(gen);
-                particle->Scale(scale);
+                    // Set mass and MOI for cone (approximate)
+                    float mass = 1000.0 * (1.0 / 3.0) * math_PI * scale * scale * scale;
+                    float moi_base = 0.3 * mass * scale * scale;  // Approximate MOI
+                    float moi_height = 0.15 * mass * scale * scale;
+                    particle->SetMass(mass);
+                    particle->SetMOI(make_float3(moi_base, moi_base, moi_height));
+                } else {
+                    // Cylinder (radius ~1, height ~2 in mesh)
+                    particle =
+                        DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cyl_r1_h2.obj").string(), mat_box);
+                    float scale = base_size * cylinder_scale_factor * scale_dist(gen);
+                    particle->Scale(scale);
 
-                // Set mass and MOI for cylinder
-                float radius = scale;
-                float height = 2.0 * scale;
-                float mass = 1000.0 * math_PI * radius * radius * height;
-                float moi_radial = mass * (3.0 * radius * radius + height * height) / 12.0;
-                float moi_axial = 0.5 * mass * radius * radius;
-                particle->SetMass(mass);
-                particle->SetMOI(make_float3(moi_radial, moi_radial, moi_axial));
+                    // Set mass and MOI for cylinder
+                    float radius = scale;
+                    float height = 2.0 * scale;
+                    float mass = 1000.0 * math_PI * radius * radius * height;
+                    float moi_radial = mass * (3.0 * radius * radius + height * height) / 12.0;
+                    float moi_axial = 0.5 * mass * radius * radius;
+                    particle->SetMass(mass);
+                    particle->SetMOI(make_float3(moi_radial, moi_radial, moi_axial));
+                }
+
+                particle->SetFamily(0);
+                particle->SetInitPos(make_float3(x, y, z));
+
+                // Add small initial rotation for more interesting dynamics
+                particle->SetInitQuat(make_float4(rot_dist(gen), rot_dist(gen), rot_dist(gen), 1.0));
+
+                auto tracker = DEMSim.Track(particle);
+                trackers.push_back(tracker);
             }
-
-            particle->SetFamily(0);
-            particle->SetInitPos(make_float3(x, y, z));
-
-            // Add small initial rotation for more interesting dynamics
-            particle->SetInitQuat(make_float4(rot_dist(gen), rot_dist(gen), rot_dist(gen), 1.0));
-
-            auto tracker = DEMSim.Track(particle);
-            trackers.push_back(tracker);
         }
     }
 
-    float step_time = 1e-5;
+    float step_time = 5e-6;
     DEMSim.SetInitTimeStep(step_time);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.SetExpandSafetyType("auto");
