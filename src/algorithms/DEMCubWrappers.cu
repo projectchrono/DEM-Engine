@@ -217,14 +217,6 @@ void cubDEMSum(T1* d_in, T2* d_out, size_t n, cudaStream_t& this_stream, DEMSolv
     cub::DeviceReduce::Reduce(d_scratch_space, cub_scratch_bytes, d_in, d_out, n, CUB_SUM_OP(T2), (T2)0, this_stream);
 }
 
-// template <typename T1>
-// void cubDEMSum(T1* d_in, T1* d_out, size_t n, cudaStream_t& this_stream, DEMSolverScratchData& scratchPad) {
-//     size_t cub_scratch_bytes = 0;
-//     cub::DeviceReduce::Sum(NULL, cub_scratch_bytes, d_in, d_out, n, this_stream);
-//     void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
-//     cub::DeviceReduce::Sum(d_scratch_space, cub_scratch_bytes, d_in, d_out, n, this_stream);
-// }
-
 template <typename T1>
 void cubDEMMax(T1* d_in, T1* d_out, size_t n, cudaStream_t& this_stream, DEMSolverScratchData& scratchPad) {
     size_t cub_scratch_bytes = 0;

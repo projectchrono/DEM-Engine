@@ -90,7 +90,7 @@ void DEMDynamicThread::packDataPointers() {
     contactTorque_convToForce.bindDevicePointer(&(granData->contactTorque_convToForce));
     contactPointGeometryA.bindDevicePointer(&(granData->contactPointGeometryA));
     contactPointGeometryB.bindDevicePointer(&(granData->contactPointGeometryB));
-    contactSATSatisfied.bindDevicePointer(&(granData->contactSATSatisfied));
+    contactPatchDirectionRespected.bindDevicePointer(&(granData->contactPatchDirectionRespected));
     // granData->contactHistory = contactHistory.data();
     // granData->contactDuration = contactDuration.data();
 
@@ -676,7 +676,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
         DEME_DUAL_ARRAY_RESIZE(idPrimitiveB, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(contactTypePrimitive, cnt_arr_size, NOT_A_CONTACT);
         DEME_DUAL_ARRAY_RESIZE(geomToPatchMap, cnt_arr_size, 0);
-        DEME_DUAL_ARRAY_RESIZE(contactSATSatisfied, cnt_arr_size, 0);
+        DEME_DUAL_ARRAY_RESIZE(contactPatchDirectionRespected, cnt_arr_size, 0);
 
         DEME_DUAL_ARRAY_RESIZE(idPatchA, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(idPatchB, cnt_arr_size, 0);
@@ -2471,7 +2471,7 @@ inline void DEMDynamicThread::contactPrimitivesArraysResize(size_t nContactPairs
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryB, nContactPairs, make_float3(0));
         // NEW: Resize SAT satisfaction array for tracking tri-tri physical contact
-        DEME_DUAL_ARRAY_RESIZE(contactSATSatisfied, nContactPairs, 0);
+        DEME_DUAL_ARRAY_RESIZE(contactPatchDirectionRespected, nContactPairs, 0);
     }
 
     // Re-packing pointers now is automatic
@@ -2858,7 +2858,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 size_t* numUniqueKeys = solverScratchSpace.getDualStructDevice("numUniqueKeys");
 
                 // Step 1: Prepare weighted normals for voting.
-                // Note: the validated legacy semantics uses area/penetration weighting.
+                // Note: the validated legacy semantics uses area weighting.
                 float3* weightedNormals =
                     (float3*)solverScratchSpace.allocateTempVector("weightedNormals", countPrimitive * sizeof(float3));
                 prepareWeightedNormalsForVoting(&granData, weightedNormals, startOffsetPrimitive, countPrimitive,
@@ -2940,17 +2940,6 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     startOffsetPrimitive, startOffsetPatch, countPrimitive, streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("maxPenetrations");
 
-                // Step 6d: Check if each patch has any SAT-satisfying primitive (for tri-tri contacts)
-                // If no primitive satisfies SAT, the patch contact is non-physical and should use Step 7 fallback
-                notStupidBool_t* patchHasSAT = nullptr;
-                if (contact_type == TRIANGLE_TRIANGLE_CONTACT) {
-                    patchHasSAT = (notStupidBool_t*)solverScratchSpace.allocateTempVector(
-                        "patchHasSAT", countPatch * sizeof(notStupidBool_t));
-                    checkPatchHasSATSatisfyingPrimitive(&granData, patchHasSAT, keys, startOffsetPrimitive,
-                                                        startOffsetPatch, countPrimitive, countPatch,
-                                                        streamInfo.stream);
-                }
-
                 // Step 7: Finalize patch results by combining voting with zero-area handling.
                 // If patch-based projected area is 0 (or this patch pair consists of no SAT pair), meaning no physical
                 // contact, we use the fallback estimations (zeroArea*) of CP, penetration and areas.
@@ -2966,7 +2955,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 double3* finalContactPoints =
                     (double3*)solverScratchSpace.allocateTempVector("finalContactPoints", countPatch * sizeof(double3));
                 finalizePatchResultsFromAccumulators(patchContactAccumulators, votedNormals, zeroAreaNormals,
-                                                     zeroAreaPenetrations, zeroAreaContactPoints, patchHasSAT,
+                                                     zeroAreaPenetrations, zeroAreaContactPoints,
                                                      finalAreas, finalNormals, finalPenetrations.data(),
                                                      finalContactPoints, countPatch, streamInfo.stream);
 
@@ -2976,9 +2965,6 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("zeroAreaNormals");
                 solverScratchSpace.finishUsingTempVector("zeroAreaPenetrations");
                 solverScratchSpace.finishUsingTempVector("zeroAreaContactPoints");
-                if (patchHasSAT != nullptr) {
-                    solverScratchSpace.finishUsingTempVector("patchHasSAT");
-                }
 
                 // Clean up CUB bookkeeping buffers.
                 solverScratchSpace.finishUsingTempVector("uniqueKeys");

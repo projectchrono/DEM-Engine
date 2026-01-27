@@ -110,7 +110,7 @@ int main() {
     create_directory(out_dir);
 
     float time_end = 3.0f;
-    unsigned int fps = 20;
+    unsigned int fps = 100;
     float frame_time = 1.0f / fps;
 
     std::cout << "Output at " << fps << " FPS" << std::endl;

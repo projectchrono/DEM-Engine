@@ -183,6 +183,7 @@ void prepareWeightedNormalsForVoting(DEMDataDT* granData,
                                      contactPairs_t* keys,
                                      contactPairs_t startOffset,
                                      contactPairs_t count,
+                                     contact_t contactType,
                                      cudaStream_t& this_stream);
 
 // Optimized overload: prepares weighted normals only.
@@ -289,17 +290,6 @@ void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
                                                    contactPairs_t countPrimitive,
                                                    cudaStream_t& this_stream);
 
-// Checks if any primitive in each patch satisfies SAT (for tri-tri contacts)
-// Outputs a flag per patch: 1 if at least one SAT-satisfying primitive exists, 0 otherwise
-void checkPatchHasSATSatisfyingPrimitive(DEMDataDT* granData,
-                                         notStupidBool_t* patchHasSAT,
-                                         contactPairs_t* keys,
-                                         contactPairs_t startOffsetPrimitive,
-                                         contactPairs_t startOffsetPatch,
-                                         contactPairs_t countPrimitive,
-                                         contactPairs_t countPatch,
-                                         cudaStream_t& this_stream);
-
 // Finalizes patch results by combining normal voting with zero-area case handling
 void finalizePatchResults(double* totalProjectedAreas,
                           float3* votedNormals,
@@ -308,7 +298,6 @@ void finalizePatchResults(double* totalProjectedAreas,
                           float3* zeroAreaNormals,
                           double* zeroAreaPenetrations,
                           double3* zeroAreaContactPoints,
-                          notStupidBool_t* patchHasSAT,
                           double* finalAreas,
                           float3* finalNormals,
                           double* finalPenetrations,
@@ -320,7 +309,6 @@ void finalizePatchResults(double* totalProjectedAreas,
 void finalizePatchContactPoints(double* totalAreas,
                                 double3* votedContactPoints,
                                 double3* zeroAreaContactPoints,
-                                notStupidBool_t* patchHasSAT,
                                 double3* finalContactPoints,
                                 contactPairs_t count,
                                 cudaStream_t& this_stream);

@@ -134,16 +134,15 @@ __global__ void prepareWeightedNormalsForVoting_impl(DEMDataDT* granData,
         // Normal and geometric quantities were produced by the primitive contact kernels.
         const float3 normal = granData->contactForces[myContactID];
         const float3 areaStorage = granData->contactPointGeometryB[myContactID];
-        const float area = float3StorageToDouble(areaStorage);
+        float area = float3StorageToDouble(areaStorage);
+        // But primitive contacts that do not respect the patch general direction have no right in deciding the contact
+        // normal
+        notStupidBool_t directionRespected = granData->contactPatchDirectionRespected[myContactID];
+        if (!directionRespected) {
+            area = 0.0;
+        }
 
-        // Penetration is used to weight the vote (validated legacy semantics).
-        const float3 penStorage = granData->contactPointGeometryA[myContactID];
-        float penetration = float3StorageToDouble(penStorage);
-        penetration = (penetration > DEME_TINY_FLOAT) ? penetration : DEME_TINY_FLOAT;
-        const float weight = area / penetration;
-
-        weightedNormals[idx] = make_float3((double)normal.x * weight, (double)normal.y * weight,
-                                           (double)normal.z * weight);
+        weightedNormals[idx] = make_float3(normal.x * area, normal.y * area, normal.z * area);
     }
 }
 
@@ -151,6 +150,7 @@ void prepareWeightedNormalsForVoting(DEMDataDT* granData,
                                      float3* weightedNormals,
                                      contactPairs_t startOffset,
                                      contactPairs_t count,
+                                     contact_t contactType,
                                      cudaStream_t& this_stream) {
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
@@ -276,7 +276,6 @@ __global__ void finalizePatchResultsFromAccumulators_impl(const PatchContactAccu
                                                           const float3* zeroAreaNormals,
                                                           const double* zeroAreaPenetrations,
                                                           const double3* zeroAreaContactPoints,
-                                                          const notStupidBool_t* patchHasSAT,
                                                           double* finalAreas,
                                                           float3* finalNormals,
                                                           double* finalPenetrations,
@@ -287,11 +286,8 @@ __global__ void finalizePatchResultsFromAccumulators_impl(const PatchContactAccu
         const PatchContactAccum acc = patchAccumulators[idx];
         const double projectedArea = acc.sumProjArea;
 
-        // Default to 1 (SAT satisfied) for non-triangle-triangle contacts where patchHasSAT is null
-        const notStupidBool_t hasSAT = (patchHasSAT != nullptr) ? patchHasSAT[idx] : 1;
-
-        // Use voted results only if projectedArea > 0 AND at least one primitive satisfies SAT
-        if (projectedArea > 0.0 && hasSAT) {
+        // Use voted results only if projectedArea > 0
+        if (projectedArea > 0.0) {
             finalAreas[idx] = projectedArea;
             finalNormals[idx] = votedNormals[idx];
             finalPenetrations[idx] = acc.maxProjPen;
@@ -306,7 +302,7 @@ __global__ void finalizePatchResultsFromAccumulators_impl(const PatchContactAccu
                 finalContactPoints[idx] = make_double3(0.0, 0.0, 0.0);
             }
         } else {
-            // Zero-area case OR no SAT-satisfying primitives: fallback to max-penetration primitive's results
+            // Zero-area case: fallback to max-penetration primitive's results
             finalAreas[idx] = 0.0;
             finalNormals[idx] = zeroAreaNormals[idx];
             finalPenetrations[idx] = zeroAreaPenetrations[idx];
@@ -320,7 +316,6 @@ void finalizePatchResultsFromAccumulators(const PatchContactAccum* patchAccumula
                                           const float3* zeroAreaNormals,
                                           const double* zeroAreaPenetrations,
                                           const double3* zeroAreaContactPoints,
-                                          const notStupidBool_t* patchHasSAT,
                                           double* finalAreas,
                                           float3* finalNormals,
                                           double* finalPenetrations,
@@ -330,7 +325,7 @@ void finalizePatchResultsFromAccumulators(const PatchContactAccum* patchAccumula
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         finalizePatchResultsFromAccumulators_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            patchAccumulators, votedNormals, zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, patchHasSAT,
+            patchAccumulators, votedNormals, zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints,
             finalAreas, finalNormals, finalPenetrations, finalContactPoints, count);
     }
 }
@@ -479,7 +474,7 @@ __global__ void findMaxPenetrationPrimitiveForZeroAreaPatches_impl(DEMDataDT* gr
         contactPairs_t patchIdx = keys[idx];
         contactPairs_t localPatchIdx = patchIdx - startOffsetPatch;
 
-        // In fact, we just need to proceed if area is zero or the SAT check failed. But these no-contact cases are so
+        // In fact, we just need to proceed if area is zero. But these no-contact cases are so
         // common, that we don't do an early termination here.
 
         // Get this primitive's penetration
@@ -531,54 +526,7 @@ void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
     }
 }
 
-// Kernel to check if any primitive in each patch satisfies SAT (for tri-tri contacts)
-// Uses simple idempotent writes to set patchHasSAT[patchIdx] = 1 if any primitive has contactSATSatisfied = 1
-// Since we only transition from 0 to 1, and the array is pre-initialized to 0, multiple threads writing 1 is safe
-__global__ void checkPatchHasSATSatisfyingPrimitive_impl(DEMDataDT* granData,
-                                                         notStupidBool_t* patchHasSAT,
-                                                         contactPairs_t* keys,
-                                                         contactPairs_t startOffsetPrimitive,
-                                                         contactPairs_t startOffsetPatch,
-                                                         contactPairs_t countPrimitive) {
-    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < countPrimitive) {
-        contactPairs_t myContactID = startOffsetPrimitive + idx;
-        contactPairs_t patchIdx = keys[idx];
-        contactPairs_t localPatchIdx = patchIdx - startOffsetPatch;
-
-        // Check if this primitive satisfies SAT
-        notStupidBool_t satisfiesSAT = granData->contactSATSatisfied[myContactID];
-
-        // If this primitive satisfies SAT, mark the patch as having at least one SAT-satisfying primitive
-        // Since we only need to set 0 -> 1, a simple write is safe (multiple threads writing 1 is idempotent)
-        if (satisfiesSAT) {
-            patchHasSAT[localPatchIdx] = 1;
-        }
-    }
-}
-
-void checkPatchHasSATSatisfyingPrimitive(DEMDataDT* granData,
-                                         notStupidBool_t* patchHasSAT,
-                                         contactPairs_t* keys,
-                                         contactPairs_t startOffsetPrimitive,
-                                         contactPairs_t startOffsetPatch,
-                                         contactPairs_t countPrimitive,
-                                         contactPairs_t countPatch,
-                                         cudaStream_t& this_stream) {
-    // Initialize patchHasSAT to 0
-    DEME_GPU_CALL(cudaMemsetAsync(patchHasSAT, 0, countPatch * sizeof(notStupidBool_t), this_stream));
-
-    size_t blocks_needed = (countPrimitive + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-    if (blocks_needed > 0) {
-        checkPatchHasSATSatisfyingPrimitive_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            granData, patchHasSAT, keys, startOffsetPrimitive, startOffsetPatch, countPrimitive);
-    }
-}
-
 // Kernel to finalize patch results by combining normal voting results with zero-area case handling
-// For patches with totalArea > 0 AND patchHasSAT = 1: use voted normal and weighted penetration
-// For patches with totalArea == 0 OR patchHasSAT = 0: use max-penetration primitive's normal and penetration (Step 8
-// fallback)
 __global__ void finalizePatchResults_impl(double* totalProjectedAreas,
                                           float3* votedNormals,
                                           double* votedPenetrations,
@@ -586,7 +534,6 @@ __global__ void finalizePatchResults_impl(double* totalProjectedAreas,
                                           float3* zeroAreaNormals,
                                           double* zeroAreaPenetrations,
                                           double3* zeroAreaContactPoints,
-                                          notStupidBool_t* patchHasSAT,
                                           double* finalAreas,
                                           float3* finalNormals,
                                           double* finalPenetrations,
@@ -595,18 +542,16 @@ __global__ void finalizePatchResults_impl(double* totalProjectedAreas,
     contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
         double projectedArea = totalProjectedAreas[idx];
-        // Default to 1 (SAT satisfied) for non-triangle-triangle contacts where patchHasSAT is null
-        notStupidBool_t hasSAT = (patchHasSAT != nullptr) ? patchHasSAT[idx] : 1;
 
-        // Use voted results only if projectedArea > 0 AND at least one primitive satisfies SAT
-        if (projectedArea > 0.0 && hasSAT) {
+        // Use voted results only if projectedArea > 0
+        if (projectedArea > 0.0) {
             // Normal case: use voted results
             finalAreas[idx] = projectedArea;
             finalNormals[idx] = votedNormals[idx];
             finalPenetrations[idx] = votedPenetrations[idx];
             finalContactPoints[idx] = votedContactPoints[idx];
         } else {
-            // Zero-area case OR no SAT-satisfying primitives: use max-penetration primitive's results (Step 8 fallback)
+            // Zero-area case: use max-penetration primitive's results (Step 8 fallback)
             // Set finalArea to 0 for these cases
             finalAreas[idx] = 0.0;
             finalNormals[idx] = zeroAreaNormals[idx];
@@ -623,7 +568,6 @@ void finalizePatchResults(double* totalProjectedAreas,
                           float3* zeroAreaNormals,
                           double* zeroAreaPenetrations,
                           double3* zeroAreaContactPoints,
-                          notStupidBool_t* patchHasSAT,
                           double* finalAreas,
                           float3* finalNormals,
                           double* finalPenetrations,
@@ -634,7 +578,7 @@ void finalizePatchResults(double* totalProjectedAreas,
     if (blocks_needed > 0) {
         finalizePatchResults_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             totalProjectedAreas, votedNormals, votedPenetrations, votedContactPoints, zeroAreaNormals,
-            zeroAreaPenetrations, zeroAreaContactPoints, patchHasSAT, finalAreas, finalNormals, finalPenetrations,
+            zeroAreaPenetrations, zeroAreaContactPoints, finalAreas, finalNormals, finalPenetrations,
             finalContactPoints, count);
     }
 }

@@ -24,6 +24,7 @@ SET(DEMOS
 		DEMdemo_TestPack
 		DEMdemo_TestRestart
 		DEMdemo_RotatingDrum
+		DEMdemo_DrumCubes
 		DEMdemo_Centrifuge
 		DEMdemo_DrumCubes
 		DEMdemo_ResponseAngleMesh
