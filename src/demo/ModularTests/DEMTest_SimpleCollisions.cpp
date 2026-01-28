@@ -21,17 +21,21 @@
 #include <DEM/utils/HostSideHelpers.hpp>
 
 #include <cmath>
+#include <cstdio>
+#include <filesystem>
 #include <iostream>
 #include <limits>
 #include <numeric>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace deme;
+using namespace std::filesystem;
 
 namespace {
 
-constexpr bool kUseTriangleParticles = true; // toggle to run the STL-based triangle setup
+constexpr bool kUseTriangleParticles = false; // toggle to run the STL-based triangle setup
 constexpr float kMmToMeters = 0.001f;
 constexpr double kTriangleParticleDensity = 2600.0;
 
@@ -41,6 +45,10 @@ constexpr double kSpeed = 1.0;       // 1 m/s
 constexpr double kTimeStep = 1e-5;   // seconds
 constexpr int kMaxSteps = 200000;    // 2 seconds max
 constexpr double kContactEps = 1e-6; // contact force threshold
+constexpr bool kFixWinding = true;   // flip inward-facing triangles based on CoM
+constexpr bool kWriteFrames = true;
+constexpr unsigned int kOutputFPS = 2000;
+constexpr const char* kOutputDir = "DemoOutput_SimpleCollisions";
 
 struct RunResult {
     bool ok = false;
@@ -66,6 +74,88 @@ double vec_dot(const float3& a, const float3& b) {
 
 float3 vec_scale(const float3& v, double s) {
     return make_float3(v.x * s, v.y * s, v.z * s);
+}
+
+std::pair<float3, float3> compute_bounds(const std::vector<float3>& vertices) {
+    if (vertices.empty()) {
+        return {make_float3(0, 0, 0), make_float3(0, 0, 0)};
+    }
+    float3 min_v = vertices.front();
+    float3 max_v = vertices.front();
+    for (const auto& v : vertices) {
+        min_v.x = std::min(min_v.x, v.x);
+        min_v.y = std::min(min_v.y, v.y);
+        min_v.z = std::min(min_v.z, v.z);
+        max_v.x = std::max(max_v.x, v.x);
+        max_v.y = std::max(max_v.y, v.y);
+        max_v.z = std::max(max_v.z, v.z);
+    }
+    return {min_v, max_v};
+}
+
+void print_mesh_diagnostics(const std::shared_ptr<DEMMesh>& mesh, const std::string& label) {
+    if (!mesh) {
+        return;
+    }
+    size_t boundary_edges = 0;
+    size_t nonmanifold_edges = 0;
+    bool watertight = mesh->IsWatertight(&boundary_edges, &nonmanifold_edges);
+
+    double volume = 0.0;
+    float3 center = make_float3(0, 0, 0);
+    float3 inertia = make_float3(0, 0, 0);
+    mesh->ComputeMassProperties(volume, center, inertia);
+
+    auto [min_v, max_v] = compute_bounds(mesh->GetCoordsVertices());
+    float3 dims = max_v - min_v;
+
+    std::cout << "\n[" << label << "] mesh diagnostics" << std::endl;
+    std::cout << "Vertices: " << mesh->GetNumNodes() << " Triangles: " << mesh->GetNumTriangles() << std::endl;
+    std::cout << "Bounds min=(" << min_v.x << ", " << min_v.y << ", " << min_v.z << ") max=(" << max_v.x << ", "
+              << max_v.y << ", " << max_v.z << ") dims=(" << dims.x << ", " << dims.y << ", " << dims.z << ")"
+              << std::endl;
+    std::cout << "Watertight: " << (watertight ? "yes" : "no") << " boundary_edges=" << boundary_edges
+              << " nonmanifold_edges=" << nonmanifold_edges << std::endl;
+    std::cout << "Volume=" << volume << " CoM=(" << center.x << ", " << center.y << ", " << center.z
+              << ") MOI(unit density, CoM)=(" << inertia.x << ", " << inertia.y << ", " << inertia.z << ")"
+              << std::endl;
+}
+
+void diagnose_winding(const std::shared_ptr<DEMMesh>& mesh,
+                      const std::string& label,
+                      bool fix_winding) {
+    if (!mesh || mesh->m_face_v_indices.empty()) {
+        return;
+    }
+    double volume = 0.0;
+    float3 center = make_float3(0, 0, 0);
+    float3 inertia = make_float3(0, 0, 0);
+    mesh->ComputeMassProperties(volume, center, inertia);
+    if (volume == 0.0) {
+        center = make_float3(0, 0, 0);
+    }
+
+    size_t inward = 0;
+    for (size_t i = 0; i < mesh->m_face_v_indices.size(); ++i) {
+        const int3& f = mesh->m_face_v_indices[i];
+        const float3& v0 = mesh->m_vertices[f.x];
+        const float3& v1 = mesh->m_vertices[f.y];
+        const float3& v2 = mesh->m_vertices[f.z];
+        const float3 n = face_normal(v0, v1, v2);
+        const float3 centroid = (v0 + v1 + v2) / 3.0f;
+        const float3 to_face = centroid - center;
+        const float d = dot(n, to_face);
+        if (d < 0.0f) {
+            inward++;
+            if (fix_winding) {
+                mesh->m_face_v_indices[i] = make_int3(f.x, f.z, f.y);
+            }
+        }
+    }
+
+    std::cout << "\n[" << label << "] winding diagnostics" << std::endl;
+    std::cout << "Faces total=" << mesh->m_face_v_indices.size() << " inward=" << inward
+              << (fix_winding ? " (flipped)" : "") << std::endl;
 }
 
 Stats calc_stats(const std::vector<double>& values) {
@@ -152,6 +242,18 @@ std::shared_ptr<DEMMesh> load_triangle_template(DEMSolver& DEMSim,
     out_mass = static_cast<float>(volume * kTriangleParticleDensity);
     out_moi = inertia * static_cast<float>(kTriangleParticleDensity);
 
+    print_mesh_diagnostics(mesh_template, "simpleTriangleShape4mm.stl (scaled)");
+    diagnose_winding(mesh_template, "simpleTriangleShape4mm.stl (scaled)", kFixWinding);
+    if (center.x != 0.0f || center.y != 0.0f || center.z != 0.0f) {
+        for (auto& v : mesh_template->m_vertices) {
+            v.x -= center.x;
+            v.y -= center.y;
+            v.z -= center.z;
+        }
+        std::cout << "[simpleTriangleShape4mm.stl] shifted vertices to CoM frame ("
+                  << center.x << ", " << center.y << ", " << center.z << ")" << std::endl;
+    }
+
     assign_patch_ids(mesh_template, per_triangle_patches, mat_type);
     return mesh_template;
 }
@@ -165,6 +267,7 @@ RunResult run_single_collision(const float4& init_rot,
 
     DEMSolver DEMSim;
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
+    DEMSim.SetMeshOutputFormat("VTK");
     DEMSim.InstructBoxDomainDimension(5, 5, 5);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, 0));
     DEMSim.SetCDUpdateFreq(0);
@@ -208,9 +311,30 @@ RunResult run_single_collision(const float4& init_rot,
     bool contact_started = false;
     bool rebound_captured = false;
     double peak_normal_force = 0.0;
+    unsigned int frame_id = 0;
+    double next_frame_time = 0.0;
+    path out_dir;
+    if (kWriteFrames) {
+        out_dir = current_path() / kOutputDir / label / ("run_" + std::to_string(run_id));
+        create_directories(out_dir);
+        next_frame_time = 0.0;
+        char filename[128];
+        std::snprintf(filename, sizeof(filename), "frame_%06u.vtk", frame_id++);
+        DEMSim.WriteMeshFile(out_dir / filename);
+    }
 
     for (int step = 0; step < kMaxSteps; ++step) {
         DEMSim.DoStepDynamics();
+
+        if (kWriteFrames) {
+            double sim_time = DEMSim.GetSimTime();
+            while (sim_time + 1e-12 >= next_frame_time) {
+                char filename[128];
+                std::snprintf(filename, sizeof(filename), "frame_%06u.vtk", frame_id++);
+                DEMSim.WriteMeshFile(out_dir / filename);
+                next_frame_time += 1.0 / static_cast<double>(kOutputFPS);
+            }
+        }
 
         float3 plane_force = plane_tracker->ContactAcc();
         plane_force = vec_scale(plane_force, plane_tracker->Mass());

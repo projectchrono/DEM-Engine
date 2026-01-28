@@ -1734,45 +1734,137 @@ void DEMMesh::ComputeMassProperties(double& volume, float3& center, float3& iner
     inertia = make_float3(static_cast<float>(Ixx), static_cast<float>(Iyy), static_cast<float>(Izz));
 }
 
+// Section for Watertight test, false if not
+
+struct QuantKey3 {
+    int64_t x, y, z;
+    bool operator==(const QuantKey3& o) const noexcept { return x==o.x && y==o.y && z==o.z; }
+};
+struct QuantKey3Hash {
+    size_t operator()(const QuantKey3& k) const noexcept {
+        size_t h1 = std::hash<int64_t>{}(k.x);
+        size_t h2 = std::hash<int64_t>{}(k.y);
+        size_t h3 = std::hash<int64_t>{}(k.z);
+        size_t h = h1;
+        h ^= h2 + 0x9e3779b97f4a7c15ULL + (h<<6) + (h>>2);
+        h ^= h3 + 0x9e3779b97f4a7c15ULL + (h<<6) + (h>>2);
+        return h;
+    }
+};
+
+static inline int64_t q(double v, double eps) {
+    return (int64_t)std::llround(v / eps);
+}
+
 bool DEMMesh::IsWatertight(size_t* boundary_edges, size_t* nonmanifold_edges) const {
-    if (boundary_edges) {
-        *boundary_edges = 0;
-    }
-    if (nonmanifold_edges) {
-        *nonmanifold_edges = 0;
-    }
-    if (m_face_v_indices.empty()) {
+    if (boundary_edges) *boundary_edges = 0;
+    if (nonmanifold_edges) *nonmanifold_edges = 0;
+    if (m_face_v_indices.empty()) return true;
+
+    auto count_edges_by_index = [&](size_t& boundary, size_t& nonmanifold) {
+        std::map<std::pair<size_t, size_t>, size_t> edge_counts;
+
+        for (const auto& face : m_face_v_indices) {
+            const int fx = face.x, fy = face.y, fz = face.z;
+            if (fx < 0 || fy < 0 || fz < 0) continue;
+
+            const size_t a = (size_t)fx, b = (size_t)fy, c = (size_t)fz;
+            if (a == b || b == c || c == a) continue;
+
+            std::pair<size_t, size_t> edges[3] = {
+                {std::min(a,b), std::max(a,b)},
+                {std::min(b,c), std::max(b,c)},
+                {std::min(c,a), std::max(c,a)}
+            };
+            edge_counts[edges[0]]++;
+            edge_counts[edges[1]]++;
+            edge_counts[edges[2]]++;
+        }
+
+        boundary = 0; nonmanifold = 0;
+        for (const auto& kv : edge_counts) {
+            if (kv.second == 1) boundary++;
+            else if (kv.second > 2) nonmanifold++;
+        }
+    };
+
+    size_t boundary1 = 0, nonmanifold1 = 0;
+    count_edges_by_index(boundary1, nonmanifold1);
+
+    if (boundary1 == 0 && nonmanifold1 == 0) {
+        if (boundary_edges) *boundary_edges = 0;
+        if (nonmanifold_edges) *nonmanifold_edges = 0;
         return true;
     }
 
-    std::map<std::pair<int, int>, size_t> edge_counts;
+    if (m_vertices.empty()) {
+        if (boundary_edges) *boundary_edges = boundary1;
+        if (nonmanifold_edges) *nonmanifold_edges = nonmanifold1;
+        return false;
+    }
+
+    double minx = m_vertices[0].x, miny = m_vertices[0].y, minz = m_vertices[0].z;
+    double maxx = minx, maxy = miny, maxz = minz;
+    for (const auto& v : m_vertices) {
+        minx = std::min(minx, (double)v.x); miny = std::min(miny, (double)v.y);
+        minz = std::min(minz, (double)v.z);
+        maxx = std::max(maxx, (double)v.x); maxy = std::max(maxy, (double)v.y);
+        maxz = std::max(maxz, (double)v.z);
+    }
+    const double dx = maxx - minx, dy = maxy - miny, dz = maxz - minz;
+    const double diag = std::sqrt(dx*dx + dy*dy + dz*dz);
+    const double eps = std::max(diag * 1e-9, 1e-12);
+
+    std::unordered_map<QuantKey3, size_t, QuantKey3Hash> rep;
+    rep.reserve(m_vertices.size());
+
+    std::vector<size_t> canon(m_vertices.size(), (size_t)-1);
+    size_t next_id = 0;
+
+    for (size_t i = 0; i < m_vertices.size(); ++i) {
+        const auto& v = m_vertices[i];
+        QuantKey3 key{ q(v.x, eps), q(v.y, eps), q(v.z, eps) };
+
+        auto it = rep.find(key);
+        if (it == rep.end()) {
+            rep.emplace(key, next_id);
+            canon[i] = next_id;
+            next_id++;
+        } else {
+            canon[i] = it->second;
+        }
+    }
+
+    std::map<std::pair<size_t, size_t>, size_t> edge_counts2;
     for (const auto& face : m_face_v_indices) {
-        std::pair<int, int> edges[3] = {{std::min(face.x, face.y), std::max(face.x, face.y)},
-                                        {std::min(face.y, face.z), std::max(face.y, face.z)},
-                                        {std::min(face.z, face.x), std::max(face.z, face.x)}};
-        for (int e = 0; e < 3; ++e) {
-            edge_counts[edges[e]]++;
-        }
+        const int fx = face.x, fy = face.y, fz = face.z;
+        if (fx < 0 || fy < 0 || fz < 0) continue;
+
+        const size_t a0 = (size_t)fx, b0 = (size_t)fy, c0 = (size_t)fz;
+        if (a0 >= canon.size() || b0 >= canon.size() || c0 >= canon.size()) continue;
+
+        const size_t a = canon[a0], b = canon[b0], c = canon[c0];
+        if (a == b || b == c || c == a) continue;
+
+        std::pair<size_t, size_t> edges[3] = {
+            {std::min(a,b), std::max(a,b)},
+            {std::min(b,c), std::max(b,c)},
+            {std::min(c,a), std::max(c,a)}
+        };
+        edge_counts2[edges[0]]++;
+        edge_counts2[edges[1]]++;
+        edge_counts2[edges[2]]++;
     }
 
-    size_t boundary = 0;
-    size_t nonmanifold = 0;
-    for (const auto& kv : edge_counts) {
-        if (kv.second == 1) {
-            boundary++;
-        } else if (kv.second > 2) {
-            nonmanifold++;
-        }
+    size_t boundary2 = 0, nonmanifold2 = 0;
+    for (const auto& kv : edge_counts2) {
+        if (kv.second == 1) boundary2++;
+        else if (kv.second > 2) nonmanifold2++;
     }
 
-    if (boundary_edges) {
-        *boundary_edges = boundary;
-    }
-    if (nonmanifold_edges) {
-        *nonmanifold_edges = nonmanifold;
-    }
-
-    return boundary == 0 && nonmanifold == 0;
+    if (boundary_edges) *boundary_edges = boundary2;
+    if (nonmanifold_edges) *nonmanifold_edges = nonmanifold2;
+    return boundary2 == 0 && nonmanifold2 == 0;
 }
 
 }  // end namespace deme

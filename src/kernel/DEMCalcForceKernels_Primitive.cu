@@ -59,6 +59,10 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
     // resulting into the correct place needs to be done here.
     deme::contactPairs_t myPatchContactID = granData->geomToPatchMap[myPrimitiveContactID];
 
+    // Default: patch-direction check should not filter non-tri-tri contacts.
+    // Tri-tri will overwrite this after computing patch direction.
+    granData->contactPatchDirectionRespected[myPrimitiveContactID] = 1;
+
     // ----------------------------------------------------------------
     // Based on A's type, equip info
     // ----------------------------------------------------------------
