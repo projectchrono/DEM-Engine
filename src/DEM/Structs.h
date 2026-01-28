@@ -711,6 +711,10 @@ struct kTStateParams {
 
     // Current average num of contacts per sphere has.
     float avgCntsPerPrimitive = 0.;
+    // Consecutive contact-detection steps above errOutAvgPrimitiveCnts.
+    unsigned int avgCntsOverLimitStreak = 0;
+    // Peak average contacts observed during the current over-limit streak.
+    float avgCntsOverLimitPeak = 0.f;
 
     // float maxVel_buffer; // buffer for the current max vel sent by dT
     DualStruct<float> maxVel = DualStruct<float>(0.f);     // kT's own storage of max vel

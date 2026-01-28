@@ -48,6 +48,9 @@ class ThreadManager {
     // kT's
     std::atomic<int64_t> kinematicIngredProdDateStamp;  // dT tags this when sending it to kT
     std::atomic<int64_t> kinematicMaxFutureDrift;       // kT tags this to its produce before shipping
+    // Shared ghosting margin and max owner bound radius for cylindrical periodicity (kT -> dT)
+    std::atomic<float> kinematicGhostMargin;
+    std::atomic<float> maxOwnerBoundRadius;
 
     // Single-producer/single-consumer freshness flags that guard the transfer buffers (kT -> dT and dT -> kT).
     // Use acquire/release on loads/stores so buffer writes are visible before consumption without extra locking.
@@ -82,6 +85,8 @@ class ThreadManager {
         dynamicDone = false;
         dynamicOwned_Prod2ConsBuffer_isFresh = false;
         kinematicOwned_Cons2ProdBuffer_isFresh = false;
+        kinematicGhostMargin = 0.f;
+        maxOwnerBoundRadius = 0.f;
     }
 
     ~ThreadManager() {}

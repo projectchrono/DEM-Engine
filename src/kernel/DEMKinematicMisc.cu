@@ -4,6 +4,8 @@
 #include <DEM/Defines.h>
 _kernelIncludes_;
 
+// Layout revision marker: keep baked JIT fingerprints in sync with DEMDataKT changes.
+
 // Definitions of analytical entites and clump components are below
 _clumpTemplateDefs_;
 _analyticalEntityDefs_;
@@ -33,7 +35,7 @@ __device__ __forceinline__ float getApproxAbsVel(deme::DEMSimParams* simParams,
     return vel;
 }
 
-__global__ void computeMarginFromAbsv_implSph(deme::DEMSimParams* simParams,
+DEME_KERNEL void computeMarginFromAbsv_implSph(deme::DEMSimParams* simParams,
                                               deme::DEMDataKT* granData,
                                               const float* absVel_owner,
                                               const float* absAngVel_owner,
@@ -58,7 +60,7 @@ __global__ void computeMarginFromAbsv_implSph(deme::DEMSimParams* simParams,
     }
 }
 
-__global__ void computeMarginFromAbsv_implTri(deme::DEMSimParams* simParams,
+DEME_KERNEL void computeMarginFromAbsv_implTri(deme::DEMSimParams* simParams,
                                               deme::DEMDataKT* granData,
                                               const float* absVel_owner,
                                               const float* absAngVel_owner,
@@ -100,7 +102,7 @@ __global__ void computeMarginFromAbsv_implTri(deme::DEMSimParams* simParams,
     }
 }
 
-__global__ void computeMarginFromAbsv_implAnal(deme::DEMSimParams* simParams,
+DEME_KERNEL void computeMarginFromAbsv_implAnal(deme::DEMSimParams* simParams,
                                                deme::DEMDataKT* granData,
                                                const float* absVel_owner,
                                                const float* absAngVel_owner,

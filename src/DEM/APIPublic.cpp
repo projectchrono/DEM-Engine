@@ -15,6 +15,7 @@
 #include <thread>
 #include <chrono>
 #include <cstring>
+#include <cmath>
 #include <limits>
 #include <algorithm>
 #include <filesystem>
@@ -321,8 +322,8 @@ std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
 
     std::vector<bodyID_t> clumps_in_cnt;
     for (size_t i = 0; i < dT->getNumContacts(); i++) {
-        auto idA = dT->idPatchA[i];
-        auto idB = dT->idPatchB[i];
+        auto idA = dT->idPatchA[i] & CYL_PERIODIC_SPHERE_ID_MASK;
+        auto idB = dT->idPatchB[i] & CYL_PERIODIC_SPHERE_ID_MASK;
         auto cnt_type = dT->contactTypePatch[i];
         // Using decode to get the A and B type
         auto typeA = decodeTypeA(cnt_type);
@@ -504,6 +505,41 @@ std::vector<float3> DEMSolver::GetOwnerAngAcc(bodyID_t ownerID, bodyID_t n) cons
 }
 std::vector<unsigned int> DEMSolver::GetOwnerFamily(bodyID_t ownerID, bodyID_t n) const {
     return dT->getOwnerFamily(ownerID, n);
+}
+
+std::vector<int> DEMSolver::GetOwnerCylWrapK(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerCylWrapK(ownerID, n);
+}
+
+std::vector<int> DEMSolver::GetOwnerCylWrapOffset(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerCylWrapOffset(ownerID, n);
+}
+
+std::vector<float> DEMSolver::GetOwnerBoundRadius(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerBoundRadius(ownerID, n);
+}
+
+std::vector<unsigned int> DEMSolver::GetOwnerCylGhostActive(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerCylGhostActive(ownerID, n);
+}
+
+std::vector<unsigned int> DEMSolver::GetOwnerCylSkipCount(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerCylSkipCount(ownerID, n);
+}
+
+std::vector<unsigned int> DEMSolver::GetOwnerCylSkipPotentialCount(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerCylSkipPotentialCount(ownerID, n);
+}
+
+void DEMSolver::GetOwnerContactGhostCounts(std::vector<int>& real_cnt,
+                                           std::vector<int>& ghost_pos_cnt,
+                                           std::vector<int>& ghost_neg_cnt) const {
+    dT->getOwnerContactGhostCounts(real_cnt, ghost_pos_cnt, ghost_neg_cnt);
+}
+
+void DEMSolver::RequestContactUpdate() {
+    assertSysInit("RequestContactUpdate");
+    dT->announceCritical();
 }
 
 std::vector<float> DEMSolver::GetOwnerWildcardValue(bodyID_t ownerID, const std::string& name, bodyID_t n) {
@@ -874,6 +910,170 @@ void DEMSolver::InstructBoxDomainDimension(const std::pair<float, float>& x,
         m_box_dir_length_is_exact = SPATIAL_DIR::NONE;
     } else {
         DEME_ERROR("Unknown '%s' parameter in InstructBoxDomainDimension call.", dir_exact.c_str());
+    }
+}
+
+void DEMSolver::SetCylindricalPeriodicity(SPATIAL_DIR axis,
+                                          float start_angle,
+                                          float end_angle,
+                                          float min_radius) {
+    if (min_radius < 0.f) {
+        DEME_ERROR("Cylindrical periodic min_radius %.7g is invalid (must be >= 0).", min_radius);
+    }
+    if (min_radius < DEME_TINY_FLOAT) {
+        min_radius = DEME_TINY_FLOAT;
+    }
+    if (axis == SPATIAL_DIR::NONE) {
+        m_use_cyl_periodic = false;
+        m_cyl_periodic_axis = SPATIAL_DIR::NONE;
+        m_cyl_periodic_span = 0.f;
+    } else {
+        if (axis != SPATIAL_DIR::X && axis != SPATIAL_DIR::Y && axis != SPATIAL_DIR::Z) {
+            DEME_ERROR("Unknown axis in SetCylindricalPeriodicity.");
+        }
+        if (!std::isfinite(start_angle) || !std::isfinite(end_angle)) {
+            DEME_ERROR("Cylindrical periodic start/end angle must be finite (degrees).");
+        }
+        // Angles are provided in degrees; convert to radians using double precision.
+        const double two_pi = 2.0 * (double)PI;
+
+        double start = std::fmod(start_angle, two_pi);
+        if (start < 0.0) {
+            start += two_pi;
+        }
+        double end = std::fmod(end_angle, two_pi);
+        if (end < 0.0) {
+            end += two_pi;
+        }
+        double span = end - start;
+        if (span <= 0.0) {
+            span += two_pi;
+        }
+        if (span <= (double)DEME_TINY_FLOAT || span >= two_pi - (double)DEME_TINY_FLOAT) {
+            DEME_ERROR("Cylindrical periodic span must be in (0, 2*pi).");
+        }
+
+        float3 axis_vec = make_float3(0.f, 0.f, 0.f);
+        float3 u = make_float3(0.f, 0.f, 0.f);
+        float3 v = make_float3(0.f, 0.f, 0.f);
+        switch (axis) {
+            case SPATIAL_DIR::X:
+                axis_vec = make_float3(1.f, 0.f, 0.f);
+                u = make_float3(0.f, 1.f, 0.f);
+                v = make_float3(0.f, 0.f, 1.f);
+                break;
+            case SPATIAL_DIR::Y:
+                axis_vec = make_float3(0.f, 1.f, 0.f);
+                u = make_float3(0.f, 0.f, 1.f);
+                v = make_float3(1.f, 0.f, 0.f);
+                break;
+            case SPATIAL_DIR::Z:
+                axis_vec = make_float3(0.f, 0.f, 1.f);
+                u = make_float3(1.f, 0.f, 0.f);
+                v = make_float3(0.f, 1.f, 0.f);
+                break;
+            default:
+                DEME_ERROR("Unknown axis in SetCylindricalPeriodicity.");
+        }
+
+        const double cs0 = std::cos(start);
+        const double sn0 = std::sin(start);
+        const double cs1 = std::cos(start + span);
+        const double sn1 = std::sin(start + span);
+        const float3 r0 = make_float3((float)(u.x * cs0 + v.x * sn0),
+                                      (float)(u.y * cs0 + v.y * sn0),
+                                      (float)(u.z * cs0 + v.z * sn0));
+        const float3 r1 = make_float3((float)(u.x * cs1 + v.x * sn1),
+                                      (float)(u.y * cs1 + v.y * sn1),
+                                      (float)(u.z * cs1 + v.z * sn1));
+        auto cross3 = [](const float3& a, const float3& b) {
+            return make_float3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+        };
+        const float3 n0 = cross3(axis_vec, r0);
+        const float3 n1 = cross3(axis_vec, r1);
+
+        m_use_cyl_periodic = true;
+        m_cyl_periodic_axis = axis;
+        m_cyl_periodic_start = (float)start;
+        m_cyl_periodic_span = (float)span;
+        m_cyl_periodic_min_radius = min_radius;
+        m_cyl_periodic_axis_vec = axis_vec;
+        m_cyl_periodic_u = u;
+        m_cyl_periodic_v = v;
+        m_cyl_periodic_start_normal = n0;
+        m_cyl_periodic_end_normal = n1;
+        m_cyl_periodic_cos_span = (float)std::cos(span);
+        m_cyl_periodic_sin_span = (float)std::sin(span);
+        const double half_span = 0.5 * span;
+        m_cyl_periodic_cos_half_span = (float)std::cos(half_span);
+        m_cyl_periodic_sin_half_span = (float)std::sin(half_span);
+    }
+
+    if (sys_initialized) {
+        auto apply = [&](DualStruct<DEMSimParams>& params) {
+            params->useCylPeriodic = m_use_cyl_periodic ? 1 : 0;
+            params->useCylPeriodicDiagCounters = m_cyl_periodic_diag ? 1 : 0;
+            params->cylPeriodicAxis = static_cast<unsigned char>(m_cyl_periodic_axis);
+            params->cylPeriodicStart = m_cyl_periodic_start;
+            params->cylPeriodicSpan = m_cyl_periodic_span;
+            params->cylPeriodicMinRadius = m_cyl_periodic_min_radius;
+            params->cylPeriodicCosSpan = m_cyl_periodic_cos_span;
+            params->cylPeriodicSinSpan = m_cyl_periodic_sin_span;
+            params->cylPeriodicCosHalfSpan = m_cyl_periodic_cos_half_span;
+            params->cylPeriodicSinHalfSpan = m_cyl_periodic_sin_half_span;
+            params->cylPeriodicAxisVec = m_cyl_periodic_axis_vec;
+            params->cylPeriodicU = m_cyl_periodic_u;
+            params->cylPeriodicV = m_cyl_periodic_v;
+            params->cylPeriodicStartNormal = m_cyl_periodic_start_normal;
+            params->cylPeriodicEndNormal = m_cyl_periodic_end_normal;
+            params->cylPeriodicOrigin = make_float3(-params->LBFX, -params->LBFY, -params->LBFZ);
+            params->maxSphereRadius = m_largest_radius;
+            params->maxTriRadius = m_largest_tri_radius;
+            params->maxFamilyExtraMargin = m_max_family_extra_margin;
+        };
+        apply(dT->simParams);
+        apply(kT->simParams);
+        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+        dT->simParams.toDeviceAsync(dT->streamInfo.stream);
+        DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
+        kT->simParams.toDeviceAsync(kT->streamInfo.stream);
+    }
+}
+
+void DEMSolver::SetCylPeriodicDiagnosticCounters(bool enable) {
+    m_cyl_periodic_diag = enable;
+    if (sys_initialized) {
+        auto apply = [&](DualStruct<DEMSimParams>& params) {
+            params->useCylPeriodicDiagCounters = m_cyl_periodic_diag ? 1 : 0;
+        };
+        apply(dT->simParams);
+        apply(kT->simParams);
+        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+        dT->simParams.toDeviceAsync(dT->streamInfo.stream);
+        DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
+        kT->simParams.toDeviceAsync(kT->streamInfo.stream);
+    }
+}
+
+void DEMSolver::SetCylindricalPeriodicity(const std::string& axis,
+                                          float start_angle,
+                                          float end_angle,
+                                          float min_radius) {
+    if (axis.empty()) {
+        DEME_ERROR("SetCylindricalPeriodicity axis string is empty.");
+    }
+    std::string axis_up = axis;
+    std::transform(axis_up.begin(), axis_up.end(), axis_up.begin(), [](unsigned char c) { return std::toupper(c); });
+    if (axis_up == "X") {
+        SetCylindricalPeriodicity(SPATIAL_DIR::X, start_angle, end_angle, min_radius);
+    } else if (axis_up == "Y") {
+        SetCylindricalPeriodicity(SPATIAL_DIR::Y, start_angle, end_angle, min_radius);
+    } else if (axis_up == "Z") {
+        SetCylindricalPeriodicity(SPATIAL_DIR::Z, start_angle, end_angle, min_radius);
+    } else if (axis_up == "NONE") {
+        SetCylindricalPeriodicity(SPATIAL_DIR::NONE, start_angle, end_angle, min_radius);
+    } else {
+        DEME_ERROR("Unknown axis '%s' in SetCylindricalPeriodicity (use X, Y, Z, or NONE).", axis.c_str());
     }
 }
 
@@ -1867,6 +2067,17 @@ void DEMSolver::SetFamilyExtraMargin(unsigned int N, float extra_size) {
     }
     kT->familyExtraMarginSize.setVal(extra_size, N);
     dT->familyExtraMarginSize.setVal(extra_size, N);
+    if (extra_size > m_max_family_extra_margin) {
+        m_max_family_extra_margin = extra_size;
+    }
+    if (sys_initialized) {
+        dT->simParams->maxFamilyExtraMargin = m_max_family_extra_margin;
+        kT->simParams->maxFamilyExtraMargin = m_max_family_extra_margin;
+        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+        dT->simParams.toDeviceAsync(dT->streamInfo.stream);
+        DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
+        kT->simParams.toDeviceAsync(kT->streamInfo.stream);
+    }
 }
 
 void DEMSolver::ClearCache() {
@@ -2575,6 +2786,22 @@ void DEMSolver::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::ve
 
     // This method requires kT and dT are sync-ed
     // resetWorkerThreads();
+
+    float max_factor = 0.f;
+    for (float factor : factors) {
+        if (factor > max_factor) {
+            max_factor = factor;
+        }
+    }
+    if (max_factor > 1.f && m_largest_radius > 0.f) {
+        m_largest_radius *= max_factor;
+        dT->simParams->maxSphereRadius = m_largest_radius;
+        kT->simParams->maxSphereRadius = m_largest_radius;
+        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+        dT->simParams.toDeviceAsync(dT->streamInfo.stream);
+        DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
+        kT->simParams.toDeviceAsync(kT->streamInfo.stream);
+    }
 
     std::thread dThread = std::move(std::thread([this, IDs, factors]() { this->dT->changeOwnerSizes(IDs, factors); }));
     std::thread kThread = std::move(std::thread([this, IDs, factors]() { this->kT->changeOwnerSizes(IDs, factors); }));

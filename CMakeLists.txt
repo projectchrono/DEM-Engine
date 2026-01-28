@@ -297,6 +297,17 @@ install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/data/ DESTINATION ${CMAKE_INSTALL_DA
 file(COPY ${CMAKE_CURRENT_LIST_DIR}/src/kernel/ DESTINATION ${CMAKE_BINARY_DIR}/kernel/)
 file(COPY ${CMAKE_CURRENT_LIST_DIR}/src/DEM/Defines.h DESTINATION ${CMAKE_BINARY_DIR}/DEM)
 file(COPY ${CMAKE_CURRENT_LIST_DIR}/src/DEM/VariableTypes.h DESTINATION ${CMAKE_BINARY_DIR}/DEM)
+add_custom_target(sync_kernels ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_LIST_DIR}/src/kernel
+            ${CMAKE_BINARY_DIR}/kernel
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_CURRENT_LIST_DIR}/src/DEM/Defines.h
+            ${CMAKE_BINARY_DIR}/DEM/Defines.h
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_CURRENT_LIST_DIR}/src/DEM/VariableTypes.h
+            ${CMAKE_BINARY_DIR}/DEM/VariableTypes.h
+    COMMENT "Syncing kernel sources into build tree")
 install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/src/kernel/ DESTINATION ${CMAKE_INSTALL_DATADIR}/DEME/kernel/)
 
 # ---------------------------------------------------------------------------- #

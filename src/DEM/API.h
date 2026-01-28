@@ -74,6 +74,25 @@ class DEMSolver {
         m_user_add_bounding_box = inst;
         m_bounding_box_material = mat;
     }
+    /// @brief Enable cylindrical periodicity for particles (clump owners).
+    /// @param axis Rotation axis: SPATIAL_DIR::X/Y/Z. Use SPATIAL_DIR::NONE to disable.
+    /// @param start_angle Start angle in radians.
+    /// @param end_angle End angle in radians.
+    /// @param min_radius Minimum radial distance from axis (values <= 0 clamp to DEME_TINY_FLOAT).
+    void SetCylindricalPeriodicity(SPATIAL_DIR axis, float start_angle, float end_angle, float min_radius = 0.f);
+    /// @brief Enable cylindrical periodicity for particles (clump owners).
+    /// @param axis Rotation axis as "X", "Y", or "Z" (case-insensitive).
+    /// @param start_angle Start angle in radians.
+    /// @param end_angle End angle in radians.
+    /// @param min_radius Minimum radial distance from axis (values <= 0 clamp to DEME_TINY_FLOAT).
+    void SetCylindricalPeriodicity(const std::string& axis,
+                                   float start_angle,
+                                   float end_angle,
+                                   float min_radius = 0.f);
+    /// @brief Enable/disable cylindrical-periodic diagnostic counters.
+    /// @details This switch controls per-owner diagnostic counters/flags only. Cylindrical-periodic
+    /// correctness safeguards remain active regardless of this setting.
+    void SetCylPeriodicDiagnosticCounters(bool enable);
 
     /// Set gravitational pull.
     void SetGravitationalAcceleration(float3 g) { G = g; }
@@ -517,6 +536,24 @@ class DEMSolver {
     /// @param n The number of consecutive owners.
     /// @return The family number.
     std::vector<unsigned int> GetOwnerFamily(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// @brief Get cylindrical wrap count of n consecutive owners.
+    std::vector<int> GetOwnerCylWrapK(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// @brief Get cylindrical wrap offset since the last kT update, for n consecutive owners.
+    std::vector<int> GetOwnerCylWrapOffset(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// @brief Get per-owner bound radius for n consecutive owners.
+    std::vector<float> GetOwnerBoundRadius(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// @brief Get per-owner ghost-active flag for n consecutive owners.
+    std::vector<unsigned int> GetOwnerCylGhostActive(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// @brief Get per-owner count of periodic candidates skipped due to image-branch mismatch.
+    std::vector<unsigned int> GetOwnerCylSkipCount(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// @brief Get per-owner count of force-relevant periodic skips.
+    std::vector<unsigned int> GetOwnerCylSkipPotentialCount(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// @brief Get per-owner contact counts split by real/ghost(+)/ghost(-).
+    void GetOwnerContactGhostCounts(std::vector<int>& real_cnt,
+                                    std::vector<int>& ghost_pos_cnt,
+                                    std::vector<int>& ghost_neg_cnt) const;
+    /// @brief Request an immediate contact detection update (forces kT to refresh contacts next cycle).
+    void RequestContactUpdate();
     /// @brief Get the mass of n consecutive owners.
     /// @param ownerID First owner's ID.
     /// @param n The number of consecutive owners.
@@ -1659,6 +1696,12 @@ class DEMSolver {
     bool sys_initialized = false;
     // Smallest sphere radius (used to let the user know whether the expand factor is sufficient)
     float m_smallest_radius = DEME_HUGE_FLOAT;
+    // Largest sphere radius (for periodic ghost broadphase)
+    float m_largest_radius = 0.f;
+    // Largest triangle radius (for periodic ghost broadphase)
+    float m_largest_tri_radius = 0.f;
+    // Max family extra margin (for periodic ghost broadphase)
+    float m_max_family_extra_margin = 0.f;
 
     // The number of dT steps before it waits for a kT update. The default value means every dT step will wait for a
     // newly produced contact-pair info (from kT) before proceeding.
@@ -1678,6 +1721,23 @@ class DEMSolver {
     // Along which direction the size of the simulation world representable with our integer-based voxels needs to be
     // exactly the same as user-instructed simulation domain size?
     SPATIAL_DIR m_box_dir_length_is_exact = SPATIAL_DIR::NONE;
+
+    // Cylindrical periodicity (particles only)
+    bool m_use_cyl_periodic = false;
+    SPATIAL_DIR m_cyl_periodic_axis = SPATIAL_DIR::NONE;
+    float m_cyl_periodic_start = 0.f;
+    float m_cyl_periodic_span = 0.f;
+    float m_cyl_periodic_min_radius = 0.f;
+    float3 m_cyl_periodic_axis_vec = make_float3(0.f, 0.f, 0.f);
+    float3 m_cyl_periodic_u = make_float3(0.f, 0.f, 0.f);
+    float3 m_cyl_periodic_v = make_float3(0.f, 0.f, 0.f);
+    float3 m_cyl_periodic_start_normal = make_float3(0.f, 0.f, 0.f);
+    float3 m_cyl_periodic_end_normal = make_float3(0.f, 0.f, 0.f);
+    float m_cyl_periodic_cos_span = 1.f;
+    float m_cyl_periodic_sin_span = 0.f;
+    float m_cyl_periodic_cos_half_span = 1.f;
+    float m_cyl_periodic_sin_half_span = 0.f;
+    bool m_cyl_periodic_diag = false;
 
     // If we should ensure that when kernel jitification fails, the line number reported reflexes where error happens
     bool ensure_kernel_line_num = false;
