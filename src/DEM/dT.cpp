@@ -82,6 +82,7 @@ void DEMDynamicThread::packDataPointers() {
     idPatchA.bindDevicePointer(&(granData->idPatchA));
     idPatchB.bindDevicePointer(&(granData->idPatchB));
     contactTypePatch.bindDevicePointer(&(granData->contactTypePatch));
+    contactPatchIsland.bindDevicePointer(&(granData->contactPatchIsland));
 
     familyMaskMatrix.bindDevicePointer(&(granData->familyMasks));
     familyExtraMarginSize.bindDevicePointer(&(granData->familyExtraMarginSize));
@@ -115,8 +116,13 @@ void DEMDynamicThread::packDataPointers() {
 
     // Mesh and analytical-related
     ownerTriMesh.bindDevicePointer(&(granData->ownerTriMesh));
+    ownerMeshConvex.bindDevicePointer(&(granData->ownerMeshConvex));
+    ownerMeshNeverWinner.bindDevicePointer(&(granData->ownerMeshNeverWinner));
     ownerPatchMesh.bindDevicePointer(&(granData->ownerPatchMesh));
     triPatchID.bindDevicePointer(&(granData->triPatchID));
+    triNeighbor1.bindDevicePointer(&(granData->triNeighbor1));
+    triNeighbor2.bindDevicePointer(&(granData->triNeighbor2));
+    triNeighbor3.bindDevicePointer(&(granData->triNeighbor3));
     ownerAnalBody.bindDevicePointer(&(granData->ownerAnalBody));
     relPosNode1.bindDevicePointer(&(granData->relPosNode1));
     relPosNode2.bindDevicePointer(&(granData->relPosNode2));
@@ -245,6 +251,7 @@ void DEMDynamicThread::migrateDataToDevice() {
     contactTypePatch.toDeviceAsync(streamInfo.stream);
     idPatchA.toDeviceAsync(streamInfo.stream);
     idPatchB.toDeviceAsync(streamInfo.stream);
+    contactPatchIsland.toDeviceAsync(streamInfo.stream);
 
     familyMaskMatrix.toDeviceAsync(streamInfo.stream);
     familyExtraMarginSize.toDeviceAsync(streamInfo.stream);
@@ -273,8 +280,13 @@ void DEMDynamicThread::migrateDataToDevice() {
     volumeOwnerBody.toDeviceAsync(streamInfo.stream);
 
     ownerTriMesh.toDeviceAsync(streamInfo.stream);
+    ownerMeshConvex.toDeviceAsync(streamInfo.stream);
+    ownerMeshNeverWinner.toDeviceAsync(streamInfo.stream);
     ownerPatchMesh.toDeviceAsync(streamInfo.stream);
     triPatchID.toDeviceAsync(streamInfo.stream);
+    triNeighbor1.toDeviceAsync(streamInfo.stream);
+    triNeighbor2.toDeviceAsync(streamInfo.stream);
+    triNeighbor3.toDeviceAsync(streamInfo.stream);
     ownerAnalBody.toDeviceAsync(streamInfo.stream);
     relPosNode1.toDeviceAsync(streamInfo.stream);
     relPosNode2.toDeviceAsync(streamInfo.stream);
@@ -343,6 +355,7 @@ void DEMDynamicThread::migrateContactInfoToHost() {
     contactTypePatch.toHost();
     idPatchA.toHost();
     idPatchB.toHost();
+    contactPatchIsland.toHost();
 
     // Contact results
     contactForces.toHost();
@@ -599,6 +612,8 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(alphaZ, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(accSpecified, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(angAccSpecified, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerMeshConvex, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerMeshNeverWinner, nOwnerBodies, 0);
 
     // Resize the family mask `matrix' (in fact it is flattened)
     DEME_DUAL_ARRAY_RESIZE(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
@@ -630,6 +645,9 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(relPosNode2, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(relPosNode3, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(triPatchID, nTriGM, 0);
+    DEME_DUAL_ARRAY_RESIZE(triNeighbor1, nTriGM, NULL_BODYID);
+    DEME_DUAL_ARRAY_RESIZE(triNeighbor2, nTriGM, NULL_BODYID);
+    DEME_DUAL_ARRAY_RESIZE(triNeighbor3, nTriGM, NULL_BODYID);
 
     // Resize to the number of mesh patches
     DEME_DUAL_ARRAY_RESIZE(ownerPatchMesh, nMeshPatches, 0);
@@ -797,8 +815,13 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                                             const std::vector<float3>& input_mesh_obj_xyz,
                                             const std::vector<float4>& input_mesh_obj_rot,
                                             const std::vector<unsigned int>& input_mesh_obj_family,
+                                            const std::vector<notStupidBool_t>& input_mesh_obj_convex,
+                                            const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
                                             const std::vector<unsigned int>& mesh_facet_owner,
                                             const std::vector<bodyID_t>& mesh_facet_patch,
+                                            const std::vector<bodyID_t>& mesh_facet_neighbor1,
+                                            const std::vector<bodyID_t>& mesh_facet_neighbor2,
+                                            const std::vector<bodyID_t>& mesh_facet_neighbor3,
                                             const std::vector<DEMTriangle>& mesh_facets,
                                             const std::vector<bodyID_t>& mesh_patch_owner,
                                             const std::vector<materialsOffset_t>& mesh_patch_materials,
@@ -1192,14 +1215,20 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
             ownerTriMesh[nExistingFacets + k] = owner_offset_for_mesh_obj + this_facet_owner;
             // Tri's patch belonging needs to take into account those patches that are previously added
             triPatchID[nExistingFacets + k] = nExistingMeshPatches + mesh_facet_patch.at(k);
+            triNeighbor1[nExistingFacets + k] = mesh_facet_neighbor1.at(k);
+            triNeighbor2[nExistingFacets + k] = mesh_facet_neighbor2.at(k);
+            triNeighbor3[nExistingFacets + k] = mesh_facet_neighbor3.at(k);
             DEMTriangle this_tri = mesh_facets.at(k);
             relPosNode1[nExistingFacets + k] = this_tri.p1;
             relPosNode2[nExistingFacets + k] = this_tri.p2;
             relPosNode3[nExistingFacets + k] = this_tri.p3;
         }
 
+        const bodyID_t owner_id = owner_offset_for_mesh_obj + i;
         family_t this_family_num = input_mesh_obj_family.at(i);
-        familyID[i + owner_offset_for_mesh_obj] = this_family_num;
+        familyID[owner_id] = this_family_num;
+        ownerMeshConvex[owner_id] = input_mesh_obj_convex.at(i);
+        ownerMeshNeverWinner[owner_id] = input_mesh_obj_never_winner.at(i);
 
         // Cached initial values for wildcards of this mesh is not needed anymore
         m_meshes.back()->ClearWildcards();
@@ -1289,8 +1318,13 @@ void DEMDynamicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpB
                                      const std::vector<float3>& input_mesh_obj_xyz,
                                      const std::vector<float4>& input_mesh_obj_rot,
                                      const std::vector<unsigned int>& input_mesh_obj_family,
+                                     const std::vector<notStupidBool_t>& input_mesh_obj_convex,
+                                     const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
                                      const std::vector<unsigned int>& mesh_facet_owner,
                                      const std::vector<bodyID_t>& mesh_facet_patch,
+                                     const std::vector<bodyID_t>& mesh_facet_neighbor1,
+                                     const std::vector<bodyID_t>& mesh_facet_neighbor2,
+                                     const std::vector<bodyID_t>& mesh_facet_neighbor3,
                                      const std::vector<DEMTriangle>& mesh_facets,
                                      const std::vector<bodyID_t>& mesh_patch_owner,
                                      const std::vector<materialsOffset_t>& mesh_patch_materials,
@@ -1318,9 +1352,10 @@ void DEMDynamicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpB
     // For initialization, owner array offset is 0
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_rot, input_ext_obj_family,
                          input_mesh_objs, input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family,
-                         mesh_facet_owner, mesh_facet_patch, mesh_facets, mesh_patch_owner, mesh_patch_materials,
-                         clump_templates, ext_obj_mass_types, ext_obj_moi_types, ext_obj_comp_num, mesh_obj_mass_types,
-                         mesh_obj_moi_types, mesh_obj_mass_offsets, 0, 0, 0, 0);
+                         input_mesh_obj_convex, input_mesh_obj_never_winner, mesh_facet_owner, mesh_facet_patch,
+                         mesh_facet_neighbor1, mesh_facet_neighbor2, mesh_facet_neighbor3, mesh_facets,
+                         mesh_patch_owner, mesh_patch_materials, clump_templates, ext_obj_mass_types, ext_obj_moi_types,
+                         ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, mesh_obj_mass_offsets, 0, 0, 0, 0);
 
     buildTrackedObjs(input_clump_batches, ext_obj_comp_num, input_mesh_objs, tracked_objs, 0, 0, 0, 0);
 }
@@ -1333,8 +1368,13 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                                              const std::vector<float3>& input_mesh_obj_xyz,
                                              const std::vector<float4>& input_mesh_obj_rot,
                                              const std::vector<unsigned int>& input_mesh_obj_family,
+                                             const std::vector<notStupidBool_t>& input_mesh_obj_convex,
+                                             const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
                                              const std::vector<unsigned int>& mesh_facet_owner,
                                              const std::vector<bodyID_t>& mesh_facet_patch,
+                                             const std::vector<bodyID_t>& mesh_facet_neighbor1,
+                                             const std::vector<bodyID_t>& mesh_facet_neighbor2,
+                                             const std::vector<bodyID_t>& mesh_facet_neighbor3,
                                              const std::vector<DEMTriangle>& mesh_facets,
                                              const std::vector<bodyID_t>& mesh_patch_owner,
                                              const std::vector<materialsOffset_t>& mesh_patch_materials,
@@ -1366,10 +1406,11 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
     // Analytical objects-related arrays should be empty
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_rot, input_ext_obj_family,
                          input_mesh_objs, input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family,
-                         mesh_facet_owner, mesh_facet_patch, mesh_facets, mesh_patch_owner, mesh_patch_materials,
-                         clump_templates, ext_obj_mass_types, ext_obj_moi_types, ext_obj_comp_num, mesh_obj_mass_types,
-                         mesh_obj_moi_types, mesh_obj_mass_offsets, nExistingOwners, nExistingSpheres, nExistingFacets,
-                         nExistingPatches);
+                         input_mesh_obj_convex, input_mesh_obj_never_winner, mesh_facet_owner, mesh_facet_patch,
+                         mesh_facet_neighbor1, mesh_facet_neighbor2, mesh_facet_neighbor3, mesh_facets,
+                         mesh_patch_owner, mesh_patch_materials, clump_templates, ext_obj_mass_types, ext_obj_moi_types,
+                         ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, mesh_obj_mass_offsets,
+                         nExistingOwners, nExistingSpheres, nExistingFacets, nExistingPatches);
 
     // Make changes to tracked objects (potentially add more)
     buildTrackedObjs(input_clump_batches, ext_obj_comp_num, input_mesh_objs, tracked_objs, nExistingOwners,
@@ -2486,6 +2527,7 @@ inline void DEMDynamicThread::contactPatchArrayResize(size_t nPatchPairs) {
     DEME_DUAL_ARRAY_RESIZE(idPatchA, nPatchPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(idPatchB, nPatchPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(contactTypePatch, nPatchPairs, NOT_A_CONTACT);
+    DEME_DUAL_ARRAY_RESIZE(contactPatchIsland, nPatchPairs, NULL_BODYID);
 
     // Re-packing pointers to device now is automatic
     // Sync pointers to device can be delayed... we'll only need to do that before kernel calls
@@ -2551,6 +2593,7 @@ inline void DEMDynamicThread::unpackMyBuffer() {
         swapped = swap_device_buffer(idPatchA, idPatchA_buffer[read_idx]) && swapped;
         swapped = swap_device_buffer(idPatchB, idPatchB_buffer[read_idx]) && swapped;
         swapped = swap_device_buffer(contactTypePatch, contactTypePatch_buffer[read_idx]) && swapped;
+        swapped = swap_device_buffer(contactPatchIsland, contactPatchIsland_buffer[read_idx]) && swapped;
     }
 #endif
     xfer::XferList xu;
@@ -2565,6 +2608,7 @@ inline void DEMDynamicThread::unpackMyBuffer() {
         xu.add(granData->idPatchA, idPatchA_buffer[read_idx].data(), nPatch * sizeof(bodyID_t));
         xu.add(granData->idPatchB, idPatchB_buffer[read_idx].data(), nPatch * sizeof(bodyID_t));
         xu.add(granData->contactTypePatch, contactTypePatch_buffer[read_idx].data(), nPatch * sizeof(contact_t));
+        xu.add(granData->contactPatchIsland, contactPatchIsland_buffer[read_idx].data(), nPatch * sizeof(bodyID_t));
     }
 
     if (!solverFlags.isHistoryless) {
@@ -2593,6 +2637,7 @@ inline void DEMDynamicThread::unpackMyBuffer() {
         kT->granData->pDTOwnedBuffer_idPatchA = idPatchA_buffer[kt_write_buf].data();
         kT->granData->pDTOwnedBuffer_idPatchB = idPatchB_buffer[kt_write_buf].data();
         kT->granData->pDTOwnedBuffer_contactTypePatch = contactTypePatch_buffer[kt_write_buf].data();
+        kT->granData->pDTOwnedBuffer_contactPatchIsland = contactPatchIsland_buffer[kt_write_buf].data();
         if (!solverFlags.isHistoryless) {
             kT->granData->pDTOwnedBuffer_contactMapping = contactMapping_buffer[kt_write_buf].data();
         }
@@ -3185,21 +3230,31 @@ inline void DEMDynamicThread::unpack_impl() {
     //     entry.second.second);
     // }
 
-    // Now for patch-based contacts, we do the same thing. Note the unique types herein will be the same as thosein.
-    cubRunLengthEncode<contact_t, contactPairs_t>(granData->contactTypePatch, existingContactTypes.device(), typeCounts,
+    // Now for patch-based contacts, we do the same thing. Keep primitive type list intact.
+    contact_t* patchTypesDevice = (contact_t*)solverScratchSpace.allocateTempVector(
+        "patchContactTypes", (NUM_SUPPORTED_CONTACT_TYPES + 1) * sizeof(contact_t));
+    cubRunLengthEncode<contact_t, contactPairs_t>(granData->contactTypePatch, patchTypesDevice, typeCounts,
                                                   solverScratchSpace.getDualStructDevice("numExistingTypes"),
                                                   *solverScratchSpace.numContacts, streamInfo.stream,
                                                   solverScratchSpace);
-    cubPrefixScan<contactPairs_t, contactPairs_t>(typeCounts, typeStartOffsetsPatch.device(), m_numExistingTypes,
+    solverScratchSpace.syncDualStructDeviceToHost("numExistingTypes");
+    size_t numPatchTypes = *solverScratchSpace.getDualStructHost("numExistingTypes");
+    cubPrefixScan<contactPairs_t, contactPairs_t>(typeCounts, typeStartOffsetsPatch.device(), numPatchTypes,
                                                   streamInfo.stream, solverScratchSpace);
     typeStartOffsetsPatch.toHost();
+    std::vector<contact_t> patchTypesHost(numPatchTypes);
+    if (numPatchTypes > 0) {
+        DEME_GPU_CALL(cudaMemcpy(patchTypesHost.data(), patchTypesDevice, numPatchTypes * sizeof(contact_t),
+                                 cudaMemcpyDeviceToHost));
+    }
     typeStartCountPatchMap.SetAll({0, 0});
-    for (size_t i = 0; i < m_numExistingTypes; i++) {
-        typeStartCountPatchMap[existingContactTypes[i]] = std::make_pair(
-            typeStartOffsetsPatch[i], (i + 1 < m_numExistingTypes ? typeStartOffsetsPatch[i + 1]
-                                                                  : (contactPairs_t)*solverScratchSpace.numContacts) -
+    for (size_t i = 0; i < numPatchTypes; i++) {
+        typeStartCountPatchMap[patchTypesHost[i]] = std::make_pair(
+            typeStartOffsetsPatch[i], (i + 1 < numPatchTypes ? typeStartOffsetsPatch[i + 1]
+                                                             : (contactPairs_t)*solverScratchSpace.numContacts) -
                                           typeStartOffsetsPatch[i]);
     }
+    solverScratchSpace.finishUsingTempVector("patchContactTypes");
 
     solverScratchSpace.finishUsingTempVector("typeCounts");
     solverScratchSpace.finishUsingDualStruct("numExistingTypes");

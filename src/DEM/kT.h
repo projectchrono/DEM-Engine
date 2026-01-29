@@ -195,10 +195,19 @@ class DEMKinematicThread {
     DualArray<bodyID_t> ownerClumpBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> ownerTriMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> ownerAnalBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // Mesh owner flags (indexed by owner body ID)
+    DualArray<notStupidBool_t> ownerMeshConvex =
+        DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<notStupidBool_t> ownerMeshNeverWinner =
+        DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Mesh patch information: each facet belongs to a patch
     // Patch ID for each triangle facet (maps facet to patch)
     DualArray<bodyID_t> triPatchID = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // Triangle edge neighbors (global triangle indices; NULL_BODYID for boundary)
+    DualArray<bodyID_t> triNeighbor1 = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> triNeighbor2 = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> triNeighbor3 = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The ID that maps this sphere component's geometry-defining parameters, when this component is jitified
     DualArray<clumpComponentOffset_t> clumpComponentOffset =
@@ -224,6 +233,10 @@ class DEMKinematicThread {
     DualArray<contact_t> contactTypePatch = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<contact_t> previous_contactTypePatch =
         DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // Island label per patch contact (winner-side primitive label)
+    DualArray<bodyID_t> contactPatchIsland = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> previous_contactPatchIsland =
+        DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Mapping array: maps from primitive-based pair index to patch-based pair index
     // Same length as primitive pair arrays (idPrimitiveA/B). For each primitive pair,
@@ -340,8 +353,13 @@ class DEMKinematicThread {
     void populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                               const std::vector<unsigned int>& input_ext_obj_family,
                               const std::vector<unsigned int>& input_mesh_obj_family,
+                              const std::vector<notStupidBool_t>& input_mesh_obj_convex,
+                              const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
                               const std::vector<unsigned int>& input_mesh_facet_owner,
                               const std::vector<bodyID_t>& input_mesh_facet_patch,
+                              const std::vector<bodyID_t>& input_mesh_facet_neighbor1,
+                              const std::vector<bodyID_t>& input_mesh_facet_neighbor2,
+                              const std::vector<bodyID_t>& input_mesh_facet_neighbor3,
                               const std::vector<DEMTriangle>& input_mesh_facets,
                               const ClumpTemplateFlatten& clump_templates,
                               const std::vector<unsigned int>& ext_obj_comp_num,
@@ -354,8 +372,13 @@ class DEMKinematicThread {
     void initGPUArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                        const std::vector<unsigned int>& input_ext_obj_family,
                        const std::vector<unsigned int>& input_mesh_obj_family,
+                       const std::vector<notStupidBool_t>& input_mesh_obj_convex,
+                       const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
                        const std::vector<unsigned int>& input_mesh_facet_owner,
                        const std::vector<bodyID_t>& input_mesh_facet_patch,
+                       const std::vector<bodyID_t>& input_mesh_facet_neighbor1,
+                       const std::vector<bodyID_t>& input_mesh_facet_neighbor2,
+                       const std::vector<bodyID_t>& input_mesh_facet_neighbor3,
                        const std::vector<DEMTriangle>& input_mesh_facets,
                        const std::vector<unsigned int>& ext_obj_comp_num,
                        const std::vector<notStupidBool_t>& family_mask_matrix,
@@ -366,8 +389,13 @@ class DEMKinematicThread {
     void updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                const std::vector<unsigned int>& input_ext_obj_family,
                                const std::vector<unsigned int>& input_mesh_obj_family,
+                               const std::vector<notStupidBool_t>& input_mesh_obj_convex,
+                               const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
                                const std::vector<unsigned int>& input_mesh_facet_owner,
                                const std::vector<bodyID_t>& input_mesh_facet_patch,
+                               const std::vector<bodyID_t>& input_mesh_facet_neighbor1,
+                               const std::vector<bodyID_t>& input_mesh_facet_neighbor2,
+                               const std::vector<bodyID_t>& input_mesh_facet_neighbor3,
                                const std::vector<DEMTriangle>& input_mesh_facets,
                                const std::vector<unsigned int>& ext_obj_comp_num,
                                const std::vector<notStupidBool_t>& family_mask_matrix,

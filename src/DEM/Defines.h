@@ -363,6 +363,7 @@ struct DEMDataDT {
     bodyID_t* idPatchA;
     bodyID_t* idPatchB;
     contact_t* contactTypePatch;
+    bodyID_t* contactPatchIsland;
     contactPairs_t* contactMapping;
 
     // Family mask
@@ -388,7 +389,12 @@ struct DEMDataDT {
     bodyID_t* ownerTriMesh;
     bodyID_t* ownerPatchMesh;
     bodyID_t* ownerAnalBody;
+    notStupidBool_t* ownerMeshConvex;
+    notStupidBool_t* ownerMeshNeverWinner;
     bodyID_t* triPatchID;
+    bodyID_t* triNeighbor1;
+    bodyID_t* triNeighbor2;
+    bodyID_t* triNeighbor3;
     float3* relPosNode1;
     float3* relPosNode2;
     float3* relPosNode3;
@@ -464,7 +470,12 @@ struct DEMDataKT {
     clumpComponentOffsetExt_t* clumpComponentOffsetExt;
     bodyID_t* ownerTriMesh;
     bodyID_t* ownerAnalBody;
+    notStupidBool_t* ownerMeshConvex;
+    notStupidBool_t* ownerMeshNeverWinner;
     bodyID_t* triPatchID;
+    bodyID_t* triNeighbor1;
+    bodyID_t* triNeighbor2;
+    bodyID_t* triNeighbor3;
     float3* relPosNode1;
     float3* relPosNode2;
     float3* relPosNode3;
@@ -486,6 +497,8 @@ struct DEMDataKT {
     bodyID_t* previous_idPatchB;
     contact_t* contactTypePatch;
     contact_t* previous_contactTypePatch;
+    bodyID_t* contactPatchIsland;
+    bodyID_t* previous_contactPatchIsland;
     contactPairs_t* geomToPatchMap;
 
     // data pointers that is kT's transfer destination
@@ -500,6 +513,7 @@ struct DEMDataKT {
     bodyID_t* pDTOwnedBuffer_idPatchA = nullptr;
     bodyID_t* pDTOwnedBuffer_idPatchB = nullptr;
     contact_t* pDTOwnedBuffer_contactTypePatch = nullptr;
+    bodyID_t* pDTOwnedBuffer_contactPatchIsland = nullptr;
     contactPairs_t* pDTOwnedBuffer_geomToPatchMap = nullptr;
 
     // The collection of pointers to DEM template arrays such as radiiSphere, still useful when there are template info

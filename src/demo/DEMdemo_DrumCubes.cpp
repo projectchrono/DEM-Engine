@@ -43,6 +43,8 @@ int main() {
     // Load cube mesh template (12 triangles) and scale to 10 mm
     auto cube_template = DEMSim.LoadMeshType((GET_DATA_PATH() / "mesh/cube.obj").string(), mat_type_cube, true, false);
     cube_template->Scale(cube_size);
+    cube_template->SetConvex(true);
+    cube_template->SetNeverWinner(true);
 
     // Drum definition
     float3 CylCenter = make_float3(0, 0, 0);

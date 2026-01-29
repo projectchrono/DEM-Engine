@@ -94,8 +94,8 @@ int main() {
 
     // --------------------- Particle settings block ---------------------
     // Mesh file can be .stl or .obj (path is relative to data/mesh).
-    const path particle_mesh_file = GET_DATA_PATH() / "mesh" / "cube.obj"; // "simpleTriangleShape4mm.stl"
-    const float particle_mesh_scale = mm_to_m * 5.0f; // 1.0f for STLs in mm size
+    const path particle_mesh_file = GET_DATA_PATH() / "mesh" / "cross_fine.stl"; // "simpleTriangleShape4mm.stl"
+    const float particle_mesh_scale = mm_to_m * 0.5f; // 1.0f for STLs in mm size
     const unsigned int target_particles = 5000;
     // -------------------------------------------------------------------
 
@@ -141,11 +141,32 @@ int main() {
     auto cap_tracker = DEMSim.Track(end_caps);
 
     // Sample particles inside the cylindrical volume with a small wall clearance.
-    const float sample_radius = drum_inner_radius - wall_clearance - tri_radius;
-    const float sample_halfheight = drum_height / 2.0f - wall_clearance - tri_radius;
+    const float r_sphere = tri_radius;  // = 0.5 * tri_diag
+    // AABB clearance for a cylinder aligned with z:
+    // radial clearance uses the half-diagonal in XY; z-clearance uses half-height in Z.
+    const float r_xy_aabb = 0.5f * std::sqrt(tri_dims.x * tri_dims.x + tri_dims.y * tri_dims.y);
+    const float r_z_aabb  = 0.5f * tri_dims.z;
+    // Spacing of the HCP lattice (center-to-center). Keep conservative spacing (uses tri_diag).
+    // Clearance model only changes usable container dimensions.
     HCPSampler sampler(tri_diag * 1.01f);
-    auto candidate_pos =
-        sampler.SampleCylinderZ(make_float3(0, 0, drum_height / 2.0f), sample_radius, sample_halfheight);
+    auto sample_with_clearance = [&](float r_xy, float r_z) {
+        const float sample_radius     = drum_inner_radius - wall_clearance - r_xy;
+        const float sample_halfheight = drum_height * 0.5f - wall_clearance - r_z;
+        // Guard against negative dimensions
+        if (sample_radius <= 0.f || sample_halfheight <= 0.f) {
+            return std::vector<float3>{};
+        }
+
+        return sampler.SampleCylinderZ(make_float3(0, 0, drum_height / 2.0f), sample_radius, sample_halfheight);
+    };
+    // Generate both candidate sets
+    auto cand_sphere = sample_with_clearance(r_sphere, r_sphere);
+    auto cand_aabb   = sample_with_clearance(r_xy_aabb, r_z_aabb);
+    // Pick denser (more points). If equal, prefer sphere for robustness.
+    bool use_aabb = cand_aabb.size() > cand_sphere.size();
+    auto& candidate_pos = use_aabb ? cand_aabb : cand_sphere;
+    std::cout << "Sampling clearance mode: " << (use_aabb ? "AABB" : "Sphere")
+              << " (AABB=" << cand_aabb.size() << ", Sphere=" << cand_sphere.size() << ")\n";
     if (candidate_pos.size() < target_particles) {
         DEME_WARNING("Sampler produced fewer points (%zu) than requested (%u). Using all generated points.",
                      candidate_pos.size(), target_particles);

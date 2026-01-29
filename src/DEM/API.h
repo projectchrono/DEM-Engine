@@ -1905,6 +1905,8 @@ class DEMSolver {
     std::vector<float3> m_input_mesh_obj_xyz;
     std::vector<float4> m_input_mesh_obj_rot;
     std::vector<unsigned int> m_input_mesh_obj_family;
+    std::vector<notStupidBool_t> m_input_mesh_obj_convex;
+    std::vector<notStupidBool_t> m_input_mesh_obj_never_winner;
 
     // Processed unique family prescription info
     std::vector<familyPrescription_t> m_unique_family_prescription;
@@ -1940,6 +1942,10 @@ class DEMSolver {
     std::vector<bodyID_t> m_mesh_facet_owner;
     // Patch ID for each mesh facet, flattened
     std::vector<bodyID_t> m_mesh_facet_patch;
+    // Per-facet edge neighbors (global triangle indices, NULL_BODYID if boundary)
+    std::vector<bodyID_t> m_mesh_facet_neighbor1;
+    std::vector<bodyID_t> m_mesh_facet_neighbor2;
+    std::vector<bodyID_t> m_mesh_facet_neighbor3;
     // Three nodes of each triangle, flattened
     std::vector<DEMTriangle> m_mesh_facets;
 

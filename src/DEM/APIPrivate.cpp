@@ -13,12 +13,140 @@
 #include <thread>
 #include <chrono>
 #include <cstring>
+#include <cstdint>
+#include <cmath>
 #include <limits>
 #include <algorithm>
 #include <map>
 #include <tuple>
+#include <unordered_map>
+#include <array>
 
 namespace deme {
+
+namespace {
+
+struct EdgeInfo {
+    size_t tri = 0;
+    int edge = 0;
+};
+
+struct QuantKey3 {
+    int64_t x, y, z;
+    bool operator==(const QuantKey3& o) const noexcept { return x == o.x && y == o.y && z == o.z; }
+};
+struct QuantKey3Hash {
+    size_t operator()(const QuantKey3& k) const noexcept {
+        size_t h1 = std::hash<int64_t>{}(k.x);
+        size_t h2 = std::hash<int64_t>{}(k.y);
+        size_t h3 = std::hash<int64_t>{}(k.z);
+        size_t h = h1;
+        h ^= h2 + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+        h ^= h3 + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+        return h;
+    }
+};
+
+inline uint64_t makeEdgeKey(int a, int b) {
+    const uint32_t lo = static_cast<uint32_t>(std::min(a, b));
+    const uint32_t hi = static_cast<uint32_t>(std::max(a, b));
+    return (static_cast<uint64_t>(lo) << 32) | static_cast<uint64_t>(hi);
+}
+
+static inline int64_t quantize(double v, double eps) {
+    return static_cast<int64_t>(std::llround(v / eps));
+}
+
+std::vector<std::array<bodyID_t, 3>> buildTriangleEdgeNeighbors(const std::vector<int3>& face_v_indices,
+                                                                 const std::vector<float3>& vertices) {
+    const size_t n_faces = face_v_indices.size();
+    std::vector<std::array<bodyID_t, 3>> neighbors(n_faces, {NULL_BODYID, NULL_BODYID, NULL_BODYID});
+    if (n_faces == 0) {
+        return neighbors;
+    }
+
+    std::vector<size_t> canon;
+    if (!vertices.empty()) {
+        double minx = vertices[0].x, miny = vertices[0].y, minz = vertices[0].z;
+        double maxx = minx, maxy = miny, maxz = minz;
+        for (const auto& v : vertices) {
+            minx = std::min(minx, (double)v.x);
+            miny = std::min(miny, (double)v.y);
+            minz = std::min(minz, (double)v.z);
+            maxx = std::max(maxx, (double)v.x);
+            maxy = std::max(maxy, (double)v.y);
+            maxz = std::max(maxz, (double)v.z);
+        }
+        const double dx = maxx - minx, dy = maxy - miny, dz = maxz - minz;
+        const double diag = std::sqrt(dx * dx + dy * dy + dz * dz);
+        const double eps = std::max(diag * 1e-9, 1e-12);
+
+        std::unordered_map<QuantKey3, size_t, QuantKey3Hash> rep;
+        rep.reserve(vertices.size());
+        canon.assign(vertices.size(), static_cast<size_t>(-1));
+        size_t next_id = 0;
+        for (size_t i = 0; i < vertices.size(); ++i) {
+            const auto& v = vertices[i];
+            QuantKey3 key{quantize(v.x, eps), quantize(v.y, eps), quantize(v.z, eps)};
+            auto it = rep.find(key);
+            if (it == rep.end()) {
+                rep.emplace(key, next_id);
+                canon[i] = next_id;
+                next_id++;
+            } else {
+                canon[i] = it->second;
+            }
+        }
+    }
+
+    std::unordered_map<uint64_t, std::vector<EdgeInfo>> edge_map;
+    edge_map.reserve(n_faces * 3);
+
+    for (size_t i = 0; i < n_faces; ++i) {
+        const int3& face = face_v_indices[i];
+        const int v0_raw = face.x;
+        const int v1_raw = face.y;
+        const int v2_raw = face.z;
+        if (v0_raw < 0 || v1_raw < 0 || v2_raw < 0) {
+            continue;
+        }
+        int v0 = v0_raw;
+        int v1 = v1_raw;
+        int v2 = v2_raw;
+        if (!canon.empty()) {
+            if (static_cast<size_t>(v0_raw) >= canon.size() || static_cast<size_t>(v1_raw) >= canon.size() ||
+                static_cast<size_t>(v2_raw) >= canon.size()) {
+                continue;
+            }
+            v0 = static_cast<int>(canon[static_cast<size_t>(v0_raw)]);
+            v1 = static_cast<int>(canon[static_cast<size_t>(v1_raw)]);
+            v2 = static_cast<int>(canon[static_cast<size_t>(v2_raw)]);
+        }
+        if (v0 == v1 || v1 == v2 || v2 == v0) {
+            continue;
+        }
+        const uint64_t e0 = makeEdgeKey(v0, v1);
+        const uint64_t e1 = makeEdgeKey(v1, v2);
+        const uint64_t e2 = makeEdgeKey(v2, v0);
+        edge_map[e0].push_back(EdgeInfo{i, 0});
+        edge_map[e1].push_back(EdgeInfo{i, 1});
+        edge_map[e2].push_back(EdgeInfo{i, 2});
+    }
+
+    for (const auto& entry : edge_map) {
+        const auto& info = entry.second;
+        if (info.size() == 2) {
+            const EdgeInfo& a = info[0];
+            const EdgeInfo& b = info[1];
+            neighbors[a.tri][a.edge] = static_cast<bodyID_t>(b.tri);
+            neighbors[b.tri][b.edge] = static_cast<bodyID_t>(a.tri);
+        }
+    }
+
+    return neighbors;
+}
+
+}  // namespace
 
 void DEMSolver::assertSysInit(const std::string& method_name) {
     if (!sys_initialized) {
@@ -840,17 +968,38 @@ void DEMSolver::preprocessTriangleObjs() {
         m_input_mesh_obj_xyz.push_back(mesh_obj->init_pos);
         m_input_mesh_obj_rot.push_back(mesh_obj->init_oriQ);
         m_input_mesh_obj_family.push_back(mesh_obj->family_code);
+        m_input_mesh_obj_convex.push_back(mesh_obj->is_convex ? 1 : 0);
+        m_input_mesh_obj_never_winner.push_back(mesh_obj->never_winner ? 1 : 0);
         m_mesh_facet_owner.insert(m_mesh_facet_owner.end(), mesh_obj->GetNumTriangles(), thisMeshObj);
 
-        // Initialize patch IDs if not already set (default: all facets in patch 0)
-        if (!mesh_obj->patches_explicitly_set && mesh_obj->m_patch_ids.empty()) {
-            mesh_obj->SetPatchIDs({0});
+        const bodyID_t tri_offset = static_cast<bodyID_t>(m_mesh_facets.size());
+        const auto local_neighbors = buildTriangleEdgeNeighbors(mesh_obj->m_face_v_indices, mesh_obj->m_vertices);
+
+        // Force single-patch semantics: one patch per mesh (all facets in patch 0)
+        if (mesh_obj->patches_explicitly_set || mesh_obj->GetNumPatches() > 1) {
+            DEME_WARNING(
+                "Mesh patch IDs were provided or computed, but single-patch mode is enabled; all facets will be "
+                "assigned to one patch.");
+        }
+        if (mesh_obj->GetNumTriangles() > 0) {
+            mesh_obj->m_patch_ids.assign(mesh_obj->GetNumTriangles(), 0);
+        } else {
+            mesh_obj->m_patch_ids.clear();
+        }
+        mesh_obj->nPatches = 1;
+        mesh_obj->patches_explicitly_set = true;
+        mesh_obj->m_patch_locations.clear();
+        mesh_obj->patch_locations_explicitly_set = false;
+        if (mesh_obj->materials.size() != 1 && !mesh_obj->materials.empty()) {
+            auto mat = mesh_obj->materials[0];
+            mesh_obj->materials.assign(1, mat);
+            DEME_WARNING("Mesh provided multiple patch materials; single-patch mode keeps only the first material.");
         }
 
         // Populate patch owner and material arrays (one entry per patch in this mesh)
         // Note patch_id in a mesh is always 0-based, and contiguous
         std::vector<materialsOffset_t> patch_materials(mesh_obj->GetNumPatches());
-        for (size_t facet_idx = 0; facet_idx < mesh_obj->GetNumPatches(); facet_idx++) {
+        for (size_t facet_idx = 0; facet_idx < mesh_obj->GetNumTriangles(); facet_idx++) {
             // patch_id is per-triangle
             bodyID_t patch_id = mesh_obj->m_patch_ids.at(facet_idx);
             // Assign this facet's material to its patch (will overwrite for each facet, but they should be consistent
@@ -886,6 +1035,11 @@ void DEMSolver::preprocessTriangleObjs() {
                 }
             }
             m_mesh_facets.push_back(tri);
+
+            const auto& nb = local_neighbors[i];
+            m_mesh_facet_neighbor1.push_back(nb[0] == NULL_BODYID ? NULL_BODYID : nb[0] + tri_offset);
+            m_mesh_facet_neighbor2.push_back(nb[1] == NULL_BODYID ? NULL_BODYID : nb[1] + tri_offset);
+            m_mesh_facet_neighbor3.push_back(nb[2] == NULL_BODYID ? NULL_BODYID : nb[2] + tri_offset);
         }
         thisLoadPatchCount += mesh_obj->GetNumPatches();
 
@@ -1345,8 +1499,10 @@ void DEMSolver::initializeGPUArrays() {
         // Analytical objects' initial stats
         m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
         // Meshed objects' initial stats
-        cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner,
-        m_mesh_facet_patch, m_mesh_facets, m_mesh_patch_owner, m_mesh_patch_materials,
+        cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family,
+        m_input_mesh_obj_convex, m_input_mesh_obj_never_winner, m_mesh_facet_owner, m_mesh_facet_patch,
+        m_mesh_facet_neighbor1, m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets, m_mesh_patch_owner,
+        m_mesh_patch_materials,
         // Clump template name mapping
         m_template_number_name_map,
         // Clump template info (mass, sphere components, materials etc.)
@@ -1368,7 +1524,8 @@ void DEMSolver::initializeGPUArrays() {
         // Analytical objects' initial stats
         m_input_ext_obj_family,
         // Meshed objects' initial stats
-        m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facets,
+        m_input_mesh_obj_family, m_input_mesh_obj_convex, m_input_mesh_obj_never_winner, m_mesh_facet_owner,
+        m_mesh_facet_patch, m_mesh_facet_neighbor1, m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets,
         // Analytical obj physics properties
         m_ext_obj_comp_num,
         // Family mask
@@ -1398,8 +1555,10 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // Analytical objects' initial stats
         m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
         // Meshed objects' initial stats
-        cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner,
-        m_mesh_facet_patch, m_mesh_facets, m_mesh_patch_owner, m_mesh_patch_materials,
+        cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family,
+        m_input_mesh_obj_convex, m_input_mesh_obj_never_winner, m_mesh_facet_owner, m_mesh_facet_patch,
+        m_mesh_facet_neighbor1, m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets, m_mesh_patch_owner,
+        m_mesh_patch_materials,
         // Clump template info (mass, sphere components, materials etc.)
         flattened_clump_templates,
         // Analytical obj physics properties
@@ -1420,7 +1579,8 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // Analytical objects' initial stats
         m_input_ext_obj_family,
         // Meshed objects' initial stats
-        m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facets,
+        m_input_mesh_obj_family, m_input_mesh_obj_convex, m_input_mesh_obj_never_winner, m_mesh_facet_owner,
+        m_mesh_facet_patch, m_mesh_facet_neighbor1, m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets,
         // Analytical obj physics properties
         m_ext_obj_comp_num,
         // Family mask

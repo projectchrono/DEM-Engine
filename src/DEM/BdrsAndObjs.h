@@ -370,6 +370,10 @@ class DEMMesh : public DEMInitializer {
     // If true, when the mesh is initialized into the system, it will re-order the nodes of each triangle so that the
     // normals derived from right-hand-rule are the same as the normals in the mesh file
     bool use_mesh_normals = false;
+    // If true, this mesh is treated as convex for contact island reduction.
+    bool is_convex = false;
+    // If true, this mesh is never selected as the winner side for island labeling.
+    bool never_winner = false;
 
     DEMMesh() { obj_type = OWNER_TYPE::MESH; }
     DEMMesh(std::string input_file) {
@@ -407,6 +411,14 @@ class DEMMesh : public DEMInitializer {
     /// Instruct that when the mesh is initialized into the system, it will re-order the nodes of each triangle so that
     /// the normals derived from right-hand-rule are the same as the normals in the mesh file
     void UseNormals(bool use = true) { use_mesh_normals = use; }
+    /// Mark this mesh as convex for contact reduction purposes.
+    void SetConvex(bool convex = true) { is_convex = convex; }
+    /// Query whether this mesh is marked convex.
+    bool IsConvex() const { return is_convex; }
+    /// Prevent this mesh from ever being chosen as the winner side in island labeling.
+    void SetNeverWinner(bool never = true) { never_winner = never; }
+    /// Query whether this mesh is marked as never-winner.
+    bool IsNeverWinner() const { return never_winner; }
 
     /// Access the n-th triangle in mesh
     DEMTriangle GetTriangle(size_t index) const {  // No need to wrap (for Shlok)

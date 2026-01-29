@@ -2389,6 +2389,8 @@ void DEMSolver::ReleaseFlattenedArrays() {
     deallocate_array(m_input_mesh_obj_xyz);
     deallocate_array(m_input_mesh_obj_rot);
     deallocate_array(m_input_mesh_obj_family);
+    deallocate_array(m_input_mesh_obj_convex);
+    deallocate_array(m_input_mesh_obj_never_winner);
 
     deallocate_array(m_unique_family_prescription);
     deallocate_array(m_input_clump_family);
@@ -2404,6 +2406,9 @@ void DEMSolver::ReleaseFlattenedArrays() {
 
     deallocate_array(m_mesh_facet_owner);
     deallocate_array(m_mesh_facet_patch);
+    deallocate_array(m_mesh_facet_neighbor1);
+    deallocate_array(m_mesh_facet_neighbor2);
+    deallocate_array(m_mesh_facet_neighbor3);
     deallocate_array(m_mesh_facets);
     deallocate_array(m_mesh_patch_owner);
     deallocate_array(m_mesh_patch_materials);
