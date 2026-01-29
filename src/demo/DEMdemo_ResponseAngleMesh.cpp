@@ -16,6 +16,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cctype>
 #include <filesystem>
 #include <random>
 #include <limits>
@@ -27,34 +28,34 @@ using namespace std::filesystem;
 
 namespace {
 
-/// Load an STL mesh, scale it, attach material and register it as a template.
-std::shared_ptr<DEMMesh> LoadStlTemplate(DEMSolver& sim,
-                                         const path& file,
-                                         const std::shared_ptr<DEMMaterial>& mat,
-                                         float scale) {
+std::string ToLower(std::string s) {
+    for (char& c : s) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return s;
+}
+
+/// Load a mesh (STL or OBJ), scale it, attach material and register it as a template.
+std::shared_ptr<DEMMesh> LoadMeshTemplate(DEMSolver& sim,
+                                          const path& file,
+                                          const std::shared_ptr<DEMMaterial>& mat,
+                                          float scale) {
     DEMMesh mesh;
-    bool ok = mesh.LoadSTLMesh(file.string());
+    std::string ext = ToLower(file.extension().string());
+    bool ok = false;
+    if (ext == ".stl") {
+        ok = mesh.LoadSTLMesh(file.string());
+    } else if (ext == ".obj") {
+        ok = mesh.LoadWavefrontMesh(file.string());
+    } else {
+        DEME_ERROR("Unsupported mesh format: %s (only .stl or .obj)", ext.c_str());
+    }
     if (!ok) {
-        DEME_ERROR("Failed to load STL mesh template %s", file.string().c_str());
+        DEME_ERROR("Failed to load mesh template %s", file.string().c_str());
     }
     mesh.SetMaterial(mat);
     mesh.Scale(scale);
     return sim.LoadMeshType(mesh);
-}
-
-/// Load an STL mesh, scale it, attach material and place it directly in the scene.
-std::shared_ptr<DEMMesh> LoadStlMesh(DEMSolver& sim,
-                                     const path& file,
-                                     const std::shared_ptr<DEMMaterial>& mat,
-                                     float scale) {
-    DEMMesh mesh;
-    bool ok = mesh.LoadSTLMesh(file.string());
-    if (!ok) {
-        DEME_ERROR("Failed to load STL mesh %s", file.string().c_str());
-    }
-    mesh.SetMaterial(mat);
-    mesh.Scale(scale);
-    return sim.AddMesh(mesh);
 }
 
 std::pair<float3, float3> ComputeBounds(const std::vector<float3>& vertices) {
@@ -82,18 +83,23 @@ int main() {
     DEMSim.SetMeshUniversalContact(true);
     const float mm_to_m = 0.001f;
     const float drum_inner_radius = 0.1f;  // 200 mm diameter
-    const float wall_clearance = 0.002f;   // leave a small gap to the mantle
+    const float wall_clearance = 0.001f;   // leave a small gap to the mantle
     const float rpm = 40.0f;
     const float drum_ang_vel = rpm * 2.0f * PI / 60.0f;
 
     auto mat_type_particle =
-        DEMSim.LoadMaterial({{"E", 1e6}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.01}});
-    auto mat_type_drum = DEMSim.LoadMaterial({{"E", 2e6}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.01}});
+        DEMSim.LoadMaterial({{"E", 1e6}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.00}});
+    auto mat_type_drum = DEMSim.LoadMaterial({{"E", 2e6}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.00}});
     DEMSim.SetMaterialPropertyPair("mu", mat_type_particle, mat_type_drum, 0.5);
 
-    // Load particle mesh template from STL (approx. 4 mm triangular prism)
-    path tri_path = GET_DATA_PATH() / "mesh" / "simpleTriangleShape4mm.stl";
-    auto tri_template = LoadStlTemplate(DEMSim, tri_path, mat_type_particle, mm_to_m);
+    // --------------------- Particle settings block ---------------------
+    // Mesh file can be .stl or .obj (path is relative to data/mesh).
+    const path particle_mesh_file = GET_DATA_PATH() / "mesh" / "cube.obj"; // "simpleTriangleShape4mm.stl"
+    const float particle_mesh_scale = mm_to_m * 5.0f; // 1.0f for STLs in mm size
+    const unsigned int target_particles = 5000;
+    // -------------------------------------------------------------------
+
+    auto tri_template = LoadMeshTemplate(DEMSim, particle_mesh_file, mat_type_particle, particle_mesh_scale);
     auto [tri_min, tri_max] = ComputeBounds(tri_template->GetCoordsVertices());
     const float3 tri_dims = tri_max - tri_min;
     const float tri_diag = std::sqrt(tri_dims.x * tri_dims.x + tri_dims.y * tri_dims.y + tri_dims.z * tri_dims.z);
@@ -105,50 +111,41 @@ int main() {
     tri_template->ComputeMassProperties(tri_volume, tri_center, tri_inertia);
     const float particle_mass = static_cast<float>(tri_volume * particle_density);
     const float3 particle_moi = tri_inertia * particle_density;
-    std::cout << "Particle STL volume (m^3): " << tri_volume << std::endl;
-    std::cout << "Particle STL MOI (unit density, CoM): " << tri_inertia.x << ", " << tri_inertia.y << ", "
+    std::cout << "Particle volume (m^3): " << tri_volume << ", mass (kg): "<< particle_mass << std::endl;
+    std::cout << "Particle MOI (unit density, CoM): " << tri_inertia.x << ", " << tri_inertia.y << ", "
               << tri_inertia.z << std::endl;
     const double cube_vol = std::pow(4.0e-3, 3);
-    std::cout << "Particle mass (kg): " << particle_mass << std::endl;
 
-    // Load drum mantle from STL; STL units are mm with z in [0, 100]
-    path drum_path = GET_DATA_PATH() / "mesh" / "drum.stl";
-    auto drum_mesh = LoadStlMesh(DEMSim, drum_path, mat_type_drum, mm_to_m);
-    auto [drum_min, drum_max] = ComputeBounds(drum_mesh->GetCoordsVertices());
-    const float drum_height = drum_max.z - drum_min.z;
+    // Analytical drum mantle (planar contact cylinder) with end caps.
+    const float drum_height = 0.1f;
+    const float drum_mass = 1.0f;
+    const float IZZ = drum_mass * drum_inner_radius * drum_inner_radius / 2.0f;
+    const float IYY = (drum_mass / 12.0f) * (3.0f * drum_inner_radius * drum_inner_radius + drum_height * drum_height);
     unsigned int drum_family = 100;
-    drum_mesh->SetFamily(drum_family);
-    const float drum_density = 2600.0f;
-    double drum_volume = 0.0;
-    float3 drum_center = make_float3(0, 0, 0);
-    float3 drum_inertia = make_float3(0, 0, 0);
-    drum_mesh->ComputeMassProperties(drum_volume, drum_center, drum_inertia);
-    const float drum_mass = static_cast<float>(drum_volume * drum_density);
-    drum_mesh->SetMass(drum_mass);
-    drum_mesh->SetMOI(drum_inertia * drum_density);
-    std::cout << "Drum STL volume (m^3): " << drum_volume << std::endl;
-    std::cout << "Drum STL MOI (unit density, CoM): " << drum_inertia.x << ", " << drum_inertia.y << ", "
-              << drum_inertia.z << std::endl;
-    std::cout << "Drum mass (kg): " << drum_mass << std::endl;
+
+    auto drum = DEMSim.AddExternalObject();
+    drum->AddPlanarContactCylinder(make_float3(0, 0, drum_height / 2.0f), make_float3(0, 0, 1), drum_inner_radius,
+                                   mat_type_drum, ENTITY_NORMAL_INWARD);
+    drum->SetFamily(drum_family);
+    drum->SetMass(drum_mass);
+    drum->SetMOI(make_float3(IYY, IYY, IZZ));
     DEMSim.SetFamilyPrescribedAngVel(drum_family, "0", "0", to_string_with_precision(drum_ang_vel));
 
-    // Add top and bottom planes at z = 0 and z = 0.1 m. They rotate with the drum family (axis-aligned so rotation
-    // does not change their normals).
+    // Add top and bottom planes at z = 0 and z = drum_height. They rotate with the drum family.
     auto end_caps = DEMSim.AddExternalObject();
-    end_caps->AddPlane(make_float3(0, 0, drum_max.z), make_float3(0, 0, -1), mat_type_drum);
-    end_caps->AddPlane(make_float3(0, 0, drum_min.z), make_float3(0, 0, 1), mat_type_drum);
+    end_caps->AddPlane(make_float3(0, 0, drum_height), make_float3(0, 0, -1), mat_type_drum);
+    end_caps->AddPlane(make_float3(0, 0, 0), make_float3(0, 0, 1), mat_type_drum);
     end_caps->SetFamily(drum_family);
 
-    auto drum_tracker = DEMSim.Track(drum_mesh);
+    auto drum_tracker = DEMSim.Track(drum);
     auto cap_tracker = DEMSim.Track(end_caps);
 
-    // Sample 5000 particles inside the cylindrical volume with a small wall clearance.
-    const unsigned int target_particles = 5000;
+    // Sample particles inside the cylindrical volume with a small wall clearance.
     const float sample_radius = drum_inner_radius - wall_clearance - tri_radius;
     const float sample_halfheight = drum_height / 2.0f - wall_clearance - tri_radius;
-    HCPSampler sampler(tri_diag * 1.05f);
+    HCPSampler sampler(tri_diag * 1.01f);
     auto candidate_pos =
-        sampler.SampleCylinderZ(make_float3(0, 0, drum_min.z + drum_height / 2.0f), sample_radius, sample_halfheight);
+        sampler.SampleCylinderZ(make_float3(0, 0, drum_height / 2.0f), sample_radius, sample_halfheight);
     if (candidate_pos.size() < target_particles) {
         DEME_WARNING("Sampler produced fewer points (%zu) than requested (%u). Using all generated points.",
                      candidate_pos.size(), target_particles);
@@ -166,7 +163,8 @@ int main() {
         tri->SetMOI(particle_moi);
         tri->SetInitQuat(make_float4(0.f, 0.f, 0.f, 1.0f));
     }
-    std::cout << "Placed " << candidate_pos.size() << " STL particles inside the drum." << std::endl;
+    const float total_particle_mass = particle_mass * candidate_pos.size();
+    std::cout << "Placed " << candidate_pos.size() << " particles with a mass of "<< total_particle_mass <<" kg inside the drum." <<std::endl;
 
     auto max_v_finder = DEMSim.CreateInspector("max_absv");
     float max_v;
@@ -177,7 +175,10 @@ int main() {
     DEMSim.SetGPUTimersEnabled(true);
     DEMSim.SetGravitationalAcceleration(make_float3(0, -9.81, 0));
     DEMSim.SetExpandSafetyType("auto");
-    DEMSim.SetExpandSafetyAdder(drum_ang_vel * drum_inner_radius);
+    const float vmax_grav = std::sqrt(2.0f * 9.81f * drum_inner_radius);
+    const float vmax_rot = drum_ang_vel * drum_inner_radius;
+    const float vmax = (vmax_grav > vmax_rot) ? vmax_grav : vmax_rot;
+    DEMSim.SetExpandSafetyAdder(vmax);
     DEMSim.Initialize();
 
     path out_dir = current_path();
