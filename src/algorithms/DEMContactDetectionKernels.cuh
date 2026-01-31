@@ -322,7 +322,9 @@ __global__ void computeGroupWinners(const contact_t* groupTypes,
         forceSingleIsland[myID] = single_island ? 1 : 0;
 
         notStupidBool_t pickA = 0;
-        if (A_never && !B_never) {
+        if (A_never && B_never) {
+            pickA = 0;  // deterministic: prefer B when both are never-winner
+        } else if (A_never && !B_never) {
             pickA = 0;
         } else if (B_never && !A_never) {
             pickA = 1;
@@ -421,6 +423,7 @@ __global__ void propagateActiveTriLabels(const uint64_t* keys,
                                          bodyID_t* labelsOut,
                                          const contactPairs_t* groupStart,
                                          const contactPairs_t* groupCount,
+                                         const bodyID_t* triNeighborIndex,
                                          const bodyID_t* triNeighbor1,
                                          const bodyID_t* triNeighbor2,
                                          const bodyID_t* triNeighbor3,
@@ -434,7 +437,12 @@ __global__ void propagateActiveTriLabels(const uint64_t* keys,
         const contactPairs_t count = groupCount[grp];
         bodyID_t label = labelsIn[myID];
 
-        bodyID_t nbs[3] = {triNeighbor1[triID], triNeighbor2[triID], triNeighbor3[triID]};
+        const bodyID_t nb_idx = triNeighborIndex[triID];
+        if (nb_idx == NULL_BODYID) {
+            labelsOut[myID] = label;
+            return;
+        }
+        bodyID_t nbs[3] = {triNeighbor1[nb_idx], triNeighbor2[nb_idx], triNeighbor3[nb_idx]};
         for (int e = 0; e < 3; ++e) {
             const bodyID_t nb = nbs[e];
             if (nb == NULL_BODYID || count == 0) {

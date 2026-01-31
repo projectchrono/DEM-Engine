@@ -467,7 +467,8 @@ class DEMDynamicThread {
     // Mesh patch information: each facet belongs to a patch, and each patch has material properties
     // Patch ID for each triangle facet (maps facet to patch)
     DualArray<bodyID_t> triPatchID = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    // Triangle edge neighbors (global triangle indices; NULL_BODYID for boundary)
+    // Triangle edge neighbors (compact; index via triNeighborIndex)
+    DualArray<bodyID_t> triNeighborIndex = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> triNeighbor1 = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> triNeighbor2 = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> triNeighbor3 = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
@@ -735,6 +736,7 @@ class DEMDynamicThread {
                            size_t nTriMeshes,
                            size_t nSpheresGM,
                            size_t nTriGM,
+                           size_t nTriNeighbors,
                            size_t nMeshPatches,
                            unsigned int nAnalGM,
                            size_t nExtraContacts,
@@ -775,13 +777,14 @@ class DEMDynamicThread {
                               const std::vector<float>& ext_obj_mass_types,
                               const std::vector<float3>& ext_obj_moi_types,
                               const std::vector<unsigned int>& ext_obj_comp_num,
-                             const std::vector<float>& mesh_obj_mass_types,
-                             const std::vector<float3>& mesh_obj_moi_types,
-                             const std::vector<inertiaOffset_t>& mesh_obj_mass_offsets,
-                             size_t nExistOwners,
-                             size_t nExistSpheres,
-                             size_t nExistingFacets,
-                             size_t nExistingPatches);
+                              const std::vector<float>& mesh_obj_mass_types,
+                              const std::vector<float3>& mesh_obj_moi_types,
+                              const std::vector<inertiaOffset_t>& mesh_obj_mass_offsets,
+                              size_t nExistOwners,
+                              size_t nExistSpheres,
+                              size_t nExistingFacets,
+                              size_t nExistingPatches,
+                              size_t nExistingTriNeighbors);
     void registerPolicies(const std::unordered_map<unsigned int, std::string>& template_number_name_map,
                           const ClumpTemplateFlatten& clump_templates,
                           const std::vector<float>& ext_obj_mass_types,
@@ -864,6 +867,7 @@ class DEMDynamicThread {
                                size_t nExistingSpheres,
                                size_t nExistingTriMesh,
                                size_t nExistingFacets,
+                               size_t nExistingTriNeighbors,
                                size_t nExistingPatches,
                                unsigned int nExistingObj,
                                unsigned int nExistingAnalGM);

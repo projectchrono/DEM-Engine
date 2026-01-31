@@ -120,6 +120,7 @@ void DEMDynamicThread::packDataPointers() {
     ownerMeshNeverWinner.bindDevicePointer(&(granData->ownerMeshNeverWinner));
     ownerPatchMesh.bindDevicePointer(&(granData->ownerPatchMesh));
     triPatchID.bindDevicePointer(&(granData->triPatchID));
+    triNeighborIndex.bindDevicePointer(&(granData->triNeighborIndex));
     triNeighbor1.bindDevicePointer(&(granData->triNeighbor1));
     triNeighbor2.bindDevicePointer(&(granData->triNeighbor2));
     triNeighbor3.bindDevicePointer(&(granData->triNeighbor3));
@@ -284,6 +285,7 @@ void DEMDynamicThread::migrateDataToDevice() {
     ownerMeshNeverWinner.toDeviceAsync(streamInfo.stream);
     ownerPatchMesh.toDeviceAsync(streamInfo.stream);
     triPatchID.toDeviceAsync(streamInfo.stream);
+    triNeighborIndex.toDeviceAsync(streamInfo.stream);
     triNeighbor1.toDeviceAsync(streamInfo.stream);
     triNeighbor2.toDeviceAsync(streamInfo.stream);
     triNeighbor3.toDeviceAsync(streamInfo.stream);
@@ -562,6 +564,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
                                          size_t nTriMeshes,
                                          size_t nSpheresGM,
                                          size_t nTriGM,
+                                         size_t nTriNeighbors,
                                          size_t nMeshPatches,
                                          unsigned int nAnalGM,
                                          size_t nExtraContacts,
@@ -645,9 +648,10 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(relPosNode2, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(relPosNode3, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(triPatchID, nTriGM, 0);
-    DEME_DUAL_ARRAY_RESIZE(triNeighbor1, nTriGM, NULL_BODYID);
-    DEME_DUAL_ARRAY_RESIZE(triNeighbor2, nTriGM, NULL_BODYID);
-    DEME_DUAL_ARRAY_RESIZE(triNeighbor3, nTriGM, NULL_BODYID);
+    DEME_DUAL_ARRAY_RESIZE(triNeighborIndex, nTriGM, NULL_BODYID);
+    DEME_DUAL_ARRAY_RESIZE(triNeighbor1, nTriNeighbors, NULL_BODYID);
+    DEME_DUAL_ARRAY_RESIZE(triNeighbor2, nTriNeighbors, NULL_BODYID);
+    DEME_DUAL_ARRAY_RESIZE(triNeighbor3, nTriNeighbors, NULL_BODYID);
 
     // Resize to the number of mesh patches
     DEME_DUAL_ARRAY_RESIZE(ownerPatchMesh, nMeshPatches, 0);
@@ -835,7 +839,8 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                                             size_t nExistOwners,
                                             size_t nExistSpheres,
                                             size_t nExistingFacets,
-                                            size_t nExistingMeshPatches) {
+                                            size_t nExistingMeshPatches,
+                                            size_t nExistingTriNeighbors) {
     // Load in clump components info (but only if instructed to use jitified clump templates). This step will be
     // repeated even if we are just adding some more clumps to system, not a complete re-initialization.
     size_t k = 0;
@@ -1125,6 +1130,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
     unsigned int offset_for_mesh_obj_mass_template = offset_for_ext_obj_mass_template + input_ext_obj_xyz.size();
     // k for indexing the triangle facets
     k = 0;
+    size_t neighbor_write = nExistingTriNeighbors;
     // p for indexing patches (flattened across all meshes)
     size_t p = 0;
     for (size_t i = 0; i < input_mesh_objs.size(); i++) {
@@ -1208,20 +1214,29 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         // Per-facet info
         //// TODO: This flatten-then-init approach is historical and too ugly.
         size_t this_facet_owner = mesh_facet_owner.at(k);
+        const bool mesh_needs_neighbors =
+            !(input_mesh_obj_convex.at(this_facet_owner) != 0 && input_mesh_obj_never_winner.at(this_facet_owner) != 0);
         for (; k < mesh_facet_owner.size(); k++) {
             // mesh_facet_owner run length is the num of facets in this mesh entity
             if (mesh_facet_owner.at(k) != this_facet_owner)
                 break;
-            ownerTriMesh[nExistingFacets + k] = owner_offset_for_mesh_obj + this_facet_owner;
+            const size_t global_tri = nExistingFacets + k;
+            ownerTriMesh[global_tri] = owner_offset_for_mesh_obj + this_facet_owner;
             // Tri's patch belonging needs to take into account those patches that are previously added
-            triPatchID[nExistingFacets + k] = nExistingMeshPatches + mesh_facet_patch.at(k);
-            triNeighbor1[nExistingFacets + k] = mesh_facet_neighbor1.at(k);
-            triNeighbor2[nExistingFacets + k] = mesh_facet_neighbor2.at(k);
-            triNeighbor3[nExistingFacets + k] = mesh_facet_neighbor3.at(k);
+            triPatchID[global_tri] = nExistingMeshPatches + mesh_facet_patch.at(k);
+            if (mesh_needs_neighbors) {
+                triNeighborIndex[global_tri] = neighbor_write;
+                triNeighbor1[neighbor_write] = mesh_facet_neighbor1.at(k);
+                triNeighbor2[neighbor_write] = mesh_facet_neighbor2.at(k);
+                triNeighbor3[neighbor_write] = mesh_facet_neighbor3.at(k);
+                neighbor_write++;
+            } else {
+                triNeighborIndex[global_tri] = NULL_BODYID;
+            }
             DEMTriangle this_tri = mesh_facets.at(k);
-            relPosNode1[nExistingFacets + k] = this_tri.p1;
-            relPosNode2[nExistingFacets + k] = this_tri.p2;
-            relPosNode3[nExistingFacets + k] = this_tri.p3;
+            relPosNode1[global_tri] = this_tri.p1;
+            relPosNode2[global_tri] = this_tri.p2;
+            relPosNode3[global_tri] = this_tri.p3;
         }
 
         const bodyID_t owner_id = owner_offset_for_mesh_obj + i;
@@ -1355,7 +1370,8 @@ void DEMDynamicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpB
                          input_mesh_obj_convex, input_mesh_obj_never_winner, mesh_facet_owner, mesh_facet_patch,
                          mesh_facet_neighbor1, mesh_facet_neighbor2, mesh_facet_neighbor3, mesh_facets,
                          mesh_patch_owner, mesh_patch_materials, clump_templates, ext_obj_mass_types, ext_obj_moi_types,
-                         ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, mesh_obj_mass_offsets, 0, 0, 0, 0);
+                         ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, mesh_obj_mass_offsets, 0, 0, 0, 0,
+                         0);
 
     buildTrackedObjs(input_clump_batches, ext_obj_comp_num, input_mesh_objs, tracked_objs, 0, 0, 0, 0);
 }
@@ -1396,6 +1412,7 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                                              size_t nExistingSpheres,
                                              size_t nExistingTriMesh,
                                              size_t nExistingFacets,
+                                             size_t nExistingTriNeighbors,
                                              size_t nExistingPatches,
                                              unsigned int nExistingObj,
                                              unsigned int nExistingAnalGM) {
@@ -1410,7 +1427,7 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                          mesh_facet_neighbor1, mesh_facet_neighbor2, mesh_facet_neighbor3, mesh_facets,
                          mesh_patch_owner, mesh_patch_materials, clump_templates, ext_obj_mass_types, ext_obj_moi_types,
                          ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, mesh_obj_mass_offsets,
-                         nExistingOwners, nExistingSpheres, nExistingFacets, nExistingPatches);
+                         nExistingOwners, nExistingSpheres, nExistingFacets, nExistingPatches, nExistingTriNeighbors);
 
     // Make changes to tracked objects (potentially add more)
     buildTrackedObjs(input_clump_batches, ext_obj_comp_num, input_mesh_objs, tracked_objs, nExistingOwners,

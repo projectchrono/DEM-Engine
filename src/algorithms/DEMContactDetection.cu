@@ -1622,6 +1622,7 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                         propagateActiveTriLabels<<<dim3(blocks_needed_active), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
                                                    this_stream>>>(activeTriKeysUnique, labelsIn, labelsOut,
                                                                   groupActiveStart, groupActiveCount,
+                                                                  granData->triNeighborIndex,
                                                                   granData->triNeighbor1, granData->triNeighbor2,
                                                                   granData->triNeighbor3, numUniqueActiveTri);
                         bodyID_t* tmp = labelsIn;

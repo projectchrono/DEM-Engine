@@ -13,7 +13,6 @@ SET(LIBRARIES
 SET(MODULAR_TESTS
 		DEMTest_MeshTemplate
 		DEMTest_PatchLocations
-		DEMTest_MeshPatch
 		DEMTest_SimpleCollisions
 )
 

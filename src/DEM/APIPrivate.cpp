@@ -31,30 +31,10 @@ struct EdgeInfo {
     int edge = 0;
 };
 
-struct QuantKey3 {
-    int64_t x, y, z;
-    bool operator==(const QuantKey3& o) const noexcept { return x == o.x && y == o.y && z == o.z; }
-};
-struct QuantKey3Hash {
-    size_t operator()(const QuantKey3& k) const noexcept {
-        size_t h1 = std::hash<int64_t>{}(k.x);
-        size_t h2 = std::hash<int64_t>{}(k.y);
-        size_t h3 = std::hash<int64_t>{}(k.z);
-        size_t h = h1;
-        h ^= h2 + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
-        h ^= h3 + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
-        return h;
-    }
-};
-
 inline uint64_t makeEdgeKey(int a, int b) {
     const uint32_t lo = static_cast<uint32_t>(std::min(a, b));
     const uint32_t hi = static_cast<uint32_t>(std::max(a, b));
     return (static_cast<uint64_t>(lo) << 32) | static_cast<uint64_t>(hi);
-}
-
-static inline int64_t quantize(double v, double eps) {
-    return static_cast<int64_t>(std::llround(v / eps));
 }
 
 std::vector<std::array<bodyID_t, 3>> buildTriangleEdgeNeighbors(const std::vector<int3>& face_v_indices,
@@ -67,36 +47,8 @@ std::vector<std::array<bodyID_t, 3>> buildTriangleEdgeNeighbors(const std::vecto
 
     std::vector<size_t> canon;
     if (!vertices.empty()) {
-        double minx = vertices[0].x, miny = vertices[0].y, minz = vertices[0].z;
-        double maxx = minx, maxy = miny, maxz = minz;
-        for (const auto& v : vertices) {
-            minx = std::min(minx, (double)v.x);
-            miny = std::min(miny, (double)v.y);
-            minz = std::min(minz, (double)v.z);
-            maxx = std::max(maxx, (double)v.x);
-            maxy = std::max(maxy, (double)v.y);
-            maxz = std::max(maxz, (double)v.z);
-        }
-        const double dx = maxx - minx, dy = maxy - miny, dz = maxz - minz;
-        const double diag = std::sqrt(dx * dx + dy * dy + dz * dz);
-        const double eps = std::max(diag * 1e-9, 1e-12);
-
-        std::unordered_map<QuantKey3, size_t, QuantKey3Hash> rep;
-        rep.reserve(vertices.size());
-        canon.assign(vertices.size(), static_cast<size_t>(-1));
-        size_t next_id = 0;
-        for (size_t i = 0; i < vertices.size(); ++i) {
-            const auto& v = vertices[i];
-            QuantKey3 key{quantize(v.x, eps), quantize(v.y, eps), quantize(v.z, eps)};
-            auto it = rep.find(key);
-            if (it == rep.end()) {
-                rep.emplace(key, next_id);
-                canon[i] = next_id;
-                next_id++;
-            } else {
-                canon[i] = it->second;
-            }
-        }
+        const double eps = computeVertexQuantEps(vertices);
+        canon = buildCanonicalVertexMap(vertices, eps);
     }
 
     std::unordered_map<uint64_t, std::vector<EdgeInfo>> edge_map;
@@ -973,7 +925,12 @@ void DEMSolver::preprocessTriangleObjs() {
         m_mesh_facet_owner.insert(m_mesh_facet_owner.end(), mesh_obj->GetNumTriangles(), thisMeshObj);
 
         const bodyID_t tri_offset = static_cast<bodyID_t>(m_mesh_facets.size());
-        const auto local_neighbors = buildTriangleEdgeNeighbors(mesh_obj->m_face_v_indices, mesh_obj->m_vertices);
+        std::vector<std::array<bodyID_t, 3>> local_neighbors;
+        if (mesh_obj->IsConvex() && mesh_obj->IsNeverWinner()) {
+            local_neighbors.assign(mesh_obj->GetNumTriangles(), {NULL_BODYID, NULL_BODYID, NULL_BODYID});
+        } else {
+            local_neighbors = buildTriangleEdgeNeighbors(mesh_obj->m_face_v_indices, mesh_obj->m_vertices);
+        }
 
         // Force single-patch semantics: one patch per mesh (all facets in patch 0)
         if (mesh_obj->patches_explicitly_set || mesh_obj->GetNumPatches() > 1) {
@@ -1469,17 +1426,30 @@ void DEMSolver::setSimParams() {
 }
 
 void DEMSolver::allocateGPUArrays() {
+    size_t tri_neighbors = 0;
+    for (const auto& mesh_obj : cached_mesh_objs) {
+        if (!mesh_obj) {
+            continue;
+        }
+        if (!(mesh_obj->IsConvex() && mesh_obj->IsNeverWinner())) {
+            tri_neighbors += mesh_obj->GetNumTriangles();
+        }
+    }
+    nTriNeighbors = tri_neighbors;
+
     // Resize arrays based on the statistical data we have
     std::thread dThread = std::move(std::thread([this]() {
         this->dT->allocateGPUArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
-                                    this->nSpheresGM, this->nTriGM, this->nMeshPatches, this->nAnalGM,
+                                    this->nSpheresGM, this->nTriGM, this->nTriNeighbors, this->nMeshPatches,
+                                    this->nAnalGM,
                                     this->nExtraContacts, this->nDistinctMassProperties,
                                     this->nDistinctClumpBodyTopologies, this->nDistinctClumpComponents,
                                     this->nJitifiableClumpComponents, this->nMatTuples);
     }));
     std::thread kThread = std::move(std::thread([this]() {
         this->kT->allocateGPUArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
-                                    this->nSpheresGM, this->nTriGM, this->nAnalGM, this->nExtraContacts,
+                                    this->nSpheresGM, this->nTriGM, this->nTriNeighbors, this->nAnalGM,
+                                    this->nExtraContacts,
                                     this->nDistinctMassProperties, this->nDistinctClumpBodyTopologies,
                                     this->nDistinctClumpComponents, this->nJitifiableClumpComponents, this->nMatTuples);
     }));
@@ -1542,6 +1512,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
                                       size_t nSpheres,
                                       size_t nTriMesh,
                                       size_t nFacets,
+                                      size_t nTriNeighbors,
                                       size_t nMeshPatches,
                                       unsigned int nExtObj,
                                       unsigned int nAnalGM) {
@@ -1572,7 +1543,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // I/O and misc.
         m_no_output_families, m_tracked_objs,
         // Number of entities, old
-        nOwners, nClumps, nSpheres, nTriMesh, nFacets, nMeshPatches, nExtObj, nAnalGM);
+        nOwners, nClumps, nSpheres, nTriMesh, nFacets, nTriNeighbors, nMeshPatches, nExtObj, nAnalGM);
     kT->updateClumpMeshArrays(
         // Clump batchs' initial stats
         cached_input_clump_batches,
@@ -1588,7 +1559,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // Templates and misc.
         flattened_clump_templates,
         // Number of entities, old
-        nOwners, nClumps, nSpheres, nTriMesh, nFacets, nMeshPatches, nExtObj, nAnalGM);
+        nOwners, nClumps, nSpheres, nTriMesh, nFacets, nTriNeighbors, nMeshPatches, nExtObj, nAnalGM);
 }
 
 void DEMSolver::packDataPointers() {

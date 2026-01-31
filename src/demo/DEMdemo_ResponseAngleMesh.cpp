@@ -78,7 +78,7 @@ int main() {
     DEMSolver DEMSim;
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::FAMILY);
-    DEMSim.SetMeshOutputFormat("STL");
+    DEMSim.SetMeshOutputFormat("VTK");
     DEMSim.SetNoForceRecord();
     DEMSim.SetMeshUniversalContact(true);
     const float mm_to_m = 0.001f;
@@ -109,6 +109,8 @@ int main() {
     float3 tri_center = make_float3(0, 0, 0);
     float3 tri_inertia = make_float3(0, 0, 0);
     tri_template->ComputeMassProperties(tri_volume, tri_center, tri_inertia);
+    // tri_template->SetConvex(true); // for convex particels only
+    // tri_template->SetNeverWinner(true); // if mesh is more coarse the other contacts
     const float particle_mass = static_cast<float>(tri_volume * particle_density);
     const float3 particle_moi = tri_inertia * particle_density;
     std::cout << "Particle volume (m^3): " << tri_volume << ", mass (kg): "<< particle_mass << std::endl;
@@ -218,7 +220,7 @@ int main() {
         std::cout << "Frame: " << currframe << std::endl;
         DEMSim.ShowThreadCollaborationStats();
         char filename[100];
-        sprintf(filename, "DEMdemo_output_%04d.stl", currframe);
+        sprintf(filename, "DEMdemo_output_%04d.vtk", currframe);
         DEMSim.WriteMeshFile(out_dir / filename);
         currframe++;
         max_v = max_v_finder->GetValue();

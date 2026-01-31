@@ -2524,6 +2524,7 @@ void DEMSolver::Update() {
     size_t nSpheres_old = nSpheresGM;
     size_t nTriMesh_old = nTriMeshes;
     size_t nFacets_old = nTriGM;
+    size_t nTriNeighbors_old = nTriNeighbors;
     size_t nPatch_old = nMeshPatches;
     unsigned int nAnalGM_old = nAnalGM;
     unsigned int nExtObj_old = nExtObj;
@@ -2534,8 +2535,8 @@ void DEMSolver::Update() {
     updateTotalEntityNum();
     allocateGPUArrays();
     // `Update' method needs to know the number of existing clumps and spheres (before this addition)
-    updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old, nPatch_old, nExtObj_old,
-                          nAnalGM_old);
+    updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old, nTriNeighbors_old,
+                          nPatch_old, nExtObj_old, nAnalGM_old);
     packDataPointers();
 
     // Now that all params prepared, and all data pointers packed on host side, we need to migrate that imformation to

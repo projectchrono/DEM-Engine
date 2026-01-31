@@ -392,6 +392,8 @@ struct DEMDataDT {
     notStupidBool_t* ownerMeshConvex;
     notStupidBool_t* ownerMeshNeverWinner;
     bodyID_t* triPatchID;
+    // Map global triangle ID -> compact neighbor index (NULL_BODYID if neighbors are not stored)
+    bodyID_t* triNeighborIndex;
     bodyID_t* triNeighbor1;
     bodyID_t* triNeighbor2;
     bodyID_t* triNeighbor3;
@@ -473,6 +475,8 @@ struct DEMDataKT {
     notStupidBool_t* ownerMeshConvex;
     notStupidBool_t* ownerMeshNeverWinner;
     bodyID_t* triPatchID;
+    // Map global triangle ID -> compact neighbor index (NULL_BODYID if neighbors are not stored)
+    bodyID_t* triNeighborIndex;
     bodyID_t* triNeighbor1;
     bodyID_t* triNeighbor2;
     bodyID_t* triNeighbor3;

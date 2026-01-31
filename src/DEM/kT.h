@@ -204,7 +204,8 @@ class DEMKinematicThread {
     // Mesh patch information: each facet belongs to a patch
     // Patch ID for each triangle facet (maps facet to patch)
     DualArray<bodyID_t> triPatchID = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    // Triangle edge neighbors (global triangle indices; NULL_BODYID for boundary)
+    // Triangle edge neighbors (compact; index via triNeighborIndex)
+    DualArray<bodyID_t> triNeighborIndex = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> triNeighbor1 = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> triNeighbor2 = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> triNeighbor3 = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
@@ -340,6 +341,7 @@ class DEMKinematicThread {
                            size_t nTriMeshes,
                            size_t nSpheresGM,
                            size_t nTriGM,
+                           size_t nTriNeighbors,
                            unsigned int nAnalGM,
                            size_t nExtraContacts,
                            unsigned int nMassProperties,
@@ -366,7 +368,8 @@ class DEMKinematicThread {
                               size_t nExistOwners,
                               size_t nExistSpheres,
                               size_t nExistingFacets,
-                              size_t nExistingMeshPatches);
+                              size_t nExistingMeshPatches,
+                              size_t nExistingTriNeighbors);
 
     /// Initialize arrays
     void initGPUArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
@@ -405,6 +408,7 @@ class DEMKinematicThread {
                                size_t nExistingSpheres,
                                size_t nExistingTriMesh,
                                size_t nExistingFacets,
+                               size_t nExistingTriNeighbors,
                                size_t nExistingPatches,
                                unsigned int nExistingObj,
                                unsigned int nExistingAnalGM);

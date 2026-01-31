@@ -1750,6 +1750,8 @@ class DEMSolver {
     size_t nSpheresGM = 0;
     // Total number of triangle facets
     size_t nTriGM = 0;
+    // Total number of triangles that need neighbor info (compact neighbor array size)
+    size_t nTriNeighbors = 0;
     // Total number of mesh patches
     size_t nMeshPatches = 0;
     // Number of analytical entites (as components of some external objects)
@@ -2080,6 +2082,7 @@ class DEMSolver {
                                size_t nSpheres,
                                size_t nTriMesh,
                                size_t nFacets,
+                               size_t nTriNeighbors,
                                size_t nMeshPatches,
                                unsigned int nExtObj_old,
                                unsigned int nAnalGM_old);
