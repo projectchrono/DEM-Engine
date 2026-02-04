@@ -64,7 +64,7 @@ For conda users, you can build and install using conda-build. This method automa
 
 ```bash
 # Build the conda package (requires conda-build and access to conda-forge channel)
-conda install conda-build
+conda install conda-build -c conda-forge
 conda build recipe/ -c conda-forge
 
 # Install from local build
