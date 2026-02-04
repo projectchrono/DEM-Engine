@@ -49,7 +49,17 @@ option(DEME_BUILD_PYTHON "Build Python bindings for DEME" OFF)
 # Find Python and pybind11 if building Python bindings
 if(DEME_BUILD_PYTHON)
 	find_package(Python COMPONENTS Interpreter Development REQUIRED)
-	add_subdirectory(thirdparty/pybind11)
+	
+	# Try to find pybind11 as an installed package first (e.g., from conda)
+	# If not found, fall back to the submodule
+	find_package(pybind11 CONFIG QUIET)
+	if(NOT pybind11_FOUND)
+		message(STATUS "pybind11 not found as installed package, using submodule")
+		add_subdirectory(thirdparty/pybind11)
+	else()
+		message(STATUS "Using installed pybind11 package")
+	endif()
+	
 	message(STATUS "Python bindings enabled")
 	message(STATUS "Python version: ${Python_VERSION}")
 	message(STATUS "Python executable: ${Python_EXECUTABLE}")
