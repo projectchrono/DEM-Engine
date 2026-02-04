@@ -51,13 +51,19 @@ if(DEME_BUILD_PYTHON)
 	find_package(Python COMPONENTS Interpreter Development REQUIRED)
 	
 	# Try to find pybind11 as an installed package first (e.g., from conda)
-	# If not found, fall back to the submodule
 	find_package(pybind11 CONFIG QUIET)
 	if(NOT pybind11_FOUND)
-		message(STATUS "pybind11 not found as installed package, using submodule")
-		add_subdirectory(thirdparty/pybind11)
+		# Check if the pybind11 submodule is initialized
+		if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/pybind11/CMakeLists.txt")
+			message(STATUS "pybind11 not found as installed package, using submodule")
+			add_subdirectory(thirdparty/pybind11)
+		else()
+			# Submodule not initialized, try non-CONFIG mode (for conda/pip packages)
+			find_package(pybind11 REQUIRED)
+			message(STATUS "Using installed pybind11 package")
+		endif()
 	else()
-		message(STATUS "Using installed pybind11 package")
+		message(STATUS "Using installed pybind11 package (CONFIG mode)")
 	endif()
 	
 	message(STATUS "Python bindings enabled")
