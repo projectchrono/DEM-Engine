@@ -3,7 +3,8 @@ package:
   version: 3.0.0
 
 source:
-  path: ..
+  git_url: ..
+  git_submodules: true
 
 build:
   number: 0
@@ -21,6 +22,7 @@ requirements:
     - ninja
     - cudatoolkit >=11.0
     - make
+    - git
 
   host:
     - python >=3.8
