@@ -96,7 +96,7 @@ After installation, you can import the package in Python:
 import DEME
 
 # Create a solver
-solver = DEME.DEMSolver(nGPUs=1)
+solver = DEME.DEMSolver()
 
 # Use other classes and functions
 # ...
