@@ -10,6 +10,7 @@
 #include <set>
 #include <cfloat>
 #include <functional>
+#include <thread>
 
 #include "kT.h"
 #include "dT.h"
@@ -1203,6 +1204,7 @@ class DEMSolver {
     /// Remove host-side cached vectors (so you can re-define them, and then re-initialize system)
     void ClearCache();
 
+    /// Output methods enqueue asynchronous writes; call WaitForPendingOutput() to block for completion.
     /// Write the current status of clumps to a file
     void WriteClumpFile(const std::string& outfilename, unsigned int accuracy = 10) const;
     void WriteClumpFile(const std::filesystem::path& outfilename, unsigned int accuracy = 10) const {
@@ -1231,6 +1233,8 @@ class DEMSolver {
     /// Write the current status of all meshes to a file.
     void WriteMeshFile(const std::string& outfilename) const;
     void WriteMeshFile(const std::filesystem::path& outfilename) const { WriteMeshFile(outfilename.string()); }
+    /// Wait for any in-flight async output to finish.
+    void WaitForPendingOutput() const;
 
     /// @brief Read 3 columns of your choice from a CSV filem and group them by clump_header.
     /// @param infilename CSV filename.
@@ -1471,6 +1475,8 @@ class DEMSolver {
     /// @brief Specify the output file format of meshes.
     /// @param format A choice between "VTK", "OBJ", "STL", "PLY".
     void SetMeshOutputFormat(const std::string& format);
+    /// @brief Enable/disable per-patch face colors in PLY mesh output (for testing auto patch splitting only).
+    void EnableMeshPatchColorOutput(bool enable = true);
     /// @brief Clear stored solver logs (errors, warnings, messages).
     void ClearLog() { Logger::GetInstance().Clear(); }
     /// @brief Show error and warnings.
@@ -1566,10 +1572,13 @@ class DEMSolver {
                                      CNT_OUTPUT_CONTENT::CNT_WILDCARD;
     // The output file format for meshes
     MESH_FORMAT m_mesh_out_format = MESH_FORMAT::VTK;
+    // If PLY mesh output should include per-patch face colors
+    bool m_mesh_out_ply_patch_colors = false;
     // If the solver should output wildcards to file
     bool m_is_out_owner_wildcards = false;
     bool m_is_out_cnt_wildcards = false;
     bool m_is_out_geo_wildcards = false;
+    mutable std::thread m_output_thread;
 
     // User-instructed simulation `world' size. Note it is an approximate of the true size and we will generate a world
     // not smaller than this. This is useful if the user want to automatically add BCs enclosing this user-defined
@@ -1741,6 +1750,8 @@ class DEMSolver {
     size_t nSpheresGM = 0;
     // Total number of triangle facets
     size_t nTriGM = 0;
+    // Total number of triangles that need neighbor info (compact neighbor array size)
+    size_t nTriNeighbors = 0;
     // Total number of mesh patches
     size_t nMeshPatches = 0;
     // Number of analytical entites (as components of some external objects)
@@ -1896,6 +1907,8 @@ class DEMSolver {
     std::vector<float3> m_input_mesh_obj_xyz;
     std::vector<float4> m_input_mesh_obj_rot;
     std::vector<unsigned int> m_input_mesh_obj_family;
+    std::vector<notStupidBool_t> m_input_mesh_obj_convex;
+    std::vector<notStupidBool_t> m_input_mesh_obj_never_winner;
 
     // Processed unique family prescription info
     std::vector<familyPrescription_t> m_unique_family_prescription;
@@ -1931,6 +1944,10 @@ class DEMSolver {
     std::vector<bodyID_t> m_mesh_facet_owner;
     // Patch ID for each mesh facet, flattened
     std::vector<bodyID_t> m_mesh_facet_patch;
+    // Per-facet edge neighbors (global triangle indices, NULL_BODYID if boundary)
+    std::vector<bodyID_t> m_mesh_facet_neighbor1;
+    std::vector<bodyID_t> m_mesh_facet_neighbor2;
+    std::vector<bodyID_t> m_mesh_facet_neighbor3;
     // Three nodes of each triangle, flattened
     std::vector<DEMTriangle> m_mesh_facets;
 
@@ -2065,6 +2082,7 @@ class DEMSolver {
                                size_t nSpheres,
                                size_t nTriMesh,
                                size_t nFacets,
+                               size_t nTriNeighbors,
                                size_t nMeshPatches,
                                unsigned int nExtObj_old,
                                unsigned int nAnalGM_old);

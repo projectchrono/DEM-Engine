@@ -78,10 +78,6 @@ JitHelper::CachedProgram JitHelper::buildProgram(const std::string& name,
     for (auto& subst : ordered_subs) {
         code = std::regex_replace(code, std::regex(subst.first), subst.second);
     }
-
-    if (std::find(flags.begin(), flags.end(), "-std=c++17") == flags.end()) {
-        flags.push_back("-std=c++17");
-    }
     {
         // Collect CUDA include paths from CMake and common fallbacks
         std::vector<std::filesystem::path> include_paths;

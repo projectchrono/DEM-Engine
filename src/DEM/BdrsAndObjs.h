@@ -25,7 +25,7 @@ namespace deme {
 /// External object type
 /// Note all of them are `shell', not solid objects. If you need a solid cylinder for example, then use one CYLINDER as
 /// the side plus 2 CIRCLE as the ends to emulate it. Please be sure to set OUTWARD CYLINDER normal in this case.
-enum class OBJ_COMPONENT { PLANE, SPHERE, PLATE, CIRCLE, CYL, CYL_INF, CONE, CONE_INF, TRIANGLE };
+enum class OBJ_COMPONENT { PLANE, SPHERE, PLATE, CIRCLE, CYL, CYL_INF, PLANAR_CYL, CONE, CONE_INF, TRIANGLE };
 
 /// Sphere
 struct DEMSphereParams_t {
@@ -224,6 +224,54 @@ class DEMExternObj : public DEMInitializer {
         assertThreeElements(axis, "AddCylinder", "axis");
         AddCylinder(make_float3(pos[0], pos[1], pos[2]), make_float3(axis[0], axis[1], axis[2]), rad, material, normal);
     }
+
+    /// Add a z-axis-aligned cylinder of infinite length with planar contact approximation
+    void AddZPlanarContactCylinder(const float3 pos,
+                                   const float rad,
+                                   const std::shared_ptr<DEMMaterial>& material,
+                                   const objNormal_t normal = ENTITY_NORMAL_INWARD) {
+        types.push_back(OBJ_COMPONENT::PLANAR_CYL);
+        materials.push_back(material);
+        DEMAnalEntParams params;
+        params.cyl.center = pos;
+        params.cyl.radius = rad;
+        params.cyl.dir = make_float3(0, 0, 1);
+        params.cyl.normal = normal;
+        entity_params.push_back(params);
+    }
+    void AddZPlanarContactCylinder(const std::vector<float>& pos,
+                                   const float rad,
+                                   const std::shared_ptr<DEMMaterial>& material,
+                                   const objNormal_t normal = ENTITY_NORMAL_INWARD) {
+        assertThreeElements(pos, "AddZPlanarContactCylinder", "pos");
+        AddZPlanarContactCylinder(make_float3(pos[0], pos[1], pos[2]), rad, material, normal);
+    }
+
+    /// Add a cylinder of infinite length with planar contact approximation, along a user-specific axis
+    void AddPlanarContactCylinder(const float3 pos,
+                                  const float3 axis,
+                                  const float rad,
+                                  const std::shared_ptr<DEMMaterial>& material,
+                                  const objNormal_t normal = ENTITY_NORMAL_INWARD) {
+        types.push_back(OBJ_COMPONENT::PLANAR_CYL);
+        materials.push_back(material);
+        DEMAnalEntParams params;
+        params.cyl.center = pos;
+        params.cyl.radius = rad;
+        params.cyl.dir = normalize(axis);
+        params.cyl.normal = normal;
+        entity_params.push_back(params);
+    }
+    void AddPlanarContactCylinder(const std::vector<float>& pos,
+                                  const std::vector<float>& axis,
+                                  const float rad,
+                                  const std::shared_ptr<DEMMaterial>& material,
+                                  const objNormal_t normal = ENTITY_NORMAL_INWARD) {
+        assertThreeElements(pos, "AddPlanarContactCylinder", "pos");
+        assertThreeElements(axis, "AddPlanarContactCylinder", "axis");
+        AddPlanarContactCylinder(make_float3(pos[0], pos[1], pos[2]), make_float3(axis[0], axis[1], axis[2]), rad,
+                                 material, normal);
+    }
 };
 
 // DEM mesh object
@@ -322,6 +370,10 @@ class DEMMesh : public DEMInitializer {
     // If true, when the mesh is initialized into the system, it will re-order the nodes of each triangle so that the
     // normals derived from right-hand-rule are the same as the normals in the mesh file
     bool use_mesh_normals = false;
+    // If true, this mesh is treated as convex for contact island reduction.
+    bool is_convex = false;
+    // If true, this mesh is never selected as the winner side for island labeling.
+    bool never_winner = false;
 
     DEMMesh() { obj_type = OWNER_TYPE::MESH; }
     DEMMesh(std::string input_file) {
@@ -359,6 +411,14 @@ class DEMMesh : public DEMInitializer {
     /// Instruct that when the mesh is initialized into the system, it will re-order the nodes of each triangle so that
     /// the normals derived from right-hand-rule are the same as the normals in the mesh file
     void UseNormals(bool use = true) { use_mesh_normals = use; }
+    /// Mark this mesh as convex for contact reduction purposes.
+    void SetConvex(bool convex = true) { is_convex = convex; }
+    /// Query whether this mesh is marked convex.
+    bool IsConvex() const { return is_convex; }
+    /// Prevent this mesh from ever being chosen as the winner side in island labeling.
+    void SetNeverWinner(bool never = true) { never_winner = never; }
+    /// Query whether this mesh is marked as never-winner.
+    bool IsNeverWinner() const { return never_winner; }
 
     /// Access the n-th triangle in mesh
     DEMTriangle GetTriangle(size_t index) const {  // No need to wrap (for Shlok)
@@ -393,6 +453,10 @@ class DEMMesh : public DEMInitializer {
         assertThreeElements(MOI, "SetMOI", "MOI");
         SetMOI(make_float3(MOI[0], MOI[1], MOI[2]));
     }
+    /// Compute volume, centroid and MOI in CoM frame (unit density).
+    void ComputeMassProperties(double& volume, float3& center, float3& inertia) const;
+    /// Check if mesh is watertight (closed, manifold). Returns true if no boundary/non-manifold edges.
+    bool IsWatertight(size_t* boundary_edges = nullptr, size_t* nonmanifold_edges = nullptr) const;
     /// Set mesh family number.
     void SetFamily(unsigned int num) { this->family_code = num; }
 
@@ -411,9 +475,6 @@ class DEMMesh : public DEMInitializer {
     }
 
     /*
-    /// Compute barycenter, mass and MOI in CoM frame
-    void ComputeMassProperties(double& mass, float3& center, float3& inertia);
-
     /// Create a map of neighboring triangles, vector of:
     /// [Ti TieA TieB TieC]
     /// (the free sides have triangle id = -1).
@@ -558,16 +619,6 @@ class DEMMesh : public DEMInitializer {
     // Whether patch locations have been explicitly set
     bool patch_locations_explicitly_set = false;
 
-    /// @brief Split the mesh into convex patches based on angle threshold.
-    /// @details Uses a region-growing algorithm to group adjacent triangles whose face normals differ by less than
-    /// the specified angle threshold. Each patch represents a locally convex region of the mesh. Patches are
-    /// non-overlapping and cover the entire mesh. This is useful for contact force calculations.
-    /// @param angle_threshold_deg Maximum angle (in degrees) between adjacent face normals to be in same patch.
-    /// Default is 30.0 degrees. Lower values create more patches (stricter convexity), higher values create fewer
-    /// patches (relaxed convexity).
-    /// @return Number of patches created.
-    unsigned int SplitIntoConvexPatches(float angle_threshold_deg = 30.0f);
-
     /// @brief Manually set the patch IDs for each triangle.
     /// @details Allows user to manually specify which patch each triangle belongs to. This is useful when
     /// the user has pre-computed patch information or wants to define patches based on custom criteria.
@@ -612,6 +663,118 @@ class DEMMesh : public DEMInitializer {
     /// patch.
     /// @return Vector of locations (one per patch).
     std::vector<float3> ComputePatchLocations() const;
+    // ------------------------------------------------------------
+    // Advanced mesh patch splitting + quality reporting
+    // ------------------------------------------------------------
+    enum class PatchQualityLevel : uint8_t { SAFE = 0, WARN = 1, CRITICAL = 2 };
+
+    enum class PatchConstraintStatus : uint8_t {
+        SATISFIED = 0,
+        TOO_MANY_UNMERGEABLE = 1,   // patch_max konnte wegen hard/concave Barrieren nicht erreicht werden
+        TOO_FEW_UNSPLITTABLE = 2    // patch_min konnte nicht erreicht werden (zu wenig "splittable" Struktur)
+    };
+
+    struct PatchQualityPatch {
+        PatchQualityLevel level = PatchQualityLevel::SAFE;
+
+        // Normal statistics (area-weighted mean normal, area only for weighting)
+        float worst_angle_deg = 0.0f;   // max deviation from mean normal (largest triangle deviation)
+        float coherence_r = 1.0f;       // ||sum(A*n)|| / sum(A) in [0,1] (1 = perfectly aligned)
+
+        unsigned int n_tris = 0;
+
+        // Internal violations (should be 0 in a "clean" patching)
+        unsigned int hard_crossings = 0;     // internal edges whose triangle normals exceed hard_angle_deg
+        unsigned int concave_crossings = 0;  // internal concave edges (if concavity enabled and oriented edge is reliable)
+        unsigned int unoriented_edges = 0;   // internal edges where orientation test failed (sign dihedral unreliable)
+    };
+
+    struct PatchQualityReport {
+        PatchQualityLevel overall = PatchQualityLevel::SAFE;
+        PatchConstraintStatus constraint_status = PatchConstraintStatus::SATISFIED;
+
+        unsigned int achieved_patches = 0;
+        unsigned int requested_min = 1;
+        unsigned int requested_max = std::numeric_limits<unsigned int>::max();
+
+        std::vector<PatchQualityPatch> per_patch;
+    };
+
+    struct PatchQualityOptions {
+        // Coherence thresholds
+        float safe_r = 0.85f;
+        float warn_r = 0.65f;
+
+        // Worst-angle tolerance:
+        // - compare worst_angle_deg to the "reference" (patch_normal_max if enabled, else hard_angle)
+        float warn_worst_angle_margin_deg = 5.0f;
+
+        bool hard_crossings_are_critical = true;
+        bool concave_crossings_are_critical = false;
+
+        // If unoriented edges are many, concavity sign is unreliable; treat it at least as WARN if concavity is enabled.
+        unsigned int unoriented_warn_threshold = 10;
+    };
+
+    struct PatchSplitOptions {
+        // Hysteresis:
+        // - soft < hard  => easy merges below soft, cautious merges in (soft..hard)
+        // - soft < 0     => disable hysteresis (soft = hard)
+        float soft_angle_deg = -1.0f;
+
+        // Statistical criterion:
+        // Max allowed angle between candidate triangle normal and current PATCH mean normal.
+        // < 0 => disabled (legacy-like behavior).
+        float patch_normal_max_deg = -1.0f;
+
+        // Concavity filter using signed dihedral angle (reliable for consistently oriented manifold surfaces)
+        bool block_concave_edges = false;
+        float concave_allow_deg = 0.0f;  // 0 => block any concave edge; allow small negative dihedral if desired
+
+        // Patch count constraints (count-only; no area threshold)
+        unsigned int patch_min = 1;
+        unsigned int patch_max = std::numeric_limits<unsigned int>::max();
+
+        // Seeding strategy
+        bool seed_largest_first = true;
+
+        // Optional auto-tuning (OFF by default)
+        struct AutoTuneOptions {
+            bool enabled = false;
+
+            // Stop once overall quality is <= target_level (SAFE is strictest)
+            PatchQualityLevel target_level = PatchQualityLevel::WARN;
+
+            unsigned int max_iters = 6;
+
+            // Step sizes for tightening/loosening (deg)
+            float step_deg = 5.0f;
+
+            // Allow enabling concavity block automatically if it helps
+            bool allow_enable_concavity = true;
+        } auto_tune;
+    };
+
+    /// @brief Smart patch splitter with optional hysteresis, patch-normal statistics, dihedral concavity blocking,
+    ///        patch_min/patch_max enforcement, and optional quality report + auto-tuning.
+    /// @param hard_angle_deg Mandatory: edges above this are NEVER merged.
+    /// @param opt Advanced controls.
+    /// @param out_report Optional: returns SAFE/WARN/CRITICAL feedback + constraint status.
+    /// @param qopt Classification thresholds for feedback.
+    /// @return Number of patches created (achieved).
+    unsigned int SplitIntoConvexPatches(float hard_angle_deg,
+                                        const PatchSplitOptions& opt,
+                                        PatchQualityReport* out_report,
+                                        const PatchQualityOptions& qopt);
+    unsigned int SplitIntoConvexPatches(float hard_angle_deg) {
+        return SplitIntoConvexPatches(hard_angle_deg, PatchSplitOptions(), nullptr, PatchQualityOptions());
+    }
+    unsigned int SplitIntoConvexPatches(float hard_angle_deg, const PatchSplitOptions& opt) {
+        return SplitIntoConvexPatches(hard_angle_deg, opt, nullptr, PatchQualityOptions());
+    }
+    unsigned int SplitIntoConvexPatches(float hard_angle_deg, const PatchSplitOptions& opt, PatchQualityReport* out_report) {
+        return SplitIntoConvexPatches(hard_angle_deg, opt, out_report, PatchQualityOptions());
+    }
 
     ////////////////////////////////////////////////////////
     // Some geo wildcard-related stuff

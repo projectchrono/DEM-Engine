@@ -56,6 +56,7 @@ DEMSolver::DEMSolver(unsigned int nGPUs) {
 }
 
 DEMSolver::~DEMSolver() {
+    WaitForPendingOutput();
     if (sys_initialized)
         DoDynamicsThenSync(0.0);
     delete kT;
@@ -169,6 +170,10 @@ void DEMSolver::SetMeshOutputFormat(const std::string& format) {
         default:
             DEME_ERROR("Instruction %s is unknown in SetMeshOutputFormat call.", format.c_str());
     }
+}
+
+void DEMSolver::EnableMeshPatchColorOutput(bool enable) {
+    m_mesh_out_ply_patch_colors = enable;
 }
 
 void DEMSolver::SetOutputContent(const std::vector<std::string>& content) {
@@ -2028,28 +2033,45 @@ std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quan
 }
 
 void DEMSolver::WriteSphereFile(const std::string& outfilename) const {
+    WaitForPendingOutput();
     switch (m_out_format) {
 #ifdef DEME_USE_CHPF
         case (OUTPUT_FORMAT::CHPF): {
-            std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
-            dT->writeSpheresAsChpf(ptFile);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateClumpHighOrderInfoToHost();
+            m_output_thread = std::thread([this, outfilename]() {
+                std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
+                dT->writeSpheresAsChpfFromHost(ptFile);
+            });
             break;
         }
 #endif
         case (OUTPUT_FORMAT::CSV): {
-            std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeSpheresAsCsv(ptFile);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateClumpHighOrderInfoToHost();
+            dT->migrateOwnerWildcardToHost();
+            dT->migrateSphGeoWildcardToHost();
+            m_output_thread = std::thread([this, outfilename]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeSpheresAsCsvFromHost(ptFile);
+            });
             break;
         }
         case (OUTPUT_FORMAT::BINARY): {
             // std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
             //// TODO: Implement it
-            std::ofstream ptFile(outfilename, std::ios::out);
             DEME_WARNING(std::string("Binary sphere output is not implemented yet, using CSV..."));
-            dT->writeSpheresAsCsv(ptFile);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateClumpHighOrderInfoToHost();
+            dT->migrateOwnerWildcardToHost();
+            dT->migrateSphGeoWildcardToHost();
+            m_output_thread = std::thread([this, outfilename]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeSpheresAsCsvFromHost(ptFile);
+            });
             break;
         }
         default:
@@ -2058,28 +2080,43 @@ void DEMSolver::WriteSphereFile(const std::string& outfilename) const {
 }
 
 void DEMSolver::WriteClumpFile(const std::string& outfilename, unsigned int accuracy) const {
+    WaitForPendingOutput();
     switch (m_out_format) {
 #ifdef DEME_USE_CHPF
         case (OUTPUT_FORMAT::CHPF): {
-            std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
-            dT->writeClumpsAsChpf(ptFile, accuracy);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateClumpHighOrderInfoToHost();
+            m_output_thread = std::thread([this, outfilename, accuracy]() {
+                std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
+                dT->writeClumpsAsChpfFromHost(ptFile, accuracy);
+            });
             break;
         }
 #endif
         case (OUTPUT_FORMAT::CSV): {
-            std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeClumpsAsCsv(ptFile, accuracy);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateClumpHighOrderInfoToHost();
+            dT->migrateOwnerWildcardToHost();
+            m_output_thread = std::thread([this, outfilename, accuracy]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeClumpsAsCsvFromHost(ptFile, accuracy);
+            });
             break;
         }
         case (OUTPUT_FORMAT::BINARY): {
             // std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
             //// TODO: Implement it
-            std::ofstream ptFile(outfilename, std::ios::out);
             DEME_WARNING(std::string("Binary clump output is not implemented yet, using CSV..."));
-            dT->writeClumpsAsCsv(ptFile, accuracy);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateClumpHighOrderInfoToHost();
+            dT->migrateOwnerWildcardToHost();
+            m_output_thread = std::thread([this, outfilename, accuracy]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeClumpsAsCsvFromHost(ptFile, accuracy);
+            });
             break;
         }
         default:
@@ -2088,6 +2125,7 @@ void DEMSolver::WriteClumpFile(const std::string& outfilename, unsigned int accu
 }
 
 void DEMSolver::WriteContactFile(const std::string& outfilename, float force_thres) const {
+    WaitForPendingOutput();
     if (no_recording_contact_forces) {
         DEME_WARNING(std::string(
             "The solver is instructed to not record contact force info, so no work is done in a WriteContactFile "
@@ -2096,18 +2134,26 @@ void DEMSolver::WriteContactFile(const std::string& outfilename, float force_thr
     }
     switch (m_cnt_out_format) {
         case (OUTPUT_FORMAT::CSV): {
-            std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeContactsAsCsv(ptFile, force_thres);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateContactInfoToHost();
+            m_output_thread = std::thread([this, outfilename, force_thres]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeContactsAsCsvFromHost(ptFile, force_thres);
+            });
             break;
         }
         case (OUTPUT_FORMAT::BINARY): {
             // std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
             //// TODO: Implement it
             DEME_WARNING(std::string("Binary contact pair output is not implemented yet, using CSV..."));
-            std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeContactsAsCsv(ptFile, force_thres);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateContactInfoToHost();
+            m_output_thread = std::thread([this, outfilename, force_thres]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeContactsAsCsvFromHost(ptFile, force_thres);
+            });
             break;
         }
         default:
@@ -2118,28 +2164,44 @@ void DEMSolver::WriteContactFile(const std::string& outfilename, float force_thr
 }
 
 void DEMSolver::WriteMeshFile(const std::string& outfilename) const {
+    WaitForPendingOutput();
     switch (m_mesh_out_format) {
         case (MESH_FORMAT::VTK): {
-            std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeMeshesAsVtk(ptFile);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            m_output_thread = std::thread([this, outfilename]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeMeshesAsVtkFromHost(ptFile);
+            });
             break;
         }
         case (MESH_FORMAT::STL): {
-            std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeMeshesAsStl(ptFile);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            m_output_thread = std::thread([this, outfilename]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeMeshesAsStlFromHost(ptFile);
+            });
             break;
         }
         case (MESH_FORMAT::PLY): {
-            std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeMeshesAsPly(ptFile);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            m_output_thread = std::thread([this, outfilename]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeMeshesAsPlyFromHost(ptFile, m_mesh_out_ply_patch_colors);
+            });
             break;
         }
         default:
             DEME_ERROR(std::string(
                 "Mesh output file format is unknown or not implemented. Please re-set it via SetMeshOutputFormat."));
+    }
+}
+
+void DEMSolver::WaitForPendingOutput() const {
+    if (m_output_thread.joinable()) {
+        m_output_thread.join();
     }
 }
 
@@ -2327,6 +2389,8 @@ void DEMSolver::ReleaseFlattenedArrays() {
     deallocate_array(m_input_mesh_obj_xyz);
     deallocate_array(m_input_mesh_obj_rot);
     deallocate_array(m_input_mesh_obj_family);
+    deallocate_array(m_input_mesh_obj_convex);
+    deallocate_array(m_input_mesh_obj_never_winner);
 
     deallocate_array(m_unique_family_prescription);
     deallocate_array(m_input_clump_family);
@@ -2342,6 +2406,9 @@ void DEMSolver::ReleaseFlattenedArrays() {
 
     deallocate_array(m_mesh_facet_owner);
     deallocate_array(m_mesh_facet_patch);
+    deallocate_array(m_mesh_facet_neighbor1);
+    deallocate_array(m_mesh_facet_neighbor2);
+    deallocate_array(m_mesh_facet_neighbor3);
     deallocate_array(m_mesh_facets);
     deallocate_array(m_mesh_patch_owner);
     deallocate_array(m_mesh_patch_materials);
@@ -2457,6 +2524,7 @@ void DEMSolver::Update() {
     size_t nSpheres_old = nSpheresGM;
     size_t nTriMesh_old = nTriMeshes;
     size_t nFacets_old = nTriGM;
+    size_t nTriNeighbors_old = nTriNeighbors;
     size_t nPatch_old = nMeshPatches;
     unsigned int nAnalGM_old = nAnalGM;
     unsigned int nExtObj_old = nExtObj;
@@ -2467,8 +2535,8 @@ void DEMSolver::Update() {
     updateTotalEntityNum();
     allocateGPUArrays();
     // `Update' method needs to know the number of existing clumps and spheres (before this addition)
-    updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old, nPatch_old, nExtObj_old,
-                          nAnalGM_old);
+    updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old, nTriNeighbors_old,
+                          nPatch_old, nExtObj_old, nAnalGM_old);
     packDataPointers();
 
     // Now that all params prepared, and all data pointers packed on host side, we need to migrate that imformation to

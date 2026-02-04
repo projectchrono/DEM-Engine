@@ -263,6 +263,8 @@ class DEMDynamicThread {
                                                 DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed)};
     DeviceArray<contact_t> contactTypePatch_buffer[2] = {DeviceArray<contact_t>(&m_approxDeviceBytesUsed),
                                                          DeviceArray<contact_t>(&m_approxDeviceBytesUsed)};
+    DeviceArray<bodyID_t> contactPatchIsland_buffer[2] = {DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed),
+                                                          DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed)};
     DeviceArray<contactPairs_t> geomToPatchMap_buffer[2] = {DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed),
                                                             DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed)};
     DeviceArray<contactPairs_t> contactMapping_buffer[2] = {DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed),
@@ -396,6 +398,7 @@ class DEMDynamicThread {
     DualArray<bodyID_t> idPatchA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> idPatchB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<contact_t> contactTypePatch = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> contactPatchIsland = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<contactPairs_t> geomToPatchMap =
         DualArray<contactPairs_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
@@ -410,8 +413,8 @@ class DEMDynamicThread {
     // Local position of contact point of contact w.r.t. the reference frame of body A and B
     DualArray<float3> contactPointGeometryA = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<float3> contactPointGeometryB = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    // Array to record whether a triangle-triangle primitive contact satisfies SAT (is in physical contact)
-    DualArray<notStupidBool_t> contactSATSatisfied =
+    // Array to record whether a triangle-triangle primitive contact respects patch--patch general direction
+    DualArray<notStupidBool_t> contactPatchDirectionRespected =
         DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // Wildcard (extra property) arrays associated with contacts and owners
     std::vector<std::unique_ptr<DualArray<float>>> contactWildcards;
@@ -456,9 +459,19 @@ class DEMDynamicThread {
     DualArray<bodyID_t> ownerClumpBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> ownerTriMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> ownerAnalBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // Mesh owner flags (indexed by owner body ID)
+    DualArray<notStupidBool_t> ownerMeshConvex =
+        DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<notStupidBool_t> ownerMeshNeverWinner =
+        DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // Mesh patch information: each facet belongs to a patch, and each patch has material properties
     // Patch ID for each triangle facet (maps facet to patch)
     DualArray<bodyID_t> triPatchID = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // Triangle edge neighbors (compact; index via triNeighborIndex)
+    DualArray<bodyID_t> triNeighborIndex = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> triNeighbor1 = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> triNeighbor2 = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> triNeighbor3 = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // Mesh patch owner IDs (one per patch, flattened across all meshes)
     DualArray<bodyID_t> ownerPatchMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
@@ -723,6 +736,7 @@ class DEMDynamicThread {
                            size_t nTriMeshes,
                            size_t nSpheresGM,
                            size_t nTriGM,
+                           size_t nTriNeighbors,
                            size_t nMeshPatches,
                            unsigned int nAnalGM,
                            size_t nExtraContacts,
@@ -749,8 +763,13 @@ class DEMDynamicThread {
                               const std::vector<float3>& input_mesh_obj_xyz,
                               const std::vector<float4>& input_mesh_obj_rot,
                               const std::vector<unsigned int>& input_mesh_obj_family,
+                              const std::vector<notStupidBool_t>& input_mesh_obj_convex,
+                              const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
                               const std::vector<unsigned int>& mesh_facet_owner,
                               const std::vector<bodyID_t>& mesh_facet_patch,
+                              const std::vector<bodyID_t>& mesh_facet_neighbor1,
+                              const std::vector<bodyID_t>& mesh_facet_neighbor2,
+                              const std::vector<bodyID_t>& mesh_facet_neighbor3,
                               const std::vector<DEMTriangle>& mesh_facets,
                               const std::vector<bodyID_t>& mesh_patch_owner,
                               const std::vector<materialsOffset_t>& mesh_patch_materials,
@@ -758,13 +777,14 @@ class DEMDynamicThread {
                               const std::vector<float>& ext_obj_mass_types,
                               const std::vector<float3>& ext_obj_moi_types,
                               const std::vector<unsigned int>& ext_obj_comp_num,
-                             const std::vector<float>& mesh_obj_mass_types,
-                             const std::vector<float3>& mesh_obj_moi_types,
-                             const std::vector<inertiaOffset_t>& mesh_obj_mass_offsets,
-                             size_t nExistOwners,
-                             size_t nExistSpheres,
-                             size_t nExistingFacets,
-                             size_t nExistingPatches);
+                              const std::vector<float>& mesh_obj_mass_types,
+                              const std::vector<float3>& mesh_obj_moi_types,
+                              const std::vector<inertiaOffset_t>& mesh_obj_mass_offsets,
+                              size_t nExistOwners,
+                              size_t nExistSpheres,
+                              size_t nExistingFacets,
+                              size_t nExistingPatches,
+                              size_t nExistingTriNeighbors);
     void registerPolicies(const std::unordered_map<unsigned int, std::string>& template_number_name_map,
                           const ClumpTemplateFlatten& clump_templates,
                           const std::vector<float>& ext_obj_mass_types,
@@ -784,8 +804,13 @@ class DEMDynamicThread {
                        const std::vector<float3>& input_mesh_obj_xyz,
                        const std::vector<float4>& input_mesh_obj_rot,
                        const std::vector<unsigned int>& input_mesh_obj_family,
+                       const std::vector<notStupidBool_t>& input_mesh_obj_convex,
+                       const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
                        const std::vector<unsigned int>& mesh_facet_owner,
                        const std::vector<bodyID_t>& mesh_facet_patch,
+                       const std::vector<bodyID_t>& mesh_facet_neighbor1,
+                       const std::vector<bodyID_t>& mesh_facet_neighbor2,
+                       const std::vector<bodyID_t>& mesh_facet_neighbor3,
                        const std::vector<DEMTriangle>& mesh_facets,
                        const std::vector<bodyID_t>& mesh_patch_owner,
                        const std::vector<materialsOffset_t>& mesh_patch_materials,
@@ -814,8 +839,13 @@ class DEMDynamicThread {
                                const std::vector<float3>& input_mesh_obj_xyz,
                                const std::vector<float4>& input_mesh_obj_rot,
                                const std::vector<unsigned int>& input_mesh_obj_family,
+                               const std::vector<notStupidBool_t>& input_mesh_obj_convex,
+                               const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
                                const std::vector<unsigned int>& mesh_facet_owner,
                                const std::vector<bodyID_t>& mesh_facet_patch,
+                               const std::vector<bodyID_t>& mesh_facet_neighbor1,
+                               const std::vector<bodyID_t>& mesh_facet_neighbor2,
+                               const std::vector<bodyID_t>& mesh_facet_neighbor3,
                                const std::vector<DEMTriangle>& mesh_facets,
                                const std::vector<bodyID_t>& mesh_patch_owner,
                                const std::vector<materialsOffset_t>& mesh_patch_materials,
@@ -837,6 +867,7 @@ class DEMDynamicThread {
                                size_t nExistingSpheres,
                                size_t nExistingTriMesh,
                                size_t nExistingFacets,
+                               size_t nExistingTriNeighbors,
                                size_t nExistingPatches,
                                unsigned int nExistingObj,
                                unsigned int nExistingAnalGM);
@@ -854,17 +885,26 @@ class DEMDynamicThread {
 
     // Generate contact info container based on the current contact array, and return it.
     std::shared_ptr<ContactInfoContainer> generateContactInfo(float force_thres);
+    std::shared_ptr<ContactInfoContainer> generateContactInfoFromHost(float force_thres);
 
 #ifdef DEME_USE_CHPF
     void writeSpheresAsChpf(std::ofstream& ptFile);
     void writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy = 10);
+    void writeSpheresAsChpfFromHost(std::ofstream& ptFile);
+    void writeClumpsAsChpfFromHost(std::ofstream& ptFile, unsigned int accuracy = 10);
 #endif
     void writeSpheresAsCsv(std::ofstream& ptFile);
     void writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accuracy = 10);
     void writeContactsAsCsv(std::ofstream& ptFile, float force_thres = DEME_TINY_FLOAT);
     void writeMeshesAsVtk(std::ofstream& ptFile);
     void writeMeshesAsStl(std::ofstream& ptFile);
-    void writeMeshesAsPly(std::ofstream& ptFile);
+    void writeMeshesAsPly(std::ofstream& ptFile, bool patch_colors = false);
+    void writeSpheresAsCsvFromHost(std::ofstream& ptFile);
+    void writeClumpsAsCsvFromHost(std::ofstream& ptFile, unsigned int accuracy = 10);
+    void writeContactsAsCsvFromHost(std::ofstream& ptFile, float force_thres = DEME_TINY_FLOAT);
+    void writeMeshesAsVtkFromHost(std::ofstream& ptFile);
+    void writeMeshesAsStlFromHost(std::ofstream& ptFile);
+    void writeMeshesAsPlyFromHost(std::ofstream& ptFile, bool patch_colors = false);
 
     /// Called each time when the user calls DoDynamicsThenSync.
     void startThread();

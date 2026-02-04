@@ -248,6 +248,320 @@ __global__ void gatherByIndex(const T* in, T* out, const contactPairs_t* idx, si
     }
 }
 
+// Build packed (groupIndex, primitiveID) keys for unique counting.
+__global__ void buildGroupPrimitiveKeys(const contactPairs_t* groupIndex,
+                                        const bodyID_t* primitiveIDs,
+                                        uint64_t* keys,
+                                        size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        keys[myID] = (static_cast<uint64_t>(groupIndex[myID]) << 32) | static_cast<uint64_t>(primitiveIDs[myID]);
+    }
+}
+
+// Extract group indices from packed keys (high 32 bits).
+__global__ void extractGroupIndexFromKey(const uint64_t* keys, contactPairs_t* groupIndex, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        groupIndex[myID] = static_cast<contactPairs_t>(keys[myID] >> 32);
+    }
+}
+
+// Scatter run-length counts into dense per-group counters.
+__global__ void scatterGroupCounts(const contactPairs_t* groupIDs,
+                                   const contactPairs_t* counts,
+                                   contactPairs_t* groupCounts,
+                                   size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        groupCounts[groupIDs[myID]] = counts[myID];
+    }
+}
+
+// Determine winner side for each group.
+__global__ void computeGroupWinners(const contact_t* groupTypes,
+                                    const bodyID_t* groupPrimA,
+                                    const bodyID_t* groupPrimB,
+                                    const contactPairs_t* countA,
+                                    const contactPairs_t* countB,
+                                    const bodyID_t* ownerTriMesh,
+                                    const notStupidBool_t* ownerMeshConvex,
+                                    const notStupidBool_t* ownerMeshNeverWinner,
+                                    notStupidBool_t* winnerIsA,
+                                    notStupidBool_t* winnerIsTri,
+                                    notStupidBool_t* forceSingleIsland,
+                                    size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const contact_t ctype = groupTypes[myID];
+        const geoType_t typeA = decodeTypeA<contact_t, geoType_t>(ctype);
+        const geoType_t typeB = decodeTypeB<contact_t, geoType_t>(ctype);
+        const contactPairs_t nA = countA[myID];
+        const contactPairs_t nB = countB[myID];
+        const bool A_is_tri = (typeA == GEO_T_TRIANGLE);
+        const bool B_is_tri = (typeB == GEO_T_TRIANGLE);
+        bool A_convex = false;
+        bool B_convex = false;
+        bool A_never = false;
+        bool B_never = false;
+        if (A_is_tri) {
+            const bodyID_t ownerA = ownerTriMesh[groupPrimA[myID]];
+            if (ownerA != NULL_BODYID) {
+                A_convex = (ownerMeshConvex[ownerA] != 0);
+                A_never = (ownerMeshNeverWinner[ownerA] != 0);
+            }
+        }
+        if (B_is_tri) {
+            const bodyID_t ownerB = ownerTriMesh[groupPrimB[myID]];
+            if (ownerB != NULL_BODYID) {
+                B_convex = (ownerMeshConvex[ownerB] != 0);
+                B_never = (ownerMeshNeverWinner[ownerB] != 0);
+            }
+        }
+        const bool single_island = (A_is_tri && B_is_tri && A_convex && B_convex);
+        forceSingleIsland[myID] = single_island ? 1 : 0;
+
+        notStupidBool_t pickA = 0;
+        if (A_never && B_never) {
+            pickA = 0;  // deterministic: prefer B when both are never-winner
+        } else if (A_never && !B_never) {
+            pickA = 0;
+        } else if (B_never && !A_never) {
+            pickA = 1;
+        } else if (nA > nB) {
+            pickA = 1;
+        } else if (nA < nB) {
+            pickA = 0;
+        } else {
+            if (A_is_tri && B_is_tri) {
+                if (A_convex != B_convex) {
+                    pickA = A_convex ? 0 : 1;  // prefer concave if tied
+                } else {
+                    pickA = 0;  // deterministic tie-break: prefer B
+                }
+            } else if (A_is_tri && !B_is_tri) {
+                pickA = 1;
+            } else if (B_is_tri && !A_is_tri) {
+                pickA = 0;
+            } else {
+                pickA = 0;  // deterministic tie-break: prefer B
+            }
+        }
+        winnerIsA[myID] = pickA;
+        if (single_island) {
+            winnerIsTri[myID] = 0;
+        } else {
+            const geoType_t winnerType = (pickA ? typeA : typeB);
+            winnerIsTri[myID] = (winnerType == GEO_T_TRIANGLE) ? 1 : 0;
+        }
+    }
+}
+
+// Select winner primitive and flag if it is a triangle.
+__global__ void selectWinnerPrimitive(const contactPairs_t* groupIndex,
+                                      const bodyID_t* idA,
+                                      const bodyID_t* idB,
+                                      const notStupidBool_t* groupWinnerIsA,
+                                      const notStupidBool_t* groupWinnerIsTri,
+                                      const notStupidBool_t* groupForceSingleIsland,
+                                      bodyID_t* winnerID,
+                                      notStupidBool_t* winnerIsTri,
+                                      size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const contactPairs_t grp = groupIndex[myID];
+        if (groupForceSingleIsland[grp] != 0) {
+            winnerID[myID] = 0;
+            winnerIsTri[myID] = 0;
+            return;
+        }
+        const bool pickA = (groupWinnerIsA[grp] != 0);
+        winnerID[myID] = pickA ? idA[myID] : idB[myID];
+        winnerIsTri[myID] = groupWinnerIsTri[grp];
+    }
+}
+
+// Build active triangle keys for compacting (groupIndex, triID).
+__global__ void buildActiveTriKeys(const contactPairs_t* groupIndex,
+                                   const bodyID_t* winnerID,
+                                   const notStupidBool_t* winnerIsTri,
+                                   uint64_t* keys,
+                                   notStupidBool_t* flags,
+                                   size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const notStupidBool_t is_tri = winnerIsTri[myID];
+        flags[myID] = is_tri;
+        if (is_tri) {
+            keys[myID] = (static_cast<uint64_t>(groupIndex[myID]) << 32) | static_cast<uint64_t>(winnerID[myID]);
+        } else {
+            keys[myID] = 0;
+        }
+    }
+}
+
+// Initialize labels from active triangle keys (label = triID).
+__global__ void initActiveTriLabels(const uint64_t* keys, bodyID_t* labels, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        labels[myID] = static_cast<bodyID_t>(keys[myID] & 0xffffffffull);
+    }
+}
+
+// Count active triangles per group (atomic add).
+__global__ void countActiveTriPerGroup(const uint64_t* keys, contactPairs_t* groupCounts, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const contactPairs_t grp = static_cast<contactPairs_t>(keys[myID] >> 32);
+        atomicAdd(&groupCounts[grp], (contactPairs_t)1);
+    }
+}
+
+// Label propagation for active triangles within each group.
+__global__ void propagateActiveTriLabels(const uint64_t* keys,
+                                         const bodyID_t* labelsIn,
+                                         bodyID_t* labelsOut,
+                                         const contactPairs_t* groupStart,
+                                         const contactPairs_t* groupCount,
+                                         const bodyID_t* triNeighborIndex,
+                                         const bodyID_t* triNeighbor1,
+                                         const bodyID_t* triNeighbor2,
+                                         const bodyID_t* triNeighbor3,
+                                         size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const uint64_t key = keys[myID];
+        const contactPairs_t grp = static_cast<contactPairs_t>(key >> 32);
+        const bodyID_t triID = static_cast<bodyID_t>(key & 0xffffffffull);
+        const contactPairs_t start = groupStart[grp];
+        const contactPairs_t count = groupCount[grp];
+        bodyID_t label = labelsIn[myID];
+
+        const bodyID_t nb_idx = triNeighborIndex[triID];
+        if (nb_idx == NULL_BODYID) {
+            labelsOut[myID] = label;
+            return;
+        }
+        bodyID_t nbs[3] = {triNeighbor1[nb_idx], triNeighbor2[nb_idx], triNeighbor3[nb_idx]};
+        for (int e = 0; e < 3; ++e) {
+            const bodyID_t nb = nbs[e];
+            if (nb == NULL_BODYID || count == 0) {
+                continue;
+            }
+            const uint64_t target = (static_cast<uint64_t>(grp) << 32) | static_cast<uint64_t>(nb);
+            contactPairs_t left = 0;
+            contactPairs_t right = count;
+            while (left < right) {
+                contactPairs_t mid = left + (right - left) / 2;
+                const uint64_t mid_key = keys[start + mid];
+                if (mid_key < target) {
+                    left = mid + 1;
+                } else {
+                    right = mid;
+                }
+            }
+            if (left < count) {
+                const uint64_t found = keys[start + left];
+                if (found == target) {
+                    const bodyID_t nb_label = labelsIn[start + left];
+                    if (nb_label < label) {
+                        label = nb_label;
+                    }
+                }
+            }
+        }
+        labelsOut[myID] = label;
+    }
+}
+
+// Assign per-contact island labels using winner primitive and active triangle labels.
+__global__ void assignContactIslandLabel(const contactPairs_t* groupIndex,
+                                         const bodyID_t* winnerID,
+                                         const notStupidBool_t* winnerIsTri,
+                                         const uint64_t* activeKeys,
+                                         const bodyID_t* activeLabels,
+                                         const contactPairs_t* groupStart,
+                                         const contactPairs_t* groupCount,
+                                         bodyID_t* outLabels,
+                                         size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const bodyID_t prim = winnerID[myID];
+        if (winnerIsTri[myID] == 0) {
+            outLabels[myID] = prim;
+            return;
+        }
+        const contactPairs_t grp = groupIndex[myID];
+        const contactPairs_t start = groupStart[grp];
+        const contactPairs_t count = groupCount[grp];
+        if (count == 0) {
+            outLabels[myID] = prim;
+            return;
+        }
+        const uint64_t target = (static_cast<uint64_t>(grp) << 32) | static_cast<uint64_t>(prim);
+        contactPairs_t left = 0;
+        contactPairs_t right = count;
+        while (left < right) {
+            contactPairs_t mid = left + (right - left) / 2;
+            const uint64_t mid_key = activeKeys[start + mid];
+            if (mid_key < target) {
+                left = mid + 1;
+            } else {
+                right = mid;
+            }
+        }
+        if (left < count && activeKeys[start + left] == target) {
+            outLabels[myID] = activeLabels[start + left];
+        } else {
+            outLabels[myID] = prim;
+        }
+    }
+}
+
+// Simple copy kernel for bodyID arrays.
+__global__ void copyBodyIDArray(const bodyID_t* in, bodyID_t* out, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        out[myID] = in[myID];
+    }
+}
+
+// Build composite key parts (contactType + patchA, patchB + label) for island grouping.
+__global__ void buildIslandCompositeKeyParts(const patchIDPair_t* patchPairs,
+                                             const contact_t* contactTypes,
+                                             const bodyID_t* labels,
+                                             uint64_t* key_hi,
+                                             uint64_t* key_lo,
+                                             size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const patchIDPair_t pair = patchPairs[myID];
+        const uint64_t hi = static_cast<uint64_t>(pair >> 32);
+        const uint64_t lo = static_cast<uint64_t>(pair & 0xffffffffull);
+        // key_hi: contactType + patchA (primary key)
+        key_hi[myID] = (static_cast<uint64_t>(contactTypes[myID]) << 32) | hi;
+        // key_lo: patchB + island label (secondary key)
+        key_lo[myID] = (lo << 32) | static_cast<uint64_t>(labels[myID]);
+    }
+}
+
+// Mark new composite groups for sorted (key_hi, key_lo) arrays.
+__global__ void markNewCompositeGroups64(const uint64_t* key_hi,
+                                         const uint64_t* key_lo,
+                                         contactPairs_t* isNewGroup,
+                                         size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        if (myID == 0) {
+            isNewGroup[myID] = 0;
+        } else {
+            const bool new_hi = key_hi[myID] != key_hi[myID - 1];
+            const bool new_lo = key_lo[myID] != key_lo[myID - 1];
+            isNewGroup[myID] = (new_hi || new_lo) ? 1 : 0;
+        }
+    }
+}
+
 // Build a sortable 64-bit key from (idB, contactType, persistency_preference).
 // - High 32 bits: idB (so contacts with the same idB group together)
 // - Low bits: contactType then persistency (so within a duplicate group, the preferred contact comes first)
@@ -325,8 +639,10 @@ __global__ void setNullMappingForType(contactPairs_t* contactMapping,
 //   prev_count: Number of contacts of this type in previous step
 __global__ void buildPatchContactMappingForType(bodyID_t* curr_idPatchA,
                                                 bodyID_t* curr_idPatchB,
+                                                bodyID_t* curr_patchIsland,
                                                 bodyID_t* prev_idPatchA,
                                                 bodyID_t* prev_idPatchB,
+                                                bodyID_t* prev_patchIsland,
                                                 contactPairs_t* contactMapping,
                                                 contactPairs_t curr_start,
                                                 contactPairs_t curr_count,
@@ -339,6 +655,7 @@ __global__ void buildPatchContactMappingForType(bodyID_t* curr_idPatchA,
 
         bodyID_t curr_A = curr_idPatchA[curr_idx];
         bodyID_t curr_B = curr_idPatchB[curr_idx];
+        bodyID_t curr_L = curr_patchIsland[curr_idx];
 
         // Default: no match found
         contactPairs_t my_partner = NULL_MAPPING_PARTNER;
@@ -353,8 +670,9 @@ __global__ void buildPatchContactMappingForType(bodyID_t* curr_idPatchA,
             bodyID_t prev_A = prev_idPatchA[prev_idx];
             bodyID_t prev_B = prev_idPatchB[prev_idx];
 
-            // Compare (A, B) pairs lexicographically
-            if (prev_A < curr_A || (prev_A == curr_A && prev_B < curr_B)) {
+            // Compare (A, B, label) lexicographically
+            if (prev_A < curr_A || (prev_A == curr_A && (prev_B < curr_B ||
+                                                         (prev_B == curr_B && prev_patchIsland[prev_idx] < curr_L)))) {
                 left = mid + 1;
             } else {
                 right = mid;
@@ -366,7 +684,8 @@ __global__ void buildPatchContactMappingForType(bodyID_t* curr_idPatchA,
             contactPairs_t prev_idx = prev_start + left;
             bodyID_t prev_A = prev_idPatchA[prev_idx];
             bodyID_t prev_B = prev_idPatchB[prev_idx];
-            if (prev_A == curr_A && prev_B == curr_B) {
+            bodyID_t prev_L = prev_patchIsland[prev_idx];
+            if (prev_A == curr_A && prev_B == curr_B && prev_L == curr_L) {
                 my_partner = prev_idx;
             }
         }
@@ -380,9 +699,11 @@ __global__ void buildPatchContactMappingForType(bodyID_t* curr_idPatchA,
 // For each current contact, we use binary search to find the matching contact in the previous array.
 __global__ void buildPatchContactMapping(bodyID_t* curr_idPatchA,
                                          bodyID_t* curr_idPatchB,
+                                         bodyID_t* curr_patchIsland,
                                          contact_t* curr_contactTypePatch,
                                          bodyID_t* prev_idPatchA,
                                          bodyID_t* prev_idPatchB,
+                                         bodyID_t* prev_patchIsland,
                                          contact_t* previous_contactTypePatch,
                                          contactPairs_t* contactMapping,
                                          size_t numCurrContacts,
@@ -391,6 +712,7 @@ __global__ void buildPatchContactMapping(bodyID_t* curr_idPatchA,
     if (myID < numCurrContacts) {
         bodyID_t curr_A = curr_idPatchA[myID];
         bodyID_t curr_B = curr_idPatchB[myID];
+        bodyID_t curr_L = curr_patchIsland[myID];
         contact_t curr_type = curr_contactTypePatch[myID];
 
         // Default: no match found
@@ -426,19 +748,19 @@ __global__ void buildPatchContactMapping(bodyID_t* curr_idPatchA,
         }
         size_t type_end = left;
 
-        // Within this type segment, use binary search to find the matching A/B pair
-        // The segment is sorted by the combined patch ID pair (A in high bits, B in low bits)
-        // The encoding ensures that (smaller_A, larger_B) pattern creates a sortable value
+        // Within this type segment, use binary search to find the matching A/B/label triple
+        // The segment is sorted by patch pair then island label.
         left = type_start;
         right = type_end;
         while (left < right) {
             size_t mid = left + (right - left) / 2;
             bodyID_t prev_A = prev_idPatchA[mid];
             bodyID_t prev_B = prev_idPatchB[mid];
+            bodyID_t prev_L = prev_patchIsland[mid];
 
             // Compare (A, B) pairs lexicographically
             // Since they're sorted by patch ID pair where smaller ID is in high bits
-            if (prev_A < curr_A || (prev_A == curr_A && prev_B < curr_B)) {
+            if (prev_A < curr_A || (prev_A == curr_A && (prev_B < curr_B || (prev_B == curr_B && prev_L < curr_L)))) {
                 left = mid + 1;
             } else {
                 right = mid;
@@ -449,7 +771,8 @@ __global__ void buildPatchContactMapping(bodyID_t* curr_idPatchA,
         if (left < type_end) {
             bodyID_t prev_A = prev_idPatchA[left];
             bodyID_t prev_B = prev_idPatchB[left];
-            if (prev_A == curr_A && prev_B == curr_B) {
+            bodyID_t prev_L = prev_patchIsland[left];
+            if (prev_A == curr_A && prev_B == curr_B && prev_L == curr_L) {
                 my_partner = left;
             }
         }

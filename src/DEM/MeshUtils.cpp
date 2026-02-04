@@ -185,6 +185,15 @@ bool DEMMesh::LoadSTLMesh(std::string input_file, bool load_normals) {
     m_face_uv_indices.clear();
 
     set_default_patch_info();
+    {
+        size_t boundary_edges = 0;
+        size_t nonmanifold_edges = 0;
+        if (!IsWatertight(&boundary_edges, &nonmanifold_edges)) {
+            DEME_WARNING(
+                "Mesh %s is not watertight (boundary edges: %zu, non-manifold edges: %zu). Auto Volume/MOI may be inaccurate.",
+                filename.c_str(), boundary_edges, nonmanifold_edges);
+        }
+    }
     return true;
 }
 
@@ -553,6 +562,16 @@ bool DEMMesh::LoadWavefrontMesh(std::string input_file, bool load_normals, bool 
     this->nPatches = 1;
     this->patches_explicitly_set = false;
 
+    {
+        size_t boundary_edges = 0;
+        size_t nonmanifold_edges = 0;
+        if (!IsWatertight(&boundary_edges, &nonmanifold_edges)) {
+            DEME_WARNING(
+                "Mesh %s is not watertight (boundary edges: %zu, non-manifold edges: %zu). Volume/MOI may be inaccurate.",
+                filename.c_str(), boundary_edges, nonmanifold_edges);
+        }
+    }
+
     return true;
 }
 
@@ -673,131 +692,109 @@ static std::vector<std::vector<size_t>> buildAdjacencyMap(const std::vector<int3
     return adjacency;
 }
 
-// Split mesh into convex patches using region-growing algorithm.
-// The algorithm groups adjacent triangles (sharing an edge) if the angle between their
-// face normals is below the threshold. Each patch represents a locally convex region.
-unsigned int DEMMesh::SplitIntoConvexPatches(float angle_threshold_deg) {
-    if (nTri == 0) {
-        patches_explicitly_set = false;
-        nPatches = 1;
-        return 0;
-    }
+// ------------------------------------------------------------
+// Helpers for advanced patching
+// ------------------------------------------------------------
+struct EdgeAdjInfo {
+    size_t nbr = 0;
+    int va = -1;              // oriented edge vertex A (as appears in the current triangle)
+    int vb = -1;              // oriented edge vertex B (as appears in the current triangle)
+    bool oriented_ok = false; // true if the neighbor sees the shared edge reversed (good sign for oriented manifold)
+};
 
-    // Initialize patch IDs (all -1 means unassigned)
-    m_patch_ids.clear();
-    m_patch_ids.resize(nTri, -1);
-
-    // Compute face normals for all triangles
-    std::vector<float3> face_normals(nTri);
-    for (size_t i = 0; i < nTri; ++i) {
-        const int3& face = m_face_v_indices[i];
-        const float3& v0 = m_vertices[face.x];
-        const float3& v1 = m_vertices[face.y];
-        const float3& v2 = m_vertices[face.z];
-        face_normals[i] = computeFaceNormal(v0, v1, v2);
-    }
-
-    // Build adjacency map (which triangles share edges)
-    std::vector<std::vector<size_t>> adjacency = buildAdjacencyMap(m_face_v_indices);
-
-    // Region growing algorithm to assign patches
-    int current_patch_id = 0;
-    std::vector<size_t> queue;
-
-    for (size_t seed = 0; seed < nTri; ++seed) {
-        // Skip if already assigned to a patch
-        if (m_patch_ids[seed] != -1) {
-            continue;
-        }
-
-        // Start a new patch from this seed triangle
-        queue.clear();
-        queue.push_back(seed);
-        m_patch_ids[seed] = current_patch_id;
-
-        // Grow the region
-        size_t queue_idx = 0;
-        while (queue_idx < queue.size()) {
-            size_t current = queue[queue_idx++];
-
-            // Check all adjacent triangles
-            for (size_t neighbor : adjacency[current]) {
-                // Skip if already assigned
-                if (m_patch_ids[neighbor] != -1) {
-                    continue;
-                }
-
-                // Check angle between normals
-                float angle = computeAngleBetweenNormals(face_normals[current], face_normals[neighbor]);
-
-                // If angle is below threshold, add to same patch
-                if (angle <= angle_threshold_deg) {
-                    m_patch_ids[neighbor] = current_patch_id;
-                    queue.push_back(neighbor);
-                }
-            }
-        }
-
-        // Move to next patch
-        current_patch_id++;
-    }
-
-    nPatches = current_patch_id;
-    patches_explicitly_set = true;
-
-    // If material is set and we cannot broadcast it to all patches, we raise error
-    if (isMaterialSet && materials.size() != nPatches) {
-        DEME_ERROR(
-            "The number of materials set (%zu) does not match the number of patches (%u). Please set the "
-            "material for each patch or use a single material for all patches.",
-            materials.size(), nPatches);
-    }
-    // If material is set and we can broadcast it to all patches, we do so
-    if (isMaterialSet && materials.size() == 1) {
-        materials = std::vector<std::shared_ptr<DEMMaterial>>(nPatches, materials[0]);
-    }
-
-    return nPatches;
+static inline float dot3(const float3& a, const float3& b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+static inline float3 cross3(const float3& a, const float3& b) {
+    return make_float3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+}
+static inline float norm3(const float3& v) {
+    return std::sqrt(dot3(v, v));
+}
+static inline float3 normalize3(const float3& v) {
+    float n = norm3(v);
+    if (n > DEME_TINY_FLOAT)
+        return make_float3(v.x / n, v.y / n, v.z / n);
+    return make_float3(0, 0, 0);
+}
+static inline float3 add3(const float3& a, const float3& b) {
+    return make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
+}
+static inline float3 mul3(const float3& v, float s) {
+    return make_float3(v.x * s, v.y * s, v.z * s);
+}
+static inline float clamp11(float x) {
+    return std::max(-1.0f, std::min(1.0f, x));
+}
+static inline float deg2rad(float deg) {
+    return deg * (deme::PI / 180.0f);
+}
+static inline float rad2deg(float rad) {
+    return rad * (180.0f / deme::PI);
 }
 
-// Manually set patch IDs for each triangle
-void DEMMesh::SetPatchIDs(const std::vector<patchID_t>& patch_ids) {
-    assertTriLength(patch_ids.size(), "SetPatchIDs");
-
-    // Use rank-transformed patch IDs to ensure they are contiguous and start from 0
-    auto [compressed_ids, changed] = rank_transform<patchID_t>(patch_ids);
-
-    if (changed) {
-        DEME_WARNING(
-            std::string("Patch IDs you supplied for a mesh were not contiguous or did not start from 0.\nThey have "
-                        "been transformed to be contiguous and start from 0."));
-    }
-
-    // Copy the patch IDs
-    m_patch_ids = compressed_ids;
-
-    // Calculate the number of patches (maximum patch ID + 1)
-    if (!compressed_ids.empty()) {
-        int max_patch_id = *std::max_element(compressed_ids.begin(), compressed_ids.end());
-        nPatches = max_patch_id + 1;
-    } else {
-        nPatches = 1;
-    }
-
-    patches_explicitly_set = true;
-
-    // If material is set and we cannot broadcast it to all patches, we raise error
-    if (isMaterialSet && materials.size() != nPatches) {
-        DEME_ERROR(
-            "The number of materials set (%zu) does not match the number of patches (%u). Please set the "
-            "material for each patch or use a single material for all patches.",
-            materials.size(), nPatches);
-    }
-    // If material is set and we can broadcast it to all patches, we do so
-    if (isMaterialSet && materials.size() == 1) {
-        materials = std::vector<std::shared_ptr<DEMMaterial>>(nPatches, materials[0]);
-    }
+static float computeTriangleArea(const float3& v0, const float3& v1, const float3& v2) {
+    float3 e1 = make_float3(v1.x - v0.x, v1.y - v0.y, v1.z - v0.z);
+    float3 e2 = make_float3(v2.x - v0.x, v2.y - v0.y, v2.z - v0.z);
+    float3 c = cross3(e1, e2);
+    return 0.5f * norm3(c);
 }
+
+// Signed dihedral angle (deg) around oriented edge va->vb of the current triangle.
+// Sign is meaningful only when edge orientation is reliable (oriented_ok == true).
+static float signedDihedralDeg(const float3& n_cur, const float3& n_nbr, const float3& vA, const float3& vB) {
+    float3 e = normalize3(make_float3(vB.x - vA.x, vB.y - vA.y, vB.z - vA.z));
+    float s = dot3(e, cross3(n_cur, n_nbr));
+    float c = clamp11(dot3(n_cur, n_nbr));
+    float theta = std::atan2(s, c);  // [-pi, pi]
+    return rad2deg(theta);
+}
+
+// Build triangle adjacency WITH oriented shared-edge info.
+// Non-manifold edges (shared by != 2 faces) are treated as boundaries.
+static std::vector<std::vector<EdgeAdjInfo>> buildAdjacencyWithEdgeInfo(const std::vector<int3>& face_v_indices) {
+    struct EdgeRec {
+        size_t f;
+        int a;
+        int b;
+    };
+
+    const size_t num_faces = face_v_indices.size();
+    std::vector<std::vector<EdgeAdjInfo>> adj(num_faces);
+
+    std::map<std::pair<int, int>, std::vector<EdgeRec>> edge_map;
+
+    auto add_edge = [&](size_t f, int a, int b) {
+        int lo = std::min(a, b);
+        int hi = std::max(a, b);
+        edge_map[{lo, hi}].push_back(EdgeRec{f, a, b});
+    };
+
+    for (size_t i = 0; i < num_faces; ++i) {
+        const int3& tri = face_v_indices[i];
+        add_edge(i, tri.x, tri.y);
+        add_edge(i, tri.y, tri.z);
+        add_edge(i, tri.z, tri.x);
+    }
+
+    for (const auto& kv : edge_map) {
+        const auto& recs = kv.second;
+        if (recs.size() != 2) {
+            continue;  // boundary or non-manifold
+        }
+        const EdgeRec& r0 = recs[0];
+        const EdgeRec& r1 = recs[1];
+
+        bool oriented_ok_0 = (r0.a == r1.b && r0.b == r1.a);
+        bool oriented_ok_1 = oriented_ok_0;
+
+        adj[r0.f].push_back(EdgeAdjInfo{r1.f, r0.a, r0.b, oriented_ok_0});
+        adj[r1.f].push_back(EdgeAdjInfo{r0.f, r1.a, r1.b, oriented_ok_1});
+    }
+
+    return adj;
+}
+
 
 // Compute patch locations (relative to CoM, which is implicitly at 0,0,0)
 // If not explicitly set, calculates as:
@@ -842,6 +839,185 @@ std::vector<float3> DEMMesh::ComputePatchLocations() const {
     }
 
     return patch_locations;
+}
+
+// Compute volume, centroid and MOI in CoM frame (unit density).
+// ATTENTION: Only correct for "watertight" meshes with fine and non-degenerated triangles.
+void DEMMesh::ComputeMassProperties(double& volume, float3& center, float3& inertia) const {
+    double vol = 0.0;
+    double mx = 0.0;
+    double my = 0.0;
+    double mz = 0.0;
+    double ix2 = 0.0;
+    double iy2 = 0.0;
+    double iz2 = 0.0;
+    double ixy = 0.0;
+    double iyz = 0.0;
+    double izx = 0.0;
+
+    for (const auto& face : m_face_v_indices) {
+        const float3& a = m_vertices[face.x];
+        const float3& b = m_vertices[face.y];
+        const float3& c = m_vertices[face.z];
+
+        const float3 bcross = cross(b, c);
+        const double v = static_cast<double>(dot(a, bcross)) / 6.0;
+
+        vol += v;
+        mx += v * (static_cast<double>(a.x) + b.x + c.x) / 4.0;
+        my += v * (static_cast<double>(a.y) + b.y + c.y) / 4.0;
+        mz += v * (static_cast<double>(a.z) + b.z + c.z) / 4.0;
+
+        const double ax = a.x, ay = a.y, az = a.z;
+        const double bx = b.x, by = b.y, bz = b.z;
+        const double cx = c.x, cy = c.y, cz = c.z;
+
+        const double f1x = ax * ax + bx * bx + cx * cx + ax * bx + bx * cx + cx * ax;
+        const double f1y = ay * ay + by * by + cy * cy + ay * by + by * cy + cy * ay;
+        const double f1z = az * az + bz * bz + cz * cz + az * bz + bz * cz + cz * az;
+
+        ix2 += v * f1x / 10.0;
+        iy2 += v * f1y / 10.0;
+        iz2 += v * f1z / 10.0;
+
+        const double fxy = 2.0 * (ax * ay + bx * by + cx * cy) +
+                           (ax * by + ay * bx + bx * cy + by * cx + cx * ay + cy * ax);
+        const double fyz = 2.0 * (ay * az + by * bz + cy * cz) +
+                           (ay * bz + az * by + by * cz + bz * cy + cy * az + cz * ay);
+        const double fzx = 2.0 * (az * ax + bz * bx + cz * cx) +
+                           (az * bx + ax * bz + bz * cx + bx * cz + cz * ax + cx * az);
+
+        ixy += v * fxy / 20.0;
+        iyz += v * fyz / 20.0;
+        izx += v * fzx / 20.0;
+    }
+
+    if (vol == 0.0) {
+        volume = 0.0;
+        center = make_float3(0, 0, 0);
+        inertia = make_float3(0, 0, 0);
+        return;
+    }
+
+    if (vol < 0.0) {
+        vol = -vol;
+        mx = -mx;
+        my = -my;
+        mz = -mz;
+        ix2 = -ix2;
+        iy2 = -iy2;
+        iz2 = -iz2;
+        ixy = -ixy;
+        iyz = -iyz;
+        izx = -izx;
+    }
+
+    const double cx = mx / vol;
+    const double cy = my / vol;
+    const double cz = mz / vol;
+
+    double Ixx = iy2 + iz2;
+    double Iyy = ix2 + iz2;
+    double Izz = ix2 + iy2;
+    double Ixy = -ixy;
+    double Iyz = -iyz;
+    double Izx = -izx;
+
+    // Shift to center of mass.
+    Ixx -= vol * (cy * cy + cz * cz);
+    Iyy -= vol * (cx * cx + cz * cz);
+    Izz -= vol * (cx * cx + cy * cy);
+    Ixy += vol * cx * cy;
+    Iyz += vol * cy * cz;
+    Izx += vol * cz * cx;
+
+    volume = vol;
+    center = make_float3(static_cast<float>(cx), static_cast<float>(cy), static_cast<float>(cz));
+    inertia = make_float3(static_cast<float>(Ixx), static_cast<float>(Iyy), static_cast<float>(Izz));
+}
+
+// Section for Watertight test, false if not
+
+bool DEMMesh::IsWatertight(size_t* boundary_edges, size_t* nonmanifold_edges) const {
+    if (boundary_edges) *boundary_edges = 0;
+    if (nonmanifold_edges) *nonmanifold_edges = 0;
+    if (m_face_v_indices.empty()) return true;
+
+    auto count_edges_by_index = [&](size_t& boundary, size_t& nonmanifold) {
+        std::map<std::pair<size_t, size_t>, size_t> edge_counts;
+
+        for (const auto& face : m_face_v_indices) {
+            const int fx = face.x, fy = face.y, fz = face.z;
+            if (fx < 0 || fy < 0 || fz < 0) continue;
+
+            const size_t a = (size_t)fx, b = (size_t)fy, c = (size_t)fz;
+            if (a == b || b == c || c == a) continue;
+
+            std::pair<size_t, size_t> edges[3] = {
+                {std::min(a,b), std::max(a,b)},
+                {std::min(b,c), std::max(b,c)},
+                {std::min(c,a), std::max(c,a)}
+            };
+            edge_counts[edges[0]]++;
+            edge_counts[edges[1]]++;
+            edge_counts[edges[2]]++;
+        }
+
+        boundary = 0; nonmanifold = 0;
+        for (const auto& kv : edge_counts) {
+            if (kv.second == 1) boundary++;
+            else if (kv.second > 2) nonmanifold++;
+        }
+    };
+
+    size_t boundary1 = 0, nonmanifold1 = 0;
+    count_edges_by_index(boundary1, nonmanifold1);
+
+    if (boundary1 == 0 && nonmanifold1 == 0) {
+        if (boundary_edges) *boundary_edges = 0;
+        if (nonmanifold_edges) *nonmanifold_edges = 0;
+        return true;
+    }
+
+    if (m_vertices.empty()) {
+        if (boundary_edges) *boundary_edges = boundary1;
+        if (nonmanifold_edges) *nonmanifold_edges = nonmanifold1;
+        return false;
+    }
+
+    const double eps = computeVertexQuantEps(m_vertices);
+    const auto canon = buildCanonicalVertexMap(m_vertices, eps);
+
+    std::map<std::pair<size_t, size_t>, size_t> edge_counts2;
+    for (const auto& face : m_face_v_indices) {
+        const int fx = face.x, fy = face.y, fz = face.z;
+        if (fx < 0 || fy < 0 || fz < 0) continue;
+
+        const size_t a0 = (size_t)fx, b0 = (size_t)fy, c0 = (size_t)fz;
+        if (a0 >= canon.size() || b0 >= canon.size() || c0 >= canon.size()) continue;
+
+        const size_t a = canon[a0], b = canon[b0], c = canon[c0];
+        if (a == b || b == c || c == a) continue;
+
+        std::pair<size_t, size_t> edges[3] = {
+            {std::min(a,b), std::max(a,b)},
+            {std::min(b,c), std::max(b,c)},
+            {std::min(c,a), std::max(c,a)}
+        };
+        edge_counts2[edges[0]]++;
+        edge_counts2[edges[1]]++;
+        edge_counts2[edges[2]]++;
+    }
+
+    size_t boundary2 = 0, nonmanifold2 = 0;
+    for (const auto& kv : edge_counts2) {
+        if (kv.second == 1) boundary2++;
+        else if (kv.second > 2) nonmanifold2++;
+    }
+
+    if (boundary_edges) *boundary_edges = boundary2;
+    if (nonmanifold_edges) *nonmanifold_edges = nonmanifold2;
+    return boundary2 == 0 && nonmanifold2 == 0;
 }
 
 }  // end namespace deme

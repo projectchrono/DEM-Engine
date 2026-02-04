@@ -43,6 +43,8 @@ int main() {
     // Load cube mesh template (12 triangles) and scale to 10 mm
     auto cube_template = DEMSim.LoadMeshType((GET_DATA_PATH() / "mesh/cube.obj").string(), mat_type_cube, true, false);
     cube_template->Scale(cube_size);
+    cube_template->SetConvex(true);
+    cube_template->SetNeverWinner(true);
 
     // Drum definition
     float3 CylCenter = make_float3(0, 0, 0);
@@ -54,11 +56,7 @@ int main() {
     float IZZ = CylMass * CylRad * CylRad / 2;
     float IYY = (CylMass / 12) * (3 * CylRad * CylRad + CylHeight * CylHeight);
     auto Drum = DEMSim.AddExternalObject();
-    // Drum->AddCylinder(CylCenter, CylAxis, CylRad, mat_type_drum, 0);
-    Drum->AddPlane(make_float3(CylRad, 0, 0), make_float3(-1, 0, 0), mat_type_drum);
-    Drum->AddPlane(make_float3(-CylRad, 0, 0), make_float3(1, 0, 0), mat_type_drum);
-    Drum->AddPlane(make_float3(0, CylRad, 0), make_float3(0, -1, 0), mat_type_drum);
-    Drum->AddPlane(make_float3(0, -CylRad, 0), make_float3(0, 1, 0), mat_type_drum);
+    Drum->AddPlanarContactCylinder(CylCenter, CylAxis, CylRad, mat_type_drum, ENTITY_NORMAL_INWARD);
     Drum->SetMass(CylMass);
     Drum->SetMOI(make_float3(IYY, IYY, IZZ));
     auto Drum_tracker = DEMSim.Track(Drum);
@@ -114,7 +112,7 @@ int main() {
     create_directory(out_dir);
 
     float time_end = 3.0f;
-    unsigned int fps = 20;
+    unsigned int fps = 100;
     float frame_time = 1.0f / fps;
 
     std::cout << "Output at " << fps << " FPS" << std::endl;

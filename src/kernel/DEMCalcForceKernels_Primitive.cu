@@ -33,17 +33,20 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
     double overlapDepth = 0.0;
     // Area of the contact surface, or in the mesh--mesh case, area of the clipping polygon projection
     double overlapArea = 0.0;
+    // `Body pos' in the primitive contact kernel means the position of the primitive itself, e.g., sphere center or
+    // triangle nodes
     double3 AOwnerPos, bodyAPos, BOwnerPos, bodyBPos;
+    // Radius always means radius of curvature; for triangle and analytical entity, it's set to a huge number
     float AOwnerMass, ARadius, BOwnerMass, BRadius;
     float4 AOriQ, BOriQ;
     deme::materialsOffset_t bodyAMatType, bodyBMatType;
-    // Cache analytic entity info when B is analytical (used for on-the-fly area calc)
-    deme::objType_t analyticalType = deme::ANAL_OBJ_TYPE_PLANE;
-    float analyticalSize1 = 0.f;
     // The user-specified extra margin size (how much we should be lenient in determining `in-contact')
     float extraMarginSize = 0.;
     // Triangle A's three points are defined outside, as may be reused in B's acquisition and penetration calc.
     double3 triANode1, triANode2, triANode3;
+    // Mesh's patch location may be needed for testing if this primitive contact respects the patch's general spatial
+    // direction
+    float3 triPatchPosA;
     // Then allocate the optional quantities that will be needed in the force model (note: this one can't be in a
     // curly bracket, obviously...)
     _forceModelIngredientDefinition_;
@@ -55,6 +58,10 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
     // For sph-sph and sph-anal contacts, this primitive sweep already generates the final results, so putting the
     // resulting into the correct place needs to be done here.
     deme::contactPairs_t myPatchContactID = granData->geomToPatchMap[myPrimitiveContactID];
+
+    // Default: patch-direction check should not filter non-tri-tri contacts.
+    // Tri-tri will overwrite this after computing patch direction.
+    granData->contactPatchDirectionRespected[myPrimitiveContactID] = 1;
 
     // ----------------------------------------------------------------
     // Based on A's type, equip info
@@ -100,6 +107,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         deme::bodyID_t myPatchID = granData->triPatchID[triID];
         bodyAMatType = granData->patchMaterialOffset[myPatchID];
         extraMarginSize = granData->familyExtraMarginSize[AOwnerFamily];
+        float3 relPosPatch = granData->relPosPatch[myPatchID];
 
         triANode1 = to_double3(granData->relPosNode1[triID]);
         triANode2 = to_double3(granData->relPosNode2[triID]);
@@ -126,6 +134,10 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         triANode3 += AOwnerPos;
         // Assign the correct bodyAPos
         bodyAPos = triangleCentroid<double3>(triANode1, triANode2, triANode3);
+
+        // Get triPatchPosA ready
+        applyOriQToVector3(relPosPatch.x, relPosPatch.y, relPosPatch.z, AOriQ.w, AOriQ.x, AOriQ.y, AOriQ.z);
+        triPatchPosA = relPosPatch + to_float3(AOwnerPos);
     } else {
         // Currently, we only support sphere and mesh for body A
         ContactType = deme::NOT_A_CONTACT;
@@ -188,6 +200,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // If this is a triangle then it has a patch ID
         deme::bodyID_t myPatchID = granData->triPatchID[triID];
         bodyBMatType = granData->patchMaterialOffset[myPatchID];
+        float3 relPosPatch = granData->relPosPatch[myPatchID];
 
         // As the grace margin, the distance (negative overlap) just needs to be within the grace margin. So we pick
         // the larger of the 2 familyExtraMarginSize.
@@ -220,6 +233,9 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         triBNode3 += BOwnerPos;
         // Assign the correct bodyBPos
         bodyBPos = triangleCentroid<double3>(triBNode1, triBNode2, triBNode3);
+        // Get triPatchPosB ready
+        applyOriQToVector3(relPosPatch.x, relPosPatch.y, relPosPatch.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
+        float3 triPatchPosB = relPosPatch + to_float3(BOwnerPos);
 
         // If B is a triangle, then A can be a sphere or a triangle.
         if constexpr (AType == deme::GEO_T_SPHERE) {
@@ -249,18 +265,12 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
                                                                             overlapDepth, overlapArea, contactPnt);
             B2A = to_float3(contact_normal);
 
-            // Record whether this tri-tri primitive contact satisfies SAT (is in physical contact)
-            // Use the dedicated SAT check function to determine if triangles are truly in physical contact
-            // Note: checkTriangleTriangleOverlap uses projection which can report contact even for non-physical
-            // "submerged" cases, so we need the actual SAT test for accurate physical contact determination
-            bool satisfiesSAT = checkTriangleTriangleSAT<double3, double>(triANode1, triANode2, triANode3, triBNode1,
-                                                                          triBNode2, triBNode3);
-            granData->contactSATSatisfied[myPrimitiveContactID] = satisfiesSAT ? 1 : 0;
-
-            // If SAT says no physical contact potential, drop this pair (projection can report non-physical overlaps)
-            if (!satisfiesSAT) {
-                ContactType = deme::NOT_A_CONTACT;
-            }
+            // We require that in the tri--tri case, the contact also respects the patch--patch general direction. This
+            // is because if the contact margin is very large, the algorithm can detect remote fake `submerge' cases
+            // which involve the triangles of the wrong sides of the mesh particles. But in this case, the direction of
+            // this contact is almost always opposite to the general direction of the 2 patches (in terms of B2A).
+            float dotProd = dot(B2A, triPatchPosA - triPatchPosB);
+            granData->contactPatchDirectionRespected[myPrimitiveContactID] = (dotProd > 0.f) ? 1 : 0;
 
             // Fix ContactType if needed
             // If the solver says in contact, we do not question it
@@ -278,8 +288,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // For analytical entity, its patch ID is just its own component ID (but myPatchID is hardly used in this
         // analytical case)
         deme::bodyID_t myPatchID = analyticalID;
-        analyticalType = objType[analyticalID];
-        analyticalSize1 = objSize1[analyticalID];
         // If B is analytical entity, its owner, relative location, material info is jitified.
         bodyBMatType = objMaterial[analyticalID];
         BOwnerMass = objMass[analyticalID];

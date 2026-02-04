@@ -89,10 +89,12 @@ FOREACH(PROGRAM ${DEMOS})
 		
 		add_dependencies(${PROGRAM} ${LIBRARIES})
 
-		set_target_properties(
-			${PROGRAM} PROPERTIES
-			CXX_STANDARD ${CXXSTD_SUPPORTED}
-		)
+		if (CXXSTD_SUPPORTED)
+			set_target_properties(
+				${PROGRAM} PROPERTIES
+				CXX_STANDARD ${CXXSTD_SUPPORTED}
+			)
+		endif()
 
 		# install(TARGETS ${PROGRAM} DESTINATION ${DEME_INSTALL_DEMO})
 

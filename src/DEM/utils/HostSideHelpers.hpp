@@ -23,12 +23,85 @@
 #include <utility>
 #include <tuple>
 #include <type_traits>
+#include <unordered_map>
+#include <cstdint>
 
 #include "../kernel/DEMHelperKernels.cuh"
 #include "../VariableTypes.h"
 #include "../../core/utils/Logger.hpp"
 
 namespace deme {
+
+namespace detail {
+
+struct QuantKey3 {
+    int64_t x, y, z;
+    bool operator==(const QuantKey3& o) const noexcept { return x == o.x && y == o.y && z == o.z; }
+};
+
+struct QuantKey3Hash {
+    size_t operator()(const QuantKey3& k) const noexcept {
+        size_t h1 = std::hash<int64_t>{}(k.x);
+        size_t h2 = std::hash<int64_t>{}(k.y);
+        size_t h3 = std::hash<int64_t>{}(k.z);
+        size_t h = h1;
+        h ^= h2 + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+        h ^= h3 + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+        return h;
+    }
+};
+
+inline int64_t quantize_coord(double v, double eps) {
+    return static_cast<int64_t>(std::llround(v / eps));
+}
+
+}  // namespace detail
+
+inline double computeVertexQuantEps(const std::vector<float3>& vertices) {
+    if (vertices.empty()) {
+        return 0.0;
+    }
+    double minx = vertices[0].x, miny = vertices[0].y, minz = vertices[0].z;
+    double maxx = minx, maxy = miny, maxz = minz;
+    for (const auto& v : vertices) {
+        minx = std::min(minx, (double)v.x);
+        miny = std::min(miny, (double)v.y);
+        minz = std::min(minz, (double)v.z);
+        maxx = std::max(maxx, (double)v.x);
+        maxy = std::max(maxy, (double)v.y);
+        maxz = std::max(maxz, (double)v.z);
+    }
+    const double dx = maxx - minx, dy = maxy - miny, dz = maxz - minz;
+    const double diag = std::sqrt(dx * dx + dy * dy + dz * dz);
+    return std::max(diag * 1e-9, 1e-12);
+}
+
+inline std::vector<size_t> buildCanonicalVertexMap(const std::vector<float3>& vertices, double eps) {
+    if (vertices.empty()) {
+        return {};
+    }
+    if (eps <= 0.0) {
+        eps = 1e-12;
+    }
+    std::unordered_map<detail::QuantKey3, size_t, detail::QuantKey3Hash> rep;
+    rep.reserve(vertices.size());
+    std::vector<size_t> canon(vertices.size(), static_cast<size_t>(-1));
+    size_t next_id = 0;
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        const auto& v = vertices[i];
+        detail::QuantKey3 key{detail::quantize_coord(v.x, eps), detail::quantize_coord(v.y, eps),
+                              detail::quantize_coord(v.z, eps)};
+        auto it = rep.find(key);
+        if (it == rep.end()) {
+            rep.emplace(key, next_id);
+            canon[i] = next_id;
+            next_id++;
+        } else {
+            canon[i] = it->second;
+        }
+    }
+    return canon;
+}
 
 // Generic helper to access tuple of pointers
 template <typename Tuple, size_t... Is>

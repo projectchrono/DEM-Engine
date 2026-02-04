@@ -130,6 +130,26 @@ __host__ __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             CP = A - to_real3<float3, T1>(cntNormal * (radA - overlapDepth / 2.0));
             return contactTypePrimitive;
         }
+        case (deme::ANAL_OBJ_TYPE_PLANAR_CYL): {
+            T1 cyl2sph = cylRadialDistanceVec<T1>(A, B, dirB);
+            const T3 dist_delta_r = length(cyl2sph);
+            if (dist_delta_r <= (T3)DEME_TINY_FLOAT) {
+                return deme::NOT_A_CONTACT;
+            }
+            const T3 dist_plane = normal_sign * ((T3)size1B - dist_delta_r);
+            if (dist_plane < 0) {
+                return deme::NOT_A_CONTACT;
+            }
+            cntNormal = to_real3<T1, float3>(-normal_sign / dist_delta_r * cyl2sph);
+            overlapDepth = (T3)(radA + beta4Entity) - dist_plane;
+            if (overlapDepth <= DEME_TINY_FLOAT) {
+                contactTypePrimitive = deme::NOT_A_CONTACT;
+            } else {
+                contactTypePrimitive = deme::SPHERE_ANALYTICAL_CONTACT;
+            }
+            CP = A - to_real3<float3, T1>(cntNormal * (dist_plane + overlapDepth / 2.0));
+            return contactTypePrimitive;
+        }
         default:
             return deme::NOT_A_CONTACT;
     }
