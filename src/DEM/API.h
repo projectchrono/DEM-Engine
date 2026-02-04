@@ -184,9 +184,6 @@ class DEMSolver {
     /// them it into GPU kernels.
     void DisableJitifyMassProperties() { jitify_mass_moi = false; }
 
-    // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
-    void UseCompactForceKernel(bool use_compact);
-
     /// (Explicitly) set the amount by which the radii of the spheres (and the thickness of the boundaries) are expanded
     /// for the purpose of contact detection (safe, and creates false positives). If fix is set to true, then this
     /// expand factor does not change even if the user uses variable time step size.

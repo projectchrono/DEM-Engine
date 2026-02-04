@@ -507,6 +507,8 @@ class DEMClumpTemplate {
 
     /// Set mass.
     void SetMass(float mass) { this->mass = mass; }
+    /// Get mass.
+    float GetMass() const { return mass; }
     /// Set MOI (in principal frame).
     void SetMOI(float3 MOI) { this->MOI = MOI; }
     /// Set MOI (in principal frame).
@@ -514,6 +516,8 @@ class DEMClumpTemplate {
         assertThreeElements(MOI, "SetMOI", "MOI");
         SetMOI(make_float3(MOI[0], MOI[1], MOI[2]));
     }
+    /// Get MOI (in principal frame).
+    float3 GetMOI() const { return MOI; }
 
     /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
     void SetMaterial(const std::vector<std::shared_ptr<DEMMaterial>>& input) {
