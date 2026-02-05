@@ -83,14 +83,13 @@ void DEMKinematicThread::calibrateParams() {
             } else {
                 simParams->binSize /= (1. - stateParams.binCurrentChangeRate);
             }
-            // Register the new bin size
-            stateParams.numBins =
-                hostCalcBinNum(simParams->nbX, simParams->nbY, simParams->nbZ, simParams->voxelSize, simParams->binSize,
-                               simParams->nvXp2, simParams->nvYp2, simParams->nvZp2);
-
-            DEME_DEBUG_PRINTF("Bin size is now: %.7g", simParams->binSize);
-            DEME_DEBUG_PRINTF("Total num of bins is now: %zu", stateParams.numBins);
         }
+        // Register the new bin size
+        stateParams.numBins = hostCalcBinNum(simParams->nbX, simParams->nbY, simParams->nbZ, simParams->voxelSize,
+                                             simParams->binSize, simParams->nvXp2, simParams->nvYp2, simParams->nvZp2);
+
+        DEME_DEBUG_PRINTF("Bin size is now: %.7g", simParams->binSize);
+        DEME_DEBUG_PRINTF("Total num of bins is now: %zu", stateParams.numBins);
         DEME_DEBUG_PRINTF("kT runtime per step: %.7gs", CDAccumTimer.GetPrevTime());
     }
     // binSize is now calculated, we need to migrate that to device
