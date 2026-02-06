@@ -1250,6 +1250,14 @@ PYBIND11_MODULE(DEME, obj) {
                  &deme::DEMClumpBatch::AddGeometryWildcard))
         .def("AddGeometryWildcard", static_cast<void (deme::DEMClumpBatch::*)(const std::string&, float)>(
                                         &deme::DEMClumpBatch::AddGeometryWildcard))
+        .def("SetOriQ",
+              static_cast<void (deme::DEMClumpBatch::*)(const std::vector<float4>&)>(&deme::DEMClumpBatch::SetOriQ))
+        .def("SetOriQ",
+             static_cast<void (deme::DEMClumpBatch::*)(float4)>(&deme::DEMClumpBatch::SetOriQ))
+        .def("SetOriQ",
+              static_cast<void (deme::DEMClumpBatch::*)(const std::vector<float>&)>(&deme::DEMClumpBatch::SetOriQ))
+        .def("SetOriQ", static_cast<void (deme::DEMClumpBatch::*)(const std::vector<std::vector<float>>&)>(
+                            &deme::DEMClumpBatch::SetOriQ))
         .def("GetNumContacts", &deme::DEMClumpBatch::GetNumContacts);
 
     py::class_<deme::DEMExternObj, deme::DEMInitializer, std::shared_ptr<deme::DEMExternObj>>(obj, "DEMExternObj")
