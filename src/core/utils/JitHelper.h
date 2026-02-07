@@ -48,7 +48,7 @@ class JitHelper {
     static std::filesystem::path KERNEL_INCLUDE_DIR;
 
   private:
-    static jitify::JitCache kcache;
+    static jitify::JitCache* kcache;
 
     inline static std::string loadSourceFile(const std::filesystem::path& sourcefile) {
         std::string code;

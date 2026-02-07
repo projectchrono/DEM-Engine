@@ -1251,11 +1251,10 @@ PYBIND11_MODULE(DEME, obj) {
         .def("AddGeometryWildcard", static_cast<void (deme::DEMClumpBatch::*)(const std::string&, float)>(
                                         &deme::DEMClumpBatch::AddGeometryWildcard))
         .def("SetOriQ",
-              static_cast<void (deme::DEMClumpBatch::*)(const std::vector<float4>&)>(&deme::DEMClumpBatch::SetOriQ))
+             static_cast<void (deme::DEMClumpBatch::*)(const std::vector<float4>&)>(&deme::DEMClumpBatch::SetOriQ))
+        .def("SetOriQ", static_cast<void (deme::DEMClumpBatch::*)(float4)>(&deme::DEMClumpBatch::SetOriQ))
         .def("SetOriQ",
-             static_cast<void (deme::DEMClumpBatch::*)(float4)>(&deme::DEMClumpBatch::SetOriQ))
-        .def("SetOriQ",
-              static_cast<void (deme::DEMClumpBatch::*)(const std::vector<float>&)>(&deme::DEMClumpBatch::SetOriQ))
+             static_cast<void (deme::DEMClumpBatch::*)(const std::vector<float>&)>(&deme::DEMClumpBatch::SetOriQ))
         .def("SetOriQ", static_cast<void (deme::DEMClumpBatch::*)(const std::vector<std::vector<float>>&)>(
                             &deme::DEMClumpBatch::SetOriQ))
         .def("GetNumContacts", &deme::DEMClumpBatch::GetNumContacts);
