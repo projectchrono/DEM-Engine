@@ -82,7 +82,7 @@ jitify::Program JitHelper::buildProgram(
     }
     */
 
-    if(kcache==nullptr)
+    if (kcache == nullptr)
         kcache = new jitify::JitCache();
 
     return kcache->program(code, header_code, flags);
