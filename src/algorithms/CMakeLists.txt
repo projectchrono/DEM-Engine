@@ -53,7 +53,7 @@ target_sources(
 )
 
 # Get a list of supported architectures
-include(${CMAKE_SOURCE_DIR}/cmake/CudaSupportedArchitectures.cmake)
+include(../../cmake/CudaSupportedArchitectures.cmake)
 cuda_supported_architectures()
 
 # Convert the cuda supported architectures into their respective CMake properties
