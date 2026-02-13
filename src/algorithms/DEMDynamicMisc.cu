@@ -243,12 +243,6 @@ __global__ void prepareWeightedNormalsForVoting_impl(DEMDataDT* granData,
         const float3 normal = granData->contactForces[myContactID];
         const float3 areaStorage = granData->contactPointGeometryB[myContactID];
         float area = float3StorageToDouble(areaStorage);
-        // But primitive contacts that do not respect the patch general direction have no right in deciding the contact
-        // normal
-        notStupidBool_t directionRespected = granData->contactPatchDirectionRespected[myContactID];
-        if (!directionRespected) {
-            area = 0.0;
-        }
 
         weightedNormals[idx] = make_float3(normal.x * area, normal.y * area, normal.z * area);
     }

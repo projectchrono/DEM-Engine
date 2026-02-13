@@ -97,6 +97,37 @@ inline __device__ float cylPeriodicRelAngleGlobal(const float3& pos, const deme:
     return cylPeriodicRelAngle(pos_local, false, false, simParams);
 }
 
+// Reject same-sided tri-tri pairings that commonly arise when kT look-ahead is very large.
+// This uses only local facet orientations and contact normal, so it does not rely on body/patch centers and works
+// with concave meshes as long as winding is consistent.
+inline __device__ bool rejectTriTriSameSidedPair(const double3& triANode1,
+                                                 const double3& triANode2,
+                                                 const double3& triANode3,
+                                                 const double3& triBNode1,
+                                                 const double3& triBNode2,
+                                                 const double3& triBNode3,
+                                                 const float3& B2A) {
+    const float3 nA = to_float3(cross(triANode2 - triANode1, triANode3 - triANode1));
+    const float3 nB = to_float3(cross(triBNode2 - triBNode1, triBNode3 - triBNode1));
+
+    const float len2A = length2(nA);
+    const float len2B = length2(nB);
+    if (len2A <= DEME_TINY_FLOAT || len2B <= DEME_TINY_FLOAT) {
+        return false;
+    }
+
+    const float3 nA_unit = nA * rsqrtf(len2A);
+    const float3 nB_unit = nB * rsqrtf(len2B);
+
+    // sameFacing > 0 means normals generally point to the same side.
+    const float sameFacing = dot(nA_unit, nB_unit);
+    // For a physical interface between 2 closed shells, B2A should not align with both normals simultaneously.
+    const float alignProd = dot(B2A, nA_unit) * dot(B2A, nB_unit);
+
+    // Chosen to be cheap and robust: cull only clearly same-sided/strongly aligned false pairings.
+    return (sameFacing > 0.0f) && (alignProd > 0.01f);
+}
+
 // If clump templates are jitified, they will be below
 _clumpTemplateDefs_;
 // Definitions of analytical entites are below
@@ -141,9 +172,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
     float extraMarginSize = 0.;
     // Triangle A's three points are defined outside, as may be reused in B's acquisition and penetration calc.
     double3 triANode1, triANode2, triANode3;
-    // Mesh's patch location may be needed for testing if this primitive contact respects the patch's general spatial
-    // direction
-    float3 triPatchPosA;
     // Then allocate the optional quantities that will be needed in the force model (note: this one can't be in a
     // curly bracket, obviously...)
     _forceModelIngredientDefinition_;
@@ -182,10 +210,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
     // For sph-sph and sph-anal contacts, this primitive sweep already generates the final results, so putting the
     // resulting into the correct place needs to be done here.
     deme::contactPairs_t myPatchContactID = granData->geomToPatchMap[myPrimitiveContactID];
-
-    // Default: patch-direction check should not filter non-tri-tri contacts.
-    // Tri-tri will overwrite this after computing patch direction.
-    granData->contactPatchDirectionRespected[myPrimitiveContactID] = 1;
 
     // ----------------------------------------------------------------
     // Based on A's type, equip info
@@ -233,7 +257,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         deme::bodyID_t myPatchID = granData->triPatchID[triID];
         bodyAMatType = granData->patchMaterialOffset[myPatchID];
         extraMarginSize = granData->familyExtraMarginSize[AOwnerFamily];
-        float3 relPosPatch = granData->relPosPatch[myPatchID];
 
         triANode1 = to_double3(granData->relPosNode1[triID]);
         triANode2 = to_double3(granData->relPosNode2[triID]);
@@ -260,10 +283,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         triANode3 += AOwnerPos;
         // Assign the correct bodyAPos
         bodyAPos = triangleCentroid<double3>(triANode1, triANode2, triANode3);
-
-        // Get triPatchPosA ready
-        applyOriQToVector3(relPosPatch.x, relPosPatch.y, relPosPatch.z, AOriQ.w, AOriQ.x, AOriQ.y, AOriQ.z);
-        triPatchPosA = relPosPatch + to_float3(AOwnerPos);
     } else {
         // Currently, we only support sphere and mesh for body A
         ContactType = deme::NOT_A_CONTACT;
@@ -470,9 +489,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
 #if _forceModelHasRotVel_
                 ARotVel = cylPeriodicRotateVec(ARotVel, simParams, cosA, sinA);
 #endif
-                if constexpr (AType == deme::GEO_T_TRIANGLE) {
-                    triPatchPosA = to_float3(cylPeriodicRotatePosD(to_double3(triPatchPosA), simParams, cosA, sinA));
-                }
             }
             if (wrapB) {
                 BOwnerPos = cylPeriodicRotatePosD(BOwnerPos, simParams, cosB, sinB);
@@ -505,7 +521,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // If this is a triangle then it has a patch ID
         deme::bodyID_t myPatchID = granData->triPatchID[triID];
         bodyBMatType = granData->patchMaterialOffset[myPatchID];
-        float3 relPosPatch = granData->relPosPatch[myPatchID];
 
         // As the grace margin, the distance (negative overlap) just needs to be within the grace margin. So we pick
         // the larger of the 2 familyExtraMarginSize.
@@ -538,9 +553,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         triBNode3 += BOwnerPos;
         // Assign the correct bodyBPos
         bodyBPos = triangleCentroid<double3>(triBNode1, triBNode2, triBNode3);
-        // Get triPatchPosB ready
-        applyOriQToVector3(relPosPatch.x, relPosPatch.y, relPosPatch.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
-        float3 triPatchPosB = relPosPatch + to_float3(BOwnerPos);
 
         AOwnerPos_orig = AOwnerPos;
         BOwnerPos_orig = BOwnerPos;
@@ -690,7 +702,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
                     triANode2 = cylPeriodicRotatePosD(triANode2, simParams, cosA, sinA);
                     triANode3 = cylPeriodicRotatePosD(triANode3, simParams, cosA, sinA);
                     bodyAPos = triangleCentroid<double3>(triANode1, triANode2, triANode3);
-                    triPatchPosA = to_float3(cylPeriodicRotatePosD(to_double3(triPatchPosA), simParams, cosA, sinA));
                 }
             }
             if (wrapB) {
@@ -707,7 +718,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
                 triBNode2 = cylPeriodicRotatePosD(triBNode2, simParams, cosB, sinB);
                 triBNode3 = cylPeriodicRotatePosD(triBNode3, simParams, cosB, sinB);
                 bodyBPos = triangleCentroid<double3>(triBNode1, triBNode2, triBNode3);
-                triPatchPosB = to_float3(cylPeriodicRotatePosD(to_double3(triPatchPosB), simParams, cosB, sinB));
             }
         }
         // If B is a triangle, then A can be a sphere or a triangle.
@@ -738,12 +748,13 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
                                                                             overlapDepth, overlapArea, contactPnt);
             B2A = to_float3(contact_normal);
 
-            // We require that in the tri--tri case, the contact also respects the patch--patch general direction. This
-            // is because if the contact margin is very large, the algorithm can detect remote fake `submerge' cases
-            // which involve the triangles of the wrong sides of the mesh particles. But in this case, the direction of
-            // this contact is almost always opposite to the general direction of the 2 patches (in terms of B2A).
-            float dotProd = dot(B2A, triPatchPosA - triPatchPosB);
-            granData->contactPatchDirectionRespected[myPrimitiveContactID] = (dotProd > 0.f) ? 1 : 0;
+            // Remove opposite-side false pairings without using center-direction heuristics.
+            if (in_contact &&
+                rejectTriTriSameSidedPair(triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3, B2A)) {
+                in_contact = false;
+                overlapDepth = -DEME_HUGE_FLOAT;
+                overlapArea = 0.0;
+            }
 
             // Fix ContactType if needed
             // If the solver says in contact, we do not question it
@@ -1169,7 +1180,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             ContactType = deme::NOT_A_CONTACT;
             overlapDepth = -1.0;
             overlapArea = 0.0;
-            granData->contactPatchDirectionRespected[myPrimitiveContactID] = 0;
         }
         // Use contactForces, contactPointGeometryAB to store the contact info for the next
         // kernel to compute forces. contactForces is used to store the contact normal. contactPointGeometryA is used to

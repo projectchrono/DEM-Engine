@@ -118,28 +118,66 @@ int main() {
               << tri_inertia.z << std::endl;
     const double cube_vol = std::pow(4.0e-3, 3);
 
-    // Analytical drum mantle (planar contact cylinder) with end caps.
-    const float drum_height = 0.1f;
-    const float drum_mass = 1.0f;
-    const float IZZ = drum_mass * drum_inner_radius * drum_inner_radius / 2.0f;
-    const float IYY = (drum_mass / 12.0f) * (3.0f * drum_inner_radius * drum_inner_radius + drum_height * drum_height);
-    unsigned int drum_family = 100;
+    // Toggle drum mantle type:
+    // true  -> STL drum mesh ("after")
+    // false -> analytical planar contact cylinder ("before")
+    const bool use_stl_drum = true;
 
-    auto drum = DEMSim.AddExternalObject();
-    drum->AddPlanarContactCylinder(make_float3(0, 0, drum_height / 2.0f), make_float3(0, 0, 1), drum_inner_radius,
-                                   mat_type_drum, ENTITY_NORMAL_INWARD);
-    drum->SetFamily(drum_family);
-    drum->SetMass(drum_mass);
-    drum->SetMOI(make_float3(IYY, IYY, IZZ));
+    const float drum_mass = 1.0f;
+    const unsigned int drum_family = 100;
+    float drum_height = 0.1f;
+    float drum_bottom_z = 0.0f;
+    float drum_top_z = drum_bottom_z + drum_height;
+    float drum_center_z = 0.5f * (drum_bottom_z + drum_top_z);
+    std::shared_ptr<DEMTracker> drum_tracker;
+
+    if (use_stl_drum) {
+        const path drum_mesh_file = GET_DATA_PATH() / "mesh" / "drum.stl";
+        DEMMesh drum_mesh_data;
+        if (!drum_mesh_data.LoadSTLMesh(drum_mesh_file.string())) {
+            DEME_ERROR("Failed to load drum mesh %s", drum_mesh_file.string().c_str());
+        }
+        drum_mesh_data.SetMaterial(mat_type_drum);
+        drum_mesh_data.Scale(mm_to_m);
+        auto drum = DEMSim.AddMesh(drum_mesh_data);
+
+        auto [drum_min, drum_max] = ComputeBounds(drum->GetCoordsVertices());
+        drum_bottom_z = drum_min.z;
+        drum_top_z = drum_max.z;
+        drum_height = drum_top_z - drum_bottom_z;
+        drum_center_z = 0.5f * (drum_bottom_z + drum_top_z);
+
+        const float drum_outer_radius = std::max(std::max(std::abs(drum_min.x), std::abs(drum_max.x)),
+                                                 std::max(std::abs(drum_min.y), std::abs(drum_max.y)));
+        const float IZZ = drum_mass * drum_outer_radius * drum_outer_radius / 2.0f;
+        const float IYY =
+            (drum_mass / 12.0f) * (3.0f * drum_outer_radius * drum_outer_radius + drum_height * drum_height);
+
+        drum->SetFamily(drum_family);
+        drum->SetMass(drum_mass);
+        drum->SetMOI(make_float3(IYY, IYY, IZZ));
+        drum_tracker = DEMSim.Track(drum);
+    } else {
+        auto drum = DEMSim.AddExternalObject();
+        drum->AddPlanarContactCylinder(make_float3(0, 0, drum_center_z), make_float3(0, 0, 1), drum_inner_radius,
+                                       mat_type_drum, ENTITY_NORMAL_INWARD);
+        const float IZZ = drum_mass * drum_inner_radius * drum_inner_radius / 2.0f;
+        const float IYY =
+            (drum_mass / 12.0f) * (3.0f * drum_inner_radius * drum_inner_radius + drum_height * drum_height);
+
+        drum->SetFamily(drum_family);
+        drum->SetMass(drum_mass);
+        drum->SetMOI(make_float3(IYY, IYY, IZZ));
+        drum_tracker = DEMSim.Track(drum);
+    }
     DEMSim.SetFamilyPrescribedAngVel(drum_family, "0", "0", to_string_with_precision(drum_ang_vel));
 
-    // Add top and bottom planes at z = 0 and z = drum_height. They rotate with the drum family.
+    // Add top and bottom planes. They rotate with the drum family.
     auto end_caps = DEMSim.AddExternalObject();
-    end_caps->AddPlane(make_float3(0, 0, drum_height), make_float3(0, 0, -1), mat_type_drum);
-    end_caps->AddPlane(make_float3(0, 0, 0), make_float3(0, 0, 1), mat_type_drum);
+    end_caps->AddPlane(make_float3(0, 0, drum_top_z), make_float3(0, 0, -1), mat_type_drum);
+    end_caps->AddPlane(make_float3(0, 0, drum_bottom_z), make_float3(0, 0, 1), mat_type_drum);
     end_caps->SetFamily(drum_family);
 
-    auto drum_tracker = DEMSim.Track(drum);
     auto cap_tracker = DEMSim.Track(end_caps);
 
     // Sample particles inside the cylindrical volume with a small wall clearance.
@@ -159,7 +197,7 @@ int main() {
             return std::vector<float3>{};
         }
 
-        return sampler.SampleCylinderZ(make_float3(0, 0, drum_height / 2.0f), sample_radius, sample_halfheight);
+        return sampler.SampleCylinderZ(make_float3(0, 0, drum_center_z), sample_radius, sample_halfheight);
     };
     // Generate both candidate sets
     auto cand_sphere = sample_with_clearance(r_sphere, r_sphere);
