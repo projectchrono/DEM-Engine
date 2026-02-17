@@ -31,7 +31,7 @@ using namespace deme;
 
 namespace {
 
-constexpr bool kUseTriangleParticles = false; // toggle to run the STL-based triangle setup
+constexpr bool kUseTriangleParticles = true; // toggle to run the STL-based triangle setup
 constexpr float kMmToMeters = 0.001f;
 constexpr double kTriangleParticleDensity = 2600.0;
 
@@ -41,6 +41,8 @@ constexpr double kSpeed = 1.0;        // 1 m/s magnitude
 constexpr double kTimeStep = 1e-5;
 constexpr int kMaxSteps = 50000; // oberserve 0.5s fitting with --> kTimeStep
 constexpr double kContactEps = 1e-6;
+constexpr double kYoungsModulus = 1e9;
+constexpr double kPoissonsRatio = 0.3;
 
 // NEW: impact angle controls
 constexpr double kImpactThetaDeg = 0.0;   // 0 = vertical down, 90 = pure lateral
@@ -103,6 +105,54 @@ Stats calc_stats(const std::vector<double>& values) {
     }
     s.stddev = std::sqrt(var / values.size());
     return s;
+}
+
+double compute_bounding_radius(const std::shared_ptr<DEMMesh>& mesh) {
+    if (!mesh || mesh->m_vertices.empty()) {
+        return 0.0;
+    }
+
+    double cx = 0.0;
+    double cy = 0.0;
+    double cz = 0.0;
+    for (const auto& v : mesh->m_vertices) {
+        cx += v.x;
+        cy += v.y;
+        cz += v.z;
+    }
+    const double inv_n = 1.0 / static_cast<double>(mesh->m_vertices.size());
+    cx *= inv_n;
+    cy *= inv_n;
+    cz *= inv_n;
+
+    double r_max = 0.0;
+    for (const auto& v : mesh->m_vertices) {
+        const double dx = v.x - cx;
+        const double dy = v.y - cy;
+        const double dz = v.z - cz;
+        r_max = std::max(r_max, std::sqrt(dx * dx + dy * dy + dz * dz));
+    }
+    return r_max;
+}
+
+double estimate_hertz_dt(double mass, double radius, double E, double nu) {
+    if (mass <= 0.0 || radius <= 0.0 || E <= 0.0) {
+        return std::numeric_limits<double>::infinity();
+    }
+    const double one_minus_nu_sq = 1.0 - nu * nu;
+    if (one_minus_nu_sq <= 0.0) {
+        return std::numeric_limits<double>::infinity();
+    }
+
+    const double E_eff = E / (2.0 * one_minus_nu_sq);
+    const double R_eff = 0.5 * radius;
+    const double m_eff = 0.5 * mass;
+    const double KH = FOUR_OVER_THREE * std::sqrt(0.1) * E_eff * R_eff;
+    if (KH <= 0.0) {
+        return std::numeric_limits<double>::infinity();
+    }
+
+    return (PI / (2.0 * N_DT)) * std::sqrt(m_eff / KH);
 }
 
 double compute_min_z_rotated(const std::shared_ptr<DEMMesh>& mesh, const float4& rotQ) {
@@ -178,7 +228,8 @@ RunResult run_single_collision(const float4& init_rot,
     DEMSim.SetExpandSafetyType("auto");
     DEMSim.SetExpandSafetyAdder(vmax);
 
-    auto mat_type = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.00}});
+    auto mat_type =
+        DEMSim.LoadMaterial({{"E", kYoungsModulus}, {"nu", kPoissonsRatio}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.00}});
 
     float3 plane_normal = make_float3(0, 0, 1);
     auto plane = DEMSim.AddBCPlane(make_float3(0, 0, 0), plane_normal, mat_type);
@@ -209,7 +260,18 @@ RunResult run_single_collision(const float4& init_rot,
     body->SetInitPos(make_float3(0, 0, static_cast<float>(init_z)));
     auto body_tracker = DEMSim.Track(body);
 
-    DEMSim.SetInitTimeStep(kTimeStep);
+    double sim_dt = kTimeStep;
+    if (use_triangle_particles) {
+        const double radius_est = compute_bounding_radius(mesh_template);
+        const double dt_est = estimate_hertz_dt(particle_mass, radius_est, kYoungsModulus, kPoissonsRatio);
+        if (std::isfinite(dt_est) && dt_est > 0.0 && dt_est < sim_dt) {
+            sim_dt = dt_est;
+            std::cout << "[" << label << "] auto-dt active: clamped dt to " << sim_dt << " (requested " << kTimeStep
+                      << ", estimated max " << dt_est << ")" << std::endl;
+        }
+    }
+
+    DEMSim.SetInitTimeStep(sim_dt);
     DEMSim.Initialize();
 
     // NEW: angled initial velocity

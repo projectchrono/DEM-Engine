@@ -97,6 +97,124 @@ inline __device__ float cylPeriodicRelAngleGlobal(const float3& pos, const deme:
     return cylPeriodicRelAngle(pos_local, false, false, simParams);
 }
 
+inline __device__ float maxOwnerLocalLever(const deme::DEMSimParams* simParams,
+                                           const deme::DEMDataDT* granData,
+                                           deme::bodyID_t owner,
+                                           float extraMarginSize) {
+    // If we do not have a valid per-owner bound radius, do not clamp contact lever arm.
+    float max_local_lever = DEME_HUGE_FLOAT;
+    if (granData->ownerBoundRadius && owner != deme::NULL_BODYID && owner < simParams->nOwnerBodies) {
+        const float bound_r = fmaxf(granData->ownerBoundRadius[owner], 0.f);
+        if (isfinite(bound_r) && bound_r > DEME_TINY_FLOAT) {
+            const float geom_tol =
+                fmaxf(simParams->dyn.beta + simParams->maxFamilyExtraMargin + extraMarginSize, 0.f) + 1e-4f;
+            max_local_lever = fmaxf(bound_r + geom_tol, 1e-3f);
+        }
+    }
+    return max_local_lever;
+}
+
+inline __device__ void clampLocalContactPoint(float3& p, float max_norm) {
+    if (!isfinite(p.x) || !isfinite(p.y) || !isfinite(p.z)) {
+        p = make_float3(0.f, 0.f, 0.f);
+        return;
+    }
+    if (!isfinite(max_norm) || max_norm >= 0.5f * DEME_HUGE_FLOAT) {
+        return;
+    }
+    max_norm = fmaxf(max_norm, 1e-6f);
+    const float m2 = p.x * p.x + p.y * p.y + p.z * p.z;
+    const float max2 = max_norm * max_norm;
+    if (m2 > max2) {
+        const float inv_m = rsqrtf(m2);
+        p *= (max_norm * inv_m);
+    }
+}
+
+// Clamp penetration by the overlap of owner bounding spheres.
+// This is a hard geometric invariant: if owner bounds do not overlap, geometry cannot overlap.
+inline __device__ bool clampPatchPenetrationByOwnerBounds(const deme::DEMSimParams* simParams,
+                                                          const deme::DEMDataDT* granData,
+                                                          deme::bodyID_t ownerA,
+                                                          deme::bodyID_t ownerB,
+                                                          const double3& AOwnerPos,
+                                                          const double3& BOwnerPos,
+                                                          const double3& contactPnt,
+                                                          const float3& contactNormal,
+                                                          float extraMarginSize,
+                                                          double& overlapDepth,
+                                                          bool apply_shape_depth_cap) {
+    if (!granData->ownerBoundRadius || ownerA == deme::NULL_BODYID || ownerB == deme::NULL_BODYID ||
+        ownerA >= simParams->nOwnerBodies || ownerB >= simParams->nOwnerBodies) {
+        return true;
+    }
+
+    const float radA = fmaxf(granData->ownerBoundRadius[ownerA], 0.f);
+    const float radB = fmaxf(granData->ownerBoundRadius[ownerB], 0.f);
+    if (!isfinite(radA) || !isfinite(radB) || radA <= DEME_TINY_FLOAT || radB <= DEME_TINY_FLOAT) {
+        return true;
+    }
+
+    const double3 d = AOwnerPos - BOwnerPos;
+    const double dist2 = dot(d, d);
+    if (!(dist2 >= 0.0) || !isfinite(dist2)) {
+        return false;
+    }
+    const double dist = sqrt(dist2);
+    const double maxOverlap = static_cast<double>(radA) + static_cast<double>(radB) - dist;
+    if (maxOverlap <= 0.0) {
+        return false;
+    }
+    double cappedMaxOverlap = maxOverlap;
+    if (apply_shape_depth_cap) {
+        // Tri-tri penetration rate limiter:
+        // cap overlap by what relative normal approach can create within one dT step.
+        // This avoids force spikes from occasional geometric outliers without hardcoded size ratios.
+        float3 n = contactNormal;
+        const float n2 = n.x * n.x + n.y * n.y + n.z * n.z;
+        if (isfinite(n2) && n2 > DEME_TINY_FLOAT) {
+            const float inv_n = rsqrtf(n2);
+            n *= inv_n;
+
+            const float3 vA = make_float3(granData->vX[ownerA], granData->vY[ownerA], granData->vZ[ownerA]);
+            const float3 vB = make_float3(granData->vX[ownerB], granData->vY[ownerB], granData->vZ[ownerB]);
+            const float3 wA = make_float3(granData->omgBarX[ownerA], granData->omgBarY[ownerA], granData->omgBarZ[ownerA]);
+            const float3 wB = make_float3(granData->omgBarX[ownerB], granData->omgBarY[ownerB], granData->omgBarZ[ownerB]);
+
+            float3 rA = to_float3(contactPnt - AOwnerPos);
+            float3 rB = to_float3(contactPnt - BOwnerPos);
+            const float geom_tol =
+                fmaxf(simParams->dyn.beta + simParams->maxFamilyExtraMargin + extraMarginSize, 0.f) + 1e-4f;
+            clampLocalContactPoint(rA, fmaxf(radA + geom_tol, 1e-6f));
+            clampLocalContactPoint(rB, fmaxf(radB + geom_tol, 1e-6f));
+            const float3 vA_cp = vA + cross(wA, rA);
+            const float3 vB_cp = vB + cross(wB, rB);
+
+            // n points from B -> A, so positive closing speed is dot(vB - vA, n).
+            const float closing_speed = fmaxf(dot(vB_cp - vA_cp, n), 0.f);
+            unsigned int drift_steps = 1u;
+            if (granData->pKTOwnedBuffer_maxDrift && *granData->pKTOwnedBuffer_maxDrift > 0u) {
+                drift_steps = *granData->pKTOwnedBuffer_maxDrift;
+            }
+            const double drift_factor = sqrt(static_cast<double>(drift_steps));
+            const double motion_cap =
+                static_cast<double>(closing_speed) * static_cast<double>(simParams->dyn.h) *
+                drift_factor +
+                static_cast<double>(fmaxf(0.5f * simParams->dyn.beta + extraMarginSize, 0.f)) + 1e-7;
+            if (motion_cap > 0.0) {
+                cappedMaxOverlap = fmin(cappedMaxOverlap, motion_cap);
+            }
+        }
+    }
+    if (cappedMaxOverlap <= 0.0) {
+        return false;
+    }
+    if (overlapDepth > cappedMaxOverlap) {
+        overlapDepth = cappedMaxOverlap;
+    }
+    return true;
+}
+
 // If clump templates are jitified, they will be below
 _clumpTemplateDefs_;
 // Definitions of analytical entites are below
@@ -606,6 +724,19 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
         }
     }
 
+    // Patch-level geometric invariant guard for real owner-owner contacts.
+    // Prevent rare depth outliers from injecting unphysical force/energy.
+    if constexpr (BType != deme::GEO_T_ANALYTICAL) {
+        constexpr bool apply_shape_depth_cap = (AType == deme::GEO_T_TRIANGLE) && (BType == deme::GEO_T_TRIANGLE);
+        if (ContactType != deme::NOT_A_CONTACT &&
+            !clampPatchPenetrationByOwnerBounds(simParams, granData, ownerA, ownerB, AOwnerPos, BOwnerPos,
+                                                contactPnt, B2A, extraMarginSize, overlapDepth, apply_shape_depth_cap)) {
+            ContactType = deme::NOT_A_CONTACT;
+            overlapDepth = -DEME_HUGE_FLOAT;
+            overlapArea = 0.0;
+        }
+    }
+
     // Now compute forces using the patch-based contact data
     _forceModelContactWildcardAcq_;
 
@@ -626,6 +757,12 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
     // Map contact point location to bodies' local reference frames
     applyOriQToVector3<float, deme::oriQ_t>(locCPA.x, locCPA.y, locCPA.z, AOriQ.w, -AOriQ.x, -AOriQ.y, -AOriQ.z);
     applyOriQToVector3<float, deme::oriQ_t>(locCPB.x, locCPB.y, locCPB.z, BOriQ.w, -BOriQ.x, -BOriQ.y, -BOriQ.z);
+    {
+        const float max_lever_A = maxOwnerLocalLever(simParams, granData, ownerA, extraMarginSize);
+        const float max_lever_B = maxOwnerLocalLever(simParams, granData, ownerB, extraMarginSize);
+        clampLocalContactPoint(locCPA, max_lever_A);
+        clampLocalContactPoint(locCPB, max_lever_B);
+    }
 
     const deme::contact_t ContactType_candidate = ContactType;
     bool ownerBoundReject = false;
@@ -761,6 +898,12 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
                                                 -AOriQ.z);
         applyOriQToVector3<float, deme::oriQ_t>(locCPB.x, locCPB.y, locCPB.z, BOriQ.w, -BOriQ.x, -BOriQ.y,
                                                 -BOriQ.z);
+        {
+            const float max_lever_A = maxOwnerLocalLever(simParams, granData, ownerA, extraMarginSize);
+            const float max_lever_B = maxOwnerLocalLever(simParams, granData, ownerB, extraMarginSize);
+            clampLocalContactPoint(locCPA, max_lever_A);
+            clampLocalContactPoint(locCPB, max_lever_B);
+        }
     }
 
     if (ContactType == deme::NOT_A_CONTACT) {

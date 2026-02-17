@@ -455,6 +455,9 @@ class DEMMesh : public DEMInitializer {
     }
     /// Compute volume, centroid and MOI in CoM frame (unit density).
     void ComputeMassProperties(double& volume, float3& center, float3& inertia) const;
+    /// Compute volume, centroid and full inertia tensor in CoM frame (unit density).
+    /// `inertia_products` stores tensor terms (Ixy, Iyz, Izx).
+    void ComputeMassProperties(double& volume, float3& center, float3& inertia, float3& inertia_products) const;
     /// Check if mesh is watertight (closed, manifold). Returns true if no boundary/non-manifold edges.
     bool IsWatertight(size_t* boundary_edges = nullptr, size_t* nonmanifold_edges = nullptr) const;
     /// Set mesh family number.
@@ -505,6 +508,13 @@ class DEMMesh : public DEMInitializer {
         for (auto& node : m_vertices) {
             applyFrameTransformGlobalToLocal(node, center, prin_Q);
         }
+        for (auto& normal : m_normals) {
+            applyOriQToVector3(normal.x, normal.y, normal.z, prin_Q.w, -prin_Q.x, -prin_Q.y, -prin_Q.z);
+            const float n_len = length(normal);
+            if (n_len > DEME_TINY_FLOAT) {
+                normal /= n_len;
+            }
+        }
     }
     void InformCentroidPrincipal(const std::vector<float>& center, const std::vector<float>& prin_Q) {
         assertThreeElements(center, "InformCentroidPrincipal", "center");
@@ -519,6 +529,13 @@ class DEMMesh : public DEMInitializer {
     void Move(float3 vec, float4 rot_Q) {
         for (auto& node : m_vertices) {
             applyFrameTransformLocalToGlobal(node, vec, rot_Q);
+        }
+        for (auto& normal : m_normals) {
+            applyOriQToVector3(normal.x, normal.y, normal.z, rot_Q.w, rot_Q.x, rot_Q.y, rot_Q.z);
+            const float n_len = length(normal);
+            if (n_len > DEME_TINY_FLOAT) {
+                normal /= n_len;
+            }
         }
     }
     void Move(const std::vector<float>& vec, const std::vector<float>& rot_Q) {

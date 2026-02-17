@@ -28,14 +28,17 @@ if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
     atomicAdd(granData->aY + AOwner, forceA.y / AOwnerMass);
     atomicAdd(granData->aZ + AOwner, forceA.z / AOwnerMass);
 
-    float max_local_lever = 2e-2f;
+    float max_local_lever = DEME_HUGE_FLOAT;
     if (granData->ownerBoundRadius && AOwner != deme::NULL_BODYID && AOwner < simParams->nOwnerBodies) {
         const float bound_r = fmaxf(granData->ownerBoundRadius[AOwner], 0.f);
-        const float geom_tol = fmaxf(simParams->dyn.beta + simParams->maxFamilyExtraMargin, 0.f) + 1e-4f;
-        max_local_lever = fmaxf(bound_r + geom_tol, 1e-3f);
+        if (isfinite(bound_r) && bound_r > DEME_TINY_FLOAT) {
+            const float geom_tol = fmaxf(simParams->dyn.beta + simParams->maxFamilyExtraMargin, 0.f) + 1e-4f;
+            max_local_lever = fmaxf(bound_r + geom_tol, 1e-3f);
+        }
     }
+    const float cpA_sq = locCPA.x * locCPA.x + locCPA.y * locCPA.y + locCPA.z * locCPA.z;
     const bool bad_cp = !isfinite(locCPA.x) || !isfinite(locCPA.y) || !isfinite(locCPA.z) ||
-                        (dot(locCPA, locCPA) > max_local_lever * max_local_lever);
+                        !isfinite(cpA_sq) || cpA_sq > max_local_lever * max_local_lever;
     const bool bad_vec = !isfinite(forceA.x) || !isfinite(forceA.y) || !isfinite(forceA.z) || !isfinite(torqueA.x) ||
                          !isfinite(torqueA.y) || !isfinite(torqueA.z);
     if (!(bad_cp || bad_vec)) {
@@ -57,14 +60,17 @@ if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
     atomicAdd(granData->aY + BOwner, forceB.y / BOwnerMass);
     atomicAdd(granData->aZ + BOwner, forceB.z / BOwnerMass);
 
-    float max_local_lever = 2e-2f;
+    float max_local_lever = DEME_HUGE_FLOAT;
     if (granData->ownerBoundRadius && BOwner != deme::NULL_BODYID && BOwner < simParams->nOwnerBodies) {
         const float bound_r = fmaxf(granData->ownerBoundRadius[BOwner], 0.f);
-        const float geom_tol = fmaxf(simParams->dyn.beta + simParams->maxFamilyExtraMargin, 0.f) + 1e-4f;
-        max_local_lever = fmaxf(bound_r + geom_tol, 1e-3f);
+        if (isfinite(bound_r) && bound_r > DEME_TINY_FLOAT) {
+            const float geom_tol = fmaxf(simParams->dyn.beta + simParams->maxFamilyExtraMargin, 0.f) + 1e-4f;
+            max_local_lever = fmaxf(bound_r + geom_tol, 1e-3f);
+        }
     }
+    const float cpB_sq = locCPB.x * locCPB.x + locCPB.y * locCPB.y + locCPB.z * locCPB.z;
     const bool bad_cp = !isfinite(locCPB.x) || !isfinite(locCPB.y) || !isfinite(locCPB.z) ||
-                        (dot(locCPB, locCPB) > max_local_lever * max_local_lever);
+                        !isfinite(cpB_sq) || cpB_sq > max_local_lever * max_local_lever;
     const bool bad_vec = !isfinite(forceB.x) || !isfinite(forceB.y) || !isfinite(forceB.z) || !isfinite(torqueB.x) ||
                          !isfinite(torqueB.y) || !isfinite(torqueB.z);
     if (!(bad_cp || bad_vec)) {
