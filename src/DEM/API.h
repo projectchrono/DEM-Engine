@@ -554,6 +554,24 @@ class DEMSolver {
                                     std::vector<int>& ghost_neg_cnt) const;
     /// @brief Request an immediate contact detection update (forces kT to refresh contacts next cycle).
     void RequestContactUpdate();
+    /// @brief Enable per-triangle P/V/PxV tracking for the specified mesh owners.
+    /// @details Owner IDs are simulation owner IDs; each selected owner must be a mesh owner.
+    /// Tracking buffers are reset when this method is called.
+    void SetTrianglePVTrackingOwners(const std::vector<bodyID_t>& mesh_owner_ids);
+    /// @brief Disable per-triangle P/V/PxV tracking and clear tracking state.
+    void DisableTrianglePVTracking();
+    /// @brief Get frame-window averaged per-triangle P, V and P*V for one tracked owner.
+    /// @param ownerID Mesh owner ID used in SetTrianglePVTrackingOwners.
+    /// @param avgP Output vector of averaged normal-force shares per triangle.
+    /// @param avgV Output vector of averaged tangential slip speeds per triangle.
+    /// @param avgPV Output vector of averaged P*V values per triangle.
+    /// @param reset_window If true, clear the current accumulation window after reading.
+    /// @return True if the owner is currently tracked; false otherwise.
+    bool GetTrackedOwnerTrianglePV(bodyID_t ownerID,
+                                   std::vector<float>& avgP,
+                                   std::vector<float>& avgV,
+                                   std::vector<float>& avgPV,
+                                   bool reset_window = true);
     /// @brief Get the mass of n consecutive owners.
     /// @param ownerID First owner's ID.
     /// @param n The number of consecutive owners.

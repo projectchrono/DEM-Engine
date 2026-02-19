@@ -319,6 +319,13 @@ void DEMDynamicThread::migrateDataToDevice() {
     mmiYY.toDeviceAsync(streamInfo.stream);
     mmiZZ.toDeviceAsync(streamInfo.stream);
 
+    triPVGlobalTriToLocal.toDeviceAsync(streamInfo.stream);
+    triPVStepP.toDeviceAsync(streamInfo.stream);
+    triPVStepPV.toDeviceAsync(streamInfo.stream);
+    triPVAccumP.toDeviceAsync(streamInfo.stream);
+    triPVAccumV.toDeviceAsync(streamInfo.stream);
+    triPVAccumPV.toDeviceAsync(streamInfo.stream);
+
     // Might not be necessary... but it's a big call anyway, let's sync
     syncMemoryTransfer();
 }
@@ -657,6 +664,21 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     simParams->nJitifiableClumpComponents = nJitifiableClumpComponents;
     simParams->nDistinctClumpComponents = nClumpComponents;
     simParams->nMatTuples = nMatTuples;
+
+    // Reconfiguration invalidates previous per-triangle tracking maps.
+    triPVTrackingEnabled = false;
+    triPVNumTrackedTriangles = 0;
+    triPVWindowSteps = 0;
+    triPVOwnerOrder.clear();
+    triPVOwnerOffsets.clear();
+    triPVOwnerCounts.clear();
+    triPVOwnerToSlot.clear();
+    DEME_DUAL_ARRAY_RESIZE(triPVGlobalTriToLocal, nTriGM, -1);
+    DEME_DUAL_ARRAY_RESIZE(triPVStepP, 1, 0.f);
+    DEME_DUAL_ARRAY_RESIZE(triPVStepPV, 1, 0.f);
+    DEME_DUAL_ARRAY_RESIZE(triPVAccumP, 1, 0.f);
+    DEME_DUAL_ARRAY_RESIZE(triPVAccumV, 1, 0.f);
+    DEME_DUAL_ARRAY_RESIZE(triPVAccumPV, 1, 0.f);
 
     // Resize to the number of clumps
     DEME_DUAL_ARRAY_RESIZE(familyID, nOwnerBodies, 0);
@@ -3142,7 +3164,6 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 cubSumReduceByKey<contactPairs_t, PatchContactAccum>(
                     keys, uniqueKeys, primitivePatchAccumulators, patchContactAccumulators, numUniqueKeys, countPrimitive,
                     streamInfo.stream, solverScratchSpace);
-                solverScratchSpace.finishUsingTempVector("primitivePatchAccumulators");
 
                 // Step 6: Handle zero-area patches (all primitive areas are 0)
                 // For these patches, we need to find the max penetration primitive and use its normal/penetration
@@ -3196,7 +3217,6 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                                      finalContactPoints, countPatch, streamInfo.stream);
 
                 // Clean up temporaries no longer needed past this point.
-                solverScratchSpace.finishUsingTempVector("patchContactAccumulators");
                 solverScratchSpace.finishUsingTempVector("votedNormals");
                 solverScratchSpace.finishUsingTempVector("zeroAreaNormals");
                 solverScratchSpace.finishUsingTempVector("zeroAreaPenetrations");
@@ -3234,7 +3254,24 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                         }
                     }
                 }
-                DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+                if (triPVTrackingEnabled && triPVNumTrackedTriangles > 0) {
+                    float* patchNormalForce = (float*)solverScratchSpace.allocateTempVector(
+                        "patchNormalForce", countPatch * sizeof(float));
+                    float* patchSlipSpeed = (float*)solverScratchSpace.allocateTempVector(
+                        "patchSlipSpeed", countPatch * sizeof(float));
+                    computePatchPVScalars(&simParams, &granData, finalNormals, startOffsetPatch, countPatch,
+                                          patchNormalForce, patchSlipSpeed, streamInfo.stream);
+                    accumulateTrianglePVFromPatchContacts(
+                        &simParams, &granData, keys, primitivePatchAccumulators, patchContactAccumulators,
+                        patchNormalForce, patchSlipSpeed, startOffsetPrimitive, startOffsetPatch, countPrimitive,
+                        triPVGlobalTriToLocal.device(), triPVAccumP.device(), triPVAccumPV.device(), streamInfo.stream);
+                    solverScratchSpace.finishUsingTempVector("patchNormalForce");
+                    solverScratchSpace.finishUsingTempVector("patchSlipSpeed");
+                }
+
+                solverScratchSpace.finishUsingTempVector("primitivePatchAccumulators");
+                solverScratchSpace.finishUsingTempVector("patchContactAccumulators");
 
                 // If this is a tri-tri contact, compute max penetration for kT
                 // The max value stays on device until sendToTheirBuffer transfers it
@@ -3258,6 +3295,13 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
         }
     }
     // std::cout << "===========================" << std::endl;
+}
+
+void DEMDynamicThread::finalizeTrianglePVWindowStep() {
+    if (!triPVTrackingEnabled || triPVNumTrackedTriangles == 0) {
+        return;
+    }
+    triPVWindowSteps++;
 }
 
 void DEMDynamicThread::calculateForces() {
@@ -3318,6 +3362,8 @@ void DEMDynamicThread::calculateForces() {
             timers.StopGpuTimer("Optional force reduction", streamInfo.stream);
         }
     }
+
+    finalizeTrianglePVWindowStep();
 }
 
 inline void DEMDynamicThread::integrateOwnerMotions() {
@@ -4690,6 +4736,185 @@ void DEMDynamicThread::getOwnerContactGhostCounts(std::vector<int>& real_cnt,
         bump(ownerA, ghostA, ghostA_neg);
         bump(ownerB, ghostB, ghostB_neg);
     }
+}
+
+void DEMDynamicThread::configureTrianglePVTracking(const std::vector<bodyID_t>& mesh_owner_ids) {
+    DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
+
+    if (mesh_owner_ids.empty()) {
+        disableTrianglePVTracking();
+        return;
+    }
+    if (solverFlags.useNoContactRecord) {
+        DEME_ERROR("%s",
+                   "Per-triangle P/V/PxV tracking requires contact-force recording. Do not use SetNoForceRecord().");
+    }
+
+    std::vector<bodyID_t> owner_order;
+    std::unordered_map<bodyID_t, size_t> owner_to_slot;
+    owner_order.reserve(mesh_owner_ids.size());
+    owner_to_slot.reserve(mesh_owner_ids.size());
+    for (bodyID_t owner : mesh_owner_ids) {
+        if (owner >= simParams->nOwnerBodies) {
+            DEME_ERROR("Owner ID %zu is out of range [0, %zu).", (size_t)owner, (size_t)simParams->nOwnerBodies);
+        }
+        const ownerType_t type = ownerTypes[owner];
+        if ((type & OWNER_T_MESH) == 0) {
+            DEME_ERROR("Owner ID %zu is not a mesh owner. Per-triangle tracking supports mesh owners only.",
+                       (size_t)owner);
+        }
+        if (owner_to_slot.find(owner) == owner_to_slot.end()) {
+            owner_to_slot[owner] = owner_order.size();
+            owner_order.push_back(owner);
+        }
+    }
+
+    ownerTriMesh.toHost();
+    std::vector<size_t> counts(owner_order.size(), 0);
+    for (size_t tri = 0; tri < simParams->nTriGM; tri++) {
+        const bodyID_t owner = ownerTriMesh[tri];
+        auto it = owner_to_slot.find(owner);
+        if (it != owner_to_slot.end()) {
+            counts[it->second]++;
+        }
+    }
+
+    for (size_t i = 0; i < owner_order.size(); i++) {
+        if (counts[i] == 0) {
+            DEME_ERROR("Mesh owner %zu has no triangles in the current system.", (size_t)owner_order[i]);
+        }
+    }
+
+    std::vector<size_t> offsets(owner_order.size(), 0);
+    size_t n_tracked_triangles = 0;
+    for (size_t i = 0; i < owner_order.size(); i++) {
+        offsets[i] = n_tracked_triangles;
+        n_tracked_triangles += counts[i];
+    }
+    if (n_tracked_triangles == 0) {
+        DEME_ERROR("Per-triangle tracking received no triangles to track.");
+    }
+
+    std::vector<size_t> cursors(owner_order.size(), 0);
+    DEME_DUAL_ARRAY_RESIZE(triPVGlobalTriToLocal, simParams->nTriGM, -1);
+    for (size_t tri = 0; tri < simParams->nTriGM; tri++) {
+        const bodyID_t owner = ownerTriMesh[tri];
+        auto it = owner_to_slot.find(owner);
+        if (it != owner_to_slot.end()) {
+            const size_t slot = it->second;
+            const size_t local_idx = offsets[slot] + cursors[slot]++;
+            triPVGlobalTriToLocal[tri] = static_cast<int>(local_idx);
+        } else {
+            triPVGlobalTriToLocal[tri] = -1;
+        }
+    }
+
+    const size_t alloc_size = DEME_MAX((size_t)1, n_tracked_triangles);
+    DEME_DUAL_ARRAY_RESIZE(triPVStepP, alloc_size, 0.f);
+    DEME_DUAL_ARRAY_RESIZE(triPVStepPV, alloc_size, 0.f);
+    DEME_DUAL_ARRAY_RESIZE(triPVAccumP, alloc_size, 0.f);
+    DEME_DUAL_ARRAY_RESIZE(triPVAccumV, alloc_size, 0.f);
+    DEME_DUAL_ARRAY_RESIZE(triPVAccumPV, alloc_size, 0.f);
+
+    triPVGlobalTriToLocal.toDeviceAsync(streamInfo.stream);
+    triPVStepP.toDeviceAsync(streamInfo.stream);
+    triPVStepPV.toDeviceAsync(streamInfo.stream);
+    triPVAccumP.toDeviceAsync(streamInfo.stream);
+    triPVAccumV.toDeviceAsync(streamInfo.stream);
+    triPVAccumPV.toDeviceAsync(streamInfo.stream);
+    syncMemoryTransfer();
+
+    triPVOwnerOrder = std::move(owner_order);
+    triPVOwnerOffsets = std::move(offsets);
+    triPVOwnerCounts = std::move(counts);
+    triPVOwnerToSlot = std::move(owner_to_slot);
+    triPVTrackingEnabled = true;
+    triPVNumTrackedTriangles = n_tracked_triangles;
+    triPVWindowSteps = 0;
+}
+
+void DEMDynamicThread::disableTrianglePVTracking() {
+    DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
+    triPVTrackingEnabled = false;
+    triPVNumTrackedTriangles = 0;
+    triPVWindowSteps = 0;
+    triPVOwnerOrder.clear();
+    triPVOwnerOffsets.clear();
+    triPVOwnerCounts.clear();
+    triPVOwnerToSlot.clear();
+
+    if (triPVGlobalTriToLocal.size() > 0) {
+        for (size_t i = 0; i < triPVGlobalTriToLocal.size(); i++) {
+            triPVGlobalTriToLocal[i] = -1;
+        }
+        triPVGlobalTriToLocal.toDeviceAsync(streamInfo.stream);
+    }
+
+    if (triPVStepP.size() > 0) {
+        DEME_GPU_CALL(cudaMemsetAsync(triPVStepP.device(), 0, triPVStepP.size() * sizeof(float), streamInfo.stream));
+    }
+    if (triPVStepPV.size() > 0) {
+        DEME_GPU_CALL(
+            cudaMemsetAsync(triPVStepPV.device(), 0, triPVStepPV.size() * sizeof(float), streamInfo.stream));
+    }
+    if (triPVAccumP.size() > 0) {
+        DEME_GPU_CALL(cudaMemsetAsync(triPVAccumP.device(), 0, triPVAccumP.size() * sizeof(float), streamInfo.stream));
+    }
+    if (triPVAccumV.size() > 0) {
+        DEME_GPU_CALL(cudaMemsetAsync(triPVAccumV.device(), 0, triPVAccumV.size() * sizeof(float), streamInfo.stream));
+    }
+    if (triPVAccumPV.size() > 0) {
+        DEME_GPU_CALL(
+            cudaMemsetAsync(triPVAccumPV.device(), 0, triPVAccumPV.size() * sizeof(float), streamInfo.stream));
+    }
+    syncMemoryTransfer();
+}
+
+bool DEMDynamicThread::getTrackedOwnerTrianglePV(bodyID_t ownerID,
+                                                 std::vector<float>& avgP,
+                                                 std::vector<float>& avgV,
+                                                 std::vector<float>& avgPV,
+                                                 bool reset_window) {
+    if (!triPVTrackingEnabled) {
+        return false;
+    }
+    auto it = triPVOwnerToSlot.find(ownerID);
+    if (it == triPVOwnerToSlot.end()) {
+        return false;
+    }
+
+    const size_t slot = it->second;
+    const size_t offset = triPVOwnerOffsets[slot];
+    const size_t count = triPVOwnerCounts[slot];
+    avgP.assign(count, 0.f);
+    avgV.assign(count, 0.f);
+    avgPV.assign(count, 0.f);
+
+    if (count > 0 && triPVWindowSteps > 0) {
+        triPVAccumP.toHost();
+        triPVAccumPV.toHost();
+        const float inv_steps = 1.f / static_cast<float>(triPVWindowSteps);
+        for (size_t i = 0; i < count; i++) {
+            avgP[i] = triPVAccumP[offset + i] * inv_steps;
+            avgPV[i] = triPVAccumPV[offset + i] * inv_steps;
+            avgV[i] = (avgP[i] > DEME_TINY_FLOAT) ? (avgPV[i] / avgP[i]) : 0.f;
+        }
+    }
+
+    if (reset_window) {
+        triPVWindowSteps = 0;
+        if (triPVAccumP.size() > 0) {
+            DEME_GPU_CALL(
+                cudaMemsetAsync(triPVAccumP.device(), 0, triPVAccumP.size() * sizeof(float), streamInfo.stream));
+        }
+        if (triPVAccumPV.size() > 0) {
+            DEME_GPU_CALL(
+                cudaMemsetAsync(triPVAccumPV.device(), 0, triPVAccumPV.size() * sizeof(float), streamInfo.stream));
+        }
+        syncMemoryTransfer();
+    }
+
+    return true;
 }
 
 void DEMDynamicThread::setOwnerAngVel(bodyID_t ownerID, const std::vector<float3>& angVel) {

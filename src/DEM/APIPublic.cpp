@@ -542,6 +542,25 @@ void DEMSolver::RequestContactUpdate() {
     dT->announceCritical();
 }
 
+void DEMSolver::SetTrianglePVTrackingOwners(const std::vector<bodyID_t>& mesh_owner_ids) {
+    assertSysInit("SetTrianglePVTrackingOwners");
+    dT->configureTrianglePVTracking(mesh_owner_ids);
+}
+
+void DEMSolver::DisableTrianglePVTracking() {
+    assertSysInit("DisableTrianglePVTracking");
+    dT->disableTrianglePVTracking();
+}
+
+bool DEMSolver::GetTrackedOwnerTrianglePV(bodyID_t ownerID,
+                                          std::vector<float>& avgP,
+                                          std::vector<float>& avgV,
+                                          std::vector<float>& avgPV,
+                                          bool reset_window) {
+    assertSysInit("GetTrackedOwnerTrianglePV");
+    return dT->getTrackedOwnerTrianglePV(ownerID, avgP, avgV, avgPV, reset_window);
+}
+
 std::vector<float> DEMSolver::GetOwnerWildcardValue(bodyID_t ownerID, const std::string& name, bodyID_t n) {
     assertSysInit("GetOwnerWildcardValue");
     if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {

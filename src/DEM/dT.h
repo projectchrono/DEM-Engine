@@ -280,6 +280,21 @@ class DEMDynamicThread {
     // Max tri-tri penetration value to be sent to kT
     DualStruct<double> maxTriTriPenetration = DualStruct<double>(0.0);
 
+    // Optional per-triangle diagnostics (P, V, P*V) for selected mesh owners.
+    bool triPVTrackingEnabled = false;
+    size_t triPVNumTrackedTriangles = 0;
+    unsigned int triPVWindowSteps = 0;
+    DualArray<int> triPVGlobalTriToLocal = DualArray<int>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> triPVStepP = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> triPVStepPV = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> triPVAccumP = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> triPVAccumV = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> triPVAccumPV = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    std::vector<bodyID_t> triPVOwnerOrder;
+    std::vector<size_t> triPVOwnerOffsets;
+    std::vector<size_t> triPVOwnerCounts;
+    std::unordered_map<bodyID_t, size_t> triPVOwnerToSlot;
+
     // Simulation params-related variables
     DualStruct<DEMSimParams> simParams = DualStruct<DEMSimParams>();
 
@@ -759,6 +774,17 @@ class DEMDynamicThread {
                                  std::vector<float3>& torques,
                                  bool torque_in_local = false);
 
+    /// Configure per-triangle P/V/P*V tracking for selected mesh owner IDs.
+    void configureTrianglePVTracking(const std::vector<bodyID_t>& mesh_owner_ids);
+    /// Disable per-triangle P/V/P*V tracking and clear buffers.
+    void disableTrianglePVTracking();
+    /// Get frame-window averaged per-triangle P, V, and P*V for one tracked owner.
+    bool getTrackedOwnerTrianglePV(bodyID_t ownerID,
+                                   std::vector<float>& avgP,
+                                   std::vector<float>& avgV,
+                                   std::vector<float>& avgPV,
+                                   bool reset_window = true);
+
     /// Get owner of contact geometry (sphere, triangle, analytical entity).
     bodyID_t getGeoOwnerID(const bodyID_t& geo, const geoType_t& type) const;
 
@@ -1060,6 +1086,8 @@ class DEMDynamicThread {
             typeKernelMap);
     // Update clump-based acceleration array based on sphere-based force array
     void calculateForces();
+    // Fold this solver-step's triangle contributions into the current output window.
+    void finalizeTrianglePVWindowStep();
 
     // Update clump pos/oriQ and vel/omega based on acceleration
     inline void integrateOwnerMotions();
