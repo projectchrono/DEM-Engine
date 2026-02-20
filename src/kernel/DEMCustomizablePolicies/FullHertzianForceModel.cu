@@ -20,27 +20,15 @@ if (overlapDepth > 0) {
 
     float3 rotVelCPA = make_float3(0.f, 0.f, 0.f);
     float3 rotVelCPB = make_float3(0.f, 0.f, 0.f);
-    if constexpr (AType != deme::GEO_T_SPHERE || BType != deme::GEO_T_SPHERE) {
-        // We also need the relative velocity between A and B in global frame to use in the damping terms
-        // To get that, we need contact points' rotational velocity in GLOBAL frame
-        // This is local rotational velocity (the portion of linear vel contributed by rotation)
-        rotVelCPA = cross(ARotVel, locCPA);
-        rotVelCPB = cross(BRotVel, locCPB);
-        // This is mapping from local rotational velocity to global
-        applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x, AOriQ.y,
-                                                AOriQ.z);
-        applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y,
-                                                BOriQ.z);
-    } else {
-        if (simParams->useAngVelMargin) {
-            rotVelCPA = cross(ARotVel, locCPA);
-            rotVelCPB = cross(BRotVel, locCPB);
-            applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x, AOriQ.y,
-                                                    AOriQ.z);
-            applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y,
-                                                    BOriQ.z);
-        }
-    }
+    // Contact relative velocity must always include rotational contributions at the contact point.
+    // `useAngVelMargin` controls contact-detection margin sizing only; coupling force physics to that flag
+    // can under-damp spin/slip for sphere-sphere contacts.
+    rotVelCPA = cross(ARotVel, locCPA);
+    rotVelCPB = cross(BRotVel, locCPB);
+    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x, AOriQ.y,
+                                            AOriQ.z);
+    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y,
+                                            BOriQ.z);
 
     const bool tri_involved = (AType == deme::GEO_T_TRIANGLE) || (BType == deme::GEO_T_TRIANGLE);
     float contact_radius = 0.f;    // area-based radius or sqrt(overlapDepth * R_eff)

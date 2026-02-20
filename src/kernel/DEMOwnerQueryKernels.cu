@@ -8,7 +8,7 @@ _massDefs_;
 _moiDefs_;
 _volumeDefs_;
 
-__global__ void inspectOwnerProperty(deme::DEMDataDT* granData,
+DEME_KERNEL void inspectOwnerProperty(deme::DEMDataDT* granData,
                                      deme::DEMSimParams* simParams,
                                      float* quantity,
                                      deme::notStupidBool_t* not_in_region,

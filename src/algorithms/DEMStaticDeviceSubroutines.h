@@ -334,6 +334,33 @@ void computeFinalContactPointsPerPatch(double3* totalWeightedContactPoints,
                                        contactPairs_t count,
                                        cudaStream_t& this_stream);
 
+// Compute per-patch normal-force magnitude and tangential slip speed used by per-triangle diagnostics.
+void computePatchPVScalars(DEMSimParams* simParams,
+                           DEMDataDT* granData,
+                           const float3* finalNormals,
+                           contactPairs_t startOffsetPatch,
+                           contactPairs_t countPatch,
+                           float* patchNormalForce,
+                           float* patchSlipSpeed,
+                           cudaStream_t& this_stream);
+
+// Redistribute patch-level normal force to participating triangles using primitive contact weight share, and
+// accumulate per-triangle P and P*V contributions over the current output window.
+void accumulateTrianglePVFromPatchContacts(DEMSimParams* simParams,
+                                           DEMDataDT* granData,
+                                           const contactPairs_t* keys,
+                                           const PatchContactAccum* primitiveAccumulators,
+                                           const PatchContactAccum* patchAccumulators,
+                                           const float* patchNormalForce,
+                                           const float* patchSlipSpeed,
+                                           contactPairs_t startOffsetPrimitive,
+                                           contactPairs_t startOffsetPatch,
+                                           contactPairs_t countPrimitive,
+                                           const int* triGlobalToLocal,
+                                           float* triAccumP,
+                                           float* triAccumPV,
+                                           cudaStream_t& this_stream);
+
 ////////////////////////////////////////////////////////////////////////////////
 // Prep force kernels declaration
 ////////////////////////////////////////////////////////////////////////////////

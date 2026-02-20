@@ -10,7 +10,7 @@ _clumpTemplateDefs_;
 // _massDefs_;
 // _moiDefs_;
 
-__global__ void inspectSphereProperty(deme::DEMDataDT* granData,
+DEME_KERNEL void inspectSphereProperty(deme::DEMDataDT* granData,
                                       deme::DEMSimParams* simParams,
                                       float* quantity,
                                       deme::notStupidBool_t* not_in_region,

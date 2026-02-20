@@ -13,7 +13,6 @@ configure_file(
 	@ONLY
 )
 
-
 message(STATUS "${core_message} Extracting NVIDIA Jitify header...") 
 configure_file(
 	${NVIDIAJitifyPath}/jitify.hpp
@@ -119,7 +118,6 @@ install(
 	DESTINATION 
 		${CMAKE_INSTALL_INCLUDEDIR}/jitify
 )
-
 
 # --------------------------------------------------------- #
 # Runtime data path helper library 

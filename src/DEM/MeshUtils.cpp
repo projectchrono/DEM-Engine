@@ -111,7 +111,6 @@ bool DEMMesh::LoadSTLMesh(std::string input_file, bool load_normals) {
             m_face_v_indices.push_back(make_int3((int)base, (int)base + 1, (int)base + 2));
             offset += 50;
         }
-        set_default_patch_info();
         return true;
     };
 
@@ -128,30 +127,35 @@ bool DEMMesh::LoadSTLMesh(std::string input_file, bool load_normals) {
         }
     }
 
-    if (looks_binary && load_binary(tri_count)) {
-        return true;
+    bool parsed = false;
+    if (looks_binary) {
+        parsed = load_binary(tri_count);
     }
-
-    // Fallback to ASCII parsing
-    std::istringstream iss(std::string(buffer.begin(), buffer.end()));
-    std::string line;
-    std::vector<float3> facet_vertices;
-    facet_vertices.reserve(3);
-    while (std::getline(iss, line)) {
-        std::istringstream ls(line);
-        std::string token;
-        ls >> token;
-        if (token == "vertex") {
-            float3 v{};
-            ls >> v.x >> v.y >> v.z;
-            facet_vertices.push_back(v);
-            if (facet_vertices.size() == 3) {
-                size_t base = m_vertices.size();
-                m_vertices.push_back(facet_vertices[0]);
-                m_vertices.push_back(facet_vertices[1]);
-                m_vertices.push_back(facet_vertices[2]);
-                m_face_v_indices.push_back(make_int3((int)base, (int)base + 1, (int)base + 2));
-                facet_vertices.clear();
+    if (!parsed) {
+        // Fallback to ASCII parsing
+        std::istringstream iss(std::string(buffer.begin(), buffer.end()));
+        std::string line;
+        std::vector<float3> facet_vertices;
+        facet_vertices.reserve(3);
+        while (std::getline(iss, line)) {
+            std::istringstream ls(line);
+            std::string token;
+            ls >> token;
+            if (token == "facet") {
+                continue;
+            }
+            if (token == "vertex") {
+                float3 v{};
+                ls >> v.x >> v.y >> v.z;
+                facet_vertices.push_back(v);
+                if (facet_vertices.size() == 3) {
+                    size_t base = m_vertices.size();
+                    m_vertices.push_back(facet_vertices[0]);
+                    m_vertices.push_back(facet_vertices[1]);
+                    m_vertices.push_back(facet_vertices[2]);
+                    m_face_v_indices.push_back(make_int3((int)base, (int)base + 1, (int)base + 2));
+                    facet_vertices.clear();
+                }
             }
         }
     }
@@ -161,7 +165,11 @@ bool DEMMesh::LoadSTLMesh(std::string input_file, bool load_normals) {
         return false;
     }
 
-    // Compute simple per-facet normals (one normal per triangle) so downstream code can rely on normal data.
+    set_default_patch_info();
+
+    // Compute one geometric normal per facet from triangle winding.
+    // This restores the previous DEM contact behavior and avoids relying on
+    // inconsistent/inverted normals embedded in STL files.
     if (load_normals) {
         m_normals.clear();
         m_face_n_indices.clear();
@@ -172,7 +180,7 @@ bool DEMMesh::LoadSTLMesh(std::string input_file, bool load_normals) {
             const float3& v0 = m_vertices[f.x];
             const float3& v1 = m_vertices[f.y];
             const float3& v2 = m_vertices[f.z];
-            float3 n = face_normal(v0, v1, v2);
+            const float3 n = face_normal(v0, v1, v2);
             m_normals.push_back(n);
             m_face_n_indices.push_back(make_int3((int)i, (int)i, (int)i));
         }
@@ -184,7 +192,6 @@ bool DEMMesh::LoadSTLMesh(std::string input_file, bool load_normals) {
     m_UV.clear();
     m_face_uv_indices.clear();
 
-    set_default_patch_info();
     {
         size_t boundary_edges = 0;
         size_t nonmanifold_edges = 0;
@@ -844,6 +851,16 @@ std::vector<float3> DEMMesh::ComputePatchLocations() const {
 // Compute volume, centroid and MOI in CoM frame (unit density).
 // ATTENTION: Only correct for "watertight" meshes with fine and non-degenerated triangles.
 void DEMMesh::ComputeMassProperties(double& volume, float3& center, float3& inertia) const {
+    float3 inertia_products = make_float3(0, 0, 0);
+    ComputeMassProperties(volume, center, inertia, inertia_products);
+}
+
+// Compute volume, centroid and full inertia tensor in CoM frame (unit density).
+// ATTENTION: Only correct for "watertight" meshes with fine and non-degenerated triangles.
+void DEMMesh::ComputeMassProperties(double& volume,
+                                    float3& center,
+                                    float3& inertia,
+                                    float3& inertia_products) const {
     double vol = 0.0;
     double mx = 0.0;
     double my = 0.0;
@@ -896,6 +913,7 @@ void DEMMesh::ComputeMassProperties(double& volume, float3& center, float3& iner
         volume = 0.0;
         center = make_float3(0, 0, 0);
         inertia = make_float3(0, 0, 0);
+        inertia_products = make_float3(0, 0, 0);
         return;
     }
 
@@ -934,6 +952,7 @@ void DEMMesh::ComputeMassProperties(double& volume, float3& center, float3& iner
     volume = vol;
     center = make_float3(static_cast<float>(cx), static_cast<float>(cy), static_cast<float>(cz));
     inertia = make_float3(static_cast<float>(Ixx), static_cast<float>(Iyy), static_cast<float>(Izz));
+    inertia_products = make_float3(static_cast<float>(Ixy), static_cast<float>(Iyz), static_cast<float>(Izx));
 }
 
 // Section for Watertight test, false if not

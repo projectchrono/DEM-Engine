@@ -7,7 +7,7 @@ _kernelIncludes_;
 _massDefs_;
 _moiDefs_;
 
-__global__ void applyFamilyChanges(deme::DEMSimParams* simParams, deme::DEMDataDT* granData, size_t nOwnerBodies) {
+DEME_KERNEL void applyFamilyChanges(deme::DEMSimParams* simParams, deme::DEMDataDT* granData, size_t nOwnerBodies) {
     deme::bodyID_t myOwner = blockIdx.x * blockDim.x + threadIdx.x;
     if (myOwner < nOwnerBodies) {
         // The user may make references to owner positions, velocities, accelerations and simulation time

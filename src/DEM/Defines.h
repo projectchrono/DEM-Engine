@@ -14,6 +14,12 @@
 #include "VariableTypes.h"
 #include "cuda_runtime.h"
 
+#ifdef __CUDACC__
+    #define DEME_KERNEL extern "C" __global__
+#else
+    #define DEME_KERNEL
+#endif
+
 #define DEME_MIN(a, b) ((a < b) ? a : b)
 #define DEME_MAX(a, b) ((a > b) ? a : b)
 
@@ -112,23 +118,31 @@ constexpr contact_t SPHERE_ANALYTICAL_CONTACT = encodeType(GEO_T_SPHERE, GEO_T_A
 constexpr contact_t TRIANGLE_TRIANGLE_CONTACT = encodeType(GEO_T_TRIANGLE, GEO_T_TRIANGLE);
 constexpr contact_t TRIANGLE_ANALYTICAL_CONTACT = encodeType(GEO_T_TRIANGLE, GEO_T_ANALYTICAL);
 constexpr contact_t NUM_SUPPORTED_CONTACT_TYPES = 5;
+inline __host__ __device__ constexpr bool isSupportedContactType(contact_t type) {
+    return type == SPHERE_SPHERE_CONTACT || type == SPHERE_TRIANGLE_CONTACT || type == SPHERE_ANALYTICAL_CONTACT ||
+           type == TRIANGLE_TRIANGLE_CONTACT || type == TRIANGLE_ANALYTICAL_CONTACT;
+}
 constexpr contact_t ALL_CONTACT_TYPES[NUM_SUPPORTED_CONTACT_TYPES] = {
     SPHERE_SPHERE_CONTACT, SPHERE_TRIANGLE_CONTACT, SPHERE_ANALYTICAL_CONTACT, TRIANGLE_TRIANGLE_CONTACT,
     TRIANGLE_ANALYTICAL_CONTACT};
 
 // Device version of getting geo owner ID
-#define DEME_GET_GEO_OWNER_ID(geo, type)                                  \
-    ((type) == deme::GEO_T_SPHERE       ? granData->ownerClumpBody[(geo)] \
-     : (type) == deme::GEO_T_TRIANGLE   ? granData->ownerTriMesh[(geo)]   \
-     : (type) == deme::GEO_T_ANALYTICAL ? granData->ownerAnalBody[(geo)]  \
-                                        : deme::NULL_BODYID)
+#define DEME_GET_GEO_OWNER_ID(geo, type)                                                                  \
+    ((type) == deme::GEO_T_SPHERE                                                                         \
+         ? granData->ownerClumpBody[(geo) & deme::CYL_PERIODIC_SPHERE_ID_MASK]                             \
+         : (type) == deme::GEO_T_TRIANGLE                                                                 \
+               ? granData->ownerTriMesh[(geo) & deme::CYL_PERIODIC_SPHERE_ID_MASK]                         \
+               : (type) == deme::GEO_T_ANALYTICAL ? granData->ownerAnalBody[(geo) & deme::CYL_PERIODIC_SPHERE_ID_MASK]  \
+                                                  : deme::NULL_BODYID)
 
 // Device version of getting patch owner ID
-#define DEME_GET_PATCH_OWNER_ID(patchID, type)                                \
-    ((type) == deme::GEO_T_SPHERE       ? granData->ownerClumpBody[(patchID)] \
-     : (type) == deme::GEO_T_TRIANGLE   ? granData->ownerPatchMesh[(patchID)] \
-     : (type) == deme::GEO_T_ANALYTICAL ? granData->ownerAnalBody[(patchID)]  \
-                                        : deme::NULL_BODYID)
+#define DEME_GET_PATCH_OWNER_ID(patchID, type)                                                              \
+    ((type) == deme::GEO_T_SPHERE                                                                           \
+         ? granData->ownerClumpBody[(patchID) & deme::CYL_PERIODIC_SPHERE_ID_MASK]                           \
+         : (type) == deme::GEO_T_TRIANGLE                                                                   \
+               ? granData->ownerPatchMesh[(patchID) & deme::CYL_PERIODIC_SPHERE_ID_MASK]                     \
+               : (type) == deme::GEO_T_ANALYTICAL ? granData->ownerAnalBody[(patchID) & deme::CYL_PERIODIC_SPHERE_ID_MASK] \
+                                                  : deme::NULL_BODYID)
 
 // Can be seen as even finer grain type identifiers of the analytical component type
 const objType_t ANAL_OBJ_TYPE_PLANE = 0;
@@ -153,6 +167,14 @@ constexpr contactPairs_t NULL_MAPPING_PARTNER = ((size_t)1 << (sizeof(contactPai
 // Reserved bodyID
 constexpr bodyID_t NULL_BODYID = ((size_t)1 << (sizeof(bodyID_t) * DEME_BITS_PER_BYTE - 1)) +
                                  (((size_t)1 << (sizeof(bodyID_t) * DEME_BITS_PER_BYTE - 1)) - 1);
+// Cylindrical periodic ghost markers for sphere IDs (use top two bits)
+constexpr bodyID_t CYL_PERIODIC_GHOST_FLAG = (bodyID_t)1 << (sizeof(bodyID_t) * DEME_BITS_PER_BYTE - 1);
+constexpr bodyID_t CYL_PERIODIC_GHOST_NEG_FLAG = (bodyID_t)1 << (sizeof(bodyID_t) * DEME_BITS_PER_BYTE - 2);
+constexpr bodyID_t CYL_PERIODIC_SPHERE_ID_MASK = CYL_PERIODIC_GHOST_NEG_FLAG - 1;
+// Cylindrical periodic seam-side ghost flags.
+constexpr unsigned int CYL_GHOST_HINT_START = 0x1u;     // desired shift +1 (start-side ghost)
+constexpr unsigned int CYL_GHOST_HINT_END = 0x2u;       // desired shift -1 (end-side ghost)
+constexpr unsigned int CYL_GHOST_HINT_MISMATCH = 0x4u;  // dT observed kT/dT branch mismatch
 // Reserved binID
 constexpr binID_t NULL_BINID = ((size_t)1 << (sizeof(binID_t) * DEME_BITS_PER_BYTE - 1)) +
                                (((size_t)1 << (sizeof(binID_t) * DEME_BITS_PER_BYTE - 1)) - 1);
@@ -292,6 +314,26 @@ struct DEMSimParams {
     // User's box size
     float3 userBoxMin;
     float3 userBoxMax;
+    // Cylindrical periodicity (particles only)
+    notStupidBool_t useCylPeriodic = 0;
+    notStupidBool_t useCylPeriodicDiagCounters = 0;
+    unsigned char cylPeriodicAxis = 0;  // SPATIAL_DIR enum value
+    float cylPeriodicStart = 0.f;
+    float cylPeriodicSpan = 0.f;
+    float cylPeriodicMinRadius = 0.f;
+    float cylPeriodicCosSpan = 1.f;
+    float cylPeriodicSinSpan = 0.f;
+    float cylPeriodicCosHalfSpan = 1.f;
+    float cylPeriodicSinHalfSpan = 0.f;
+    float3 cylPeriodicAxisVec;
+    float3 cylPeriodicU;
+    float3 cylPeriodicV;
+    float3 cylPeriodicStartNormal;
+    float3 cylPeriodicEndNormal;
+    float3 cylPeriodicOrigin;  // Global origin in local (LBF-shifted) coordinates
+    float maxSphereRadius = 0.f;
+    float maxTriRadius = 0.f;
+    float maxFamilyExtraMargin = 0.f;
     // Stepping method
     TIME_INTEGRATOR stepping = TIME_INTEGRATOR::FORWARD_EULER;
 
@@ -299,6 +341,11 @@ struct DEMSimParams {
     unsigned int nContactWildcards;
     unsigned int nOwnerWildcards;
     unsigned int nGeoWildcards;
+
+    // For cylindrical periodicity: contact wildcard triplets (x,y,z) that represent global vectors
+    // and must be rotated when an owner wraps (teleports) across the periodic seam.
+    unsigned int nCylPeriodicWCTriplets = 0;
+    int3* cylPeriodicWCTriplets = nullptr;
 
     // Max tri-tri penetration margin (to prevent super large margins from being added)
     double capTriTriPenetration = DEME_HUGE_FLOAT;
@@ -325,6 +372,29 @@ struct DEMDataDT {
     voxelID_t* voxelID;
 
     ownerType_t* ownerTypes;
+
+    // Per-owner bounding radius (circumscribed sphere radius in the owner's local frame).
+    //
+    // This is primarily used by cylindrical periodicity to decide when an owner can be wrapped (teleported)
+    // without affecting physics/contact history. Using a per-owner value avoids overly conservative (global-max)
+    // ghost bands which can delay wrapping and create regimes where the owner is neither wrapped nor ghosted.
+    float* ownerBoundRadius;
+
+    // Per-owner cylindrical periodic wrap count for the *most recent* integration step.
+    // 0 means no wrap; +1 means rotated by -span; -1 means rotated by +span; other values represent multi-span wraps.
+    int* ownerCylWrapK;
+    // Cumulative cylindrical wrap offset since the last kT update (used to interpret ghost IDs under async drift).
+    int* ownerCylWrapOffset;
+    // Per-owner flag indicating this owner's ghost is participating in any active contact this step.
+    unsigned int* ownerCylGhostActive;
+    // Per-owner count of periodic candidates skipped in dT because their image branch did not match
+    // the dT-selected minimum image for this step.
+    unsigned int* ownerCylSkipCount;
+    // Subset of ownerCylSkipCount where the candidate would otherwise be a contact
+    // (ContactType != NOT_A_CONTACT), i.e. likely force-relevant skips.
+    unsigned int* ownerCylSkipPotentialCount;
+    // Total number of force-relevant skipped periodic candidates since last kT unpack.
+    unsigned int* ownerCylSkipPotentialTotal;
 
     subVoxelPos_t* locX;
     subVoxelPos_t* locY;
@@ -376,8 +446,6 @@ struct DEMDataDT {
     float3* contactTorque_convToForce;
     float3* contactPointGeometryA;
     float3* contactPointGeometryB;
-    // Array to record whether a triangle-triangle primitive contact is valid (respects patch--patch general direction)
-    notStupidBool_t* contactPatchDirectionRespected;
     // float3* contactHistory;
     // float* contactDuration;
 
@@ -416,6 +484,7 @@ struct DEMDataDT {
     oriQ_t* pKTOwnedBuffer_oriQ1 = nullptr;
     oriQ_t* pKTOwnedBuffer_oriQ2 = nullptr;
     oriQ_t* pKTOwnedBuffer_oriQ3 = nullptr;
+    unsigned int* pKTOwnedBuffer_ownerCylGhostActive = nullptr;
     family_t* pKTOwnedBuffer_familyID = nullptr;
     float3* pKTOwnedBuffer_relPosNode1 = nullptr;
     float3* pKTOwnedBuffer_relPosNode2 = nullptr;
@@ -456,6 +525,14 @@ struct DEMDataKT {
     oriQ_t* oriQx;
     oriQ_t* oriQy;
     oriQ_t* oriQz;
+    // Per-owner bounding radius (shared from dT), used to keep cylindrical periodic
+    // ghost/image selection consistent between kT and dT.
+    float* ownerBoundRadius = nullptr;
+    // Per-owner cylindrical periodic flags shared by kT and dT.
+    // Bit CYL_GHOST_HINT_START (0x1): start-side ghost hint (+span).
+    // Bit CYL_GHOST_HINT_END (0x2): end-side ghost hint (-span).
+    // Bit CYL_GHOST_HINT_MISMATCH (0x4): dT observed kT/dT branch mismatch.
+    unsigned int* ownerCylGhostActive = nullptr;
     // Derived from absv which is for determining contact margin size. Each type of primitive geometry has its own size.
     float* marginSizeSphere;
     float* marginSizeAnalytical;

@@ -88,6 +88,7 @@ FOREACH(PROGRAM ${DEMOS})
 		)
 		
 		add_dependencies(${PROGRAM} ${LIBRARIES})
+		add_dependencies(${PROGRAM} sync_kernels)
 
 		if (CXXSTD_SUPPORTED)
 			set_target_properties(

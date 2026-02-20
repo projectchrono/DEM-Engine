@@ -3,6 +3,22 @@
 #include <DEMCollisionKernels_SphTri_TriTri.cuh>
 _kernelIncludes_;
 
+inline __device__ float triRadiusFromNodes(const float3& center,
+                                           const float3& a1,
+                                           const float3& a2,
+                                           const float3& a3,
+                                           const float3& b1,
+                                           const float3& b2,
+                                           const float3& b3) {
+    float r2 = dot(a1 - center, a1 - center);
+    r2 = fmaxf(r2, dot(a2 - center, a2 - center));
+    r2 = fmaxf(r2, dot(a3 - center, a3 - center));
+    r2 = fmaxf(r2, dot(b1 - center, b1 - center));
+    r2 = fmaxf(r2, dot(b2 - center, b2 - center));
+    r2 = fmaxf(r2, dot(b3 - center, b3 - center));
+    return sqrtf(r2);
+}
+
 // #include <cub/block/block_load.cuh>
 // #include <cub/block/block_store.cuh>
 // #include <cub/block/block_reduce.cuh>
@@ -30,9 +46,20 @@ inline __device__ void fillSharedMemTriangles(deme::DEMSimParams* simParams,
                                               float3* triANode3,
                                               float3* triBNode1,
                                               float3* triBNode2,
-                                              float3* triBNode3) {
-    deme::bodyID_t ownerID = granData->ownerTriMesh[triID];
-    triIDs[myThreadID] = triID;
+                                              float3* triBNode3,
+                                              float3* triCenters,
+                                              signed char* triGhostFlags) {
+    bool is_ghost = false;
+    bool ghost_neg = false;
+    deme::bodyID_t tri_id = triID;
+    if (triID & deme::CYL_PERIODIC_GHOST_FLAG) {
+        tri_id = cylPeriodicDecodeID(triID, is_ghost, ghost_neg);
+        is_ghost = is_ghost && simParams->useCylPeriodic;
+    }
+    triGhostFlags[myThreadID] = is_ghost ? (ghost_neg ? -1 : 1) : 0;
+
+    deme::bodyID_t ownerID = granData->ownerTriMesh[tri_id];
+    triIDs[myThreadID] = tri_id;
     triOwnerIDs[myThreadID] = ownerID;
     triOwnerFamilies[myThreadID] = granData->familyID[ownerID];
     float3 ownerXYZ;
@@ -48,9 +75,9 @@ inline __device__ void fillSharedMemTriangles(deme::DEMSimParams* simParams,
 
     // These locations does not include the LBF offset, which is fine since we only care about relative positions here
     {
-        node1 = sandwichANode1[triID];
-        node2 = sandwichANode2[triID];
-        node3 = sandwichANode3[triID];
+        node1 = sandwichANode1[tri_id];
+        node2 = sandwichANode2[tri_id];
+        node3 = sandwichANode3[tri_id];
         applyOriQToVector3<float, deme::oriQ_t>(node1.x, node1.y, node1.z, myOriQw, myOriQx, myOriQy, myOriQz);
         applyOriQToVector3<float, deme::oriQ_t>(node2.x, node2.y, node2.z, myOriQw, myOriQx, myOriQy, myOriQz);
         applyOriQToVector3<float, deme::oriQ_t>(node3.x, node3.y, node3.z, myOriQw, myOriQx, myOriQy, myOriQz);
@@ -59,9 +86,9 @@ inline __device__ void fillSharedMemTriangles(deme::DEMSimParams* simParams,
         triANode3[myThreadID] = ownerXYZ + node3;
     }
     {
-        node1 = sandwichBNode1[triID];
-        node2 = sandwichBNode2[triID];
-        node3 = sandwichBNode3[triID];
+        node1 = sandwichBNode1[tri_id];
+        node2 = sandwichBNode2[tri_id];
+        node3 = sandwichBNode3[tri_id];
         applyOriQToVector3<float, deme::oriQ_t>(node1.x, node1.y, node1.z, myOriQw, myOriQx, myOriQy, myOriQz);
         applyOriQToVector3<float, deme::oriQ_t>(node2.x, node2.y, node2.z, myOriQw, myOriQx, myOriQy, myOriQz);
         applyOriQToVector3<float, deme::oriQ_t>(node3.x, node3.y, node3.z, myOriQw, myOriQx, myOriQy, myOriQz);
@@ -69,20 +96,54 @@ inline __device__ void fillSharedMemTriangles(deme::DEMSimParams* simParams,
         triBNode2[myThreadID] = ownerXYZ + node2;
         triBNode3[myThreadID] = ownerXYZ + node3;
     }
+
+    if (is_ghost) {
+        const float sin_span = ghost_neg ? -simParams->cylPeriodicSinSpan : simParams->cylPeriodicSinSpan;
+        triANode1[myThreadID] = cylPeriodicRotate(triANode1[myThreadID], simParams->cylPeriodicOrigin,
+                                                  simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
+                                                  simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
+        triANode2[myThreadID] = cylPeriodicRotate(triANode2[myThreadID], simParams->cylPeriodicOrigin,
+                                                  simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
+                                                  simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
+        triANode3[myThreadID] = cylPeriodicRotate(triANode3[myThreadID], simParams->cylPeriodicOrigin,
+                                                  simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
+                                                  simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
+        triBNode1[myThreadID] = cylPeriodicRotate(triBNode1[myThreadID], simParams->cylPeriodicOrigin,
+                                                  simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
+                                                  simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
+        triBNode2[myThreadID] = cylPeriodicRotate(triBNode2[myThreadID], simParams->cylPeriodicOrigin,
+                                                  simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
+                                                  simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
+        triBNode3[myThreadID] = cylPeriodicRotate(triBNode3[myThreadID], simParams->cylPeriodicOrigin,
+                                                  simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
+                                                  simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
+    }
+    triCenters[myThreadID] = triangleCentroid<float3>(triANode1[myThreadID], triANode2[myThreadID],
+                                                      triANode3[myThreadID]);
 }
 
 template <typename T1, typename T2>
 inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
                                             deme::DEMDataKT* granData,
                                             const deme::spheresBinTouches_t& myThreadID,
-                                            const deme::bodyID_t& sphereID,
+                                            const deme::bodyID_t& sphereID_in,
                                             deme::bodyID_t* ownerIDs,
                                             deme::bodyID_t* bodyIDs,
                                             deme::family_t* ownerFamilies,
                                             T1* radii,
                                             T2* bodyX,
                                             T2* bodyY,
-                                            T2* bodyZ) {
+                                            T2* bodyZ,
+                                            signed char* ghostFlags) {
+    bool is_ghost = false;
+    bool ghost_neg = false;
+    // Keep a local `sphereID` for component acquisition macros.
+    deme::bodyID_t sphereID = sphereID_in;
+    if (sphereID_in & deme::CYL_PERIODIC_GHOST_FLAG) {
+        sphereID = cylPeriodicDecodeID(sphereID_in, is_ghost, ghost_neg);
+        is_ghost = is_ghost && simParams->useCylPeriodic;
+    }
+
     deme::bodyID_t ownerID = granData->ownerClumpBody[sphereID];
     bodyIDs[myThreadID] = sphereID;
     ownerIDs[myThreadID] = ownerID;
@@ -111,9 +172,43 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
     bodyX[myThreadID] = ownerX + myRelPos.x;
     bodyY[myThreadID] = ownerY + myRelPos.y;
     bodyZ[myThreadID] = ownerZ + myRelPos.z;
+    if (is_ghost) {
+        const float sin_span = ghost_neg ? -simParams->cylPeriodicSinSpan : simParams->cylPeriodicSinSpan;
+        float3 pos_local = make_float3(bodyX[myThreadID], bodyY[myThreadID], bodyZ[myThreadID]);
+        pos_local = cylPeriodicRotate(pos_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec,
+                                      simParams->cylPeriodicU, simParams->cylPeriodicV, simParams->cylPeriodicCosSpan,
+                                      sin_span);
+        bodyX[myThreadID] = pos_local.x;
+        bodyY[myThreadID] = pos_local.y;
+        bodyZ[myThreadID] = pos_local.z;
+    }
     radii[myThreadID] = myRadius;
+    ghostFlags[myThreadID] = is_ghost ? (ghost_neg ? -1 : 1) : 0;
 }
 
+
+
+// Compute owner COM in true global coordinates and rotate to the ghost image when requested.
+inline __device__ float3 getOwnerPosGhosted(deme::DEMSimParams* simParams,
+                                            deme::DEMDataKT* granData,
+                                            deme::bodyID_t ownerID,
+                                            bool isGhost,
+                                            bool ghost_neg) {
+    float3 ownerXYZ;
+    voxelIDToPosition<float, deme::voxelID_t, deme::subVoxelPos_t>(
+        ownerXYZ.x, ownerXYZ.y, ownerXYZ.z, granData->voxelID[ownerID], granData->locX[ownerID],
+        granData->locY[ownerID], granData->locZ[ownerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
+    if (isGhost) {
+        const float sin_span = ghost_neg ? -simParams->cylPeriodicSinSpan : simParams->cylPeriodicSinSpan;
+        ownerXYZ = cylPeriodicRotate(ownerXYZ, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec,
+                                     simParams->cylPeriodicU, simParams->cylPeriodicV,
+                                     simParams->cylPeriodicCosSpan, sin_span);
+    }
+    ownerXYZ.x += simParams->LBFX;
+    ownerXYZ.y += simParams->LBFY;
+    ownerXYZ.z += simParams->LBFZ;
+    return ownerXYZ;
+}
 inline __device__ bool checkPrismPrismContact(deme::DEMSimParams* simParams,
                                               const float3& triANode1,
                                               const float3& triANode2,
@@ -134,7 +229,7 @@ inline __device__ bool checkPrismPrismContact(deme::DEMSimParams* simParams,
     return in_contact;
 }
 
-__global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams,
+DEME_KERNEL void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams,
                                                    deme::DEMDataKT* granData,
                                                    deme::bodyID_t* sphereIDsEachBinTouches_sorted,
                                                    deme::binID_t* activeBinIDs,
@@ -164,7 +259,9 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
     __shared__ float3 triBNode1[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ float3 triBNode2[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ float3 triBNode3[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ float3 triCenters[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ deme::family_t triOwnerFamilies[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ signed char triGhostFlags[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ deme::binContactPairs_t blockSphTriPairCnt, blockTriTriPairCnt;
 
     // typedef cub::BlockReduce<deme::binContactPairs_t, DEME_KT_CD_NTHREADS_PER_BLOCK> BlockReduceT;
@@ -219,7 +316,8 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
             deme::bodyID_t triID = triIDsEachBinTouches_sorted[thisTriTableEntry + processed_count + myThreadID];
             fillSharedMemTriangles(simParams, granData, myThreadID, triID, triOwnerIDs, triIDs, triOwnerFamilies,
                                    sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1, sandwichBNode2,
-                                   sandwichBNode3, triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3);
+                                   sandwichBNode3, triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3,
+                                   triCenters, triGhostFlags);
         }
         __syncthreads();
 
@@ -234,10 +332,13 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                 deme::family_t ownerFamily;
                 float myRadius;
                 float3 sphXYZ;
+                signed char sph_isGhost = 0;
 
                 // Borrow it from another kernel file...
                 fillSharedMemSpheres<float, float>(simParams, granData, 0, sphereID, &ownerID, &sphereID, &ownerFamily,
-                                                   &myRadius, &sphXYZ.x, &sphXYZ.y, &sphXYZ.z);
+                                                   &myRadius, &sphXYZ.x, &sphXYZ.y, &sphXYZ.z, &sph_isGhost);
+                const bool sphGhost = sph_isGhost != 0;
+                const bool sphGhost_neg = sph_isGhost < 0;
 
                 // Test contact with each triangle in shared memory
                 for (deme::trianglesBinTouches_t ind = 0; ind < this_batch_active_count; ind++) {
@@ -245,6 +346,34 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                     // implementation...
                     if (ownerID == triOwnerIDs[ind])
                         continue;
+                    const bool triGhost = triGhostFlags[ind] != 0;
+                    const bool triGhost_neg = triGhostFlags[ind] < 0;
+                    if (sphGhost && triGhost) {
+                        continue;
+                    }
+                    if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
+                        // Canonical periodic image selection MUST be owner-based (one active image per owner-pair).
+// Using per-primitive positions (sphere component / triangle centroid) causes different primitives
+// of the same owner to pick different images, which injects energy via history/lever-arm mismatch.
+const float3 ownerPosA = getOwnerPosGhosted(simParams, granData, ownerID, sphGhost, sphGhost_neg);
+const float3 ownerPosB =
+    getOwnerPosGhosted(simParams, granData, triOwnerIDs[ind], triGhost, triGhost_neg);
+	float radA_owner = myRadius;
+const float triRadFallback = triRadiusFromNodes(triCenters[ind], triANode1[ind], triANode2[ind],
+                                               triANode3[ind], triBNode1[ind], triBNode2[ind],
+                                               triBNode3[ind]);
+	float radB_owner = triRadFallback;
+if (granData->ownerBoundRadius) {
+    radA_owner = granData->ownerBoundRadius[ownerID];
+    radB_owner = granData->ownerBoundRadius[triOwnerIDs[ind]];
+}
+
+if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, sphGhost, sphGhost_neg, ownerID, ownerPosB,
+                                  radB_owner, triGhost, triGhost_neg, triOwnerIDs[ind],
+                                  simParams, granData->ownerCylGhostActive)) {
+    continue;
+}
+                    }
 
                     // Grab family number from memory
                     unsigned int maskMatID = locateMaskPair<unsigned int>(ownerFamily, triOwnerFamilies[ind]);
@@ -313,6 +442,33 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                 // double-counting), and they do not belong to the same clump
                 if (triOwnerIDs[bodyA] == triOwnerIDs[bodyB])
                     continue;
+                const bool ghostA = triGhostFlags[bodyA] != 0;
+                const bool ghostB = triGhostFlags[bodyB] != 0;
+                const bool ghostA_neg = triGhostFlags[bodyA] < 0;
+                const bool ghostB_neg = triGhostFlags[bodyB] < 0;
+                if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
+                    const float radA_fallback = triRadiusFromNodes(triCenters[bodyA], triANode1[bodyA], triANode2[bodyA],
+                                             triANode3[bodyA], triBNode1[bodyA], triBNode2[bodyA],
+                                             triBNode3[bodyA]);
+const float radB_fallback = triRadiusFromNodes(triCenters[bodyB], triANode1[bodyB], triANode2[bodyB],
+                                             triANode3[bodyB], triBNode1[bodyB], triBNode2[bodyB],
+                                             triBNode3[bodyB]);
+const float3 ownerPosA =
+    getOwnerPosGhosted(simParams, granData, triOwnerIDs[bodyA], ghostA, ghostA_neg);
+const float3 ownerPosB =
+    getOwnerPosGhosted(simParams, granData, triOwnerIDs[bodyB], ghostB, ghostB_neg);
+float radA_owner = radA_fallback;
+float radB_owner = radB_fallback;
+if (granData->ownerBoundRadius) {
+    radA_owner = granData->ownerBoundRadius[triOwnerIDs[bodyA]];
+    radB_owner = granData->ownerBoundRadius[triOwnerIDs[bodyB]];
+}
+if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, ghostA, ghostA_neg, triOwnerIDs[bodyA],
+                                  ownerPosB, radB_owner, ghostB, ghostB_neg, triOwnerIDs[bodyB],
+                                  simParams, granData->ownerCylGhostActive)) {
+    continue;
+}
+                }
 
                 // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
                 unsigned int bodyAFamily = triOwnerFamilies[bodyA];
@@ -352,7 +508,9 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                 for (deme::trianglesBinTouches_t i = 0; i < leftover_count; i++) {
                     deme::bodyID_t cur_ownerID, cur_bodyID;
                     float3 cur_triANode1, cur_triANode2, cur_triANode3, cur_triBNode1, cur_triBNode2, cur_triBNode3;
+                    float3 cur_triCenter;
                     deme::family_t cur_ownerFamily;
+                    signed char cur_isGhost = 0;
                     {
                         const deme::trianglesBinTouches_t cur_ind =
                             processed_count + DEME_NUM_TRIANGLES_PER_CD_BATCH + i;
@@ -364,11 +522,39 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
                                                &cur_ownerFamily, sandwichANode1, sandwichANode2, sandwichANode3,
                                                sandwichBNode1, sandwichBNode2, sandwichBNode3, &cur_triANode1,
                                                &cur_triANode2, &cur_triANode3, &cur_triBNode1, &cur_triBNode2,
-                                               &cur_triBNode3);
+                                               &cur_triBNode3, &cur_triCenter, &cur_isGhost);
                     }
                     // Then each in-shared-mem sphere compares against it. But first, check if same owner...
                     if (triOwnerIDs[myThreadID] == cur_ownerID)
                         continue;
+                    const bool ghostA = triGhostFlags[myThreadID] != 0;
+                    const bool ghostB = cur_isGhost != 0;
+                    const bool ghostA_neg = triGhostFlags[myThreadID] < 0;
+                    const bool ghostB_neg = cur_isGhost < 0;
+                    if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
+                        const float radA_fallback = triRadiusFromNodes(triCenters[myThreadID], triANode1[myThreadID],
+                                             triANode2[myThreadID], triANode3[myThreadID],
+                                             triBNode1[myThreadID], triBNode2[myThreadID],
+                                             triBNode3[myThreadID]);
+const float radB_fallback = triRadiusFromNodes(cur_triCenter, cur_triANode1, cur_triANode2,
+                                             cur_triANode3, cur_triBNode1, cur_triBNode2,
+                                             cur_triBNode3);
+const float3 ownerPosA =
+    getOwnerPosGhosted(simParams, granData, triOwnerIDs[myThreadID], ghostA, ghostA_neg);
+const float3 ownerPosB =
+    getOwnerPosGhosted(simParams, granData, cur_ownerID, ghostB, ghostB_neg);
+	float radA_owner = radA_fallback;
+	float radB_owner = radB_fallback;
+if (granData->ownerBoundRadius) {
+    radA_owner = granData->ownerBoundRadius[triOwnerIDs[myThreadID]];
+    radB_owner = granData->ownerBoundRadius[cur_ownerID];
+}
+if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, ghostA, ghostA_neg,
+                                  triOwnerIDs[myThreadID], ownerPosB, radB_owner, ghostB,
+                                  ghostB_neg, cur_ownerID, simParams, granData->ownerCylGhostActive)) {
+    continue;
+}
+                    }
 
                     // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
                     unsigned int bodyAFamily = triOwnerFamilies[myThreadID];
@@ -402,7 +588,7 @@ __global__ void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams
     }
 }
 
-__global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
+DEME_KERNEL void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                                                 deme::DEMDataKT* granData,
                                                 deme::bodyID_t* sphereIDsEachBinTouches_sorted,
                                                 deme::binID_t* activeBinIDs,
@@ -438,7 +624,9 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
     __shared__ float3 triBNode1[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ float3 triBNode2[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ float3 triBNode3[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ float3 triCenters[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ deme::family_t triOwnerFamilies[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ signed char triGhostFlags[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ deme::binContactPairs_t blockSphTriPairCnt, blockTriTriPairCnt;
 
     const deme::trianglesBinTouches_t nTriInBin = numTrianglesBinTouches[blockIdx.x];
@@ -489,7 +677,8 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
             deme::bodyID_t triID = triIDsEachBinTouches_sorted[thisTriTableEntry + processed_count + myThreadID];
             fillSharedMemTriangles(simParams, granData, myThreadID, triID, triOwnerIDs, triIDs, triOwnerFamilies,
                                    sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1, sandwichBNode2,
-                                   sandwichBNode3, triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3);
+                                   sandwichBNode3, triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3,
+                                   triCenters, triGhostFlags);
         }
         __syncthreads();
 
@@ -504,10 +693,13 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                 deme::family_t ownerFamily;
                 float myRadius;
                 float3 sphXYZ;
+                signed char sph_isGhost = 0;
 
                 // Borrow it from another kernel file...
                 fillSharedMemSpheres<float, float>(simParams, granData, 0, sphereID, &ownerID, &sphereID, &ownerFamily,
-                                                   &myRadius, &sphXYZ.x, &sphXYZ.y, &sphXYZ.z);
+                                                   &myRadius, &sphXYZ.x, &sphXYZ.y, &sphXYZ.z, &sph_isGhost);
+                const bool sphGhost = sph_isGhost != 0;
+                const bool sphGhost_neg = sph_isGhost < 0;
 
                 // Test contact with each triangle in shared memory
                 for (deme::trianglesBinTouches_t ind = 0; ind < this_batch_active_count; ind++) {
@@ -515,6 +707,34 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                     // implementation...
                     if (ownerID == triOwnerIDs[ind])
                         continue;
+                    const bool triGhost = triGhostFlags[ind] != 0;
+                    const bool triGhost_neg = triGhostFlags[ind] < 0;
+                    if (sphGhost && triGhost) {
+                        continue;
+                    }
+                    if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
+                        // Canonical periodic image selection MUST be owner-based (one active image per owner-pair).
+// Using per-primitive positions (sphere component / triangle centroid) causes different primitives
+// of the same owner to pick different images, which injects energy via history/lever-arm mismatch.
+const float3 ownerPosA = getOwnerPosGhosted(simParams, granData, ownerID, sphGhost, sphGhost_neg);
+const float3 ownerPosB =
+    getOwnerPosGhosted(simParams, granData, triOwnerIDs[ind], triGhost, triGhost_neg);
+	float radA_owner = myRadius;
+const float triRadFallback = triRadiusFromNodes(triCenters[ind], triANode1[ind], triANode2[ind],
+                                               triANode3[ind], triBNode1[ind], triBNode2[ind],
+                                               triBNode3[ind]);
+	float radB_owner = triRadFallback;
+if (granData->ownerBoundRadius) {
+    radA_owner = granData->ownerBoundRadius[ownerID];
+    radB_owner = granData->ownerBoundRadius[triOwnerIDs[ind]];
+}
+
+if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, sphGhost, sphGhost_neg, ownerID, ownerPosB,
+                                  radB_owner, triGhost, triGhost_neg, triOwnerIDs[ind],
+                                  simParams, granData->ownerCylGhostActive)) {
+    continue;
+}
+                    }
 
                     // Grab family number from memory
                     unsigned int maskMatID = locateMaskPair<unsigned int>(ownerFamily, triOwnerFamilies[ind]);
@@ -557,8 +777,10 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                         if (contactPntBin == binID) {
                             deme::contactPairs_t inBlockOffset = smReportOffset + atomicAdd(&blockSphTriPairCnt, 1);
                             if (inBlockOffset < smReportOffset_end) {
-                                idSphA_sm[inBlockOffset] = sphereID;
-                                idTriB_sm[inBlockOffset] = triIDs[ind];
+                                idSphA_sm[inBlockOffset] =
+                                    sphGhost ? cylPeriodicEncodeGhostID(sphereID, sphGhost_neg) : sphereID;
+                                idTriB_sm[inBlockOffset] =
+                                    triGhost ? cylPeriodicEncodeGhostID(triIDs[ind], triGhost_neg) : triIDs[ind];
                                 dType_sm[inBlockOffset] = deme::SPHERE_TRIANGLE_CONTACT;
                             }
                         }
@@ -588,6 +810,31 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                 // double-counting), and they do not belong to the same clump
                 if (triOwnerIDs[bodyA] == triOwnerIDs[bodyB])
                     continue;
+                const bool ghostA = triGhostFlags[bodyA] != 0;
+                const bool ghostB = triGhostFlags[bodyB] != 0;
+                const bool ghostA_neg = triGhostFlags[bodyA] < 0;
+                const bool ghostB_neg = triGhostFlags[bodyB] < 0;
+                if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
+                    const float radA_fallback = triRadiusFromNodes(triCenters[bodyA], triANode1[bodyA], triANode2[bodyA],
+                                             triANode3[bodyA], triBNode1[bodyA], triBNode2[bodyA],
+                                             triBNode3[bodyA]);
+const float radB_fallback = triRadiusFromNodes(triCenters[bodyB], triANode1[bodyB], triANode2[bodyB],
+                                             triANode3[bodyB], triBNode1[bodyB], triBNode2[bodyB],
+                                             triBNode3[bodyB]);
+const float3 ownerPosA =
+    getOwnerPosGhosted(simParams, granData, triOwnerIDs[bodyA], ghostA, ghostA_neg);
+const float3 ownerPosB =
+    getOwnerPosGhosted(simParams, granData, triOwnerIDs[bodyB], ghostB, ghostB_neg);
+const float radA_owner =
+    (granData->ownerBoundRadius ? granData->ownerBoundRadius[triOwnerIDs[bodyA]] : radA_fallback);
+const float radB_owner =
+    (granData->ownerBoundRadius ? granData->ownerBoundRadius[triOwnerIDs[bodyB]] : radB_fallback);
+if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, ghostA, ghostA_neg, triOwnerIDs[bodyA],
+                                  ownerPosB, radB_owner, ghostB, ghostB_neg, triOwnerIDs[bodyB],
+                                  simParams, granData->ownerCylGhostActive)) {
+    continue;
+}
+                }
 
                 // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
                 unsigned int bodyAFamily = triOwnerFamilies[bodyA];
@@ -619,19 +866,30 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                         // in these processes could affect the ordering, so I added this superfluous check to be
                         // future-proof.
                         // ----------------------------------------------------------------------------
-                        deme::bodyID_t triA_ID, triB_ID;
-                        if (triIDs[bodyA] <= triIDs[bodyB]) {
-                            // This branch will be reached, always
-                            triA_ID = triIDs[bodyA];
-                            triB_ID = triIDs[bodyB];
-                            idTriA_mm[inBlockOffset] = triA_ID;
-                            idTriB_mm[inBlockOffset] = triB_ID;
-                        } else {
-                            triA_ID = triIDs[bodyB];
-                            triB_ID = triIDs[bodyA];
-                            idTriA_mm[inBlockOffset] = triA_ID;
-                            idTriB_mm[inBlockOffset] = triB_ID;
+                        const deme::bodyID_t triA_ID = triIDs[bodyA];
+                        const deme::bodyID_t triB_ID = triIDs[bodyB];
+                        const bool triA_ghost = triGhostFlags[bodyA] != 0;
+                        const bool triB_ghost = triGhostFlags[bodyB] != 0;
+                        const bool triA_ghost_neg = triGhostFlags[bodyA] < 0;
+                        const bool triB_ghost_neg = triGhostFlags[bodyB] < 0;
+                        bool ghost_out_A = triA_ghost;
+                        bool ghost_out_B = triB_ghost;
+                        bool ghost_out_A_neg = triA_ghost_neg;
+                        bool ghost_out_B_neg = triB_ghost_neg;
+                        deme::bodyID_t outA = triA_ID;
+                        deme::bodyID_t outB = triB_ID;
+                        if (triA_ID > triB_ID) {
+                            outA = triB_ID;
+                            outB = triA_ID;
+                            ghost_out_A = triB_ghost;
+                            ghost_out_B = triA_ghost;
+                            ghost_out_A_neg = triB_ghost_neg;
+                            ghost_out_B_neg = triA_ghost_neg;
                         }
+                        idTriA_mm[inBlockOffset] =
+                            ghost_out_A ? cylPeriodicEncodeGhostID(outA, ghost_out_A_neg) : outA;
+                        idTriB_mm[inBlockOffset] =
+                            ghost_out_B ? cylPeriodicEncodeGhostID(outB, ghost_out_B_neg) : outB;
                         dType_mm[inBlockOffset] = deme::TRIANGLE_TRIANGLE_CONTACT;
                     }
                 }
@@ -642,7 +900,9 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                 for (deme::trianglesBinTouches_t i = 0; i < leftover_count; i++) {
                     deme::bodyID_t cur_ownerID, cur_bodyID;
                     float3 cur_triANode1, cur_triANode2, cur_triANode3, cur_triBNode1, cur_triBNode2, cur_triBNode3;
+                    float3 cur_triCenter;
                     deme::family_t cur_ownerFamily;
+                    signed char cur_isGhost = 0;
                     {
                         const deme::trianglesBinTouches_t cur_ind =
                             processed_count + DEME_NUM_TRIANGLES_PER_CD_BATCH + i;
@@ -654,11 +914,36 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                                                &cur_ownerFamily, sandwichANode1, sandwichANode2, sandwichANode3,
                                                sandwichBNode1, sandwichBNode2, sandwichBNode3, &cur_triANode1,
                                                &cur_triANode2, &cur_triANode3, &cur_triBNode1, &cur_triBNode2,
-                                               &cur_triBNode3);
+                                               &cur_triBNode3, &cur_triCenter, &cur_isGhost);
                     }
                     // Then each in-shared-mem sphere compares against it. But first, check if same owner...
                     if (triOwnerIDs[myThreadID] == cur_ownerID)
                         continue;
+                    const bool ghostA = triGhostFlags[myThreadID] != 0;
+                    const bool ghostB = cur_isGhost != 0;
+                    const bool ghostA_neg = triGhostFlags[myThreadID] < 0;
+                    const bool ghostB_neg = cur_isGhost < 0;
+                    if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
+                        const float radA_fallback = triRadiusFromNodes(triCenters[myThreadID], triANode1[myThreadID],
+                                             triANode2[myThreadID], triANode3[myThreadID],
+                                             triBNode1[myThreadID], triBNode2[myThreadID],
+                                             triBNode3[myThreadID]);
+const float radB_fallback = triRadiusFromNodes(cur_triCenter, cur_triANode1, cur_triANode2,
+                                             cur_triANode3, cur_triBNode1, cur_triBNode2,
+                                             cur_triBNode3);
+const float3 ownerPosA =
+    getOwnerPosGhosted(simParams, granData, triOwnerIDs[myThreadID], ghostA, ghostA_neg);
+const float3 ownerPosB =
+    getOwnerPosGhosted(simParams, granData, cur_ownerID, ghostB, ghostB_neg);
+const float radA_owner =
+    (granData->ownerBoundRadius ? granData->ownerBoundRadius[triOwnerIDs[myThreadID]] : radA_fallback);
+const float radB_owner = (granData->ownerBoundRadius ? granData->ownerBoundRadius[cur_ownerID] : radB_fallback);
+if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, ghostA, ghostA_neg,
+                                  triOwnerIDs[myThreadID], ownerPosB, radB_owner, ghostB,
+                                  ghostB_neg, cur_ownerID, simParams, granData->ownerCylGhostActive)) {
+    continue;
+}
+                    }
 
                     // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
                     unsigned int bodyAFamily = triOwnerFamilies[myThreadID];
@@ -679,19 +964,30 @@ __global__ void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                         // The chance of offset going out-of-bound is very low, lower than sph--bin CD step, but I put
                         // it here anyway
                         if (inBlockOffset < mmReportOffset_end) {
-                            deme::bodyID_t triA_ID, triB_ID;
-                            if (triIDs[myThreadID] <= cur_bodyID) {
-                                // This branch will be reached, always
-                                triA_ID = triIDs[myThreadID];
-                                triB_ID = cur_bodyID;
-                                idTriA_mm[inBlockOffset] = triA_ID;
-                                idTriB_mm[inBlockOffset] = triB_ID;
-                            } else {
-                                triA_ID = cur_bodyID;
-                                triB_ID = triIDs[myThreadID];
-                                idTriA_mm[inBlockOffset] = triA_ID;
-                                idTriB_mm[inBlockOffset] = triB_ID;
+                            const deme::bodyID_t triA_ID = triIDs[myThreadID];
+                            const deme::bodyID_t triB_ID = cur_bodyID;
+                            const bool triA_ghost = triGhostFlags[myThreadID] != 0;
+                            const bool triB_ghost = cur_isGhost != 0;
+                            const bool triA_ghost_neg = triGhostFlags[myThreadID] < 0;
+                            const bool triB_ghost_neg = cur_isGhost < 0;
+                            bool ghost_out_A = triA_ghost;
+                            bool ghost_out_B = triB_ghost;
+                            bool ghost_out_A_neg = triA_ghost_neg;
+                            bool ghost_out_B_neg = triB_ghost_neg;
+                            deme::bodyID_t outA = triA_ID;
+                            deme::bodyID_t outB = triB_ID;
+                            if (triA_ID > triB_ID) {
+                                outA = triB_ID;
+                                outB = triA_ID;
+                                ghost_out_A = triB_ghost;
+                                ghost_out_B = triA_ghost;
+                                ghost_out_A_neg = triB_ghost_neg;
+                                ghost_out_B_neg = triA_ghost_neg;
                             }
+                            idTriA_mm[inBlockOffset] =
+                                ghost_out_A ? cylPeriodicEncodeGhostID(outA, ghost_out_A_neg) : outA;
+                            idTriB_mm[inBlockOffset] =
+                                ghost_out_B ? cylPeriodicEncodeGhostID(outB, ghost_out_B_neg) : outB;
                             dType_mm[inBlockOffset] = deme::TRIANGLE_TRIANGLE_CONTACT;
                         }
                     }

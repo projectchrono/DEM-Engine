@@ -96,6 +96,8 @@ class DEMKinematicThread {
     DeviceArray<float> absVel_buffer = DeviceArray<float>(&m_approxDeviceBytesUsed);
     // Angular velocity magnitude of entities
     DeviceArray<float> absAngVel_buffer = DeviceArray<float>(&m_approxDeviceBytesUsed);
+    // Per-owner dT feedback flags for cylindrical periodic branch selection.
+    DeviceArray<unsigned int> ownerCylGhostActive_buffer = DeviceArray<unsigned int>(&m_approxDeviceBytesUsed);
 
     // kT's copy of family map
     // std::unordered_map<unsigned int, family_t> familyUserImplMap;
@@ -151,6 +153,7 @@ class DEMKinematicThread {
     DualArray<oriQ_t> oriQx = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<oriQ_t> oriQy = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<oriQ_t> oriQz = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<unsigned int> ownerCylGhostActive = DualArray<unsigned int>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // marginSizes include both the velocity-induced margin and family-prescribed margin.
     DeviceArray<float> marginSizeSphere = DeviceArray<float>(&m_approxDeviceBytesUsed);
