@@ -4902,19 +4902,22 @@ bool DEMDynamicThread::getTrackedOwnerTrianglePV(bodyID_t ownerID,
     }
 
     if (reset_window) {
-        triPVWindowSteps = 0;
-        if (triPVAccumP.size() > 0) {
-            DEME_GPU_CALL(
-                cudaMemsetAsync(triPVAccumP.device(), 0, triPVAccumP.size() * sizeof(float), streamInfo.stream));
-        }
-        if (triPVAccumPV.size() > 0) {
-            DEME_GPU_CALL(
-                cudaMemsetAsync(triPVAccumPV.device(), 0, triPVAccumPV.size() * sizeof(float), streamInfo.stream));
-        }
-        syncMemoryTransfer();
+        resetTrackedTrianglePVWindow();
     }
 
     return true;
+}
+
+void DEMDynamicThread::resetTrackedTrianglePVWindow() {
+    triPVWindowSteps = 0;
+    if (triPVAccumP.size() > 0) {
+        DEME_GPU_CALL(cudaMemsetAsync(triPVAccumP.device(), 0, triPVAccumP.size() * sizeof(float), streamInfo.stream));
+    }
+    if (triPVAccumPV.size() > 0) {
+        DEME_GPU_CALL(
+            cudaMemsetAsync(triPVAccumPV.device(), 0, triPVAccumPV.size() * sizeof(float), streamInfo.stream));
+    }
+    syncMemoryTransfer();
 }
 
 void DEMDynamicThread::setOwnerAngVel(bodyID_t ownerID, const std::vector<float3>& angVel) {

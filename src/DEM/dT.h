@@ -784,6 +784,8 @@ class DEMDynamicThread {
                                    std::vector<float>& avgV,
                                    std::vector<float>& avgPV,
                                    bool reset_window = true);
+    /// Reset the current per-triangle PV accumulation window.
+    void resetTrackedTrianglePVWindow();
 
     /// Get owner of contact geometry (sphere, triangle, analytical entity).
     bodyID_t getGeoOwnerID(const bodyID_t& geo, const geoType_t& type) const;

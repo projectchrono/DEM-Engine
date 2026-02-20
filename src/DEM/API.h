@@ -572,6 +572,25 @@ class DEMSolver {
                                    std::vector<float>& avgV,
                                    std::vector<float>& avgPV,
                                    bool reset_window = true);
+    /// @brief Enable a mesh wear model driven by per-triangle P*V.
+    /// @param ownerID Mesh owner ID.
+    /// @param wear_rate Wear-rate coefficient [length / (P*V * time)].
+    /// @param update_interval Geometry update interval [s], must be >= solver time step.
+    /// @param start_time Wear start time [s].
+    /// @param end_time Wear end time [s], negative value means no end time.
+    /// @param normal_sign Wear direction sign along triangle normal (+1) or opposite to it (-1).
+    void EnableMeshWearModel(bodyID_t ownerID,
+                             double wear_rate,
+                             double update_interval,
+                             double start_time = 0.0,
+                             double end_time = -1.0,
+                             float normal_sign = -1.0f);
+    /// @brief Disable mesh wear model for one owner.
+    void DisableMeshWearModel(bodyID_t ownerID);
+    /// @brief Disable all active mesh wear models.
+    void DisableAllMeshWearModels();
+    /// @brief Force-apply any pending wear deformation immediately.
+    void FlushMeshWearModels();
     /// @brief Get the mass of n consecutive owners.
     /// @param ownerID First owner's ID.
     /// @param n The number of consecutive owners.
@@ -1916,6 +1935,34 @@ class DEMSolver {
     std::vector<std::shared_ptr<DEMMesh>> m_meshes;
     // A map between the owner of mesh, and the offset this mesh lives in m_meshes array.
     std::unordered_map<bodyID_t, unsigned int> m_owner_mesh_map;
+    // User-requested per-triangle P/V/P*V debug tracking owners.
+    std::vector<bodyID_t> m_user_tri_pv_tracking_owners;
+    struct MeshWearModelState {
+        double wear_rate = 0.0;
+        double update_interval = 0.0;
+        double start_time = 0.0;
+        double end_time = -1.0;
+        float normal_sign = -1.0f;
+        size_t tri_start = 0;
+        size_t tri_count = 0;
+        double pending_time = 0.0;
+        std::vector<float> pending_depth;
+        // Vertex -> canonical-group mapping used to keep duplicated STL nodes coherent during wear updates.
+        std::vector<size_t> vertex_to_canon;
+        size_t n_canon_vertices = 0;
+        // Reference triangle normals in mesh-local coordinates (captured when wear is enabled).
+        std::vector<float3> ref_tri_normals;
+        // Upper bound on one mesh-deformation substep's applied wear depth per triangle (mesh-local length unit).
+        // Any excess depth beyond this cap is discarded (no catch-up).
+        float max_depth_per_update = 0.f;
+        // Internal safety-cap fraction of median edge length used to compute max_depth_per_update.
+        float max_depth_fraction_of_median_edge = 0.5f;
+        // Median edge length measured when wear model is enabled (mesh-local unit).
+        float median_edge_length = 0.f;
+        // Warning throttle counter for cap-hit messages.
+        size_t cap_warning_count = 0;
+    };
+    std::unordered_map<bodyID_t, MeshWearModelState> m_mesh_wear_models;
 
     ////////////////////////////////////////////////////////////////////////////////
     // Cached user's direct (raw) inputs concerning the actual physics objects
@@ -2189,6 +2236,15 @@ class DEMSolver {
                           std::vector<family_t>& famA,
                           std::vector<family_t>& famB,
                           std::function<bool(contact_t)> type_func) const;
+    /// Resolve global triangle range for a mesh owner in dT's flattened triangle soup.
+    bool findOwnerTriangleRange(bodyID_t ownerID, size_t& tri_start, size_t& tri_count);
+    /// Rebuild dT per-triangle PV tracking owner list from user-tracking and wear-model owners.
+    void refreshTrianglePVTrackingOwners();
+    /// Fold the just-finished dynamics call's P*V into active wear models, and apply geometry updates if due.
+    void updateMeshWearModels(double call_start_time, double call_end_time);
+    /// Apply one bounded pending-wear chunk of one mesh owner to its node positions.
+    /// @return true if any pending wear depth was consumed in this call.
+    bool applyMeshWearModel(bodyID_t ownerID, MeshWearModelState& model);
     /// The implimentation of persistency assignment
     void assignFamilyPersistentContact_impl(
         unsigned int N1,

@@ -20,8 +20,28 @@
 #include <algorithm>
 #include <filesystem>
 #include <cctype>
+#include <unordered_set>
 
 namespace deme {
+
+namespace {
+
+inline double overlapDuration(double a0, double a1, double b0, double b1) {
+    const double lo = std::max(a0, b0);
+    const double hi = std::min(a1, b1);
+    return (hi > lo) ? (hi - lo) : 0.0;
+}
+
+inline bool hasPendingWear(const std::vector<float>& pending_depth) {
+    for (float d : pending_depth) {
+        if (d > 0.f && std::isfinite(d)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+}  // namespace
 
 DEMSolver::DEMSolver(unsigned int nGPUs) {
     dTkT_InteractionManager = new ThreadManager();
@@ -544,12 +564,14 @@ void DEMSolver::RequestContactUpdate() {
 
 void DEMSolver::SetTrianglePVTrackingOwners(const std::vector<bodyID_t>& mesh_owner_ids) {
     assertSysInit("SetTrianglePVTrackingOwners");
-    dT->configureTrianglePVTracking(mesh_owner_ids);
+    m_user_tri_pv_tracking_owners = mesh_owner_ids;
+    refreshTrianglePVTrackingOwners();
 }
 
 void DEMSolver::DisableTrianglePVTracking() {
     assertSysInit("DisableTrianglePVTracking");
-    dT->disableTrianglePVTracking();
+    m_user_tri_pv_tracking_owners.clear();
+    refreshTrianglePVTrackingOwners();
 }
 
 bool DEMSolver::GetTrackedOwnerTrianglePV(bodyID_t ownerID,
@@ -559,6 +581,200 @@ bool DEMSolver::GetTrackedOwnerTrianglePV(bodyID_t ownerID,
                                           bool reset_window) {
     assertSysInit("GetTrackedOwnerTrianglePV");
     return dT->getTrackedOwnerTrianglePV(ownerID, avgP, avgV, avgPV, reset_window);
+}
+
+void DEMSolver::EnableMeshWearModel(bodyID_t ownerID,
+                                    double wear_rate,
+                                    double update_interval,
+                                    double start_time,
+                                    double end_time,
+                                    float normal_sign) {
+    assertSysInit("EnableMeshWearModel");
+    if (ownerID >= nOwnerBodies) {
+        DEME_ERROR("Owner ID %zu is out of range [0, %zu).", (size_t)ownerID, (size_t)nOwnerBodies);
+    }
+    if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
+        DEME_ERROR("Owner ID %zu is not a mesh owner. Wear model supports mesh owners only.", (size_t)ownerID);
+    }
+    if (!(std::isfinite(wear_rate) && wear_rate >= 0.0)) {
+        DEME_ERROR("Wear rate must be finite and non-negative (got %.9g).", wear_rate);
+    }
+    if (!(std::isfinite(update_interval) && update_interval > 0.0)) {
+        DEME_ERROR("Wear update interval must be finite and > 0 (got %.9g).", update_interval);
+    }
+    const double min_interval = static_cast<double>(dT->simParams->dyn.h);
+    if (update_interval + 1e-15 < min_interval) {
+        DEME_ERROR("Wear update interval %.9g is smaller than current solver step %.9g.", update_interval, min_interval);
+    }
+    if (!(std::isfinite(start_time) && start_time >= 0.0)) {
+        DEME_ERROR("Wear start time must be finite and >= 0 (got %.9g).", start_time);
+    }
+    if (std::isfinite(end_time) && end_time >= 0.0 && !(end_time > start_time)) {
+        DEME_ERROR("Wear end time %.9g must be > start time %.9g.", end_time, start_time);
+    }
+    if (!std::isfinite(normal_sign) || std::abs(normal_sign) <= DEME_TINY_FLOAT) {
+        DEME_ERROR("Wear normal_sign must be finite and non-zero (got %.9g).", (double)normal_sign);
+    }
+
+    size_t tri_start = 0;
+    size_t tri_count = 0;
+    if (!findOwnerTriangleRange(ownerID, tri_start, tri_count)) {
+        DEME_ERROR("Cannot determine triangle range for mesh owner %zu.", (size_t)ownerID);
+    }
+    auto mesh_it = m_owner_mesh_map.find(ownerID);
+    if (mesh_it == m_owner_mesh_map.end()) {
+        DEME_ERROR("Owner ID %zu is not a mesh owner.", (size_t)ownerID);
+    }
+    auto& mesh = m_meshes.at(mesh_it->second);
+    const auto& faces = mesh->GetIndicesVertexes();
+    if (faces.size() != tri_count) {
+        DEME_ERROR("Wear model triangle count mismatch for owner %zu (range=%zu, mesh=%zu).", (size_t)ownerID,
+                   tri_count, faces.size());
+    }
+    const auto& vertices = mesh->GetCoordsVertices();
+    if (vertices.empty()) {
+        DEME_ERROR("Mesh owner %zu has no vertices; wear model cannot be enabled.", (size_t)ownerID);
+    }
+
+    MeshWearModelState state;
+    state.wear_rate = wear_rate;
+    state.update_interval = update_interval;
+    state.start_time = start_time;
+    state.end_time = end_time;
+    state.normal_sign = (normal_sign >= 0.f) ? 1.f : -1.f;
+    state.tri_start = tri_start;
+    state.tri_count = tri_count;
+    state.pending_time = 0.0;
+    state.pending_depth.assign(tri_count, 0.f);
+    {
+        const double eps = computeVertexQuantEps(vertices);
+        state.vertex_to_canon = buildCanonicalVertexMap(vertices, eps);
+        if (state.vertex_to_canon.size() != vertices.size()) {
+            DEME_ERROR("Failed to build canonical vertex map for wear model owner %zu.", (size_t)ownerID);
+        }
+        size_t max_group = 0;
+        for (size_t g : state.vertex_to_canon) {
+            max_group = std::max(max_group, g);
+        }
+        state.n_canon_vertices = max_group + 1;
+    }
+    {
+        constexpr double kWearCapFractionOfMedianEdge = 2.0;
+        state.max_depth_fraction_of_median_edge = static_cast<float>(kWearCapFractionOfMedianEdge);
+        state.ref_tri_normals.assign(tri_count, make_float3(0.f));
+        auto cross3 = [](const float3& a, const float3& b) {
+            return make_float3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+        };
+        std::vector<float> edge_lengths;
+        edge_lengths.reserve(tri_count * 3);
+        double sum_edge_len = 0.0;
+        size_t n_edges = 0;
+        for (size_t tri = 0; tri < tri_count; tri++) {
+            const int3& f = faces[tri];
+            if (f.x < 0 || f.y < 0 || f.z < 0) {
+                continue;
+            }
+            const size_t i0 = static_cast<size_t>(f.x);
+            const size_t i1 = static_cast<size_t>(f.y);
+            const size_t i2 = static_cast<size_t>(f.z);
+            if (i0 >= vertices.size() || i1 >= vertices.size() || i2 >= vertices.size()) {
+                continue;
+            }
+            const float3 v0 = vertices[i0];
+            const float3 v1 = vertices[i1];
+            const float3 v2 = vertices[i2];
+            const float3 n_raw = cross3(v1 - v0, v2 - v0);
+            const float n_len = length(n_raw);
+            if (n_len > DEME_TINY_FLOAT && std::isfinite(n_len)) {
+                state.ref_tri_normals[tri] = n_raw / n_len;
+            }
+            const float e01 = length(v1 - v0);
+            const float e12 = length(v2 - v1);
+            const float e20 = length(v0 - v2);
+            if (e01 > DEME_TINY_FLOAT && std::isfinite(e01)) {
+                edge_lengths.push_back(e01);
+            }
+            if (e12 > DEME_TINY_FLOAT && std::isfinite(e12)) {
+                edge_lengths.push_back(e12);
+            }
+            if (e20 > DEME_TINY_FLOAT && std::isfinite(e20)) {
+                edge_lengths.push_back(e20);
+            }
+            sum_edge_len += static_cast<double>(e01 + e12 + e20);
+            n_edges += 3;
+        }
+        double median_edge = 0.0;
+        if (!edge_lengths.empty()) {
+            const size_t n = edge_lengths.size();
+            const size_t mid = n / 2;
+            auto mid_it = edge_lengths.begin() + mid;
+            std::nth_element(edge_lengths.begin(), mid_it, edge_lengths.end());
+            median_edge = static_cast<double>(*mid_it);
+            if (n % 2 == 0) {
+                const auto max_lower_it = std::max_element(edge_lengths.begin(), mid_it);
+                if (max_lower_it != mid_it) {
+                    median_edge = 0.5 * (median_edge + static_cast<double>(*max_lower_it));
+                }
+            }
+        }
+        if (!(median_edge > 0.0) || !std::isfinite(median_edge)) {
+            median_edge = (n_edges > 0) ? (sum_edge_len / static_cast<double>(n_edges)) : 0.0;
+        }
+        state.median_edge_length = static_cast<float>(std::max(0.0, median_edge));
+        const double clamp_from_mesh = median_edge * kWearCapFractionOfMedianEdge;
+        // Safety clamp against catastrophic one-step mesh collapse when local P*V spikes.
+        state.max_depth_per_update = static_cast<float>(std::max(1e-8, clamp_from_mesh));
+    }
+
+    m_mesh_wear_models[ownerID] = std::move(state);
+    refreshTrianglePVTrackingOwners();
+}
+
+void DEMSolver::DisableMeshWearModel(bodyID_t ownerID) {
+    assertSysInit("DisableMeshWearModel");
+    auto it = m_mesh_wear_models.find(ownerID);
+    if (it == m_mesh_wear_models.end()) {
+        return;
+    }
+    m_mesh_wear_models.erase(it);
+    refreshTrianglePVTrackingOwners();
+}
+
+void DEMSolver::DisableAllMeshWearModels() {
+    assertSysInit("DisableAllMeshWearModels");
+    if (m_mesh_wear_models.empty()) {
+        return;
+    }
+    m_mesh_wear_models.clear();
+    refreshTrianglePVTrackingOwners();
+}
+
+void DEMSolver::FlushMeshWearModels() {
+    assertSysInit("FlushMeshWearModels");
+    if (m_mesh_wear_models.empty()) {
+        return;
+    }
+
+    std::vector<bodyID_t> owners_to_apply;
+    owners_to_apply.reserve(m_mesh_wear_models.size());
+    for (const auto& kv : m_mesh_wear_models) {
+        if (hasPendingWear(kv.second.pending_depth)) {
+            owners_to_apply.push_back(kv.first);
+        }
+    }
+    if (owners_to_apply.empty()) {
+        return;
+    }
+
+    WaitForPendingOutput();
+    for (bodyID_t owner : owners_to_apply) {
+        auto it = m_mesh_wear_models.find(owner);
+        if (it == m_mesh_wear_models.end()) {
+            continue;
+        }
+        applyMeshWearModel(owner, it->second);
+        it->second.pending_time = 0.0;
+    }
 }
 
 std::vector<float> DEMSolver::GetOwnerWildcardValue(bodyID_t ownerID, const std::string& name, bodyID_t n) {
@@ -2719,6 +2935,320 @@ void DEMSolver::UpdateStepSize(double ts) {
                                                  kT->streamInfo.stream);
 }
 
+bool DEMSolver::findOwnerTriangleRange(bodyID_t ownerID, size_t& tri_start, size_t& tri_count) {
+    tri_start = 0;
+    tri_count = 0;
+    dT->ownerTriMesh.toHost();
+
+    bool found = false;
+    size_t last_tri = 0;
+    bool contiguous = true;
+    for (size_t tri = 0; tri < dT->ownerTriMesh.size(); tri++) {
+        if (dT->ownerTriMesh[tri] != ownerID) {
+            continue;
+        }
+        if (!found) {
+            found = true;
+            tri_start = tri;
+            last_tri = tri;
+        } else {
+            if (tri != last_tri + 1) {
+                contiguous = false;
+            }
+            last_tri = tri;
+        }
+        tri_count++;
+    }
+
+    if (!found) {
+        return false;
+    }
+    if (!contiguous) {
+        DEME_ERROR("Mesh owner %zu has non-contiguous triangle IDs; mesh deformation update expects contiguous layout.",
+                   (size_t)ownerID);
+    }
+    return true;
+}
+
+void DEMSolver::refreshTrianglePVTrackingOwners() {
+    std::vector<bodyID_t> merged;
+    merged.reserve(m_user_tri_pv_tracking_owners.size() + m_mesh_wear_models.size());
+    std::unordered_set<bodyID_t> seen;
+    seen.reserve(merged.capacity() + 1);
+
+    for (bodyID_t owner : m_user_tri_pv_tracking_owners) {
+        if (seen.insert(owner).second) {
+            merged.push_back(owner);
+        }
+    }
+    for (const auto& kv : m_mesh_wear_models) {
+        if (seen.insert(kv.first).second) {
+            merged.push_back(kv.first);
+        }
+    }
+
+    if (merged.empty()) {
+        dT->disableTrianglePVTracking();
+    } else {
+        dT->configureTrianglePVTracking(merged);
+    }
+}
+
+bool DEMSolver::applyMeshWearModel(bodyID_t ownerID, MeshWearModelState& model) {
+    auto mesh_it = m_owner_mesh_map.find(ownerID);
+    if (mesh_it == m_owner_mesh_map.end()) {
+        DEME_ERROR("Wear model owner %zu is not a mesh owner.", (size_t)ownerID);
+    }
+    auto& mesh = m_meshes.at(mesh_it->second);
+    const auto& faces = mesh->GetIndicesVertexes();
+    const size_t n_tri = faces.size();
+    if (n_tri != model.tri_count) {
+        DEME_ERROR("Wear model triangle count mismatch for owner %zu (expected %zu, got %zu).", (size_t)ownerID,
+                   model.tri_count, n_tri);
+    }
+    if (model.pending_depth.size() != n_tri) {
+        DEME_ERROR("Wear depth buffer size mismatch for owner %zu (expected %zu, got %zu).", (size_t)ownerID, n_tri,
+                   model.pending_depth.size());
+    }
+
+    auto& vertices = mesh->GetCoordsVertices();
+    const bool use_canon_groups =
+        (model.vertex_to_canon.size() == vertices.size()) && (model.n_canon_vertices > 0);
+    const size_t n_vertex_groups = use_canon_groups ? model.n_canon_vertices : vertices.size();
+    const float depth_cap =
+        (model.max_depth_per_update > 0.f && std::isfinite(model.max_depth_per_update))
+            ? model.max_depth_per_update
+            : std::numeric_limits<float>::infinity();
+    std::vector<float3> weighted_disp(n_vertex_groups, make_float3(0.f));
+    std::vector<float> weighted_sum(n_vertex_groups, 0.f);
+    std::vector<float3> node_updates(vertices.size(), make_float3(0.f));
+
+    auto cross3 = [](const float3& a, const float3& b) {
+        return make_float3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+    };
+    auto group_of_vertex = [&](size_t vid) -> size_t {
+        if (use_canon_groups) {
+            return model.vertex_to_canon[vid];
+        }
+        return vid;
+    };
+
+    size_t n_cap_clipped = 0;
+    float max_requested_depth = 0.f;
+    float max_discarded_depth = 0.f;
+    bool has_any_wear = false;
+    for (size_t tri = 0; tri < n_tri; tri++) {
+        const float pending_depth = model.pending_depth[tri];
+        if (!(pending_depth > 0.f) || !std::isfinite(pending_depth)) {
+            continue;
+        }
+        max_requested_depth = std::max(max_requested_depth, pending_depth);
+        const float depth_chunk = std::min(pending_depth, depth_cap);
+        if (!(depth_chunk > 0.f) || !std::isfinite(depth_chunk)) {
+            continue;
+        }
+        if (depth_chunk + DEME_TINY_FLOAT < pending_depth) {
+            n_cap_clipped++;
+            max_discarded_depth = std::max(max_discarded_depth, pending_depth - depth_chunk);
+        }
+
+        const int3& f = faces[tri];
+        if (f.x < 0 || f.y < 0 || f.z < 0) {
+            continue;
+        }
+        const size_t i0 = static_cast<size_t>(f.x);
+        const size_t i1 = static_cast<size_t>(f.y);
+        const size_t i2 = static_cast<size_t>(f.z);
+        if (i0 >= vertices.size() || i1 >= vertices.size() || i2 >= vertices.size()) {
+            continue;
+        }
+
+        const float3 v0 = vertices[i0];
+        const float3 v1 = vertices[i1];
+        const float3 v2 = vertices[i2];
+        const float3 e1 = v1 - v0;
+        const float3 e2 = v2 - v0;
+        const float3 n_raw = cross3(e1, e2);
+        const float n_len = length(n_raw);
+        if (!(n_len > DEME_TINY_FLOAT) || !std::isfinite(n_len)) {
+            continue;
+        }
+        float3 n_unit = n_raw / n_len;
+        if (model.ref_tri_normals.size() == n_tri) {
+            const float3 n_ref = model.ref_tri_normals[tri];
+            const float n_ref_len = length(n_ref);
+            if (n_ref_len > DEME_TINY_FLOAT && std::isfinite(n_ref_len)) {
+                n_unit = n_ref / n_ref_len;
+            }
+        }
+        const float signed_depth = depth_chunk * model.normal_sign;
+        const float3 disp = n_unit * signed_depth;
+        const float tri_area = 0.5f * n_len;
+        const size_t g0 = group_of_vertex(i0);
+        const size_t g1 = group_of_vertex(i1);
+        const size_t g2 = group_of_vertex(i2);
+        if (g0 >= n_vertex_groups || g1 >= n_vertex_groups || g2 >= n_vertex_groups) {
+            DEME_ERROR("Wear canonical-vertex map out of range for owner %zu.", (size_t)ownerID);
+        }
+
+        weighted_disp[g0] += disp * tri_area;
+        weighted_disp[g1] += disp * tri_area;
+        weighted_disp[g2] += disp * tri_area;
+        weighted_sum[g0] += tri_area;
+        weighted_sum[g1] += tri_area;
+        weighted_sum[g2] += tri_area;
+        has_any_wear = true;
+    }
+
+    if (n_cap_clipped > 0) {
+        model.cap_warning_count++;
+        DEME_WARNING(
+            "Mesh-wear cap reached for owner %zu: %zu triangle(s) exceeded the per-update cap in this geometry "
+            "update. Excess wear depth is discarded (no carry-over). Geometric wear may therefore be "
+            "under-represented at this mesh resolution, even though the wear input (P*V*wear_rate) is still "
+            "evaluated as usual. Current cap: %.6g (%.6g * median edge %.6g). "
+            "Max requested depth this update: %.6g; max discarded depth this update: %.6g. "
+            "To keep the same mesh resolution, use a smaller update_interval and/or a lower wear_rate "
+            "if physically acceptable.",
+            (size_t)ownerID, n_cap_clipped, (double)model.max_depth_per_update,
+            (double)model.max_depth_fraction_of_median_edge, (double)model.median_edge_length,
+            (double)max_requested_depth, (double)max_discarded_depth);
+    }
+
+    auto clear_pending_depth = [&]() { std::fill(model.pending_depth.begin(), model.pending_depth.end(), 0.f); };
+    if (!has_any_wear) {
+        clear_pending_depth();
+        return false;
+    }
+
+    bool has_any_node_update = false;
+    for (size_t i = 0; i < vertices.size(); i++) {
+        const size_t g = group_of_vertex(i);
+        if (g >= n_vertex_groups || !(weighted_sum[g] > DEME_TINY_FLOAT)) {
+            continue;
+        }
+        node_updates[i] = weighted_disp[g] / weighted_sum[g];
+        if (length(node_updates[i]) > DEME_TINY_FLOAT) {
+            has_any_node_update = true;
+        }
+    }
+
+    if (!has_any_node_update) {
+        clear_pending_depth();
+        return false;
+    }
+    UpdateTriNodeRelPos(ownerID, model.tri_start, node_updates);
+    clear_pending_depth();
+    return true;
+}
+
+void DEMSolver::updateMeshWearModels(double call_start_time, double call_end_time) {
+    if (m_mesh_wear_models.empty()) {
+        return;
+    }
+    if (!(call_end_time > call_start_time)) {
+        return;
+    }
+    if (!dT->triPVTrackingEnabled || dT->triPVWindowSteps == 0) {
+        return;
+    }
+
+    struct WearEval {
+        bodyID_t owner = NULL_BODYID;
+        MeshWearModelState* model = nullptr;
+        size_t offset = 0;
+        size_t count = 0;
+        double active_dt = 0.0;
+        bool ended_this_call = false;
+    };
+    std::vector<WearEval> evals;
+    evals.reserve(m_mesh_wear_models.size());
+    bool has_active_wear = false;
+
+    for (auto& kv : m_mesh_wear_models) {
+        const bodyID_t owner = kv.first;
+        MeshWearModelState& model = kv.second;
+        auto it_slot = dT->triPVOwnerToSlot.find(owner);
+        if (it_slot == dT->triPVOwnerToSlot.end()) {
+            continue;
+        }
+        const size_t slot = it_slot->second;
+        const size_t offset = dT->triPVOwnerOffsets[slot];
+        const size_t count = dT->triPVOwnerCounts[slot];
+        if (count != model.tri_count) {
+            DEME_ERROR("Wear model tracked-triangle mismatch for owner %zu (expected %zu, got %zu).", (size_t)owner,
+                       model.tri_count, count);
+        }
+
+        double active_dt = 0.0;
+        bool ended_this_call = false;
+        if (model.end_time >= 0.0) {
+            active_dt = overlapDuration(call_start_time, call_end_time, model.start_time, model.end_time);
+            ended_this_call = (call_start_time < model.end_time && call_end_time >= model.end_time);
+        } else if (call_end_time > model.start_time) {
+            active_dt = call_end_time - std::max(call_start_time, model.start_time);
+        }
+        if (active_dt > 0.0) {
+            has_active_wear = true;
+        }
+
+        evals.push_back(WearEval{owner, &model, offset, count, active_dt, ended_this_call});
+    }
+
+    if (evals.empty()) {
+        dT->resetTrackedTrianglePVWindow();
+        return;
+    }
+    if (!has_active_wear) {
+        dT->resetTrackedTrianglePVWindow();
+        return;
+    }
+    dT->triPVAccumPV.toHost();
+    const float inv_steps = 1.f / static_cast<float>(dT->triPVWindowSteps);
+    std::vector<bodyID_t> owners_to_apply;
+    owners_to_apply.reserve(evals.size());
+
+    for (const auto& ev : evals) {
+        MeshWearModelState& model = *ev.model;
+        if (ev.active_dt > 0.0) {
+            const float depth_scale = static_cast<float>(model.wear_rate * ev.active_dt) * inv_steps;
+            for (size_t i = 0; i < ev.count; i++) {
+                const float avg_pv = dT->triPVAccumPV[ev.offset + i];
+                const float depth_inc = avg_pv * depth_scale;
+                if (depth_inc > 0.f && std::isfinite(depth_inc)) {
+                    model.pending_depth[i] += depth_inc;
+                }
+            }
+            model.pending_time += ev.active_dt;
+        }
+
+        const bool due = (model.pending_time + 1e-15 >= model.update_interval);
+        if (due || ev.ended_this_call) {
+            if (hasPendingWear(model.pending_depth)) {
+                owners_to_apply.push_back(ev.owner);
+            } else {
+                model.pending_time = 0.0;
+            }
+        }
+    }
+
+    dT->resetTrackedTrianglePVWindow();
+
+    if (owners_to_apply.empty()) {
+        return;
+    }
+
+    WaitForPendingOutput();
+    for (bodyID_t owner : owners_to_apply) {
+        auto it = m_mesh_wear_models.find(owner);
+        if (it == m_mesh_wear_models.end()) {
+            continue;
+        }
+        applyMeshWearModel(owner, it->second);
+        it->second.pending_time = 0.0;
+    }
+}
+
 void DEMSolver::Update() {
     if (!sys_initialized) {
         DEME_ERROR(std::string(
@@ -2841,6 +3371,7 @@ void DEMSolver::DoDynamics(double thisCallDuration) {
     if (!sys_initialized) {
         Initialize();
     }
+    const double sim_time_start = dT->getSimTime();
 
     // Tell dT how long this call is
     dT->setCycleDuration(thisCallDuration);
@@ -2858,6 +3389,9 @@ void DEMSolver::DoDynamics(double thisCallDuration) {
         // since that's only used when kT and dT sync.
         dTMain_InteractionManager->userCallDone = false;
     }
+
+    const double sim_time_end = dT->getSimTime();
+    updateMeshWearModels(sim_time_start, sim_time_end);
 }
 
 void DEMSolver::DoDynamicsThenSync(double thisCallDuration) {
