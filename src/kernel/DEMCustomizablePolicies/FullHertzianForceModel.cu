@@ -25,10 +25,8 @@ if (overlapDepth > 0) {
     // can under-damp spin/slip for sphere-sphere contacts.
     rotVelCPA = cross(ARotVel, locCPA);
     rotVelCPB = cross(BRotVel, locCPB);
-    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x, AOriQ.y,
-                                            AOriQ.z);
-    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y,
-                                            BOriQ.z);
+    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x, AOriQ.y, AOriQ.z);
+    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
 
     const bool tri_involved = (AType == deme::GEO_T_TRIANGLE) || (BType == deme::GEO_T_TRIANGLE);
     float contact_radius = 0.f;    // area-based radius or sqrt(overlapDepth * R_eff)

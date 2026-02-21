@@ -9,11 +9,11 @@ _moiDefs_;
 _volumeDefs_;
 
 DEME_KERNEL void inspectOwnerProperty(deme::DEMDataDT* granData,
-                                     deme::DEMSimParams* simParams,
-                                     float* quantity,
-                                     deme::notStupidBool_t* not_in_region,
-                                     size_t nOwnerBodies,
-                                     deme::ownerType_t owner_type) {
+                                      deme::DEMSimParams* simParams,
+                                      float* quantity,
+                                      deme::notStupidBool_t* not_in_region,
+                                      size_t nOwnerBodies,
+                                      deme::ownerType_t owner_type) {
     deme::bodyID_t myOwner = blockIdx.x * blockDim.x + threadIdx.x;
     if (myOwner < nOwnerBodies) {
         deme::ownerType_t myType = granData->ownerTypes[myOwner];

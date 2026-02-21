@@ -127,22 +127,18 @@ constexpr contact_t ALL_CONTACT_TYPES[NUM_SUPPORTED_CONTACT_TYPES] = {
     TRIANGLE_ANALYTICAL_CONTACT};
 
 // Device version of getting geo owner ID
-#define DEME_GET_GEO_OWNER_ID(geo, type)                                                                  \
-    ((type) == deme::GEO_T_SPHERE                                                                         \
-         ? granData->ownerClumpBody[(geo) & deme::CYL_PERIODIC_SPHERE_ID_MASK]                             \
-         : (type) == deme::GEO_T_TRIANGLE                                                                 \
-               ? granData->ownerTriMesh[(geo) & deme::CYL_PERIODIC_SPHERE_ID_MASK]                         \
-               : (type) == deme::GEO_T_ANALYTICAL ? granData->ownerAnalBody[(geo) & deme::CYL_PERIODIC_SPHERE_ID_MASK]  \
-                                                  : deme::NULL_BODYID)
+#define DEME_GET_GEO_OWNER_ID(geo, type)                                                                    \
+    ((type) == deme::GEO_T_SPHERE       ? granData->ownerClumpBody[(geo)&deme::CYL_PERIODIC_SPHERE_ID_MASK] \
+     : (type) == deme::GEO_T_TRIANGLE   ? granData->ownerTriMesh[(geo)&deme::CYL_PERIODIC_SPHERE_ID_MASK]   \
+     : (type) == deme::GEO_T_ANALYTICAL ? granData->ownerAnalBody[(geo)&deme::CYL_PERIODIC_SPHERE_ID_MASK]  \
+                                        : deme::NULL_BODYID)
 
 // Device version of getting patch owner ID
-#define DEME_GET_PATCH_OWNER_ID(patchID, type)                                                              \
-    ((type) == deme::GEO_T_SPHERE                                                                           \
-         ? granData->ownerClumpBody[(patchID) & deme::CYL_PERIODIC_SPHERE_ID_MASK]                           \
-         : (type) == deme::GEO_T_TRIANGLE                                                                   \
-               ? granData->ownerPatchMesh[(patchID) & deme::CYL_PERIODIC_SPHERE_ID_MASK]                     \
-               : (type) == deme::GEO_T_ANALYTICAL ? granData->ownerAnalBody[(patchID) & deme::CYL_PERIODIC_SPHERE_ID_MASK] \
-                                                  : deme::NULL_BODYID)
+#define DEME_GET_PATCH_OWNER_ID(patchID, type)                                                                  \
+    ((type) == deme::GEO_T_SPHERE       ? granData->ownerClumpBody[(patchID)&deme::CYL_PERIODIC_SPHERE_ID_MASK] \
+     : (type) == deme::GEO_T_TRIANGLE   ? granData->ownerPatchMesh[(patchID)&deme::CYL_PERIODIC_SPHERE_ID_MASK] \
+     : (type) == deme::GEO_T_ANALYTICAL ? granData->ownerAnalBody[(patchID)&deme::CYL_PERIODIC_SPHERE_ID_MASK]  \
+                                        : deme::NULL_BODYID)
 
 // Can be seen as even finer grain type identifiers of the analytical component type
 const objType_t ANAL_OBJ_TYPE_PLANE = 0;

@@ -31,22 +31,22 @@ using namespace deme;
 
 namespace {
 
-constexpr bool kUseTriangleParticles = true; // toggle to run the STL-based triangle setup
+constexpr bool kUseTriangleParticles = true;  // toggle to run the STL-based triangle setup
 constexpr float kMmToMeters = 0.001f;
 constexpr double kTriangleParticleDensity = 2600.0;
 
 constexpr int kNumRuns = 10;
-constexpr double kGap = 0.005;        // 0.5 mm
-constexpr double kSpeed = 1.0;        // 1 m/s magnitude
+constexpr double kGap = 0.005;  // 0.5 mm
+constexpr double kSpeed = 1.0;  // 1 m/s magnitude
 constexpr double kTimeStep = 1e-5;
-constexpr int kMaxSteps = 50000; // oberserve 0.5s fitting with --> kTimeStep
+constexpr int kMaxSteps = 50000;  // oberserve 0.5s fitting with --> kTimeStep
 constexpr double kContactEps = 1e-6;
 constexpr double kYoungsModulus = 1e9;
 constexpr double kPoissonsRatio = 0.3;
 
 // NEW: impact angle controls
-constexpr double kImpactThetaDeg = 0.0;   // 0 = vertical down, 90 = pure lateral
-constexpr double kImpactPhiDeg   = 0.0;   // azimuth in XY plane: 0 -> +X, 90 -> +Y
+constexpr double kImpactThetaDeg = 0.0;  // 0 = vertical down, 90 = pure lateral
+constexpr double kImpactPhiDeg = 0.0;    // azimuth in XY plane: 0 -> +X, 90 -> +Y
 
 // NEW: multi-impact tracking
 constexpr int kMaxImpactsToRecord = 8;
@@ -54,17 +54,17 @@ constexpr int kMaxImpactsToRecord = 8;
 double vmax = kSpeed;
 
 struct ImpactEvent {
-    bool has_rebound = false;           // rebound captured at end of this contact episode
-    double peak_normal_force = 0.0;     // peak Fn during this episode
-    double rebound_speed = 0.0;         // |v| right after separation (if has_rebound)
-    float3 rebound_dir = make_float3(0,0,0);
+    bool has_rebound = false;        // rebound captured at end of this contact episode
+    double peak_normal_force = 0.0;  // peak Fn during this episode
+    double rebound_speed = 0.0;      // |v| right after separation (if has_rebound)
+    float3 rebound_dir = make_float3(0, 0, 0);
     int start_step = -1;
-    int end_step   = -1;
+    int end_step = -1;
 };
 
 struct RunResult {
     bool ok = false;
-    std::vector<ImpactEvent> impacts;   // NEW: can contain multiple episodes
+    std::vector<ImpactEvent> impacts;  // NEW: can contain multiple episodes
 };
 
 struct Stats {
@@ -88,7 +88,8 @@ float3 vec_scale(const float3& v, double s) {
 
 Stats calc_stats(const std::vector<double>& values) {
     Stats s;
-    if (values.empty()) return s;
+    if (values.empty())
+        return s;
     s.min = values.front();
     s.max = values.front();
     double sum = 0.0;
@@ -168,12 +169,12 @@ double compute_min_z_rotated(const std::shared_ptr<DEMMesh>& mesh, const float4&
 // NEW: build initial velocity vector from speed + angles (theta from +normal, phi azimuth in plane)
 float3 build_velocity(double speed, double theta_deg, double phi_deg) {
     const double theta = theta_deg * PI / 180.0;
-    const double phi   = phi_deg   * PI / 180.0;
+    const double phi = phi_deg * PI / 180.0;
 
     // normal component (downwards for approaching)
     const double v_n = -speed * std::cos(theta);
     // tangential magnitude
-    const double v_t =  speed * std::sin(theta);
+    const double v_t = speed * std::sin(theta);
 
     const double vx = v_t * std::cos(phi);
     const double vy = v_t * std::sin(phi);
@@ -182,22 +183,22 @@ float3 build_velocity(double speed, double theta_deg, double phi_deg) {
     return make_float3((float)vx, (float)vy, (float)vz);
 }
 
-std::shared_ptr<DEMMesh> load_cube_template(DEMSolver& DEMSim,
-                                           const std::shared_ptr<DEMMaterial>& mat_type) {
-    auto mesh_template = DEMSim.LoadMeshType((GET_DATA_PATH() / "mesh/cube.obj").string(), mat_type,
-                                             true, false);
-    if (!mesh_template) return nullptr;
+std::shared_ptr<DEMMesh> load_cube_template(DEMSolver& DEMSim, const std::shared_ptr<DEMMaterial>& mat_type) {
+    auto mesh_template = DEMSim.LoadMeshType((GET_DATA_PATH() / "mesh/cube.obj").string(), mat_type, true, false);
+    if (!mesh_template)
+        return nullptr;
     mesh_template->SetMaterial(mat_type);
     return mesh_template;
 }
 
 std::shared_ptr<DEMMesh> load_triangle_template(DEMSolver& DEMSim,
-                                               const std::shared_ptr<DEMMaterial>& mat_type,
-                                               float& out_mass,
-                                               float3& out_moi) {
+                                                const std::shared_ptr<DEMMaterial>& mat_type,
+                                                float& out_mass,
+                                                float3& out_moi) {
     std::shared_ptr<DEMMesh> mesh_template =
         DEMSim.LoadMeshType((GET_DATA_PATH() / "mesh/simpleTriangleShape4mm.stl").string(), mat_type, true, false);
-    if (!mesh_template) return nullptr;
+    if (!mesh_template)
+        return nullptr;
 
     mesh_template->Scale(kMmToMeters);
 
@@ -340,8 +341,7 @@ RunResult run_single_collision(const float4& init_rot,
 }
 
 // Updated stats: by default we evaluate the FIRST rebound episode that has_rebound==true
-void print_stats_block(const std::string& label,
-                       const std::vector<RunResult>& results) {
+void print_stats_block(const std::string& label, const std::vector<RunResult>& results) {
     std::vector<double> speeds;
     std::vector<double> forces;
     std::vector<double> dir_x;
@@ -350,14 +350,18 @@ void print_stats_block(const std::string& label,
     std::vector<double> n_impacts;
 
     for (const auto& r : results) {
-        if (!r.ok) continue;
+        if (!r.ok)
+            continue;
 
         n_impacts.push_back((double)r.impacts.size());
 
         // pick first episode with rebound
         const ImpactEvent* chosen = nullptr;
         for (const auto& ev : r.impacts) {
-            if (ev.has_rebound) { chosen = &ev; break; }
+            if (ev.has_rebound) {
+                chosen = &ev;
+                break;
+            }
         }
         if (!chosen) {
             // still record peak of first impact if rebound wasn't detected
@@ -396,7 +400,7 @@ void print_stats_block(const std::string& label,
 
 // Rotations
 float4 flat_quat() {
-    return make_float4(0, 0, 0, 1); // NEW: identity
+    return make_float4(0, 0, 0, 1);  // NEW: identity
 }
 
 float4 edge_quat() {
@@ -412,10 +416,7 @@ float4 corner_quat() {
     return q;
 }
 
-void run_scenario(const std::string& label,
-                  const float4& rot,
-                  bool use_triangle_particles,
-                  const float3& init_vel) {
+void run_scenario(const std::string& label, const float4& rot, bool use_triangle_particles, const float3& init_vel) {
     std::cout << "\n========================================" << std::endl;
     std::cout << label << std::endl;
     std::cout << "========================================" << std::endl;
@@ -434,10 +435,15 @@ void run_scenario(const std::string& label,
             std::cout << "Run " << i << ": impacts=" << r.impacts.size();
             // print first rebound episode if exists
             const ImpactEvent* chosen = nullptr;
-            for (const auto& ev : r.impacts) { if (ev.has_rebound) { chosen = &ev; break; } }
+            for (const auto& ev : r.impacts) {
+                if (ev.has_rebound) {
+                    chosen = &ev;
+                    break;
+                }
+            }
             if (chosen) {
-                std::cout << " rebound_speed=" << chosen->rebound_speed
-                          << " dir=(" << chosen->rebound_dir.x << ", " << chosen->rebound_dir.y << ", " << chosen->rebound_dir.z << ")"
+                std::cout << " rebound_speed=" << chosen->rebound_speed << " dir=(" << chosen->rebound_dir.x << ", "
+                          << chosen->rebound_dir.y << ", " << chosen->rebound_dir.z << ")"
                           << " peakFn=" << chosen->peak_normal_force;
             } else {
                 std::cout << " (no rebound captured) peakFn_first=" << r.impacts.front().peak_normal_force;
@@ -455,18 +461,18 @@ int main() {
     std::cout << "========================================" << std::endl;
     std::cout << "DEM Simple Collisions Test" << std::endl;
     std::cout << "========================================" << std::endl;
-    std::cout << "Particle mesh mode: "
-              << (kUseTriangleParticles ? "simpleTriangleShape4mm.stl" : "cube.obj") << std::endl;
+    std::cout << "Particle mesh mode: " << (kUseTriangleParticles ? "simpleTriangleShape4mm.stl" : "cube.obj")
+              << std::endl;
 
     // NEW: build velocity once (same for all scenarios)
     float3 init_vel = build_velocity(kSpeed, kImpactThetaDeg, kImpactPhiDeg);
 
-    float4 q_flat   = flat_quat();
-    float4 q_edge   = edge_quat();
+    float4 q_flat = flat_quat();
+    float4 q_edge = edge_quat();
     float4 q_corner = corner_quat();
 
-    run_scenario("Flat impact",   q_flat,   kUseTriangleParticles, init_vel);
-    run_scenario("Edge impact",   q_edge,   kUseTriangleParticles, init_vel);
+    run_scenario("Flat impact", q_flat, kUseTriangleParticles, init_vel);
+    run_scenario("Edge impact", q_edge, kUseTriangleParticles, init_vel);
     run_scenario("Corner impact", q_corner, kUseTriangleParticles, init_vel);
 
     std::cout << "\n========================================" << std::endl;

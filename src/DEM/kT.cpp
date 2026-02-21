@@ -349,11 +349,9 @@ inline void DEMKinematicThread::unpackMyBuffer() {
             float tmp_sph = -DEME_HUGE_FLOAT;
             float tmp_tri = -DEME_HUGE_FLOAT;
             float tmp_anal = -DEME_HUGE_FLOAT;
-            const bool has_margins =
-                (simParams->nSpheresGM > 0) || (simParams->nTriGM > 0) || (simParams->nAnalGM > 0);
+            const bool has_margins = (simParams->nSpheresGM > 0) || (simParams->nTriGM > 0) || (simParams->nAnalGM > 0);
             if (has_margins) {
-                float* max_margin_dev =
-                    (float*)solverScratchSpace.allocateTempVector("maxMarginTmp", sizeof(float));
+                float* max_margin_dev = (float*)solverScratchSpace.allocateTempVector("maxMarginTmp", sizeof(float));
                 if (simParams->nSpheresGM > 0) {
                     cubMaxReduce<float>(granData->marginSizeSphere, max_margin_dev, simParams->nSpheresGM,
                                         streamInfo.stream, solverScratchSpace);

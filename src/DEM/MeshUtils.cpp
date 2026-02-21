@@ -197,7 +197,8 @@ bool DEMMesh::LoadSTLMesh(std::string input_file, bool load_normals) {
         size_t nonmanifold_edges = 0;
         if (!IsWatertight(&boundary_edges, &nonmanifold_edges)) {
             DEME_WARNING(
-                "Mesh %s is not watertight (boundary edges: %zu, non-manifold edges: %zu). Auto Volume/MOI may be inaccurate.",
+                "Mesh %s is not watertight (boundary edges: %zu, non-manifold edges: %zu). Auto Volume/MOI may be "
+                "inaccurate.",
                 filename.c_str(), boundary_edges, nonmanifold_edges);
         }
     }
@@ -574,7 +575,8 @@ bool DEMMesh::LoadWavefrontMesh(std::string input_file, bool load_normals, bool 
         size_t nonmanifold_edges = 0;
         if (!IsWatertight(&boundary_edges, &nonmanifold_edges)) {
             DEME_WARNING(
-                "Mesh %s is not watertight (boundary edges: %zu, non-manifold edges: %zu). Volume/MOI may be inaccurate.",
+                "Mesh %s is not watertight (boundary edges: %zu, non-manifold edges: %zu). Volume/MOI may be "
+                "inaccurate.",
                 filename.c_str(), boundary_edges, nonmanifold_edges);
         }
     }
@@ -704,9 +706,9 @@ static std::vector<std::vector<size_t>> buildAdjacencyMap(const std::vector<int3
 // ------------------------------------------------------------
 struct EdgeAdjInfo {
     size_t nbr = 0;
-    int va = -1;              // oriented edge vertex A (as appears in the current triangle)
-    int vb = -1;              // oriented edge vertex B (as appears in the current triangle)
-    bool oriented_ok = false; // true if the neighbor sees the shared edge reversed (good sign for oriented manifold)
+    int va = -1;               // oriented edge vertex A (as appears in the current triangle)
+    int vb = -1;               // oriented edge vertex B (as appears in the current triangle)
+    bool oriented_ok = false;  // true if the neighbor sees the shared edge reversed (good sign for oriented manifold)
 };
 
 static inline float dot3(const float3& a, const float3& b) {
@@ -802,7 +804,6 @@ static std::vector<std::vector<EdgeAdjInfo>> buildAdjacencyWithEdgeInfo(const st
     return adj;
 }
 
-
 // Compute patch locations (relative to CoM, which is implicitly at 0,0,0)
 // If not explicitly set, calculates as:
 // - Single patch: (0,0,0)
@@ -857,10 +858,7 @@ void DEMMesh::ComputeMassProperties(double& volume, float3& center, float3& iner
 
 // Compute volume, centroid and full inertia tensor in CoM frame (unit density).
 // ATTENTION: Only correct for "watertight" meshes with fine and non-degenerated triangles.
-void DEMMesh::ComputeMassProperties(double& volume,
-                                    float3& center,
-                                    float3& inertia,
-                                    float3& inertia_products) const {
+void DEMMesh::ComputeMassProperties(double& volume, float3& center, float3& inertia, float3& inertia_products) const {
     double vol = 0.0;
     double mx = 0.0;
     double my = 0.0;
@@ -897,12 +895,12 @@ void DEMMesh::ComputeMassProperties(double& volume,
         iy2 += v * f1y / 10.0;
         iz2 += v * f1z / 10.0;
 
-        const double fxy = 2.0 * (ax * ay + bx * by + cx * cy) +
-                           (ax * by + ay * bx + bx * cy + by * cx + cx * ay + cy * ax);
-        const double fyz = 2.0 * (ay * az + by * bz + cy * cz) +
-                           (ay * bz + az * by + by * cz + bz * cy + cy * az + cz * ay);
-        const double fzx = 2.0 * (az * ax + bz * bx + cz * cx) +
-                           (az * bx + ax * bz + bz * cx + bx * cz + cz * ax + cx * az);
+        const double fxy =
+            2.0 * (ax * ay + bx * by + cx * cy) + (ax * by + ay * bx + bx * cy + by * cx + cx * ay + cy * ax);
+        const double fyz =
+            2.0 * (ay * az + by * bz + cy * cz) + (ay * bz + az * by + by * cz + bz * cy + cy * az + cz * ay);
+        const double fzx =
+            2.0 * (az * ax + bz * bx + cz * cx) + (az * bx + ax * bz + bz * cx + bx * cz + cz * ax + cx * az);
 
         ixy += v * fxy / 20.0;
         iyz += v * fyz / 20.0;
@@ -958,34 +956,39 @@ void DEMMesh::ComputeMassProperties(double& volume,
 // Section for Watertight test, false if not
 
 bool DEMMesh::IsWatertight(size_t* boundary_edges, size_t* nonmanifold_edges) const {
-    if (boundary_edges) *boundary_edges = 0;
-    if (nonmanifold_edges) *nonmanifold_edges = 0;
-    if (m_face_v_indices.empty()) return true;
+    if (boundary_edges)
+        *boundary_edges = 0;
+    if (nonmanifold_edges)
+        *nonmanifold_edges = 0;
+    if (m_face_v_indices.empty())
+        return true;
 
     auto count_edges_by_index = [&](size_t& boundary, size_t& nonmanifold) {
         std::map<std::pair<size_t, size_t>, size_t> edge_counts;
 
         for (const auto& face : m_face_v_indices) {
             const int fx = face.x, fy = face.y, fz = face.z;
-            if (fx < 0 || fy < 0 || fz < 0) continue;
+            if (fx < 0 || fy < 0 || fz < 0)
+                continue;
 
             const size_t a = (size_t)fx, b = (size_t)fy, c = (size_t)fz;
-            if (a == b || b == c || c == a) continue;
+            if (a == b || b == c || c == a)
+                continue;
 
             std::pair<size_t, size_t> edges[3] = {
-                {std::min(a,b), std::max(a,b)},
-                {std::min(b,c), std::max(b,c)},
-                {std::min(c,a), std::max(c,a)}
-            };
+                {std::min(a, b), std::max(a, b)}, {std::min(b, c), std::max(b, c)}, {std::min(c, a), std::max(c, a)}};
             edge_counts[edges[0]]++;
             edge_counts[edges[1]]++;
             edge_counts[edges[2]]++;
         }
 
-        boundary = 0; nonmanifold = 0;
+        boundary = 0;
+        nonmanifold = 0;
         for (const auto& kv : edge_counts) {
-            if (kv.second == 1) boundary++;
-            else if (kv.second > 2) nonmanifold++;
+            if (kv.second == 1)
+                boundary++;
+            else if (kv.second > 2)
+                nonmanifold++;
         }
     };
 
@@ -993,14 +996,18 @@ bool DEMMesh::IsWatertight(size_t* boundary_edges, size_t* nonmanifold_edges) co
     count_edges_by_index(boundary1, nonmanifold1);
 
     if (boundary1 == 0 && nonmanifold1 == 0) {
-        if (boundary_edges) *boundary_edges = 0;
-        if (nonmanifold_edges) *nonmanifold_edges = 0;
+        if (boundary_edges)
+            *boundary_edges = 0;
+        if (nonmanifold_edges)
+            *nonmanifold_edges = 0;
         return true;
     }
 
     if (m_vertices.empty()) {
-        if (boundary_edges) *boundary_edges = boundary1;
-        if (nonmanifold_edges) *nonmanifold_edges = nonmanifold1;
+        if (boundary_edges)
+            *boundary_edges = boundary1;
+        if (nonmanifold_edges)
+            *nonmanifold_edges = nonmanifold1;
         return false;
     }
 
@@ -1010,19 +1017,19 @@ bool DEMMesh::IsWatertight(size_t* boundary_edges, size_t* nonmanifold_edges) co
     std::map<std::pair<size_t, size_t>, size_t> edge_counts2;
     for (const auto& face : m_face_v_indices) {
         const int fx = face.x, fy = face.y, fz = face.z;
-        if (fx < 0 || fy < 0 || fz < 0) continue;
+        if (fx < 0 || fy < 0 || fz < 0)
+            continue;
 
         const size_t a0 = (size_t)fx, b0 = (size_t)fy, c0 = (size_t)fz;
-        if (a0 >= canon.size() || b0 >= canon.size() || c0 >= canon.size()) continue;
+        if (a0 >= canon.size() || b0 >= canon.size() || c0 >= canon.size())
+            continue;
 
         const size_t a = canon[a0], b = canon[b0], c = canon[c0];
-        if (a == b || b == c || c == a) continue;
+        if (a == b || b == c || c == a)
+            continue;
 
         std::pair<size_t, size_t> edges[3] = {
-            {std::min(a,b), std::max(a,b)},
-            {std::min(b,c), std::max(b,c)},
-            {std::min(c,a), std::max(c,a)}
-        };
+            {std::min(a, b), std::max(a, b)}, {std::min(b, c), std::max(b, c)}, {std::min(c, a), std::max(c, a)}};
         edge_counts2[edges[0]]++;
         edge_counts2[edges[1]]++;
         edge_counts2[edges[2]]++;
@@ -1030,12 +1037,16 @@ bool DEMMesh::IsWatertight(size_t* boundary_edges, size_t* nonmanifold_edges) co
 
     size_t boundary2 = 0, nonmanifold2 = 0;
     for (const auto& kv : edge_counts2) {
-        if (kv.second == 1) boundary2++;
-        else if (kv.second > 2) nonmanifold2++;
+        if (kv.second == 1)
+            boundary2++;
+        else if (kv.second > 2)
+            nonmanifold2++;
     }
 
-    if (boundary_edges) *boundary_edges = boundary2;
-    if (nonmanifold_edges) *nonmanifold_edges = nonmanifold2;
+    if (boundary_edges)
+        *boundary_edges = boundary2;
+    if (nonmanifold_edges)
+        *nonmanifold_edges = nonmanifold2;
     return boundary2 == 0 && nonmanifold2 == 0;
 }
 

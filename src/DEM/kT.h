@@ -153,7 +153,8 @@ class DEMKinematicThread {
     DualArray<oriQ_t> oriQx = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<oriQ_t> oriQy = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<oriQ_t> oriQz = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<unsigned int> ownerCylGhostActive = DualArray<unsigned int>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<unsigned int> ownerCylGhostActive =
+        DualArray<unsigned int>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // marginSizes include both the velocity-induced margin and family-prescribed margin.
     DeviceArray<float> marginSizeSphere = DeviceArray<float>(&m_approxDeviceBytesUsed);

@@ -932,10 +932,7 @@ void DEMSolver::InstructBoxDomainDimension(const std::pair<float, float>& x,
     }
 }
 
-void DEMSolver::SetCylindricalPeriodicity(SPATIAL_DIR axis,
-                                          float start_angle,
-                                          float end_angle,
-                                          float min_radius) {
+void DEMSolver::SetCylindricalPeriodicity(SPATIAL_DIR axis, float start_angle, float end_angle, float min_radius) {
     if (min_radius < 0.f) {
         DEME_ERROR("Cylindrical periodic min_radius %.7g is invalid (must be >= 0).", min_radius);
     }
@@ -999,12 +996,10 @@ void DEMSolver::SetCylindricalPeriodicity(SPATIAL_DIR axis,
         const double sn0 = std::sin(start);
         const double cs1 = std::cos(start + span);
         const double sn1 = std::sin(start + span);
-        const float3 r0 = make_float3((float)(u.x * cs0 + v.x * sn0),
-                                      (float)(u.y * cs0 + v.y * sn0),
-                                      (float)(u.z * cs0 + v.z * sn0));
-        const float3 r1 = make_float3((float)(u.x * cs1 + v.x * sn1),
-                                      (float)(u.y * cs1 + v.y * sn1),
-                                      (float)(u.z * cs1 + v.z * sn1));
+        const float3 r0 =
+            make_float3((float)(u.x * cs0 + v.x * sn0), (float)(u.y * cs0 + v.y * sn0), (float)(u.z * cs0 + v.z * sn0));
+        const float3 r1 =
+            make_float3((float)(u.x * cs1 + v.x * sn1), (float)(u.y * cs1 + v.y * sn1), (float)(u.z * cs1 + v.z * sn1));
         auto cross3 = [](const float3& a, const float3& b) {
             return make_float3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
         };

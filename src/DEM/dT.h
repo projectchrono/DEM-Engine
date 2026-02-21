@@ -301,7 +301,6 @@ class DEMDynamicThread {
     // Pointers to those data arrays defined below, stored in a struct
     DualStruct<DEMDataDT> granData = DualStruct<DEMDataDT>();
 
-
     // For cylindrical periodicity: indices of per-contact wildcard triplets (x,y,z) that represent global vectors
     // and must be rotated when an owner wraps.
     DualArray<int3> cylPeriodicWCTriplets = DualArray<int3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
@@ -361,7 +360,6 @@ class DEMDynamicThread {
     // Per-owner bounding radius (circumscribed sphere radius in the owner's local frame).
     // Used by cylindrical periodicity wrapping logic to keep per-owner ghost bands consistent with kT ghosting.
     DualArray<float> ownerBoundRadius = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-
 
     // Per-owner cylindrical periodic wrap count (filled every integration step; consumed to rotate contact history).
     DualArray<int> ownerCylWrapK = DualArray<int>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);

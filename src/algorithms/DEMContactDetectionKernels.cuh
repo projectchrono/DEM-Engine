@@ -30,7 +30,11 @@ inline __device__ float distSquaredPoint(const float3& p, const float3& c) {
     return dx * dx + dy * dy + dz * dz;
 }
 
-inline __device__ void updatePlaneMinMax(const float3& p, const float3& origin, const float3& n, float& min_d, float& max_d) {
+inline __device__ void updatePlaneMinMax(const float3& p,
+                                         const float3& origin,
+                                         const float3& n,
+                                         float& min_d,
+                                         float& max_d) {
     const float3 pg = p - origin;
     const float d = dot(pg, n);
     min_d = DEME_MIN(min_d, d);
@@ -87,9 +91,8 @@ __global__ void collectCylGhostDebugTriangles(DEMSimParams* simParams,
     const float3 B2 = vB2[triID];
     const float3 C2 = vC2[triID];
 
-    const float3 centroid = make_float3((A1.x + B1.x + C1.x) / 3.f,
-                                        (A1.y + B1.y + C1.y) / 3.f,
-                                        (A1.z + B1.z + C1.z) / 3.f);
+    const float3 centroid =
+        make_float3((A1.x + B1.x + C1.x) / 3.f, (A1.y + B1.y + C1.y) / 3.f, (A1.z + B1.z + C1.z) / 3.f);
     float r2 = distSquaredPoint(A1, centroid);
     r2 = DEME_MAX(r2, distSquaredPoint(B1, centroid));
     r2 = DEME_MAX(r2, distSquaredPoint(C1, centroid));
@@ -98,9 +101,8 @@ __global__ void collectCylGhostDebugTriangles(DEMSimParams* simParams,
     r2 = DEME_MAX(r2, distSquaredPoint(C2, centroid));
     const float myTriRadius = sqrtf(r2);
 
-    const float max_other = (simParams->maxSphereRadius > simParams->maxTriRadius)
-                                ? simParams->maxSphereRadius
-                                : simParams->maxTriRadius;
+    const float max_other =
+        (simParams->maxSphereRadius > simParams->maxTriRadius) ? simParams->maxSphereRadius : simParams->maxTriRadius;
     const float other_margin = simParams->dyn.beta + simParams->maxFamilyExtraMargin;
     const float ghost_dist = myTriRadius + max_other + other_margin;
 
@@ -256,8 +258,8 @@ __global__ void extractPatchInvolvedContactPatchIDPairs(patchIDPair_t* contactPa
                 bodyID_t sphA = ghostA ? cylPeriodicEncodeGhostID(bodyA, ghostA_neg) : bodyA;
                 // For sphere-triangle contact: triangle has patch ID, sphere does not but its geoID serves the same
                 // purpose. We ensure sphere is A.
-                contactPatchPairs[myID] = encodeType<patchIDPair_t, bodyID_t>(
-                    sphA, patchB);  // Input bodyID_t, return patchIDPair_t
+                contactPatchPairs[myID] =
+                    encodeType<patchIDPair_t, bodyID_t>(sphA, patchB);  // Input bodyID_t, return patchIDPair_t
                 break;
             }
             case TRIANGLE_ANALYTICAL_CONTACT: {
@@ -286,9 +288,9 @@ __global__ void extractPatchInvolvedContactPatchIDPairs(patchIDPair_t* contactPa
             }
             default:
                 // In other sph-sph and sph-anal, for now, we just use geoID as patchIDs. Keeps original order.
-                contactPatchPairs[myID] = encodeType<patchIDPair_t, bodyID_t>(
-                    ghostA ? cylPeriodicEncodeGhostID(bodyA, ghostA_neg) : bodyA,
-                    ghostB ? cylPeriodicEncodeGhostID(bodyB, ghostB_neg) : bodyB);
+                contactPatchPairs[myID] =
+                    encodeType<patchIDPair_t, bodyID_t>(ghostA ? cylPeriodicEncodeGhostID(bodyA, ghostA_neg) : bodyA,
+                                                        ghostB ? cylPeriodicEncodeGhostID(bodyB, ghostB_neg) : bodyB);
                 break;
         }
     }
@@ -829,8 +831,8 @@ __global__ void buildPatchContactMappingForType(bodyID_t* curr_idPatchA,
             bodyID_t prev_B = prev_idPatchB[prev_idx];
 
             // Compare (A, B, label) lexicographically
-            if (prev_A < curr_A || (prev_A == curr_A && (prev_B < curr_B ||
-                                                         (prev_B == curr_B && prev_patchIsland[prev_idx] < curr_L)))) {
+            if (prev_A < curr_A ||
+                (prev_A == curr_A && (prev_B < curr_B || (prev_B == curr_B && prev_patchIsland[prev_idx] < curr_L)))) {
                 left = mid + 1;
             } else {
                 right = mid;

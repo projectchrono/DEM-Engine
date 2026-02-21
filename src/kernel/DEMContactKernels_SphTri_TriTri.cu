@@ -118,8 +118,8 @@ inline __device__ void fillSharedMemTriangles(deme::DEMSimParams* simParams,
                                                   simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
                                                   simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
     }
-    triCenters[myThreadID] = triangleCentroid<float3>(triANode1[myThreadID], triANode2[myThreadID],
-                                                      triANode3[myThreadID]);
+    triCenters[myThreadID] =
+        triangleCentroid<float3>(triANode1[myThreadID], triANode2[myThreadID], triANode3[myThreadID]);
 }
 
 template <typename T1, typename T2>
@@ -186,8 +186,6 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
     ghostFlags[myThreadID] = is_ghost ? (ghost_neg ? -1 : 1) : 0;
 }
 
-
-
 // Compute owner COM in true global coordinates and rotate to the ghost image when requested.
 inline __device__ float3 getOwnerPosGhosted(deme::DEMSimParams* simParams,
                                             deme::DEMDataKT* granData,
@@ -201,8 +199,8 @@ inline __device__ float3 getOwnerPosGhosted(deme::DEMSimParams* simParams,
     if (isGhost) {
         const float sin_span = ghost_neg ? -simParams->cylPeriodicSinSpan : simParams->cylPeriodicSinSpan;
         ownerXYZ = cylPeriodicRotate(ownerXYZ, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec,
-                                     simParams->cylPeriodicU, simParams->cylPeriodicV,
-                                     simParams->cylPeriodicCosSpan, sin_span);
+                                     simParams->cylPeriodicU, simParams->cylPeriodicV, simParams->cylPeriodicCosSpan,
+                                     sin_span);
     }
     ownerXYZ.x += simParams->LBFX;
     ownerXYZ.y += simParams->LBFY;
@@ -230,26 +228,26 @@ inline __device__ bool checkPrismPrismContact(deme::DEMSimParams* simParams,
 }
 
 DEME_KERNEL void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParams,
-                                                   deme::DEMDataKT* granData,
-                                                   deme::bodyID_t* sphereIDsEachBinTouches_sorted,
-                                                   deme::binID_t* activeBinIDs,
-                                                   deme::spheresBinTouches_t* numSpheresBinTouches,
-                                                   deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
-                                                   deme::binID_t* mapTriActBinToSphActBin,
-                                                   deme::bodyID_t* triIDsEachBinTouches_sorted,
-                                                   deme::binID_t* activeBinIDsForTri,
-                                                   deme::trianglesBinTouches_t* numTrianglesBinTouches,
-                                                   deme::binsTriangleTouchPairs_t* triIDsLookUpTable,
-                                                   deme::binContactPairs_t* numTriSphContactsInEachBin,
-                                                   deme::binContactPairs_t* numTriTriContactsInEachBin,
-                                                   float3* sandwichANode1,
-                                                   float3* sandwichANode2,
-                                                   float3* sandwichANode3,
-                                                   float3* sandwichBNode1,
-                                                   float3* sandwichBNode2,
-                                                   float3* sandwichBNode3,
-                                                   size_t nActiveBinsForTri,
-                                                   bool meshUniversalContact) {
+                                                    deme::DEMDataKT* granData,
+                                                    deme::bodyID_t* sphereIDsEachBinTouches_sorted,
+                                                    deme::binID_t* activeBinIDs,
+                                                    deme::spheresBinTouches_t* numSpheresBinTouches,
+                                                    deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
+                                                    deme::binID_t* mapTriActBinToSphActBin,
+                                                    deme::bodyID_t* triIDsEachBinTouches_sorted,
+                                                    deme::binID_t* activeBinIDsForTri,
+                                                    deme::trianglesBinTouches_t* numTrianglesBinTouches,
+                                                    deme::binsTriangleTouchPairs_t* triIDsLookUpTable,
+                                                    deme::binContactPairs_t* numTriSphContactsInEachBin,
+                                                    deme::binContactPairs_t* numTriTriContactsInEachBin,
+                                                    float3* sandwichANode1,
+                                                    float3* sandwichANode2,
+                                                    float3* sandwichANode3,
+                                                    float3* sandwichBNode1,
+                                                    float3* sandwichBNode2,
+                                                    float3* sandwichBNode3,
+                                                    size_t nActiveBinsForTri,
+                                                    bool meshUniversalContact) {
     // Shared storage for bodies involved in this bin. Pre-allocated so that each threads can easily use.
     __shared__ deme::bodyID_t triOwnerIDs[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ deme::bodyID_t triIDs[DEME_NUM_TRIANGLES_PER_CD_BATCH];
@@ -353,26 +351,28 @@ DEME_KERNEL void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParam
                     }
                     if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
                         // Canonical periodic image selection MUST be owner-based (one active image per owner-pair).
-// Using per-primitive positions (sphere component / triangle centroid) causes different primitives
-// of the same owner to pick different images, which injects energy via history/lever-arm mismatch.
-const float3 ownerPosA = getOwnerPosGhosted(simParams, granData, ownerID, sphGhost, sphGhost_neg);
-const float3 ownerPosB =
-    getOwnerPosGhosted(simParams, granData, triOwnerIDs[ind], triGhost, triGhost_neg);
-	float radA_owner = myRadius;
-const float triRadFallback = triRadiusFromNodes(triCenters[ind], triANode1[ind], triANode2[ind],
-                                               triANode3[ind], triBNode1[ind], triBNode2[ind],
-                                               triBNode3[ind]);
-	float radB_owner = triRadFallback;
-if (granData->ownerBoundRadius) {
-    radA_owner = granData->ownerBoundRadius[ownerID];
-    radB_owner = granData->ownerBoundRadius[triOwnerIDs[ind]];
-}
+                        // Using per-primitive positions (sphere component / triangle centroid) causes different
+                        // primitives of the same owner to pick different images, which injects energy via
+                        // history/lever-arm mismatch.
+                        const float3 ownerPosA =
+                            getOwnerPosGhosted(simParams, granData, ownerID, sphGhost, sphGhost_neg);
+                        const float3 ownerPosB =
+                            getOwnerPosGhosted(simParams, granData, triOwnerIDs[ind], triGhost, triGhost_neg);
+                        float radA_owner = myRadius;
+                        const float triRadFallback =
+                            triRadiusFromNodes(triCenters[ind], triANode1[ind], triANode2[ind], triANode3[ind],
+                                               triBNode1[ind], triBNode2[ind], triBNode3[ind]);
+                        float radB_owner = triRadFallback;
+                        if (granData->ownerBoundRadius) {
+                            radA_owner = granData->ownerBoundRadius[ownerID];
+                            radB_owner = granData->ownerBoundRadius[triOwnerIDs[ind]];
+                        }
 
-if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, sphGhost, sphGhost_neg, ownerID, ownerPosB,
-                                  radB_owner, triGhost, triGhost_neg, triOwnerIDs[ind],
-                                  simParams, granData->ownerCylGhostActive)) {
-    continue;
-}
+                        if (!cylPeriodicShouldUseGhostPair(
+                                ownerPosA, radA_owner, sphGhost, sphGhost_neg, ownerID, ownerPosB, radB_owner, triGhost,
+                                triGhost_neg, triOwnerIDs[ind], simParams, granData->ownerCylGhostActive)) {
+                            continue;
+                        }
                     }
 
                     // Grab family number from memory
@@ -447,27 +447,27 @@ if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, sphGhost, sphGhost_neg
                 const bool ghostA_neg = triGhostFlags[bodyA] < 0;
                 const bool ghostB_neg = triGhostFlags[bodyB] < 0;
                 if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
-                    const float radA_fallback = triRadiusFromNodes(triCenters[bodyA], triANode1[bodyA], triANode2[bodyA],
-                                             triANode3[bodyA], triBNode1[bodyA], triBNode2[bodyA],
-                                             triBNode3[bodyA]);
-const float radB_fallback = triRadiusFromNodes(triCenters[bodyB], triANode1[bodyB], triANode2[bodyB],
-                                             triANode3[bodyB], triBNode1[bodyB], triBNode2[bodyB],
-                                             triBNode3[bodyB]);
-const float3 ownerPosA =
-    getOwnerPosGhosted(simParams, granData, triOwnerIDs[bodyA], ghostA, ghostA_neg);
-const float3 ownerPosB =
-    getOwnerPosGhosted(simParams, granData, triOwnerIDs[bodyB], ghostB, ghostB_neg);
-float radA_owner = radA_fallback;
-float radB_owner = radB_fallback;
-if (granData->ownerBoundRadius) {
-    radA_owner = granData->ownerBoundRadius[triOwnerIDs[bodyA]];
-    radB_owner = granData->ownerBoundRadius[triOwnerIDs[bodyB]];
-}
-if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, ghostA, ghostA_neg, triOwnerIDs[bodyA],
-                                  ownerPosB, radB_owner, ghostB, ghostB_neg, triOwnerIDs[bodyB],
-                                  simParams, granData->ownerCylGhostActive)) {
-    continue;
-}
+                    const float radA_fallback =
+                        triRadiusFromNodes(triCenters[bodyA], triANode1[bodyA], triANode2[bodyA], triANode3[bodyA],
+                                           triBNode1[bodyA], triBNode2[bodyA], triBNode3[bodyA]);
+                    const float radB_fallback =
+                        triRadiusFromNodes(triCenters[bodyB], triANode1[bodyB], triANode2[bodyB], triANode3[bodyB],
+                                           triBNode1[bodyB], triBNode2[bodyB], triBNode3[bodyB]);
+                    const float3 ownerPosA =
+                        getOwnerPosGhosted(simParams, granData, triOwnerIDs[bodyA], ghostA, ghostA_neg);
+                    const float3 ownerPosB =
+                        getOwnerPosGhosted(simParams, granData, triOwnerIDs[bodyB], ghostB, ghostB_neg);
+                    float radA_owner = radA_fallback;
+                    float radB_owner = radB_fallback;
+                    if (granData->ownerBoundRadius) {
+                        radA_owner = granData->ownerBoundRadius[triOwnerIDs[bodyA]];
+                        radB_owner = granData->ownerBoundRadius[triOwnerIDs[bodyB]];
+                    }
+                    if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, ghostA, ghostA_neg, triOwnerIDs[bodyA],
+                                                       ownerPosB, radB_owner, ghostB, ghostB_neg, triOwnerIDs[bodyB],
+                                                       simParams, granData->ownerCylGhostActive)) {
+                        continue;
+                    }
                 }
 
                 // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
@@ -532,28 +532,28 @@ if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, ghostA, ghostA_neg, tr
                     const bool ghostA_neg = triGhostFlags[myThreadID] < 0;
                     const bool ghostB_neg = cur_isGhost < 0;
                     if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
-                        const float radA_fallback = triRadiusFromNodes(triCenters[myThreadID], triANode1[myThreadID],
-                                             triANode2[myThreadID], triANode3[myThreadID],
-                                             triBNode1[myThreadID], triBNode2[myThreadID],
-                                             triBNode3[myThreadID]);
-const float radB_fallback = triRadiusFromNodes(cur_triCenter, cur_triANode1, cur_triANode2,
-                                             cur_triANode3, cur_triBNode1, cur_triBNode2,
-                                             cur_triBNode3);
-const float3 ownerPosA =
-    getOwnerPosGhosted(simParams, granData, triOwnerIDs[myThreadID], ghostA, ghostA_neg);
-const float3 ownerPosB =
-    getOwnerPosGhosted(simParams, granData, cur_ownerID, ghostB, ghostB_neg);
-	float radA_owner = radA_fallback;
-	float radB_owner = radB_fallback;
-if (granData->ownerBoundRadius) {
-    radA_owner = granData->ownerBoundRadius[triOwnerIDs[myThreadID]];
-    radB_owner = granData->ownerBoundRadius[cur_ownerID];
-}
-if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, ghostA, ghostA_neg,
-                                  triOwnerIDs[myThreadID], ownerPosB, radB_owner, ghostB,
-                                  ghostB_neg, cur_ownerID, simParams, granData->ownerCylGhostActive)) {
-    continue;
-}
+                        const float radA_fallback = triRadiusFromNodes(
+                            triCenters[myThreadID], triANode1[myThreadID], triANode2[myThreadID], triANode3[myThreadID],
+                            triBNode1[myThreadID], triBNode2[myThreadID], triBNode3[myThreadID]);
+                        const float radB_fallback =
+                            triRadiusFromNodes(cur_triCenter, cur_triANode1, cur_triANode2, cur_triANode3,
+                                               cur_triBNode1, cur_triBNode2, cur_triBNode3);
+                        const float3 ownerPosA =
+                            getOwnerPosGhosted(simParams, granData, triOwnerIDs[myThreadID], ghostA, ghostA_neg);
+                        const float3 ownerPosB =
+                            getOwnerPosGhosted(simParams, granData, cur_ownerID, ghostB, ghostB_neg);
+                        float radA_owner = radA_fallback;
+                        float radB_owner = radB_fallback;
+                        if (granData->ownerBoundRadius) {
+                            radA_owner = granData->ownerBoundRadius[triOwnerIDs[myThreadID]];
+                            radB_owner = granData->ownerBoundRadius[cur_ownerID];
+                        }
+                        if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, ghostA, ghostA_neg,
+                                                           triOwnerIDs[myThreadID], ownerPosB, radB_owner, ghostB,
+                                                           ghostB_neg, cur_ownerID, simParams,
+                                                           granData->ownerCylGhostActive)) {
+                            continue;
+                        }
                     }
 
                     // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
@@ -589,32 +589,32 @@ if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, ghostA, ghostA_neg,
 }
 
 DEME_KERNEL void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
-                                                deme::DEMDataKT* granData,
-                                                deme::bodyID_t* sphereIDsEachBinTouches_sorted,
-                                                deme::binID_t* activeBinIDs,
-                                                deme::spheresBinTouches_t* numSpheresBinTouches,
-                                                deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
-                                                deme::binID_t* mapTriActBinToSphActBin,
-                                                deme::bodyID_t* triIDsEachBinTouches_sorted,
-                                                deme::binID_t* activeBinIDsForTri,
-                                                deme::trianglesBinTouches_t* numTrianglesBinTouches,
-                                                deme::binsTriangleTouchPairs_t* triIDsLookUpTable,
-                                                deme::contactPairs_t* triSphContactReportOffsets,
-                                                deme::contactPairs_t* triTriContactReportOffsets,
-                                                deme::bodyID_t* idSphA_sm,
-                                                deme::bodyID_t* idTriB_sm,
-                                                deme::contact_t* dType_sm,
-                                                deme::bodyID_t* idTriA_mm,
-                                                deme::bodyID_t* idTriB_mm,
-                                                deme::contact_t* dType_mm,
-                                                float3* sandwichANode1,
-                                                float3* sandwichANode2,
-                                                float3* sandwichANode3,
-                                                float3* sandwichBNode1,
-                                                float3* sandwichBNode2,
-                                                float3* sandwichBNode3,
-                                                size_t nActiveBinsForTri,
-                                                bool meshUniversalContact) {
+                                                 deme::DEMDataKT* granData,
+                                                 deme::bodyID_t* sphereIDsEachBinTouches_sorted,
+                                                 deme::binID_t* activeBinIDs,
+                                                 deme::spheresBinTouches_t* numSpheresBinTouches,
+                                                 deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
+                                                 deme::binID_t* mapTriActBinToSphActBin,
+                                                 deme::bodyID_t* triIDsEachBinTouches_sorted,
+                                                 deme::binID_t* activeBinIDsForTri,
+                                                 deme::trianglesBinTouches_t* numTrianglesBinTouches,
+                                                 deme::binsTriangleTouchPairs_t* triIDsLookUpTable,
+                                                 deme::contactPairs_t* triSphContactReportOffsets,
+                                                 deme::contactPairs_t* triTriContactReportOffsets,
+                                                 deme::bodyID_t* idSphA_sm,
+                                                 deme::bodyID_t* idTriB_sm,
+                                                 deme::contact_t* dType_sm,
+                                                 deme::bodyID_t* idTriA_mm,
+                                                 deme::bodyID_t* idTriB_mm,
+                                                 deme::contact_t* dType_mm,
+                                                 float3* sandwichANode1,
+                                                 float3* sandwichANode2,
+                                                 float3* sandwichANode3,
+                                                 float3* sandwichBNode1,
+                                                 float3* sandwichBNode2,
+                                                 float3* sandwichBNode3,
+                                                 size_t nActiveBinsForTri,
+                                                 bool meshUniversalContact) {
     // Shared storage for bodies involved in this bin. Pre-allocated so that each threads can easily use.
     __shared__ deme::bodyID_t triOwnerIDs[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ deme::bodyID_t triIDs[DEME_NUM_TRIANGLES_PER_CD_BATCH];
@@ -714,26 +714,28 @@ DEME_KERNEL void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                     }
                     if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
                         // Canonical periodic image selection MUST be owner-based (one active image per owner-pair).
-// Using per-primitive positions (sphere component / triangle centroid) causes different primitives
-// of the same owner to pick different images, which injects energy via history/lever-arm mismatch.
-const float3 ownerPosA = getOwnerPosGhosted(simParams, granData, ownerID, sphGhost, sphGhost_neg);
-const float3 ownerPosB =
-    getOwnerPosGhosted(simParams, granData, triOwnerIDs[ind], triGhost, triGhost_neg);
-	float radA_owner = myRadius;
-const float triRadFallback = triRadiusFromNodes(triCenters[ind], triANode1[ind], triANode2[ind],
-                                               triANode3[ind], triBNode1[ind], triBNode2[ind],
-                                               triBNode3[ind]);
-	float radB_owner = triRadFallback;
-if (granData->ownerBoundRadius) {
-    radA_owner = granData->ownerBoundRadius[ownerID];
-    radB_owner = granData->ownerBoundRadius[triOwnerIDs[ind]];
-}
+                        // Using per-primitive positions (sphere component / triangle centroid) causes different
+                        // primitives of the same owner to pick different images, which injects energy via
+                        // history/lever-arm mismatch.
+                        const float3 ownerPosA =
+                            getOwnerPosGhosted(simParams, granData, ownerID, sphGhost, sphGhost_neg);
+                        const float3 ownerPosB =
+                            getOwnerPosGhosted(simParams, granData, triOwnerIDs[ind], triGhost, triGhost_neg);
+                        float radA_owner = myRadius;
+                        const float triRadFallback =
+                            triRadiusFromNodes(triCenters[ind], triANode1[ind], triANode2[ind], triANode3[ind],
+                                               triBNode1[ind], triBNode2[ind], triBNode3[ind]);
+                        float radB_owner = triRadFallback;
+                        if (granData->ownerBoundRadius) {
+                            radA_owner = granData->ownerBoundRadius[ownerID];
+                            radB_owner = granData->ownerBoundRadius[triOwnerIDs[ind]];
+                        }
 
-if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, sphGhost, sphGhost_neg, ownerID, ownerPosB,
-                                  radB_owner, triGhost, triGhost_neg, triOwnerIDs[ind],
-                                  simParams, granData->ownerCylGhostActive)) {
-    continue;
-}
+                        if (!cylPeriodicShouldUseGhostPair(
+                                ownerPosA, radA_owner, sphGhost, sphGhost_neg, ownerID, ownerPosB, radB_owner, triGhost,
+                                triGhost_neg, triOwnerIDs[ind], simParams, granData->ownerCylGhostActive)) {
+                            continue;
+                        }
                     }
 
                     // Grab family number from memory
@@ -815,25 +817,25 @@ if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, sphGhost, sphGhost_neg
                 const bool ghostA_neg = triGhostFlags[bodyA] < 0;
                 const bool ghostB_neg = triGhostFlags[bodyB] < 0;
                 if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
-                    const float radA_fallback = triRadiusFromNodes(triCenters[bodyA], triANode1[bodyA], triANode2[bodyA],
-                                             triANode3[bodyA], triBNode1[bodyA], triBNode2[bodyA],
-                                             triBNode3[bodyA]);
-const float radB_fallback = triRadiusFromNodes(triCenters[bodyB], triANode1[bodyB], triANode2[bodyB],
-                                             triANode3[bodyB], triBNode1[bodyB], triBNode2[bodyB],
-                                             triBNode3[bodyB]);
-const float3 ownerPosA =
-    getOwnerPosGhosted(simParams, granData, triOwnerIDs[bodyA], ghostA, ghostA_neg);
-const float3 ownerPosB =
-    getOwnerPosGhosted(simParams, granData, triOwnerIDs[bodyB], ghostB, ghostB_neg);
-const float radA_owner =
-    (granData->ownerBoundRadius ? granData->ownerBoundRadius[triOwnerIDs[bodyA]] : radA_fallback);
-const float radB_owner =
-    (granData->ownerBoundRadius ? granData->ownerBoundRadius[triOwnerIDs[bodyB]] : radB_fallback);
-if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, ghostA, ghostA_neg, triOwnerIDs[bodyA],
-                                  ownerPosB, radB_owner, ghostB, ghostB_neg, triOwnerIDs[bodyB],
-                                  simParams, granData->ownerCylGhostActive)) {
-    continue;
-}
+                    const float radA_fallback =
+                        triRadiusFromNodes(triCenters[bodyA], triANode1[bodyA], triANode2[bodyA], triANode3[bodyA],
+                                           triBNode1[bodyA], triBNode2[bodyA], triBNode3[bodyA]);
+                    const float radB_fallback =
+                        triRadiusFromNodes(triCenters[bodyB], triANode1[bodyB], triANode2[bodyB], triANode3[bodyB],
+                                           triBNode1[bodyB], triBNode2[bodyB], triBNode3[bodyB]);
+                    const float3 ownerPosA =
+                        getOwnerPosGhosted(simParams, granData, triOwnerIDs[bodyA], ghostA, ghostA_neg);
+                    const float3 ownerPosB =
+                        getOwnerPosGhosted(simParams, granData, triOwnerIDs[bodyB], ghostB, ghostB_neg);
+                    const float radA_owner =
+                        (granData->ownerBoundRadius ? granData->ownerBoundRadius[triOwnerIDs[bodyA]] : radA_fallback);
+                    const float radB_owner =
+                        (granData->ownerBoundRadius ? granData->ownerBoundRadius[triOwnerIDs[bodyB]] : radB_fallback);
+                    if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, ghostA, ghostA_neg, triOwnerIDs[bodyA],
+                                                       ownerPosB, radB_owner, ghostB, ghostB_neg, triOwnerIDs[bodyB],
+                                                       simParams, granData->ownerCylGhostActive)) {
+                        continue;
+                    }
                 }
 
                 // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
@@ -886,10 +888,8 @@ if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, ghostA, ghostA_neg, tr
                             ghost_out_A_neg = triB_ghost_neg;
                             ghost_out_B_neg = triA_ghost_neg;
                         }
-                        idTriA_mm[inBlockOffset] =
-                            ghost_out_A ? cylPeriodicEncodeGhostID(outA, ghost_out_A_neg) : outA;
-                        idTriB_mm[inBlockOffset] =
-                            ghost_out_B ? cylPeriodicEncodeGhostID(outB, ghost_out_B_neg) : outB;
+                        idTriA_mm[inBlockOffset] = ghost_out_A ? cylPeriodicEncodeGhostID(outA, ghost_out_A_neg) : outA;
+                        idTriB_mm[inBlockOffset] = ghost_out_B ? cylPeriodicEncodeGhostID(outB, ghost_out_B_neg) : outB;
                         dType_mm[inBlockOffset] = deme::TRIANGLE_TRIANGLE_CONTACT;
                     }
                 }
@@ -924,25 +924,27 @@ if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, ghostA, ghostA_neg, tr
                     const bool ghostA_neg = triGhostFlags[myThreadID] < 0;
                     const bool ghostB_neg = cur_isGhost < 0;
                     if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
-                        const float radA_fallback = triRadiusFromNodes(triCenters[myThreadID], triANode1[myThreadID],
-                                             triANode2[myThreadID], triANode3[myThreadID],
-                                             triBNode1[myThreadID], triBNode2[myThreadID],
-                                             triBNode3[myThreadID]);
-const float radB_fallback = triRadiusFromNodes(cur_triCenter, cur_triANode1, cur_triANode2,
-                                             cur_triANode3, cur_triBNode1, cur_triBNode2,
-                                             cur_triBNode3);
-const float3 ownerPosA =
-    getOwnerPosGhosted(simParams, granData, triOwnerIDs[myThreadID], ghostA, ghostA_neg);
-const float3 ownerPosB =
-    getOwnerPosGhosted(simParams, granData, cur_ownerID, ghostB, ghostB_neg);
-const float radA_owner =
-    (granData->ownerBoundRadius ? granData->ownerBoundRadius[triOwnerIDs[myThreadID]] : radA_fallback);
-const float radB_owner = (granData->ownerBoundRadius ? granData->ownerBoundRadius[cur_ownerID] : radB_fallback);
-if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, ghostA, ghostA_neg,
-                                  triOwnerIDs[myThreadID], ownerPosB, radB_owner, ghostB,
-                                  ghostB_neg, cur_ownerID, simParams, granData->ownerCylGhostActive)) {
-    continue;
-}
+                        const float radA_fallback = triRadiusFromNodes(
+                            triCenters[myThreadID], triANode1[myThreadID], triANode2[myThreadID], triANode3[myThreadID],
+                            triBNode1[myThreadID], triBNode2[myThreadID], triBNode3[myThreadID]);
+                        const float radB_fallback =
+                            triRadiusFromNodes(cur_triCenter, cur_triANode1, cur_triANode2, cur_triANode3,
+                                               cur_triBNode1, cur_triBNode2, cur_triBNode3);
+                        const float3 ownerPosA =
+                            getOwnerPosGhosted(simParams, granData, triOwnerIDs[myThreadID], ghostA, ghostA_neg);
+                        const float3 ownerPosB =
+                            getOwnerPosGhosted(simParams, granData, cur_ownerID, ghostB, ghostB_neg);
+                        const float radA_owner =
+                            (granData->ownerBoundRadius ? granData->ownerBoundRadius[triOwnerIDs[myThreadID]]
+                                                        : radA_fallback);
+                        const float radB_owner =
+                            (granData->ownerBoundRadius ? granData->ownerBoundRadius[cur_ownerID] : radB_fallback);
+                        if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, ghostA, ghostA_neg,
+                                                           triOwnerIDs[myThreadID], ownerPosB, radB_owner, ghostB,
+                                                           ghostB_neg, cur_ownerID, simParams,
+                                                           granData->ownerCylGhostActive)) {
+                            continue;
+                        }
                     }
 
                     // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)

@@ -113,9 +113,9 @@ __host__ __device__ inline float3 cylPeriodicRotate(const float3& pos,
 
 // Rotate a global position (with LBF offset) around the cylindrical axis by a given angle.
 __host__ __device__ inline float3 cylPeriodicRotatePosGlobal(const float3& pos,
-                                                            const deme::DEMSimParams* simParams,
-                                                            float cos_theta,
-                                                            float sin_theta) {
+                                                             const deme::DEMSimParams* simParams,
+                                                             float cos_theta,
+                                                             float sin_theta) {
     float3 pos_local = make_float3(pos.x - simParams->LBFX, pos.y - simParams->LBFY, pos.z - simParams->LBFZ);
     pos_local = cylPeriodicRotate(pos_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec,
                                   simParams->cylPeriodicU, simParams->cylPeriodicV, cos_theta, sin_theta);
@@ -190,8 +190,7 @@ __host__ __device__ inline void cylPeriodicGhostAvailability(const float3& owner
     const float max_other = fmaxf(simParams->maxSphereRadius, simParams->maxTriRadius);
     const float other_margin = simParams->dyn.beta + simParams->maxFamilyExtraMargin;
     const float ghost_dist = fmaxf(boundRadius, 0.f) + max_other + other_margin + eps;
-    const float3 pos_local = make_float3(ownerPosGlobal.x - simParams->LBFX,
-                                         ownerPosGlobal.y - simParams->LBFY,
+    const float3 pos_local = make_float3(ownerPosGlobal.x - simParams->LBFX, ownerPosGlobal.y - simParams->LBFY,
                                          ownerPosGlobal.z - simParams->LBFZ);
     const float3 pos_global = pos_local - simParams->cylPeriodicOrigin;
     const float dist_start = dot(pos_global, simParams->cylPeriodicStartNormal);
@@ -221,14 +220,14 @@ __host__ __device__ inline void cylPeriodicComponentGhostAvailability(const floa
 // Choose a single, deterministic periodic-image shift for a pair based on rel-angles and ghost availability.
 // This avoids double-counting cross-boundary contacts while keeping one active representation.
 __host__ __device__ inline void cylPeriodicSelectGhostShift(float relA,
-                                                           float relB,
-                                                           bool availA_pos,
-                                                           bool availA_neg,
-                                                           bool availB_pos,
-                                                           bool availB_neg,
-                                                           float span,
-                                                           int& shiftA,
-                                                           int& shiftB) {
+                                                            float relB,
+                                                            bool availA_pos,
+                                                            bool availA_neg,
+                                                            bool availB_pos,
+                                                            bool availB_neg,
+                                                            float span,
+                                                            int& shiftA,
+                                                            int& shiftB) {
     shiftA = 0;
     shiftB = 0;
     if (span <= 0.f) {
@@ -250,20 +249,28 @@ __host__ __device__ inline void cylPeriodicSelectGhostShift(float relA,
         altA = -1;
     }
     bool des_ok = true;
-    if (desA == 1 && !availA_pos) des_ok = false;
-    if (desA == -1 && !availA_neg) des_ok = false;
-    if (desB == 1 && !availB_pos) des_ok = false;
-    if (desB == -1 && !availB_neg) des_ok = false;
+    if (desA == 1 && !availA_pos)
+        des_ok = false;
+    if (desA == -1 && !availA_neg)
+        des_ok = false;
+    if (desB == 1 && !availB_pos)
+        des_ok = false;
+    if (desB == -1 && !availB_neg)
+        des_ok = false;
     if (des_ok) {
         shiftA = desA;
         shiftB = desB;
         return;
     }
     bool alt_ok = true;
-    if (altA == 1 && !availA_pos) alt_ok = false;
-    if (altA == -1 && !availA_neg) alt_ok = false;
-    if (altB == 1 && !availB_pos) alt_ok = false;
-    if (altB == -1 && !availB_neg) alt_ok = false;
+    if (altA == 1 && !availA_pos)
+        alt_ok = false;
+    if (altA == -1 && !availA_neg)
+        alt_ok = false;
+    if (altB == 1 && !availB_pos)
+        alt_ok = false;
+    if (altB == -1 && !availB_neg)
+        alt_ok = false;
     if (alt_ok) {
         shiftA = altA;
         shiftB = altB;
@@ -279,8 +286,9 @@ __host__ __device__ inline float cylPeriodicDist2(const float3& a, const float3&
 }
 
 // Apply a ±span shift (or none) to a global position.
-__host__ __device__ inline float3
-cylPeriodicShiftPosGlobal(const float3& pos, const deme::DEMSimParams* simParams, int shift) {
+__host__ __device__ inline float3 cylPeriodicShiftPosGlobal(const float3& pos,
+                                                            const deme::DEMSimParams* simParams,
+                                                            int shift) {
     if (shift == 0) {
         return pos;
     }
@@ -307,10 +315,10 @@ __host__ __device__ inline float cylPeriodicShiftDist2(const float3& posA_un,
 // and keep exactly ONE image per pair. This decision is independent of primitive-level radii to
 // avoid per-primitive image flips (critical for triangle meshes / patch aggregation).
 __host__ __device__ inline void cylPeriodicSelectGhostShiftByDist(const float3& posA_un,
-                                                                 const float3& posB_un,
-                                                                 const deme::DEMSimParams* simParams,
-                                                                 int& shiftA,
-                                                                 int& shiftB) {
+                                                                  const float3& posB_un,
+                                                                  const deme::DEMSimParams* simParams,
+                                                                  int& shiftA,
+                                                                  int& shiftB) {
     shiftA = 0;
     shiftB = 0;
     float best = cylPeriodicDist2(posA_un, posB_un);
@@ -486,8 +494,8 @@ __host__ __device__ inline bool cylPeriodicShouldKeepGhostShiftNearSeam(const fl
                                                                         float bestDist2,
                                                                         const deme::DEMSimParams* simParams) {
     return cylPeriodicShouldKeepGhostShiftNearSeamImpl(posA_un, radA, posB_un, radB, ghostShiftA, ghostShiftB,
-                                                       desiredShiftA, desiredShiftB, bestDist2,
-                                                       0.35f, 0.05f, 0.02f, 2e-4f, simParams);
+                                                       desiredShiftA, desiredShiftB, bestDist2, 0.35f, 0.05f, 0.02f,
+                                                       2e-4f, simParams);
 }
 
 // dT branch decision is more tolerant than kT because kT/dT are asynchronous.
@@ -503,25 +511,25 @@ __host__ __device__ inline bool cylPeriodicShouldKeepGhostShiftNearSeamDT(const 
                                                                           float bestDist2,
                                                                           const deme::DEMSimParams* simParams) {
     return cylPeriodicShouldKeepGhostShiftNearSeamImpl(posA_un, radA, posB_un, radB, ghostShiftA, ghostShiftB,
-                                                       desiredShiftA, desiredShiftB, bestDist2,
-                                                       0.45f, 0.08f, 0.03f, 2.5e-4f, simParams);
+                                                       desiredShiftA, desiredShiftB, bestDist2, 0.45f, 0.08f, 0.03f,
+                                                       2.5e-4f, simParams);
 }
 
 // Decide whether to keep a (possibly ghost-involved) contact pair.
 // Canonical min-image is preferred, but near seam we may keep an almost-equivalent alternative image as well
 // so dT can select a stable branch under kT/dT asynchrony.
 __host__ __device__ inline bool cylPeriodicShouldUseGhostPair(const float3& posA,
-                                                             float radA,
-                                                             bool ghostA,
-                                                             bool ghostA_neg,
-                                                             deme::bodyID_t ownerA,
-                                                             const float3& posB,
-                                                             float radB,
-                                                             bool ghostB,
-                                                             bool ghostB_neg,
-                                                             deme::bodyID_t ownerB,
-                                                             const deme::DEMSimParams* simParams,
-                                                             const unsigned int* ownerCylGhostActive = nullptr) {
+                                                              float radA,
+                                                              bool ghostA,
+                                                              bool ghostA_neg,
+                                                              deme::bodyID_t ownerA,
+                                                              const float3& posB,
+                                                              float radB,
+                                                              bool ghostB,
+                                                              bool ghostB_neg,
+                                                              deme::bodyID_t ownerB,
+                                                              const deme::DEMSimParams* simParams,
+                                                              const unsigned int* ownerCylGhostActive = nullptr) {
     if (!simParams->useCylPeriodic || simParams->cylPeriodicSpan <= 0.f) {
         return true;
     }

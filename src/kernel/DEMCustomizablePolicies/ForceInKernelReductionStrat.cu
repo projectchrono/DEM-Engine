@@ -37,8 +37,8 @@ if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
         }
     }
     const float cpA_sq = locCPA.x * locCPA.x + locCPA.y * locCPA.y + locCPA.z * locCPA.z;
-    const bool bad_cp = !isfinite(locCPA.x) || !isfinite(locCPA.y) || !isfinite(locCPA.z) ||
-                        !isfinite(cpA_sq) || cpA_sq > max_local_lever * max_local_lever;
+    const bool bad_cp = !isfinite(locCPA.x) || !isfinite(locCPA.y) || !isfinite(locCPA.z) || !isfinite(cpA_sq) ||
+                        cpA_sq > max_local_lever * max_local_lever;
     const bool bad_vec = !isfinite(forceA.x) || !isfinite(forceA.y) || !isfinite(forceA.z) || !isfinite(torqueA.x) ||
                          !isfinite(torqueA.y) || !isfinite(torqueA.z);
     if (!(bad_cp || bad_vec)) {
@@ -69,8 +69,8 @@ if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
         }
     }
     const float cpB_sq = locCPB.x * locCPB.x + locCPB.y * locCPB.y + locCPB.z * locCPB.z;
-    const bool bad_cp = !isfinite(locCPB.x) || !isfinite(locCPB.y) || !isfinite(locCPB.z) ||
-                        !isfinite(cpB_sq) || cpB_sq > max_local_lever * max_local_lever;
+    const bool bad_cp = !isfinite(locCPB.x) || !isfinite(locCPB.y) || !isfinite(locCPB.z) || !isfinite(cpB_sq) ||
+                        cpB_sq > max_local_lever * max_local_lever;
     const bool bad_vec = !isfinite(forceB.x) || !isfinite(forceB.y) || !isfinite(forceB.z) || !isfinite(torqueB.x) ||
                          !isfinite(torqueB.y) || !isfinite(torqueB.z);
     if (!(bad_cp || bad_vec)) {

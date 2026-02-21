@@ -6,9 +6,9 @@ _kernelIncludes_;
 
 inline __device__ float3 cylPeriodicRotatePosF(const float3& pos, const deme::DEMSimParams* simParams, float sin_span) {
     float3 pos_local = make_float3(pos.x - simParams->LBFX, pos.y - simParams->LBFY, pos.z - simParams->LBFZ);
-    pos_local = cylPeriodicRotate(pos_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec,
-                                  simParams->cylPeriodicU, simParams->cylPeriodicV, simParams->cylPeriodicCosSpan,
-                                  sin_span);
+    pos_local =
+        cylPeriodicRotate(pos_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec,
+                          simParams->cylPeriodicU, simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
     pos_local.x += simParams->LBFX;
     pos_local.y += simParams->LBFY;
     pos_local.z += simParams->LBFZ;
@@ -32,14 +32,18 @@ inline __device__ float3 cylPeriodicRotatePosF(const float3& pos, const deme::DE
     return cylPeriodicRotatePosF(pos, simParams, simParams->cylPeriodicSinSpan);
 }
 
-inline __device__ double3 cylPeriodicRotatePosD(const double3& pos, const deme::DEMSimParams* simParams, float sin_span) {
+inline __device__ double3 cylPeriodicRotatePosD(const double3& pos,
+                                                const deme::DEMSimParams* simParams,
+                                                float sin_span) {
     float3 p = make_float3((float)pos.x, (float)pos.y, (float)pos.z);
     p = cylPeriodicRotatePosF(p, simParams, sin_span);
     return make_double3((double)p.x, (double)p.y, (double)p.z);
 }
 
-inline __device__ double3
-cylPeriodicRotatePosD(const double3& pos, const deme::DEMSimParams* simParams, float cos_theta, float sin_theta) {
+inline __device__ double3 cylPeriodicRotatePosD(const double3& pos,
+                                                const deme::DEMSimParams* simParams,
+                                                float cos_theta,
+                                                float sin_theta) {
     float3 p = make_float3((float)pos.x, (float)pos.y, (float)pos.z);
     p = cylPeriodicRotatePosF(p, simParams, cos_theta, sin_theta);
     return make_double3((double)p.x, (double)p.y, (double)p.z);
@@ -54,8 +58,10 @@ inline __device__ float3 cylPeriodicRotateVec(const float3& vec, const deme::DEM
                              simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
 }
 
-inline __device__ float3
-cylPeriodicRotateVec(const float3& vec, const deme::DEMSimParams* simParams, float cos_theta, float sin_theta) {
+inline __device__ float3 cylPeriodicRotateVec(const float3& vec,
+                                              const deme::DEMSimParams* simParams,
+                                              float cos_theta,
+                                              float sin_theta) {
     return cylPeriodicRotate(vec, make_float3(0.f, 0.f, 0.f), simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
                              simParams->cylPeriodicV, cos_theta, sin_theta);
 }
@@ -64,23 +70,24 @@ inline __device__ float3 cylPeriodicRotateVec(const float3& vec, const deme::DEM
     return cylPeriodicRotateVec(vec, simParams, simParams->cylPeriodicSinSpan);
 }
 
-inline __device__ float4 cylPeriodicRotateQuat(const float4& q, const deme::DEMSimParams* simParams, float sin_half_span) {
-    float4 rotQ = make_float4(simParams->cylPeriodicAxisVec.x * sin_half_span,
-                              simParams->cylPeriodicAxisVec.y * sin_half_span,
-                              simParams->cylPeriodicAxisVec.z * sin_half_span,
-                              simParams->cylPeriodicCosHalfSpan);
+inline __device__ float4 cylPeriodicRotateQuat(const float4& q,
+                                               const deme::DEMSimParams* simParams,
+                                               float sin_half_span) {
+    float4 rotQ =
+        make_float4(simParams->cylPeriodicAxisVec.x * sin_half_span, simParams->cylPeriodicAxisVec.y * sin_half_span,
+                    simParams->cylPeriodicAxisVec.z * sin_half_span, simParams->cylPeriodicCosHalfSpan);
     float4 out = q;
     HamiltonProduct(out.w, out.x, out.y, out.z, rotQ.w, rotQ.x, rotQ.y, rotQ.z, out.w, out.x, out.y, out.z);
     out /= length(out);
     return out;
 }
 
-inline __device__ float4
-cylPeriodicRotateQuat(const float4& q, const deme::DEMSimParams* simParams, float cos_half, float sin_half) {
-    float4 rotQ = make_float4(simParams->cylPeriodicAxisVec.x * sin_half,
-                              simParams->cylPeriodicAxisVec.y * sin_half,
-                              simParams->cylPeriodicAxisVec.z * sin_half,
-                              cos_half);
+inline __device__ float4 cylPeriodicRotateQuat(const float4& q,
+                                               const deme::DEMSimParams* simParams,
+                                               float cos_half,
+                                               float sin_half) {
+    float4 rotQ = make_float4(simParams->cylPeriodicAxisVec.x * sin_half, simParams->cylPeriodicAxisVec.y * sin_half,
+                              simParams->cylPeriodicAxisVec.z * sin_half, cos_half);
     float4 out = q;
     HamiltonProduct(out.w, out.x, out.y, out.z, rotQ.w, rotQ.x, rotQ.y, rotQ.z, out.w, out.x, out.y, out.z);
     out /= length(out);
@@ -92,8 +99,7 @@ inline __device__ float4 cylPeriodicRotateQuat(const float4& q, const deme::DEMS
 }
 
 inline __device__ float cylPeriodicRelAngleGlobal(const float3& pos, const deme::DEMSimParams* simParams) {
-    const float3 pos_local =
-        make_float3(pos.x - simParams->LBFX, pos.y - simParams->LBFY, pos.z - simParams->LBFZ);
+    const float3 pos_local = make_float3(pos.x - simParams->LBFX, pos.y - simParams->LBFY, pos.z - simParams->LBFZ);
     return cylPeriodicRelAngle(pos_local, false, false, simParams);
 }
 
@@ -178,8 +184,10 @@ inline __device__ bool clampPatchPenetrationByOwnerBounds(const deme::DEMSimPara
 
             const float3 vA = make_float3(granData->vX[ownerA], granData->vY[ownerA], granData->vZ[ownerA]);
             const float3 vB = make_float3(granData->vX[ownerB], granData->vY[ownerB], granData->vZ[ownerB]);
-            const float3 wA = make_float3(granData->omgBarX[ownerA], granData->omgBarY[ownerA], granData->omgBarZ[ownerA]);
-            const float3 wB = make_float3(granData->omgBarX[ownerB], granData->omgBarY[ownerB], granData->omgBarZ[ownerB]);
+            const float3 wA =
+                make_float3(granData->omgBarX[ownerA], granData->omgBarY[ownerA], granData->omgBarZ[ownerA]);
+            const float3 wB =
+                make_float3(granData->omgBarX[ownerB], granData->omgBarY[ownerB], granData->omgBarZ[ownerB]);
 
             float3 rA = to_float3(contactPnt - AOwnerPos);
             float3 rB = to_float3(contactPnt - BOwnerPos);
@@ -198,8 +206,7 @@ inline __device__ bool clampPatchPenetrationByOwnerBounds(const deme::DEMSimPara
             }
             const double drift_factor = sqrt(static_cast<double>(drift_steps));
             const double motion_cap =
-                static_cast<double>(closing_speed) * static_cast<double>(simParams->dyn.h) *
-                drift_factor +
+                static_cast<double>(closing_speed) * static_cast<double>(simParams->dyn.h) * drift_factor +
                 static_cast<double>(fmaxf(0.5f * simParams->dyn.beta + extraMarginSize, 0.f)) + 1e-7;
             if (motion_cap > 0.0) {
                 cappedMaxOverlap = fmin(cappedMaxOverlap, motion_cap);
@@ -404,7 +411,6 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
                 cylPeriodicDecodeID(idB_raw, ghostB, ghostB_neg);
             }
 
-
             ghostShiftA = ghostA ? (ghostA_neg ? -1 : 1) : 0;
             ghostShiftB = ghostB ? (ghostB_neg ? -1 : 1) : 0;
             wrapShiftA = ghostShiftA;
@@ -454,8 +460,8 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
             int baseShiftA = ghostShiftA;
             int baseShiftB = ghostShiftB;
 
-
-            // Ghost-ghost pairs are never used in cylindrical wedge periodicity (avoid non-minimal ±2 images and duplicates).
+            // Ghost-ghost pairs are never used in cylindrical wedge periodicity (avoid non-minimal ±2 images and
+            // duplicates).
             if (ghostShiftA != 0 && ghostShiftB != 0) {
                 ContactType = deme::NOT_A_CONTACT;
             } else {
@@ -497,10 +503,13 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
                 }
             }
 
-            // Ensure IDs are consistent with the selected periodic representation so force accumulation and history mapping stay coherent.
+            // Ensure IDs are consistent with the selected periodic representation so force accumulation and history
+            // mapping stay coherent.
             if (ContactType != deme::NOT_A_CONTACT) {
-                if constexpr (AType == deme::GEO_T_SPHERE || AType == deme::GEO_T_TRIANGLE) {                }
-                if constexpr (BType == deme::GEO_T_SPHERE || BType == deme::GEO_T_TRIANGLE) {                }
+                if constexpr (AType == deme::GEO_T_SPHERE || AType == deme::GEO_T_TRIANGLE) {
+                }
+                if constexpr (BType == deme::GEO_T_SPHERE || BType == deme::GEO_T_TRIANGLE) {
+                }
             }
 
             // wrapShiftA/B use only the kT ghost flag for geometry/force evaluation.
@@ -592,7 +601,6 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
                 cylPeriodicDecodeID(idB_raw, ghostB, ghostB_neg);
             }
 
-
             ghostShiftA = ghostA ? (ghostA_neg ? -1 : 1) : 0;
             ghostShiftB = ghostB ? (ghostB_neg ? -1 : 1) : 0;
             wrapShiftA = ghostShiftA;
@@ -671,7 +679,8 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
 
             // Keep IDs consistent (unghosted).
             if (ContactType != deme::NOT_A_CONTACT) {
-                if constexpr (AType == deme::GEO_T_SPHERE || AType == deme::GEO_T_TRIANGLE) {                }
+                if constexpr (AType == deme::GEO_T_SPHERE || AType == deme::GEO_T_TRIANGLE) {
+                }
             }
 
             wrapA = (wrapShiftA != 0);
@@ -729,8 +738,8 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
     if constexpr (BType != deme::GEO_T_ANALYTICAL) {
         constexpr bool apply_shape_depth_cap = (AType == deme::GEO_T_TRIANGLE) && (BType == deme::GEO_T_TRIANGLE);
         if (ContactType != deme::NOT_A_CONTACT &&
-            !clampPatchPenetrationByOwnerBounds(simParams, granData, ownerA, ownerB, AOwnerPos, BOwnerPos,
-                                                contactPnt, B2A, extraMarginSize, overlapDepth, apply_shape_depth_cap)) {
+            !clampPatchPenetrationByOwnerBounds(simParams, granData, ownerA, ownerB, AOwnerPos, BOwnerPos, contactPnt,
+                                                B2A, extraMarginSize, overlapDepth, apply_shape_depth_cap)) {
             ContactType = deme::NOT_A_CONTACT;
             overlapDepth = -DEME_HUGE_FLOAT;
             overlapArea = 0.0;
@@ -746,7 +755,6 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
     if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
         cylHistShift = (wrapShiftA != 0) ? wrapShiftA : ((wrapShiftB != 0) ? wrapShiftB : 0);
     }
-
 
     // Essentials for storing and calculating contact info
     float3 force = make_float3(0, 0, 0);
@@ -768,9 +776,8 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
     bool ownerBoundReject = false;
     if constexpr (BType != deme::GEO_T_ANALYTICAL) {
         if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f &&
-        ContactType_candidate != deme::NOT_A_CONTACT && granData->ownerBoundRadius &&
-        ownerA != deme::NULL_BODYID && ownerB != deme::NULL_BODYID && ownerA < simParams->nOwnerBodies &&
-        ownerB < simParams->nOwnerBodies) {
+            ContactType_candidate != deme::NOT_A_CONTACT && granData->ownerBoundRadius && ownerA != deme::NULL_BODYID &&
+            ownerB != deme::NULL_BODYID && ownerA < simParams->nOwnerBodies && ownerB < simParams->nOwnerBodies) {
             const float radA_owner = fmaxf(granData->ownerBoundRadius[ownerA], 0.f);
             const float radB_owner = fmaxf(granData->ownerBoundRadius[ownerB], 0.f);
             if (radA_owner > 0.f && radB_owner > 0.f) {
@@ -827,9 +834,8 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
             atomicAdd(granData->ownerCylSkipPotentialTotal, 1u);
         }
     }
-    const bool activeForThisStep =
-        (ContactType_candidate != deme::NOT_A_CONTACT) && !discardGhostGhost && !cylPeriodicSkipPair &&
-        !ownerBoundReject;
+    const bool activeForThisStep = (ContactType_candidate != deme::NOT_A_CONTACT) && !discardGhostGhost &&
+                                   !cylPeriodicSkipPair && !ownerBoundReject;
     const deme::contact_t ContactType_forWrite = activeForThisStep ? ContactType_candidate : deme::NOT_A_CONTACT;
     ContactType = ContactType_forWrite;
 
@@ -838,7 +844,9 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
         const float sin_f = (cylHistShift < 0) ? -simParams->cylPeriodicSinSpan : simParams->cylPeriodicSinSpan;
         float3 dt = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
         dt = cylPeriodicRotateVec(dt, simParams, sin_f);
-        delta_tan_x = dt.x; delta_tan_y = dt.y; delta_tan_z = dt.z;
+        delta_tan_x = dt.x;
+        delta_tan_y = dt.y;
+        delta_tan_z = dt.z;
     }
 
     if (activeForThisStep) {
@@ -849,15 +857,16 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
         // If force model modifies owner wildcards, write them back here
         _forceModelOwnerWildcardWrite_;
     } else {
-        // Not active this step: clear writeback buffers to avoid stale data reuse (DEME3 does not clear arrays per step).
+        // Not active this step: clear writeback buffers to avoid stale data reuse (DEME3 does not clear arrays per
+        // step).
         force = make_float3(0.f, 0.f, 0.f);
         torque_only_force = make_float3(0.f, 0.f, 0.f);
         locCPA = make_float3(0.f, 0.f, 0.f);
         locCPB = make_float3(0.f, 0.f, 0.f);
         // For seam-branch mismatches, keep history (freeze) to avoid artificial de-sticking.
         // But if this candidate is geometrically invalid by owner bound rejection, destroy history.
-        if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f &&
-            ownerBoundReject && ContactType_candidate != deme::NOT_A_CONTACT && !discardGhostGhost) {
+        if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f && ownerBoundReject &&
+            ContactType_candidate != deme::NOT_A_CONTACT && !discardGhostGhost) {
             _forceModelContactWildcardDestroy_;
         }
         // True non-contacts still destroy history.
@@ -871,7 +880,9 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
         const float sin_b = (cylHistShift < 0) ? simParams->cylPeriodicSinSpan : -simParams->cylPeriodicSinSpan;
         float3 dt = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
         dt = cylPeriodicRotateVec(dt, simParams, sin_b);
-        delta_tan_x = dt.x; delta_tan_y = dt.y; delta_tan_z = dt.z;
+        delta_tan_x = dt.x;
+        delta_tan_y = dt.y;
+        delta_tan_z = dt.z;
     }
 
     // Note in DEME3, we do not clear force array anymore in each timestep, so always writing back force and contact
@@ -894,10 +905,8 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
         BOriQ = BOriQ_orig;
         locCPA = to_float3(contactPntA - AOwnerPos);
         locCPB = to_float3(contactPntB - BOwnerPos);
-        applyOriQToVector3<float, deme::oriQ_t>(locCPA.x, locCPA.y, locCPA.z, AOriQ.w, -AOriQ.x, -AOriQ.y,
-                                                -AOriQ.z);
-        applyOriQToVector3<float, deme::oriQ_t>(locCPB.x, locCPB.y, locCPB.z, BOriQ.w, -BOriQ.x, -BOriQ.y,
-                                                -BOriQ.z);
+        applyOriQToVector3<float, deme::oriQ_t>(locCPA.x, locCPA.y, locCPA.z, AOriQ.w, -AOriQ.x, -AOriQ.y, -AOriQ.z);
+        applyOriQToVector3<float, deme::oriQ_t>(locCPB.x, locCPB.y, locCPB.z, BOriQ.w, -BOriQ.x, -BOriQ.y, -BOriQ.z);
         {
             const float max_lever_A = maxOwnerLocalLever(simParams, granData, ownerA, extraMarginSize);
             const float max_lever_B = maxOwnerLocalLever(simParams, granData, ownerB, extraMarginSize);
@@ -922,13 +931,13 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
 
 // 3 specialized kernels for patch-based contact types
 DEME_KERNEL void calculatePatchContactForces_SphTri(deme::DEMSimParams* simParams,
-                                                   deme::DEMDataDT* granData,
-                                                   const double* finalAreas,
-                                                   const float3* finalNormals,
-                                                   const double* finalPenetrations,
-                                                   const double3* finalContactPoints,
-                                                   deme::contactPairs_t startOffset,
-                                                   deme::contactPairs_t nContactPairs) {
+                                                    deme::DEMDataDT* granData,
+                                                    const double* finalAreas,
+                                                    const float3* finalNormals,
+                                                    const double* finalPenetrations,
+                                                    const double3* finalContactPoints,
+                                                    deme::contactPairs_t startOffset,
+                                                    deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myPatchContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myPatchContactID < startOffset + nContactPairs) {
         calculatePatchContactForces_impl<deme::SPHERE_TRIANGLE_CONTACT>(simParams, granData, finalAreas, finalNormals,
@@ -938,13 +947,13 @@ DEME_KERNEL void calculatePatchContactForces_SphTri(deme::DEMSimParams* simParam
 }
 
 DEME_KERNEL void calculatePatchContactForces_TriTri(deme::DEMSimParams* simParams,
-                                                   deme::DEMDataDT* granData,
-                                                   const double* finalAreas,
-                                                   const float3* finalNormals,
-                                                   const double* finalPenetrations,
-                                                   const double3* finalContactPoints,
-                                                   deme::contactPairs_t startOffset,
-                                                   deme::contactPairs_t nContactPairs) {
+                                                    deme::DEMDataDT* granData,
+                                                    const double* finalAreas,
+                                                    const float3* finalNormals,
+                                                    const double* finalPenetrations,
+                                                    const double3* finalContactPoints,
+                                                    deme::contactPairs_t startOffset,
+                                                    deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myPatchContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myPatchContactID < startOffset + nContactPairs) {
         calculatePatchContactForces_impl<deme::TRIANGLE_TRIANGLE_CONTACT>(simParams, granData, finalAreas, finalNormals,
@@ -954,13 +963,13 @@ DEME_KERNEL void calculatePatchContactForces_TriTri(deme::DEMSimParams* simParam
 }
 
 DEME_KERNEL void calculatePatchContactForces_TriAnal(deme::DEMSimParams* simParams,
-                                                    deme::DEMDataDT* granData,
-                                                    const double* finalAreas,
-                                                    const float3* finalNormals,
-                                                    const double* finalPenetrations,
-                                                    const double3* finalContactPoints,
-                                                    deme::contactPairs_t startOffset,
-                                                    deme::contactPairs_t nContactPairs) {
+                                                     deme::DEMDataDT* granData,
+                                                     const double* finalAreas,
+                                                     const float3* finalNormals,
+                                                     const double* finalPenetrations,
+                                                     const double3* finalContactPoints,
+                                                     deme::contactPairs_t startOffset,
+                                                     deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myPatchContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myPatchContactID < startOffset + nContactPairs) {
         calculatePatchContactForces_impl<deme::TRIANGLE_ANALYTICAL_CONTACT>(

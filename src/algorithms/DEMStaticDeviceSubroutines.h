@@ -211,19 +211,19 @@ void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
 // The reduction operator is component-wise associative (sum + max), therefore it can safely be used
 // with CUB ReduceByKey.
 struct PatchContactAccum {
-    double sumProjArea;    ///< Sum of projected contact areas (per patch)
-    double maxProjPen;     ///< Max projected penetration (per patch)
-    double sumWeight;      ///< Sum of weights w = projectedPenetration * projectedArea (per patch)
-    double3 sumWeightedCP; ///< Sum of (contactPoint * w) (per patch)
+    double sumProjArea;     ///< Sum of projected contact areas (per patch)
+    double maxProjPen;      ///< Max projected penetration (per patch)
+    double sumWeight;       ///< Sum of weights w = projectedPenetration * projectedArea (per patch)
+    double3 sumWeightedCP;  ///< Sum of (contactPoint * w) (per patch)
 
     __host__ __device__ __forceinline__ PatchContactAccum operator+(const PatchContactAccum& other) const {
         PatchContactAccum out;
         out.sumProjArea = sumProjArea + other.sumProjArea;
         out.maxProjPen = (maxProjPen > other.maxProjPen) ? maxProjPen : other.maxProjPen;
         out.sumWeight = sumWeight + other.sumWeight;
-        out.sumWeightedCP = make_double3(sumWeightedCP.x + other.sumWeightedCP.x,
-                                         sumWeightedCP.y + other.sumWeightedCP.y,
-                                         sumWeightedCP.z + other.sumWeightedCP.z);
+        out.sumWeightedCP =
+            make_double3(sumWeightedCP.x + other.sumWeightedCP.x, sumWeightedCP.y + other.sumWeightedCP.y,
+                         sumWeightedCP.z + other.sumWeightedCP.z);
         return out;
     }
 };

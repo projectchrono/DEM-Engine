@@ -87,15 +87,14 @@ int main() {
     const float rpm = 40.0f;
     const float drum_ang_vel = rpm * 2.0f * PI / 60.0f;
 
-    auto mat_type_particle =
-        DEMSim.LoadMaterial({{"E", 1e6}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.00}});
+    auto mat_type_particle = DEMSim.LoadMaterial({{"E", 1e6}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.00}});
     auto mat_type_drum = DEMSim.LoadMaterial({{"E", 2e6}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.00}});
     DEMSim.SetMaterialPropertyPair("mu", mat_type_particle, mat_type_drum, 0.5);
 
     // --------------------- Particle settings block ---------------------
     // Mesh file can be .stl or .obj (path is relative to data/mesh).
-    const path particle_mesh_file = GET_DATA_PATH() / "mesh" / "cross_fine.stl"; // "simpleTriangleShape4mm.stl"
-    const float particle_mesh_scale = mm_to_m * 0.5f; // 1.0f for STLs in mm size
+    const path particle_mesh_file = GET_DATA_PATH() / "mesh" / "cross_fine.stl";  // "simpleTriangleShape4mm.stl"
+    const float particle_mesh_scale = mm_to_m * 0.5f;                             // 1.0f for STLs in mm size
     const unsigned int target_particles = 5000;
     // -------------------------------------------------------------------
 
@@ -113,9 +112,9 @@ int main() {
     // tri_template->SetNeverWinner(true); // if mesh is more coarse the other contacts
     const float particle_mass = static_cast<float>(tri_volume * particle_density);
     const float3 particle_moi = tri_inertia * particle_density;
-    std::cout << "Particle volume (m^3): " << tri_volume << ", mass (kg): "<< particle_mass << std::endl;
-    std::cout << "Particle MOI (unit density, CoM): " << tri_inertia.x << ", " << tri_inertia.y << ", "
-              << tri_inertia.z << std::endl;
+    std::cout << "Particle volume (m^3): " << tri_volume << ", mass (kg): " << particle_mass << std::endl;
+    std::cout << "Particle MOI (unit density, CoM): " << tri_inertia.x << ", " << tri_inertia.y << ", " << tri_inertia.z
+              << std::endl;
     const double cube_vol = std::pow(4.0e-3, 3);
 
     // Toggle drum mantle type:
@@ -170,9 +169,9 @@ int main() {
         drum->SetMOI(make_float3(IYY, IYY, IZZ));
         drum_tracker = DEMSim.Track(drum);
     }
-    const std::string drum_ang_pre =
-        "float3 omg_g = make_float3(0.f, 0.f, " + to_string_with_precision(drum_ang_vel) + ");"
-        "applyOriQToVector3(omg_g.x, omg_g.y, omg_g.z, oriQw, -oriQx, -oriQy, -oriQz);";
+    const std::string drum_ang_pre = "float3 omg_g = make_float3(0.f, 0.f, " + to_string_with_precision(drum_ang_vel) +
+                                     ");"
+                                     "applyOriQToVector3(omg_g.x, omg_g.y, omg_g.z, oriQw, -oriQx, -oriQy, -oriQz);";
     DEMSim.SetFamilyPrescribedAngVel(drum_family, "omg_g.x", "omg_g.y", "omg_g.z", true, drum_ang_pre);
 
     // Add top and bottom planes. They rotate with the drum family.
@@ -188,12 +187,12 @@ int main() {
     // AABB clearance for a cylinder aligned with z:
     // radial clearance uses the half-diagonal in XY; z-clearance uses half-height in Z.
     const float r_xy_aabb = 0.5f * std::sqrt(tri_dims.x * tri_dims.x + tri_dims.y * tri_dims.y);
-    const float r_z_aabb  = 0.5f * tri_dims.z;
+    const float r_z_aabb = 0.5f * tri_dims.z;
     // Spacing of the HCP lattice (center-to-center). Keep conservative spacing (uses tri_diag).
     // Clearance model only changes usable container dimensions.
     HCPSampler sampler(tri_diag * 1.01f);
     auto sample_with_clearance = [&](float r_xy, float r_z) {
-        const float sample_radius     = drum_inner_radius - wall_clearance - r_xy;
+        const float sample_radius = drum_inner_radius - wall_clearance - r_xy;
         const float sample_halfheight = drum_height * 0.5f - wall_clearance - r_z;
         // Guard against negative dimensions
         if (sample_radius <= 0.f || sample_halfheight <= 0.f) {
@@ -204,12 +203,12 @@ int main() {
     };
     // Generate both candidate sets
     auto cand_sphere = sample_with_clearance(r_sphere, r_sphere);
-    auto cand_aabb   = sample_with_clearance(r_xy_aabb, r_z_aabb);
+    auto cand_aabb = sample_with_clearance(r_xy_aabb, r_z_aabb);
     // Pick denser (more points). If equal, prefer sphere for robustness.
     bool use_aabb = cand_aabb.size() > cand_sphere.size();
     auto& candidate_pos = use_aabb ? cand_aabb : cand_sphere;
-    std::cout << "Sampling clearance mode: " << (use_aabb ? "AABB" : "Sphere")
-              << " (AABB=" << cand_aabb.size() << ", Sphere=" << cand_sphere.size() << ")\n";
+    std::cout << "Sampling clearance mode: " << (use_aabb ? "AABB" : "Sphere") << " (AABB=" << cand_aabb.size()
+              << ", Sphere=" << cand_sphere.size() << ")\n";
     if (candidate_pos.size() < target_particles) {
         DEME_WARNING("Sampler produced fewer points (%zu) than requested (%u). Using all generated points.",
                      candidate_pos.size(), target_particles);
@@ -228,7 +227,8 @@ int main() {
         tri->SetInitQuat(make_float4(0.f, 0.f, 0.f, 1.0f));
     }
     const float total_particle_mass = particle_mass * candidate_pos.size();
-    std::cout << "Placed " << candidate_pos.size() << " particles with a mass of "<< total_particle_mass <<" kg inside the drum." <<std::endl;
+    std::cout << "Placed " << candidate_pos.size() << " particles with a mass of " << total_particle_mass
+              << " kg inside the drum." << std::endl;
 
     auto max_v_finder = DEMSim.CreateInspector("max_absv");
     float max_v;

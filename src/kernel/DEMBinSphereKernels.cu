@@ -9,9 +9,9 @@ _clumpTemplateDefs_;
 _analyticalEntityDefs_;
 
 DEME_KERNEL void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
-                                                 deme::DEMDataKT* granData,
-                                                 deme::binsSphereTouches_t* numBinsSphereTouches,
-                                                 deme::objID_t* numAnalGeoSphereTouches) {
+                                                  deme::DEMDataKT* granData,
+                                                  deme::binsSphereTouches_t* numBinsSphereTouches,
+                                                  deme::objID_t* numAnalGeoSphereTouches) {
     deme::bodyID_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;
     if (sphereID < simParams->nSpheresGM) {
         // Register sphere--analytical geometry contacts
@@ -99,36 +99,34 @@ DEME_KERNEL void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                 const float ghost_dist = ghost_radius + max_other + other_margin;
                 const float dist_start = dot(pos_global, simParams->cylPeriodicStartNormal);
                 if (dist_start <= ghost_dist) {
-                    const float3 ghost_pos =
-                        cylPeriodicRotate(pos_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec,
-                                          simParams->cylPeriodicU, simParams->cylPeriodicV,
-                                          simParams->cylPeriodicCosSpan, simParams->cylPeriodicSinSpan);
+                    const float3 ghost_pos = cylPeriodicRotate(
+                        pos_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
+                        simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, simParams->cylPeriodicSinSpan);
                     const deme::AxisBounds gx = axis_bounds(ghost_pos.x, myRadius, nbX, invBinSize);
                     if (gx.imax >= gx.imin) {
                         const deme::AxisBounds gy = axis_bounds(ghost_pos.y, myRadius, nbY, invBinSize);
                         if (gy.imax >= gy.imin) {
                             const deme::AxisBounds gz = axis_bounds(ghost_pos.z, myRadius, nbZ, invBinSize);
                             if (gz.imax >= gz.imin) {
-                                ghostBins += (gx.imax - gx.imin + 1) * (gy.imax - gy.imin + 1) *
-                                             (gz.imax - gz.imin + 1);
+                                ghostBins +=
+                                    (gx.imax - gx.imin + 1) * (gy.imax - gy.imin + 1) * (gz.imax - gz.imin + 1);
                             }
                         }
                     }
                 }
                 const float dist_end = dot(pos_global, simParams->cylPeriodicEndNormal);
                 if (dist_end >= -ghost_dist) {
-                    const float3 ghost_pos =
-                        cylPeriodicRotate(pos_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec,
-                                          simParams->cylPeriodicU, simParams->cylPeriodicV,
-                                          simParams->cylPeriodicCosSpan, -simParams->cylPeriodicSinSpan);
+                    const float3 ghost_pos = cylPeriodicRotate(
+                        pos_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
+                        simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, -simParams->cylPeriodicSinSpan);
                     const deme::AxisBounds gx = axis_bounds(ghost_pos.x, myRadius, nbX, invBinSize);
                     if (gx.imax >= gx.imin) {
                         const deme::AxisBounds gy = axis_bounds(ghost_pos.y, myRadius, nbY, invBinSize);
                         if (gy.imax >= gy.imin) {
                             const deme::AxisBounds gz = axis_bounds(ghost_pos.z, myRadius, nbZ, invBinSize);
                             if (gz.imax >= gz.imin) {
-                                ghostBins += (gx.imax - gx.imin + 1) * (gy.imax - gy.imin + 1) *
-                                             (gz.imax - gz.imin + 1);
+                                ghostBins +=
+                                    (gx.imax - gx.imin + 1) * (gy.imax - gy.imin + 1) * (gz.imax - gz.imin + 1);
                             }
                         }
                     }
@@ -196,14 +194,14 @@ DEME_KERNEL void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
 }
 
 DEME_KERNEL void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
-                                               deme::DEMDataKT* granData,
-                                               deme::binSphereTouchPairs_t* numBinsSphereTouchesScan,
-                                               deme::binSphereTouchPairs_t* numAnalGeoSphereTouchesScan,
-                                               deme::binID_t* binIDsEachSphereTouches,
-                                               deme::bodyID_t* sphereIDsEachBinTouches,
-                                               deme::bodyID_t* idGeoA,
-                                               deme::bodyID_t* idGeoB,
-                                               deme::contact_t* contactTypePrimitive) {
+                                                deme::DEMDataKT* granData,
+                                                deme::binSphereTouchPairs_t* numBinsSphereTouchesScan,
+                                                deme::binSphereTouchPairs_t* numAnalGeoSphereTouchesScan,
+                                                deme::binID_t* binIDsEachSphereTouches,
+                                                deme::bodyID_t* sphereIDsEachBinTouches,
+                                                deme::bodyID_t* idGeoA,
+                                                deme::bodyID_t* idGeoB,
+                                                deme::contact_t* contactTypePrimitive) {
     deme::bodyID_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;
     if (sphereID < simParams->nSpheresGM) {
         double3 myPosXYZ;
@@ -296,10 +294,9 @@ DEME_KERNEL void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                 const float ghost_dist = ghost_radius + max_other + other_margin;
                 const float dist_start = dot(pos_global, simParams->cylPeriodicStartNormal);
                 if (dist_start <= ghost_dist) {
-                    const float3 ghost_pos =
-                        cylPeriodicRotate(pos_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec,
-                                          simParams->cylPeriodicU, simParams->cylPeriodicV,
-                                          simParams->cylPeriodicCosSpan, simParams->cylPeriodicSinSpan);
+                    const float3 ghost_pos = cylPeriodicRotate(
+                        pos_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
+                        simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, simParams->cylPeriodicSinSpan);
                     const deme::AxisBounds gx = axis_bounds(ghost_pos.x, myRadius, nbX, invBinSize);
                     const deme::AxisBounds gy = axis_bounds(ghost_pos.y, myRadius, nbY, invBinSize);
                     const deme::AxisBounds gz = axis_bounds(ghost_pos.z, myRadius, nbZ, invBinSize);
@@ -326,10 +323,9 @@ DEME_KERNEL void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                 }
                 const float dist_end = dot(pos_global, simParams->cylPeriodicEndNormal);
                 if (dist_end >= -ghost_dist) {
-                    const float3 ghost_pos =
-                        cylPeriodicRotate(pos_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec,
-                                          simParams->cylPeriodicU, simParams->cylPeriodicV,
-                                          simParams->cylPeriodicCosSpan, -simParams->cylPeriodicSinSpan);
+                    const float3 ghost_pos = cylPeriodicRotate(
+                        pos_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
+                        simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, -simParams->cylPeriodicSinSpan);
                     const deme::AxisBounds gx = axis_bounds(ghost_pos.x, myRadius, nbX, invBinSize);
                     const deme::AxisBounds gy = axis_bounds(ghost_pos.y, myRadius, nbY, invBinSize);
                     const deme::AxisBounds gz = axis_bounds(ghost_pos.z, myRadius, nbZ, invBinSize);

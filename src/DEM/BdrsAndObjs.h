@@ -687,23 +687,24 @@ class DEMMesh : public DEMInitializer {
 
     enum class PatchConstraintStatus : uint8_t {
         SATISFIED = 0,
-        TOO_MANY_UNMERGEABLE = 1,   // patch_max konnte wegen hard/concave Barrieren nicht erreicht werden
-        TOO_FEW_UNSPLITTABLE = 2    // patch_min konnte nicht erreicht werden (zu wenig "splittable" Struktur)
+        TOO_MANY_UNMERGEABLE = 1,  // patch_max konnte wegen hard/concave Barrieren nicht erreicht werden
+        TOO_FEW_UNSPLITTABLE = 2   // patch_min konnte nicht erreicht werden (zu wenig "splittable" Struktur)
     };
 
     struct PatchQualityPatch {
         PatchQualityLevel level = PatchQualityLevel::SAFE;
 
         // Normal statistics (area-weighted mean normal, area only for weighting)
-        float worst_angle_deg = 0.0f;   // max deviation from mean normal (largest triangle deviation)
-        float coherence_r = 1.0f;       // ||sum(A*n)|| / sum(A) in [0,1] (1 = perfectly aligned)
+        float worst_angle_deg = 0.0f;  // max deviation from mean normal (largest triangle deviation)
+        float coherence_r = 1.0f;      // ||sum(A*n)|| / sum(A) in [0,1] (1 = perfectly aligned)
 
         unsigned int n_tris = 0;
 
         // Internal violations (should be 0 in a "clean" patching)
-        unsigned int hard_crossings = 0;     // internal edges whose triangle normals exceed hard_angle_deg
-        unsigned int concave_crossings = 0;  // internal concave edges (if concavity enabled and oriented edge is reliable)
-        unsigned int unoriented_edges = 0;   // internal edges where orientation test failed (sign dihedral unreliable)
+        unsigned int hard_crossings = 0;  // internal edges whose triangle normals exceed hard_angle_deg
+        unsigned int concave_crossings =
+            0;  // internal concave edges (if concavity enabled and oriented edge is reliable)
+        unsigned int unoriented_edges = 0;  // internal edges where orientation test failed (sign dihedral unreliable)
     };
 
     struct PatchQualityReport {
@@ -729,7 +730,8 @@ class DEMMesh : public DEMInitializer {
         bool hard_crossings_are_critical = true;
         bool concave_crossings_are_critical = false;
 
-        // If unoriented edges are many, concavity sign is unreliable; treat it at least as WARN if concavity is enabled.
+        // If unoriented edges are many, concavity sign is unreliable; treat it at least as WARN if concavity is
+        // enabled.
         unsigned int unoriented_warn_threshold = 10;
     };
 
@@ -789,7 +791,9 @@ class DEMMesh : public DEMInitializer {
     unsigned int SplitIntoConvexPatches(float hard_angle_deg, const PatchSplitOptions& opt) {
         return SplitIntoConvexPatches(hard_angle_deg, opt, nullptr, PatchQualityOptions());
     }
-    unsigned int SplitIntoConvexPatches(float hard_angle_deg, const PatchSplitOptions& opt, PatchQualityReport* out_report) {
+    unsigned int SplitIntoConvexPatches(float hard_angle_deg,
+                                        const PatchSplitOptions& opt,
+                                        PatchQualityReport* out_report) {
         return SplitIntoConvexPatches(hard_angle_deg, opt, out_report, PatchQualityOptions());
     }
 

@@ -214,9 +214,8 @@ inline __device__ void integrateVelPos(deme::bodyID_t ownerID,
             Z += (double)v.z * h;
         }
 
-        if (simParams->useCylPeriodic &&
-            (granData->ownerTypes[ownerID] == deme::OWNER_T_CLUMP ||
-             granData->ownerTypes[ownerID] == deme::OWNER_T_MESH)) {
+        if (simParams->useCylPeriodic && (granData->ownerTypes[ownerID] == deme::OWNER_T_CLUMP ||
+                                          granData->ownerTypes[ownerID] == deme::OWNER_T_MESH)) {
             const float span = simParams->cylPeriodicSpan;
             if (span > 0.f) {
                 const float3 origin = simParams->cylPeriodicOrigin;
@@ -267,9 +266,9 @@ inline __device__ void integrateVelPos(deme::bodyID_t ownerID,
                         sincosf(delta, &sin_delta, &cos_delta);
                         sincosf(0.5f * delta, &sin_half, &cos_half);
                     }
-                    pos_local = cylPeriodicRotate(pos_local, origin, simParams->cylPeriodicAxisVec,
-                                                  simParams->cylPeriodicU, simParams->cylPeriodicV, cos_delta,
-                                                  sin_delta);
+                    pos_local =
+                        cylPeriodicRotate(pos_local, origin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
+                                          simParams->cylPeriodicV, cos_delta, sin_delta);
                     X = (double)(pos_local.x + lbf.x);
                     Y = (double)(pos_local.y + lbf.y);
                     Z = (double)(pos_local.z + lbf.z);
@@ -341,16 +340,17 @@ inline __device__ void integrateVelPos(deme::bodyID_t ownerID,
             granData->vY[ownerID] = vel.y;
             granData->vZ[ownerID] = vel.z;
 
-            float3 omg = make_float3(granData->omgBarX[ownerID], granData->omgBarY[ownerID], granData->omgBarZ[ownerID]);
+            float3 omg =
+                make_float3(granData->omgBarX[ownerID], granData->omgBarY[ownerID], granData->omgBarZ[ownerID]);
             omg = cylPeriodicRotate(omg, make_float3(0.f, 0.f, 0.f), simParams->cylPeriodicAxisVec,
                                     simParams->cylPeriodicU, simParams->cylPeriodicV, cos_delta, sin_delta);
             granData->omgBarX[ownerID] = omg.x;
             granData->omgBarY[ownerID] = omg.y;
             granData->omgBarZ[ownerID] = omg.z;
 
-            float4 rotQ = make_float4(simParams->cylPeriodicAxisVec.x * sin_half,
-                                      simParams->cylPeriodicAxisVec.y * sin_half,
-                                      simParams->cylPeriodicAxisVec.z * sin_half, cos_half);
+            float4 rotQ =
+                make_float4(simParams->cylPeriodicAxisVec.x * sin_half, simParams->cylPeriodicAxisVec.y * sin_half,
+                            simParams->cylPeriodicAxisVec.z * sin_half, cos_half);
             float4 oriQ = make_float4(granData->oriQx[ownerID], granData->oriQy[ownerID], granData->oriQz[ownerID],
                                       granData->oriQw[ownerID]);
             HamiltonProduct(oriQ.w, oriQ.x, oriQ.y, oriQ.z, rotQ.w, rotQ.x, rotQ.y, rotQ.z, oriQ.w, oriQ.x, oriQ.y,
@@ -395,13 +395,11 @@ DEME_KERNEL void integrateOwners(deme::DEMSimParams* simParams, deme::DEMDataDT*
     }
 }
 
-
-
 // Rotate selected per-contact wildcard vector triplets when an owner wraps across the cylindrical periodic seam.
 // This preserves contact-history continuity (e.g., tangential displacement vectors) under the periodic mapping.
 DEME_KERNEL void cylPeriodicRotateContactWildcards(deme::DEMSimParams* simParams,
-                                                  deme::DEMDataDT* granData,
-                                                  size_t nContacts) {
+                                                   deme::DEMDataDT* granData,
+                                                   size_t nContacts) {
     const size_t tid = blockIdx.x * blockDim.x + threadIdx.x;
     if (tid >= nContacts) {
         return;
@@ -471,11 +469,10 @@ DEME_KERNEL void cylPeriodicRotateContactWildcards(deme::DEMSimParams* simParams
     const float3 origin = make_float3(0.f);
     for (unsigned int t = 0; t < simParams->nCylPeriodicWCTriplets; t++) {
         const int3 ijk = simParams->cylPeriodicWCTriplets[t];
-        float3 v = make_float3(granData->contactWildcards[ijk.x][tid],
-                               granData->contactWildcards[ijk.y][tid],
+        float3 v = make_float3(granData->contactWildcards[ijk.x][tid], granData->contactWildcards[ijk.y][tid],
                                granData->contactWildcards[ijk.z][tid]);
-        v = cylPeriodicRotate(v, origin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU, simParams->cylPeriodicV,
-                              cos_delta, sin_delta);
+        v = cylPeriodicRotate(v, origin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
+                              simParams->cylPeriodicV, cos_delta, sin_delta);
         granData->contactWildcards[ijk.x][tid] = v.x;
         granData->contactWildcards[ijk.y][tid] = v.y;
         granData->contactWildcards[ijk.z][tid] = v.z;

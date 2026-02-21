@@ -64,8 +64,7 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
     bodyZ[myThreadID] = ownerZ + (double)myRelPos.z;
     if (is_ghost) {
         const float sin_span = ghost_neg ? -simParams->cylPeriodicSinSpan : simParams->cylPeriodicSinSpan;
-        float3 pos_local =
-            make_float3((float)bodyX[myThreadID], (float)bodyY[myThreadID], (float)bodyZ[myThreadID]);
+        float3 pos_local = make_float3((float)bodyX[myThreadID], (float)bodyY[myThreadID], (float)bodyZ[myThreadID]);
         pos_local = cylPeriodicRotate(pos_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec,
                                       simParams->cylPeriodicU, simParams->cylPeriodicV, simParams->cylPeriodicCosSpan,
                                       sin_span);
@@ -103,13 +102,13 @@ inline __device__ bool calcContactPoint(deme::DEMSimParams* simParams,
 }
 
 DEME_KERNEL void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
-                                                 deme::DEMDataKT* granData,
-                                                 deme::bodyID_t* sphereIDsEachBinTouches_sorted,
-                                                 deme::binID_t* activeBinIDs,
-                                                 deme::spheresBinTouches_t* numSpheresBinTouches,
-                                                 deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
-                                                 deme::binContactPairs_t* numContactsInEachBin,
-                                                 size_t nActiveBins) {
+                                                  deme::DEMDataKT* granData,
+                                                  deme::bodyID_t* sphereIDsEachBinTouches_sorted,
+                                                  deme::binID_t* activeBinIDs,
+                                                  deme::spheresBinTouches_t* numSpheresBinTouches,
+                                                  deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
+                                                  deme::binContactPairs_t* numContactsInEachBin,
+                                                  size_t nActiveBins) {
     // shared storage for bodies involved in this bin. Pre-allocated so that each threads can easily use.
     __shared__ deme::bodyID_t ownerIDs[DEME_NUM_SPHERES_PER_CD_BATCH];
     __shared__ deme::bodyID_t bodyIDs[DEME_NUM_SPHERES_PER_CD_BATCH];  // In this kernel, this is not used
@@ -201,17 +200,17 @@ DEME_KERNEL void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
                 const bool ghostA_neg = ghostFlags[bodyA] < 0;
                 const bool ghostB_neg = ghostFlags[bodyB] < 0;
                 if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
-                    const float3 bodyPosA = make_float3((float)bodyX[bodyA] + simParams->LBFX,
-                                                        (float)bodyY[bodyA] + simParams->LBFY,
-                                                        (float)bodyZ[bodyA] + simParams->LBFZ);
-                    const float3 bodyPosB = make_float3((float)bodyX[bodyB] + simParams->LBFX,
-                                                        (float)bodyY[bodyB] + simParams->LBFY,
-                                                        (float)bodyZ[bodyB] + simParams->LBFZ);
+                    const float3 bodyPosA =
+                        make_float3((float)bodyX[bodyA] + simParams->LBFX, (float)bodyY[bodyA] + simParams->LBFY,
+                                    (float)bodyZ[bodyA] + simParams->LBFZ);
+                    const float3 bodyPosB =
+                        make_float3((float)bodyX[bodyB] + simParams->LBFX, (float)bodyY[bodyB] + simParams->LBFY,
+                                    (float)bodyZ[bodyB] + simParams->LBFZ);
                     const float radA_comp = radii[bodyA];
                     const float radB_comp = radii[bodyB];
                     if (!cylPeriodicShouldUseGhostPair(bodyPosA, radA_comp, ghostA, ghostA_neg, ownerIDs[bodyA],
-                                                      bodyPosB, radB_comp, ghostB, ghostB_neg, ownerIDs[bodyB],
-                                                      simParams, granData->ownerCylGhostActive)) {
+                                                       bodyPosB, radB_comp, ghostB, ghostB_neg, ownerIDs[bodyB],
+                                                       simParams, granData->ownerCylGhostActive)) {
                         continue;
                     }
                 }
@@ -289,14 +288,14 @@ DEME_KERNEL void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
                     const float3 bodyPosA = make_float3((float)bodyX[myThreadID] + simParams->LBFX,
                                                         (float)bodyY[myThreadID] + simParams->LBFY,
                                                         (float)bodyZ[myThreadID] + simParams->LBFZ);
-                    const float3 bodyPosB = make_float3((float)cur_bodyX + simParams->LBFX,
-                                                        (float)cur_bodyY + simParams->LBFY,
-                                                        (float)cur_bodyZ + simParams->LBFZ);
+                    const float3 bodyPosB =
+                        make_float3((float)cur_bodyX + simParams->LBFX, (float)cur_bodyY + simParams->LBFY,
+                                    (float)cur_bodyZ + simParams->LBFZ);
                     const float radA_comp = radii[myThreadID];
                     const float radB_comp = cur_radii;
-                    if (!cylPeriodicShouldUseGhostPair(bodyPosA, radA_comp, ghostA, ghostA_neg,
-                                                      ownerIDs[myThreadID], bodyPosB, radB_comp, ghostB,
-                                                      ghostB_neg, cur_ownerID, simParams, granData->ownerCylGhostActive)) {
+                    if (!cylPeriodicShouldUseGhostPair(bodyPosA, radA_comp, ghostA, ghostA_neg, ownerIDs[myThreadID],
+                                                       bodyPosB, radB_comp, ghostB, ghostB_neg, cur_ownerID, simParams,
+                                                       granData->ownerCylGhostActive)) {
                         continue;
                     }
                 }
@@ -321,16 +320,16 @@ DEME_KERNEL void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
 }
 
 DEME_KERNEL void populateSphereContactPairsEachBin(deme::DEMSimParams* simParams,
-                                                  deme::DEMDataKT* granData,
-                                                  deme::bodyID_t* sphereIDsEachBinTouches_sorted,
-                                                  deme::binID_t* activeBinIDs,
-                                                  deme::spheresBinTouches_t* numSpheresBinTouches,
-                                                  deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
-                                                  deme::contactPairs_t* contactReportOffsets,
-                                                  deme::bodyID_t* idSphA,
-                                                  deme::bodyID_t* idSphB,
-                                                  deme::contact_t* dType,
-                                                  size_t nActiveBins) {
+                                                   deme::DEMDataKT* granData,
+                                                   deme::bodyID_t* sphereIDsEachBinTouches_sorted,
+                                                   deme::binID_t* activeBinIDs,
+                                                   deme::spheresBinTouches_t* numSpheresBinTouches,
+                                                   deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
+                                                   deme::contactPairs_t* contactReportOffsets,
+                                                   deme::bodyID_t* idSphA,
+                                                   deme::bodyID_t* idSphB,
+                                                   deme::contact_t* dType,
+                                                   size_t nActiveBins) {
     // shared storage for bodies involved in this bin. Pre-allocated so that each threads can easily use.
     __shared__ deme::bodyID_t ownerIDs[DEME_NUM_SPHERES_PER_CD_BATCH];
     __shared__ deme::bodyID_t bodyIDs[DEME_NUM_SPHERES_PER_CD_BATCH];
@@ -414,17 +413,17 @@ DEME_KERNEL void populateSphereContactPairsEachBin(deme::DEMSimParams* simParams
                 const bool ghostA_neg = ghostFlags[bodyA] < 0;
                 const bool ghostB_neg = ghostFlags[bodyB] < 0;
                 if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
-                    const float3 bodyPosA = make_float3((float)bodyX[bodyA] + simParams->LBFX,
-                                                        (float)bodyY[bodyA] + simParams->LBFY,
-                                                        (float)bodyZ[bodyA] + simParams->LBFZ);
-                    const float3 bodyPosB = make_float3((float)bodyX[bodyB] + simParams->LBFX,
-                                                        (float)bodyY[bodyB] + simParams->LBFY,
-                                                        (float)bodyZ[bodyB] + simParams->LBFZ);
+                    const float3 bodyPosA =
+                        make_float3((float)bodyX[bodyA] + simParams->LBFX, (float)bodyY[bodyA] + simParams->LBFY,
+                                    (float)bodyZ[bodyA] + simParams->LBFZ);
+                    const float3 bodyPosB =
+                        make_float3((float)bodyX[bodyB] + simParams->LBFX, (float)bodyY[bodyB] + simParams->LBFY,
+                                    (float)bodyZ[bodyB] + simParams->LBFZ);
                     const float radA_comp = radii[bodyA];
                     const float radB_comp = radii[bodyB];
                     if (!cylPeriodicShouldUseGhostPair(bodyPosA, radA_comp, ghostA, ghostA_neg, ownerIDs[bodyA],
-                                                      bodyPosB, radB_comp, ghostB, ghostB_neg, ownerIDs[bodyB],
-                                                      simParams, granData->ownerCylGhostActive)) {
+                                                       bodyPosB, radB_comp, ghostB, ghostB_neg, ownerIDs[bodyB],
+                                                       simParams, granData->ownerCylGhostActive)) {
                         continue;
                     }
                 }
@@ -510,14 +509,14 @@ DEME_KERNEL void populateSphereContactPairsEachBin(deme::DEMSimParams* simParams
                     const float3 bodyPosA = make_float3((float)bodyX[myThreadID] + simParams->LBFX,
                                                         (float)bodyY[myThreadID] + simParams->LBFY,
                                                         (float)bodyZ[myThreadID] + simParams->LBFZ);
-                    const float3 bodyPosB = make_float3((float)cur_bodyX + simParams->LBFX,
-                                                        (float)cur_bodyY + simParams->LBFY,
-                                                        (float)cur_bodyZ + simParams->LBFZ);
+                    const float3 bodyPosB =
+                        make_float3((float)cur_bodyX + simParams->LBFX, (float)cur_bodyY + simParams->LBFY,
+                                    (float)cur_bodyZ + simParams->LBFZ);
                     const float radA_comp = radii[myThreadID];
                     const float radB_comp = cur_radii;
-                    if (!cylPeriodicShouldUseGhostPair(bodyPosA, radA_comp, ghostA, ghostA_neg,
-                                                      ownerIDs[myThreadID], bodyPosB, radB_comp, ghostB,
-                                                      ghostB_neg, cur_ownerID, simParams, granData->ownerCylGhostActive)) {
+                    if (!cylPeriodicShouldUseGhostPair(bodyPosA, radA_comp, ghostA, ghostA_neg, ownerIDs[myThreadID],
+                                                       bodyPosB, radB_comp, ghostB, ghostB_neg, cur_ownerID, simParams,
+                                                       granData->ownerCylGhostActive)) {
                         continue;
                     }
                 }

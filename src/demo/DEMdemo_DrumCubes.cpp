@@ -31,7 +31,6 @@ using namespace deme;
 using namespace std::filesystem;
 
 int main() {
-
     const bool disable_periodic = false;
 
     DEMSolver DEMSim;
@@ -88,7 +87,8 @@ int main() {
     const float two_pi = 2.0f * deme::PI;
 
     float span = cyl_periodic_end - cyl_periodic_start;
-    if (span < 0.0f) span += two_pi;
+    if (span < 0.0f)
+        span += two_pi;
     const float wedge_clear = half_diag + safe_delta;
     float cyl_min_radius_geom = 0.0f;
     if (span > 1e-6f && std::sin(0.5f * span) > 1e-6f) {
@@ -110,23 +110,26 @@ int main() {
 
     auto in_periodic_wedge_with_margin = [&](float x, float y) {
         const float r2 = x * x + y * y;
-        if ((!disable_periodic) &&
-            (r2 < cyl_min_radius * cyl_min_radius))
+        if ((!disable_periodic) && (r2 < cyl_min_radius * cyl_min_radius))
             return false;
-        if (disable_periodic) return true;
+        if (disable_periodic)
+            return true;
 
         const float r = std::sqrt(r2);
         float angle = std::atan2(y, x);
-        if (angle < 0.0f) angle += two_pi;
+        if (angle < 0.0f)
+            angle += two_pi;
 
         float rel = angle - cyl_periodic_start;
-        if (rel < 0.0f) rel += two_pi;
+        if (rel < 0.0f)
+            rel += two_pi;
 
-        if (rel > span) return false;
+        if (rel > span)
+            return false;
 
         // Abstand zu beiden radialen Keilflächen: r*sin(rel) und r*sin(span-rel)
         const float d_start = r * std::sin(rel);
-        const float d_end   = r * std::sin(span - rel);
+        const float d_end = r * std::sin(span - rel);
         return (d_start >= wedge_clear) && (d_end >= wedge_clear);
     };
 
@@ -135,8 +138,10 @@ int main() {
         for (float y = -sample_radius; y <= sample_radius; y += fill_spacing) {
             for (float x = -sample_radius; x <= sample_radius; x += fill_spacing) {
                 const float r2 = x * x + y * y;
-                if (r2 > sample_radius * sample_radius) continue;
-                if (!in_periodic_wedge_with_margin(x, y)) continue;
+                if (r2 > sample_radius * sample_radius)
+                    continue;
+                if (!in_periodic_wedge_with_margin(x, y))
+                    continue;
                 candidate_positions.push_back(make_float3(x, y, z));
             }
         }
@@ -158,13 +163,13 @@ int main() {
     }
     created = n_to_place;
     if (n_to_place < target_cubes) {
-        std::cout << "Warning: target_cubes=" << target_cubes
-                  << " exceeds available non-overlapping slots (" << n_to_place << ")." << std::endl;
+        std::cout << "Warning: target_cubes=" << target_cubes << " exceeds available non-overlapping slots ("
+                  << n_to_place << ")." << std::endl;
     }
     std::cout << "Placed " << created << " cubes inside the drum." << std::endl;
 
     auto max_v_finder = DEMSim.CreateInspector("max_absv");
-    float max_v =0.f;
+    float max_v = 0.f;
 
     DEMSim.InstructBoxDomainDimension(0.4, 0.4, 0.4);
     float step_size = 1e-4f;
@@ -203,7 +208,7 @@ int main() {
         float3 drum_acc = Drum_tracker->ContactAngAccLocal();
         float3 drum_torque = drum_acc * drum_moi;
         std::cout << "Contact torque on the side walls is " << drum_torque.x << ", " << drum_torque.y << ", "
-                    << drum_torque.z << std::endl;
+                  << drum_torque.z << std::endl;
 
         float3 force_on_BC = planes_tracker->ContactAcc() * planes_tracker->Mass();
         std::cout << "Contact force on bottom plane is " << std::abs(force_on_BC.z) << std::endl;

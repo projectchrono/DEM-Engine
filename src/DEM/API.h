@@ -85,10 +85,7 @@ class DEMSolver {
     /// @param start_angle Start angle in radians.
     /// @param end_angle End angle in radians.
     /// @param min_radius Minimum radial distance from axis (values <= 0 clamp to DEME_TINY_FLOAT).
-    void SetCylindricalPeriodicity(const std::string& axis,
-                                   float start_angle,
-                                   float end_angle,
-                                   float min_radius = 0.f);
+    void SetCylindricalPeriodicity(const std::string& axis, float start_angle, float end_angle, float min_radius = 0.f);
     /// @brief Enable/disable cylindrical-periodic diagnostic counters.
     /// @details This switch controls per-owner diagnostic counters/flags only. Cylindrical-periodic
     /// correctness safeguards remain active regardless of this setting.

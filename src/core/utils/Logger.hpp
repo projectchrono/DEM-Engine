@@ -71,7 +71,7 @@ class Logger : private NonCopyable, public Singleton<Logger> {
         }
     }
 
-    // snprintf version of logging
+    // snprintf version of logging with format arguments
     template <typename... Args>
     std::string Logf(MessageType type, const char* func, const char* file, int line, const char* fmt, Args&&... args) {
         constexpr size_t BUF_SIZE = 2048;
@@ -82,10 +82,35 @@ class Logger : private NonCopyable, public Singleton<Logger> {
         return message;
     }
 
+    // const char* version without format arguments (avoids -Wformat-security warning)
+    std::string Logf(MessageType type, const char* func, const char* file, int line, const char* message) {
+        Log(type, func, std::string(message), file, line);
+        return std::string(message);
+    }
+
     // std::string version of logging
     std::string Logf(MessageType type, const char* func, const char* file, int line, const std::string& message) {
         Log(type, func, message, file, line);
         return message;
+    }
+
+    // LogStatus with format arguments
+    template <typename... Args>
+    void LogStatusf(const std::string& identifier,
+                    const char* func,
+                    const char* file,
+                    int line,
+                    const char* fmt,
+                    Args&&... args) {
+        constexpr size_t BUF_SIZE = 2048;
+        char buffer[BUF_SIZE];
+        std::snprintf(buffer, BUF_SIZE, fmt, std::forward<Args>(args)...);
+        LogStatus(identifier, func, std::string(buffer), file, line);
+    }
+
+    // LogStatus without format arguments (avoids -Wformat-security warning)
+    void LogStatusf(const std::string& identifier, const char* func, const char* file, int line, const char* message) {
+        LogStatus(identifier, func, std::string(message), file, line);
     }
 
     void LogStatus(const std::string& identifier,
@@ -168,6 +193,7 @@ class Logger : private NonCopyable, public Singleton<Logger> {
                 return verbosity >= VERBOSITY_INFO;
             case MessageType::Status:
                 return verbosity >= VERBOSITY_METRIC;
+            // Debug level will just immediately output all previous ones
             default:
                 return false;
         }
@@ -189,9 +215,7 @@ class Logger : private NonCopyable, public Singleton<Logger> {
                 oss << "[STATUS]  ";
                 break;
         }
-        oss << Log.source << ": " << Log.message;
-        if (Log.type != MessageType::Info)
-            oss << " (" << Log.file << ":" << Log.line << ")";
+        oss << Log.source << ": " << Log.message << " (" << Log.file << ":" << Log.line << ")";
         if (!Log.identifier.empty() && Log.type == MessageType::Status)
             oss << " [id: " << Log.identifier << "]";
         return oss.str();
@@ -219,13 +243,8 @@ class Logger : private NonCopyable, public Singleton<Logger> {
 
 #define DEME_INFO(...) Logger::GetInstance().Logf(MessageType::Info, __func__, __FILE__, __LINE__, __VA_ARGS__)
 
-#define DEME_STATUS(identifier, ...)                                                       \
-    do {                                                                                   \
-        constexpr size_t BUF_SIZE = 2048;                                                  \
-        char buffer[BUF_SIZE];                                                             \
-        std::snprintf(buffer, BUF_SIZE, __VA_ARGS__);                                      \
-        Logger::GetInstance().LogStatus(identifier, __func__, buffer, __FILE__, __LINE__); \
-    } while (0)
+#define DEME_STATUS(identifier, ...) \
+    Logger::GetInstance().LogStatusf(identifier, __func__, __FILE__, __LINE__, __VA_ARGS__)
 
 #define DEME_GPU_CALL(code)                                                                                           \
     {                                                                                                                 \

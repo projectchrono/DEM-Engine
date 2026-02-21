@@ -8,7 +8,7 @@ inline __device__ bool deme_isfinite3(const float3& v) {
 }
 
 inline __device__ float deme_len2(const float3& v) {
-    return v.x*v.x + v.y*v.y + v.z*v.z;
+    return v.x * v.x + v.y * v.y + v.z * v.z;
 }
 
 inline __device__ bool deme_sane_local_cp(const float3& p, float max_norm) {
@@ -24,21 +24,25 @@ _kernelIncludes_;
 _massDefs_;
 _moiDefs_;
 
-inline __device__ float3 cylPeriodicRotateVecSpan(const float3& vec, const deme::DEMSimParams* simParams, float sin_span) {
+inline __device__ float3 cylPeriodicRotateVecSpan(const float3& vec,
+                                                  const deme::DEMSimParams* simParams,
+                                                  float sin_span) {
     return cylPeriodicRotate(vec, make_float3(0.f, 0.f, 0.f), simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
                              simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
 }
 
-inline __device__ float3
-cylPeriodicRotateVec(const float3& vec, const deme::DEMSimParams* simParams, float cos_theta, float sin_theta) {
+inline __device__ float3 cylPeriodicRotateVec(const float3& vec,
+                                              const deme::DEMSimParams* simParams,
+                                              float cos_theta,
+                                              float sin_theta) {
     return cylPeriodicRotate(vec, make_float3(0.f, 0.f, 0.f), simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
                              simParams->cylPeriodicV, cos_theta, sin_theta);
 }
 
 inline __device__ deme::bodyID_t getPatchOwnerSafe(const deme::DEMSimParams* simParams,
-                                                    const deme::DEMDataDT* granData,
-                                                    deme::bodyID_t patch_id,
-                                                    deme::geoType_t type) {
+                                                   const deme::DEMDataDT* granData,
+                                                   deme::bodyID_t patch_id,
+                                                   deme::geoType_t type) {
     switch (type) {
         case deme::GEO_T_SPHERE:
             if (patch_id < simParams->nSpheresGM) {
@@ -147,20 +151,20 @@ DEME_KERNEL void forceToAcc(deme::DEMSimParams* simParams, deme::DEMDataDT* gran
 
             // Then ang acc
             if (!(bad_vec || bad_cp)) {
-            const deme::oriQ_t myOriQw = granData->oriQw[myOwner];
-            const deme::oriQ_t myOriQx = granData->oriQx[myOwner];
-            const deme::oriQ_t myOriQy = granData->oriQy[myOwner];
-            const deme::oriQ_t myOriQz = granData->oriQz[myOwner];
+                const deme::oriQ_t myOriQw = granData->oriQw[myOwner];
+                const deme::oriQ_t myOriQx = granData->oriQx[myOwner];
+                const deme::oriQ_t myOriQy = granData->oriQy[myOwner];
+                const deme::oriQ_t myOriQz = granData->oriQz[myOwner];
 
-            // torque_inForceForm is usually the contribution of rolling resistance and it contributes to torque only,
-            // not linear velocity
-            float3 myF = (forceA + torqueA);
-            // F is in global frame, but it needs to be in local to coordinate with moi and cntPnt
-            applyOriQToVector3<float, deme::oriQ_t>(myF.x, myF.y, myF.z, myOriQw, -myOriQx, -myOriQy, -myOriQz);
-            const float3 angAcc = cross(myCntPnt, myF) / myMOI;
-            atomicAdd(granData->alphaX + myOwner, angAcc.x);
-            atomicAdd(granData->alphaY + myOwner, angAcc.y);
-            atomicAdd(granData->alphaZ + myOwner, angAcc.z);
+                // torque_inForceForm is usually the contribution of rolling resistance and it contributes to torque
+                // only, not linear velocity
+                float3 myF = (forceA + torqueA);
+                // F is in global frame, but it needs to be in local to coordinate with moi and cntPnt
+                applyOriQToVector3<float, deme::oriQ_t>(myF.x, myF.y, myF.z, myOriQw, -myOriQx, -myOriQy, -myOriQz);
+                const float3 angAcc = cross(myCntPnt, myF) / myMOI;
+                atomicAdd(granData->alphaX + myOwner, angAcc.x);
+                atomicAdd(granData->alphaY + myOwner, angAcc.y);
+                atomicAdd(granData->alphaZ + myOwner, angAcc.z);
             }
         }
 
@@ -200,8 +204,8 @@ DEME_KERNEL void forceToAcc(deme::DEMSimParams* simParams, deme::DEMDataDT* gran
                 const deme::oriQ_t myOriQy = granData->oriQy[myOwner];
                 const deme::oriQ_t myOriQz = granData->oriQz[myOwner];
 
-                // torque_inForceForm is usually the contribution of rolling resistance and it contributes to torque only,
-                // not linear velocity
+                // torque_inForceForm is usually the contribution of rolling resistance and it contributes to torque
+                // only, not linear velocity
                 float3 myF = (forceB + torqueB);
                 // F is in global frame, but it needs to be in local to coordinate with moi and cntPnt
                 applyOriQToVector3<float, deme::oriQ_t>(myF.x, myF.y, myF.z, myOriQw, -myOriQx, -myOriQy, -myOriQz);

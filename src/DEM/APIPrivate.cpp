@@ -38,7 +38,7 @@ inline uint64_t makeEdgeKey(int a, int b) {
 }
 
 std::vector<std::array<bodyID_t, 3>> buildTriangleEdgeNeighbors(const std::vector<int3>& face_v_indices,
-                                                                 const std::vector<float3>& vertices) {
+                                                                const std::vector<float3>& vertices) {
     const size_t n_faces = face_v_indices.size();
     std::vector<std::array<bodyID_t, 3>> neighbors(n_faces, {NULL_BODYID, NULL_BODYID, NULL_BODYID});
     if (n_faces == 0) {
@@ -107,8 +107,8 @@ struct MeshCanonicalizationResult {
 };
 
 inline float4 normalizeQuatSafe(const float4& q) {
-    const double n2 = static_cast<double>(q.x) * q.x + static_cast<double>(q.y) * q.y +
-                      static_cast<double>(q.z) * q.z + static_cast<double>(q.w) * q.w;
+    const double n2 = static_cast<double>(q.x) * q.x + static_cast<double>(q.y) * q.y + static_cast<double>(q.z) * q.z +
+                      static_cast<double>(q.w) * q.w;
     if (!(n2 > 0.0) || !std::isfinite(n2)) {
         return make_float4(0, 0, 0, 1);
     }
@@ -192,8 +192,8 @@ inline bool jacobiEigenSymmetric3(const double in_A[3][3], double eigvals[3], do
         }
 
         const double tau = (aqq - app) / (2.0 * apq);
-        const double t = (tau >= 0.0) ? (1.0 / (tau + std::sqrt(1.0 + tau * tau)))
-                                      : (-1.0 / (-tau + std::sqrt(1.0 + tau * tau)));
+        const double t =
+            (tau >= 0.0) ? (1.0 / (tau + std::sqrt(1.0 + tau * tau))) : (-1.0 / (-tau + std::sqrt(1.0 + tau * tau)));
         const double c = 1.0 / std::sqrt(1.0 + t * t);
         const double s = t * c;
 
@@ -316,9 +316,9 @@ MeshCanonicalizationResult canonicalizeMeshOwnerFrame(DEMMesh& mesh) {
         }
     }
 
-    const double det =
-        R[0][0] * (R[1][1] * R[2][2] - R[1][2] * R[2][1]) - R[0][1] * (R[1][0] * R[2][2] - R[1][2] * R[2][0]) +
-        R[0][2] * (R[1][0] * R[2][1] - R[1][1] * R[2][0]);
+    const double det = R[0][0] * (R[1][1] * R[2][2] - R[1][2] * R[2][1]) -
+                       R[0][1] * (R[1][0] * R[2][2] - R[1][2] * R[2][0]) +
+                       R[0][2] * (R[1][0] * R[2][1] - R[1][1] * R[2][0]);
     if (det < 0.0) {
         for (int row = 0; row < 3; row++) {
             R[row][2] = -R[row][2];
@@ -1065,8 +1065,7 @@ void DEMSolver::preprocessAnalyticalObjs() {
                     break;
                 case OBJ_COMPONENT::PLANAR_CYL:
                     addAnalCompTemplate(ANAL_OBJ_TYPE_PLANAR_CYL, comp_mat.at(i), thisLoadExtObj, param.cyl.center,
-                                        param.cyl.dir, param.cyl.radius, 0, 0,
-                                        param.cyl.normal);
+                                        param.cyl.dir, param.cyl.radius, 0, 0, param.cyl.normal);
                     break;
                 default:
                     DEME_ERROR(std::string("There is at least one analytical boundary that has a type not supported."));
@@ -1300,9 +1299,9 @@ void DEMSolver::preprocessTriangleObjs() {
                 }
             }
             {
-                const float3 centroid = make_float3((tri.p1.x + tri.p2.x + tri.p3.x) / 3.f,
-                                                    (tri.p1.y + tri.p2.y + tri.p3.y) / 3.f,
-                                                    (tri.p1.z + tri.p2.z + tri.p3.z) / 3.f);
+                const float3 centroid =
+                    make_float3((tri.p1.x + tri.p2.x + tri.p3.x) / 3.f, (tri.p1.y + tri.p2.y + tri.p3.y) / 3.f,
+                                (tri.p1.z + tri.p2.z + tri.p3.z) / 3.f);
                 auto dist2 = [&](const float3& p) {
                     const float dx = p.x - centroid.x;
                     const float dy = p.y - centroid.y;
@@ -1804,17 +1803,16 @@ void DEMSolver::allocateGPUArrays() {
     std::thread dThread = std::move(std::thread([this]() {
         this->dT->allocateGPUArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
                                     this->nSpheresGM, this->nTriGM, this->nTriNeighbors, this->nMeshPatches,
-                                    this->nAnalGM,
-                                    this->nExtraContacts, this->nDistinctMassProperties,
+                                    this->nAnalGM, this->nExtraContacts, this->nDistinctMassProperties,
                                     this->nDistinctClumpBodyTopologies, this->nDistinctClumpComponents,
                                     this->nJitifiableClumpComponents, this->nMatTuples);
     }));
     std::thread kThread = std::move(std::thread([this]() {
         this->kT->allocateGPUArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
                                     this->nSpheresGM, this->nTriGM, this->nTriNeighbors, this->nAnalGM,
-                                    this->nExtraContacts,
-                                    this->nDistinctMassProperties, this->nDistinctClumpBodyTopologies,
-                                    this->nDistinctClumpComponents, this->nJitifiableClumpComponents, this->nMatTuples);
+                                    this->nExtraContacts, this->nDistinctMassProperties,
+                                    this->nDistinctClumpBodyTopologies, this->nDistinctClumpComponents,
+                                    this->nJitifiableClumpComponents, this->nMatTuples);
     }));
     dThread.join();
     kThread.join();
@@ -1832,10 +1830,9 @@ void DEMSolver::initializeGPUArrays() {
         // Analytical objects' initial stats
         m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
         // Meshed objects' initial stats
-        cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family,
-        m_input_mesh_obj_convex, m_input_mesh_obj_never_winner, m_mesh_facet_owner, m_mesh_facet_patch,
-        m_mesh_facet_neighbor1, m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets, m_mesh_patch_owner,
-        m_mesh_patch_materials,
+        cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_input_mesh_obj_convex,
+        m_input_mesh_obj_never_winner, m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facet_neighbor1,
+        m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets, m_mesh_patch_owner, m_mesh_patch_materials,
         // Clump template name mapping
         m_template_number_name_map,
         // Clump template info (mass, sphere components, materials etc.)
@@ -1889,10 +1886,9 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // Analytical objects' initial stats
         m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
         // Meshed objects' initial stats
-        cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family,
-        m_input_mesh_obj_convex, m_input_mesh_obj_never_winner, m_mesh_facet_owner, m_mesh_facet_patch,
-        m_mesh_facet_neighbor1, m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets, m_mesh_patch_owner,
-        m_mesh_patch_materials,
+        cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_input_mesh_obj_convex,
+        m_input_mesh_obj_never_winner, m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facet_neighbor1,
+        m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets, m_mesh_patch_owner, m_mesh_patch_materials,
         // Clump template info (mass, sphere components, materials etc.)
         flattened_clump_templates,
         // Analytical obj physics properties
@@ -2200,10 +2196,8 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     strMap["_forceModelIngredientDefinition_;"] = ingredient_definition;
     strMap["_forceModelIngredientAcqForA_;"] = ingredient_acquisition_A;
     strMap["_forceModelIngredientAcqForB_;"] = ingredient_acquisition_B;
-    strMap["_forceModelHasLinVel_"] =
-        (added_ingredients["ALinVel"] || added_ingredients["BLinVel"]) ? "1" : "0";
-    strMap["_forceModelHasRotVel_"] =
-        (added_ingredients["ARotVel"] || added_ingredients["BRotVel"]) ? "1" : "0";
+    strMap["_forceModelHasLinVel_"] = (added_ingredients["ALinVel"] || added_ingredients["BLinVel"]) ? "1" : "0";
+    strMap["_forceModelHasRotVel_"] = (added_ingredients["ARotVel"] || added_ingredients["BRotVel"]) ? "1" : "0";
     // Geo wildcard acquisition is contact type-dependent.
     strMap["_forceModelGeoWildcardAcqForASph_;"] = geo_wc_acquisition_A_sph;
     strMap["_forceModelGeoWildcardAcqForAMeshPatch_;"] = geo_wc_acquisition_A_patch;

@@ -13,14 +13,16 @@
 __device__ inline bool saneLocalCP(const float3& p) {
     // packed-double storage often yields absurd magnitudes (1e10+), while real local CP is on mm–cm scale.
     // Also reject NaN/inf.
-    if (!isfinite(p.x) || !isfinite(p.y) || !isfinite(p.z)) return false;
-    const float m2 = p.x*p.x + p.y*p.y + p.z*p.z;
+    if (!isfinite(p.x) || !isfinite(p.y) || !isfinite(p.z))
+        return false;
+    const float m2 = p.x * p.x + p.y * p.y + p.z * p.z;
     // 1 meter in local space is already absurd for your cube sizes; threshold can be tuned.
     return (m2 < 1.0f);
 }
 
 __device__ inline bool saneLocalCPWithBound(const float3& p, float max_norm) {
-    if (!isfinite(p.x) || !isfinite(p.y) || !isfinite(p.z)) return false;
+    if (!isfinite(p.x) || !isfinite(p.y) || !isfinite(p.z))
+        return false;
     max_norm = fmaxf(max_norm, 1e-6f);
     const float m2 = p.x * p.x + p.y * p.y + p.z * p.z;
     return (m2 <= max_norm * max_norm);
@@ -41,11 +43,11 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
                                                       bool torque_in_local) {
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < numCnt) {
-        
         const bool patch_space = (granData->contactTypePatch && granData->idPatchA && granData->idPatchB);
         if (!patch_space) {
             // IMPORTANT: Patch and primitive contact arrays do not share the same index space.
-            // This kernel is intended for PATCH contacts only. Handling primitive contacts must use a separate kernel launch.
+            // This kernel is intended for PATCH contacts only. Handling primitive contacts must use a separate kernel
+            // launch.
             return;
         }
         const contact_t typeContact = granData->contactTypePatch[i];
@@ -88,18 +90,18 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
         double3 CoM;
         float4 oriQ;
         bodyID_t ownerID;
-	        bool cntPnt_is_local = true;
-if (AorB) {
+        bool cntPnt_is_local = true;
+        if (AorB) {
             if (cntPnt_is_local) {
-	                cntPnt = granData->contactPointGeometryA[i];
-	                // Some pipelines multiplex this field; if it is not a sane local point, treat it as a global CP.
-	                if (!saneLocalCP(cntPnt)) {
-	                    cntPnt_is_local = false;
-	                }
+                cntPnt = granData->contactPointGeometryA[i];
+                // Some pipelines multiplex this field; if it is not a sane local point, treat it as a global CP.
+                if (!saneLocalCP(cntPnt)) {
+                    cntPnt_is_local = false;
+                }
             }
             ownerID = ownerA;
             if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
-	                int wrapShift = ghostA ? (ghostA_neg ? -1 : 1) : 0;
+                int wrapShift = ghostA ? (ghostA_neg ? -1 : 1) : 0;
                 if (wrapShift != 0) {
                     float cos_theta = 1.f, sin_theta = 0.f, cos_half = 1.f, sin_half = 0.f;
                     cylPeriodicShiftTrig(-wrapShift, simParams, cos_theta, sin_theta, cos_half, sin_half);
@@ -113,9 +115,9 @@ if (AorB) {
                     if (!cntPnt_is_local) {
                         float3 cp_local = make_float3(cntPnt.x - simParams->LBFX, cntPnt.y - simParams->LBFY,
                                                       cntPnt.z - simParams->LBFZ);
-                        cp_local = cylPeriodicRotate(cp_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec,
-                                                     simParams->cylPeriodicU, simParams->cylPeriodicV, cos_theta,
-                                                     sin_theta);
+                        cp_local =
+                            cylPeriodicRotate(cp_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec,
+                                              simParams->cylPeriodicU, simParams->cylPeriodicV, cos_theta, sin_theta);
                         cntPnt = make_float3(cp_local.x + simParams->LBFX, cp_local.y + simParams->LBFY,
                                              cp_local.z + simParams->LBFZ);
                     }
@@ -123,10 +125,10 @@ if (AorB) {
             }
         } else {
             if (cntPnt_is_local) {
-	                cntPnt = granData->contactPointGeometryB[i];
-	                if (!saneLocalCP(cntPnt)) {
-	                    cntPnt_is_local = false;
-	                }
+                cntPnt = granData->contactPointGeometryB[i];
+                if (!saneLocalCP(cntPnt)) {
+                    cntPnt_is_local = false;
+                }
             }
             ownerID = ownerB;
             // Force dir flipped
@@ -134,7 +136,7 @@ if (AorB) {
             if (need_torque)
                 torque_only_force = -torque_only_force;
             if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
-	                int wrapShift = ghostB ? (ghostB_neg ? -1 : 1) : 0;
+                int wrapShift = ghostB ? (ghostB_neg ? -1 : 1) : 0;
                 if (wrapShift != 0) {
                     float cos_theta = 1.f, sin_theta = 0.f, cos_half = 1.f, sin_half = 0.f;
                     cylPeriodicShiftTrig(-wrapShift, simParams, cos_theta, sin_theta, cos_half, sin_half);
@@ -148,9 +150,9 @@ if (AorB) {
                     if (!cntPnt_is_local) {
                         float3 cp_local = make_float3(cntPnt.x - simParams->LBFX, cntPnt.y - simParams->LBFY,
                                                       cntPnt.z - simParams->LBFZ);
-                        cp_local = cylPeriodicRotate(cp_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec,
-                                                     simParams->cylPeriodicU, simParams->cylPeriodicV, cos_theta,
-                                                     sin_theta);
+                        cp_local =
+                            cylPeriodicRotate(cp_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec,
+                                              simParams->cylPeriodicU, simParams->cylPeriodicV, cos_theta, sin_theta);
                         cntPnt = make_float3(cp_local.x + simParams->LBFX, cp_local.y + simParams->LBFY,
                                              cp_local.z + simParams->LBFZ);
                     }
@@ -188,14 +190,14 @@ if (AorB) {
             if (!saneLocalCPWithBound(cntPnt_local, max_lever)) {
                 d_torques[writeIndex] = make_float3(0.f, 0.f, 0.f);
             } else {
-            float3 myF = force + torque_only_force;
-            applyOriQToVector3<float, oriQ_t>(myF.x, myF.y, myF.z, oriQ.w, -oriQ.x, -oriQ.y, -oriQ.z);
-            float3 torque = cross(cntPnt_local, myF);
-            if (!torque_in_local) {
-                applyOriQToVector3<float, oriQ_t>(torque.x, torque.y, torque.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+                float3 myF = force + torque_only_force;
+                applyOriQToVector3<float, oriQ_t>(myF.x, myF.y, myF.z, oriQ.w, -oriQ.x, -oriQ.y, -oriQ.z);
+                float3 torque = cross(cntPnt_local, myF);
+                if (!torque_in_local) {
+                    applyOriQToVector3<float, oriQ_t>(torque.x, torque.y, torque.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+                }
+                d_torques[writeIndex] = torque;
             }
-            d_torques[writeIndex] = torque;
-	            }
         }
         if (cntPnt_is_local) {
             applyFrameTransformLocalToGlobal<float3, double3, float4>(cntPnt, CoM, oriQ);
@@ -232,9 +234,9 @@ void getContactForcesConcerningOwners(float3* d_points,
 
 // Optimized overload: prepare weighted normals only (no temporary areas/keys arrays).
 __global__ void prepareWeightedNormalsForVoting_impl(DEMDataDT* granData,
-                                                          float3* weightedNormals,
-                                                          contactPairs_t startOffset,
-                                                          contactPairs_t count) {
+                                                     float3* weightedNormals,
+                                                     contactPairs_t startOffset,
+                                                     contactPairs_t count) {
     contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
         contactPairs_t myContactID = startOffset + idx;
@@ -345,7 +347,8 @@ __global__ void computePatchContactAccumulators_impl(DEMDataDT* granData,
         const double weight = projectedPenetration * projectedArea;
 
         const double3 contactPoint = to_double3(granData->contactTorque_convToForce[myContactID]);
-        const double3 weightedCP = make_double3(contactPoint.x * weight, contactPoint.y * weight, contactPoint.z * weight);
+        const double3 weightedCP =
+            make_double3(contactPoint.x * weight, contactPoint.y * weight, contactPoint.z * weight);
 
         PatchContactAccum acc;
         acc.sumProjArea = projectedArea;
@@ -395,9 +398,8 @@ __global__ void finalizePatchResultsFromAccumulators_impl(const PatchContactAccu
 
             if (acc.sumWeight > 0.0) {
                 const double invW = 1.0 / acc.sumWeight;
-                finalContactPoints[idx] = make_double3(acc.sumWeightedCP.x * invW,
-                                                      acc.sumWeightedCP.y * invW,
-                                                      acc.sumWeightedCP.z * invW);
+                finalContactPoints[idx] =
+                    make_double3(acc.sumWeightedCP.x * invW, acc.sumWeightedCP.y * invW, acc.sumWeightedCP.z * invW);
             } else {
                 // If total weight is 0, contact point is set to (0,0,0)
                 finalContactPoints[idx] = make_double3(0.0, 0.0, 0.0);
@@ -426,8 +428,8 @@ void finalizePatchResultsFromAccumulators(const PatchContactAccum* patchAccumula
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         finalizePatchResultsFromAccumulators_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            patchAccumulators, votedNormals, zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints,
-            finalAreas, finalNormals, finalPenetrations, finalContactPoints, count);
+            patchAccumulators, votedNormals, zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, finalAreas,
+            finalNormals, finalPenetrations, finalContactPoints, count);
     }
 }
 
@@ -519,7 +521,6 @@ void computeWeightedUsefulPenetration(DEMDataDT* granData,
         computeWeightedUsefulPenetration_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             granData, votedNormals, keys, areas, projectedPenetrations, projectedAreas, startOffsetPrimitive,
             startOffsetPatch, count);
-
     }
 }
 
@@ -818,8 +819,8 @@ __global__ void computePatchPVScalars_impl(const DEMSimParams* simParams,
         float3 linVelA = make_float3(granData->vX[ownerA], granData->vY[ownerA], granData->vZ[ownerA]);
         float3 angVelA = make_float3(granData->omgBarX[ownerA], granData->omgBarY[ownerA], granData->omgBarZ[ownerA]);
         float3 rA_local = granData->contactPointGeometryA[patchContactID];
-        const float4 oriA =
-            make_float4(granData->oriQx[ownerA], granData->oriQy[ownerA], granData->oriQz[ownerA], granData->oriQw[ownerA]);
+        const float4 oriA = make_float4(granData->oriQx[ownerA], granData->oriQy[ownerA], granData->oriQz[ownerA],
+                                        granData->oriQw[ownerA]);
         float3 rotVelA = cross(angVelA, rA_local);
         applyOriQToVector3<float, oriQ_t>(rotVelA.x, rotVelA.y, rotVelA.z, oriA.w, oriA.x, oriA.y, oriA.z);
         velCPA = linVelA + rotVelA;
@@ -829,8 +830,8 @@ __global__ void computePatchPVScalars_impl(const DEMSimParams* simParams,
         float3 linVelB = make_float3(granData->vX[ownerB], granData->vY[ownerB], granData->vZ[ownerB]);
         float3 angVelB = make_float3(granData->omgBarX[ownerB], granData->omgBarY[ownerB], granData->omgBarZ[ownerB]);
         float3 rB_local = granData->contactPointGeometryB[patchContactID];
-        const float4 oriB =
-            make_float4(granData->oriQx[ownerB], granData->oriQy[ownerB], granData->oriQz[ownerB], granData->oriQw[ownerB]);
+        const float4 oriB = make_float4(granData->oriQx[ownerB], granData->oriQy[ownerB], granData->oriQz[ownerB],
+                                        granData->oriQw[ownerB]);
         float3 rotVelB = cross(angVelB, rB_local);
         applyOriQToVector3<float, oriQ_t>(rotVelB.x, rotVelB.y, rotVelB.z, oriB.w, oriB.x, oriB.y, oriB.z);
         velCPB = linVelB + rotVelB;

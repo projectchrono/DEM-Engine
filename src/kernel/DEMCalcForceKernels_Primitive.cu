@@ -6,9 +6,9 @@ _kernelIncludes_;
 
 inline __device__ float3 cylPeriodicRotatePosF(const float3& pos, const deme::DEMSimParams* simParams, float sin_span) {
     float3 pos_local = make_float3(pos.x - simParams->LBFX, pos.y - simParams->LBFY, pos.z - simParams->LBFZ);
-    pos_local = cylPeriodicRotate(pos_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec,
-                                  simParams->cylPeriodicU, simParams->cylPeriodicV, simParams->cylPeriodicCosSpan,
-                                  sin_span);
+    pos_local =
+        cylPeriodicRotate(pos_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec,
+                          simParams->cylPeriodicU, simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
     pos_local.x += simParams->LBFX;
     pos_local.y += simParams->LBFY;
     pos_local.z += simParams->LBFZ;
@@ -32,14 +32,18 @@ inline __device__ float3 cylPeriodicRotatePosF(const float3& pos, const deme::DE
     return cylPeriodicRotatePosF(pos, simParams, simParams->cylPeriodicSinSpan);
 }
 
-inline __device__ double3 cylPeriodicRotatePosD(const double3& pos, const deme::DEMSimParams* simParams, float sin_span) {
+inline __device__ double3 cylPeriodicRotatePosD(const double3& pos,
+                                                const deme::DEMSimParams* simParams,
+                                                float sin_span) {
     float3 p = make_float3((float)pos.x, (float)pos.y, (float)pos.z);
     p = cylPeriodicRotatePosF(p, simParams, sin_span);
     return make_double3((double)p.x, (double)p.y, (double)p.z);
 }
 
-inline __device__ double3
-cylPeriodicRotatePosD(const double3& pos, const deme::DEMSimParams* simParams, float cos_theta, float sin_theta) {
+inline __device__ double3 cylPeriodicRotatePosD(const double3& pos,
+                                                const deme::DEMSimParams* simParams,
+                                                float cos_theta,
+                                                float sin_theta) {
     float3 p = make_float3((float)pos.x, (float)pos.y, (float)pos.z);
     p = cylPeriodicRotatePosF(p, simParams, cos_theta, sin_theta);
     return make_double3((double)p.x, (double)p.y, (double)p.z);
@@ -54,8 +58,10 @@ inline __device__ float3 cylPeriodicRotateVec(const float3& vec, const deme::DEM
                              simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
 }
 
-inline __device__ float3
-cylPeriodicRotateVec(const float3& vec, const deme::DEMSimParams* simParams, float cos_theta, float sin_theta) {
+inline __device__ float3 cylPeriodicRotateVec(const float3& vec,
+                                              const deme::DEMSimParams* simParams,
+                                              float cos_theta,
+                                              float sin_theta) {
     return cylPeriodicRotate(vec, make_float3(0.f, 0.f, 0.f), simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
                              simParams->cylPeriodicV, cos_theta, sin_theta);
 }
@@ -64,23 +70,24 @@ inline __device__ float3 cylPeriodicRotateVec(const float3& vec, const deme::DEM
     return cylPeriodicRotateVec(vec, simParams, simParams->cylPeriodicSinSpan);
 }
 
-inline __device__ float4 cylPeriodicRotateQuat(const float4& q, const deme::DEMSimParams* simParams, float sin_half_span) {
-    float4 rotQ = make_float4(simParams->cylPeriodicAxisVec.x * sin_half_span,
-                              simParams->cylPeriodicAxisVec.y * sin_half_span,
-                              simParams->cylPeriodicAxisVec.z * sin_half_span,
-                              simParams->cylPeriodicCosHalfSpan);
+inline __device__ float4 cylPeriodicRotateQuat(const float4& q,
+                                               const deme::DEMSimParams* simParams,
+                                               float sin_half_span) {
+    float4 rotQ =
+        make_float4(simParams->cylPeriodicAxisVec.x * sin_half_span, simParams->cylPeriodicAxisVec.y * sin_half_span,
+                    simParams->cylPeriodicAxisVec.z * sin_half_span, simParams->cylPeriodicCosHalfSpan);
     float4 out = q;
     HamiltonProduct(out.w, out.x, out.y, out.z, rotQ.w, rotQ.x, rotQ.y, rotQ.z, out.w, out.x, out.y, out.z);
     out /= length(out);
     return out;
 }
 
-inline __device__ float4
-cylPeriodicRotateQuat(const float4& q, const deme::DEMSimParams* simParams, float cos_half, float sin_half) {
-    float4 rotQ = make_float4(simParams->cylPeriodicAxisVec.x * sin_half,
-                              simParams->cylPeriodicAxisVec.y * sin_half,
-                              simParams->cylPeriodicAxisVec.z * sin_half,
-                              cos_half);
+inline __device__ float4 cylPeriodicRotateQuat(const float4& q,
+                                               const deme::DEMSimParams* simParams,
+                                               float cos_half,
+                                               float sin_half) {
+    float4 rotQ = make_float4(simParams->cylPeriodicAxisVec.x * sin_half, simParams->cylPeriodicAxisVec.y * sin_half,
+                              simParams->cylPeriodicAxisVec.z * sin_half, cos_half);
     float4 out = q;
     HamiltonProduct(out.w, out.x, out.y, out.z, rotQ.w, rotQ.x, rotQ.y, rotQ.z, out.w, out.x, out.y, out.z);
     out /= length(out);
@@ -92,8 +99,7 @@ inline __device__ float4 cylPeriodicRotateQuat(const float4& q, const deme::DEMS
 }
 
 inline __device__ float cylPeriodicRelAngleGlobal(const float3& pos, const deme::DEMSimParams* simParams) {
-    const float3 pos_local =
-        make_float3(pos.x - simParams->LBFX, pos.y - simParams->LBFY, pos.z - simParams->LBFZ);
+    const float3 pos_local = make_float3(pos.x - simParams->LBFX, pos.y - simParams->LBFY, pos.z - simParams->LBFZ);
     return cylPeriodicRelAngle(pos_local, false, false, simParams);
 }
 
@@ -344,7 +350,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
                 cylPeriodicDecodeID(idB_raw, ghostB, ghostB_neg);
             }
 
-
             ghostShiftA = ghostA ? (ghostA_neg ? -1 : 1) : 0;
             ghostShiftB = ghostB ? (ghostB_neg ? -1 : 1) : 0;
             // Use only the kT ghost flag for geometry/force evaluation (base-wedge frame).
@@ -449,8 +454,10 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             // Keep IDs consistent with the selected periodic representation (important when this primitive contact
             // originated from an un-ghosted pair but dT selects a wrapped image).
             if (ContactType != deme::NOT_A_CONTACT) {
-                if constexpr (AType == deme::GEO_T_SPHERE || AType == deme::GEO_T_TRIANGLE) {                }
-                if constexpr (BType == deme::GEO_T_SPHERE || BType == deme::GEO_T_TRIANGLE) {                }
+                if constexpr (AType == deme::GEO_T_SPHERE || AType == deme::GEO_T_TRIANGLE) {
+                }
+                if constexpr (BType == deme::GEO_T_SPHERE || BType == deme::GEO_T_TRIANGLE) {
+                }
             }
 
             const bool kTGhostA = (ghostShiftA != 0);
@@ -570,7 +577,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
                 cylPeriodicDecodeID(idB_raw, ghostB, ghostB_neg);
             }
 
-
             ghostShiftA = ghostA ? (ghostA_neg ? -1 : 1) : 0;
             ghostShiftB = ghostB ? (ghostB_neg ? -1 : 1) : 0;
             wrapShiftA = ghostShiftA;
@@ -626,7 +632,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
                 }
             }
 
-// Effective ghosting for dT (after min-image selection / desired shifts).
+            // Effective ghosting for dT (after min-image selection / desired shifts).
             isGhostA = (baseShiftA != 0);
             isGhostB = (baseShiftB != 0);
 
@@ -659,8 +665,10 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             // Keep IDs consistent with the selected periodic representation (important when this primitive contact
             // originated from an un-ghosted pair but dT selects a wrapped image).
             if (ContactType != deme::NOT_A_CONTACT) {
-                if constexpr (AType == deme::GEO_T_SPHERE || AType == deme::GEO_T_TRIANGLE) {                }
-                if constexpr (BType == deme::GEO_T_SPHERE || BType == deme::GEO_T_TRIANGLE) {                }
+                if constexpr (AType == deme::GEO_T_SPHERE || AType == deme::GEO_T_TRIANGLE) {
+                }
+                if constexpr (BType == deme::GEO_T_SPHERE || BType == deme::GEO_T_TRIANGLE) {
+                }
             }
 
             const bool kTGhostA = (ghostShiftA != 0);
@@ -803,7 +811,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             if constexpr (BType == deme::GEO_T_SPHERE || BType == deme::GEO_T_TRIANGLE) {
                 cylPeriodicDecodeID(idB_raw, ghostB, ghostB_neg);
             }
-
 
             ghostShiftA = ghostA ? (ghostA_neg ? -1 : 1) : 0;
             ghostShiftB = ghostB ? (ghostB_neg ? -1 : 1) : 0;
@@ -982,7 +989,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             cylHistShift = (wrapShiftA != 0) ? wrapShiftA : ((wrapShiftB != 0) ? wrapShiftB : 0);
         }
 
-
         // Essentials for storing and calculating contact info
         float3 force = make_float3(0, 0, 0);
         float3 torque_only_force = make_float3(0, 0, 0);
@@ -1000,13 +1006,14 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         bool ownerBoundReject = false;
         if constexpr (BType != deme::GEO_T_ANALYTICAL) {
             if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f &&
-            ContactType_candidate != deme::NOT_A_CONTACT && granData->ownerBoundRadius &&
-            ownerA != deme::NULL_BODYID && ownerB != deme::NULL_BODYID && ownerA < simParams->nOwnerBodies &&
-            ownerB < simParams->nOwnerBodies) {
+                ContactType_candidate != deme::NOT_A_CONTACT && granData->ownerBoundRadius &&
+                ownerA != deme::NULL_BODYID && ownerB != deme::NULL_BODYID && ownerA < simParams->nOwnerBodies &&
+                ownerB < simParams->nOwnerBodies) {
                 const float radA_owner = fmaxf(granData->ownerBoundRadius[ownerA], 0.f);
                 const float radB_owner = fmaxf(granData->ownerBoundRadius[ownerB], 0.f);
                 if (radA_owner > 0.f && radB_owner > 0.f) {
-                    const float max_other_margin = simParams->dyn.beta + simParams->maxFamilyExtraMargin + extraMarginSize;
+                    const float max_other_margin =
+                        simParams->dyn.beta + simParams->maxFamilyExtraMargin + extraMarginSize;
                     const float reach = radA_owner + radB_owner + fmaxf(max_other_margin, 0.f) + 1e-6f;
                     const float3 ownerA_pos = to_float3(AOwnerPos);
                     const float3 ownerB_pos = to_float3(BOwnerPos);
@@ -1015,7 +1022,8 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
                 }
             }
         }
-        if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f && cylPeriodicSkipPair && !discardGhostGhost) {
+        if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f && cylPeriodicSkipPair &&
+            !discardGhostGhost) {
             if (simParams->useCylPeriodicDiagCounters && granData->ownerCylSkipCount) {
                 if (ownerA != deme::NULL_BODYID) {
                     atomicAdd(granData->ownerCylSkipCount + ownerA, 1u);
@@ -1059,9 +1067,8 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
                 atomicAdd(granData->ownerCylSkipPotentialTotal, 1u);
             }
         }
-        const bool activeForThisStep =
-            (ContactType_candidate != deme::NOT_A_CONTACT) && (!discardGhostGhost) && (!cylPeriodicSkipPair) &&
-            (!ownerBoundReject);
+        const bool activeForThisStep = (ContactType_candidate != deme::NOT_A_CONTACT) && (!discardGhostGhost) &&
+                                       (!cylPeriodicSkipPair) && (!ownerBoundReject);
 
         // Rotate history (base-wedge -> active image) only when this contact is active.
         if (activeForThisStep && cylHistShift != 0) {
@@ -1087,8 +1094,8 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             torque_only_force = make_float3(0.f, 0.f, 0.f);
             // For seam-branch mismatches, keep history (freeze) to avoid artificial de-sticking.
             // But if this candidate is geometrically invalid by owner bound rejection, destroy history.
-            if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f &&
-                ownerBoundReject && ContactType_candidate != deme::NOT_A_CONTACT && !discardGhostGhost) {
+            if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f && ownerBoundReject &&
+                ContactType_candidate != deme::NOT_A_CONTACT && !discardGhostGhost) {
                 _forceModelContactWildcardDestroy_;
             }
             // True non-contacts still destroy history.
@@ -1208,9 +1215,9 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
 
 // 5 specialized kernels for different contact types
 DEME_KERNEL void calculatePrimitiveContactForces_SphSph(deme::DEMSimParams* simParams,
-                                                       deme::DEMDataDT* granData,
-                                                       deme::contactPairs_t startOffset,
-                                                       deme::contactPairs_t nContactPairs) {
+                                                        deme::DEMDataDT* granData,
+                                                        deme::contactPairs_t startOffset,
+                                                        deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myPrimitiveContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myPrimitiveContactID < startOffset + nContactPairs) {
         calculatePrimitiveContactForces_impl<deme::SPHERE_SPHERE_CONTACT>(simParams, granData, myPrimitiveContactID);
@@ -1218,9 +1225,9 @@ DEME_KERNEL void calculatePrimitiveContactForces_SphSph(deme::DEMSimParams* simP
 }
 
 DEME_KERNEL void calculatePrimitiveContactForces_SphTri(deme::DEMSimParams* simParams,
-                                                       deme::DEMDataDT* granData,
-                                                       deme::contactPairs_t startOffset,
-                                                       deme::contactPairs_t nContactPairs) {
+                                                        deme::DEMDataDT* granData,
+                                                        deme::contactPairs_t startOffset,
+                                                        deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myPrimitiveContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myPrimitiveContactID < startOffset + nContactPairs) {
         calculatePrimitiveContactForces_impl<deme::SPHERE_TRIANGLE_CONTACT>(simParams, granData, myPrimitiveContactID);
@@ -1228,9 +1235,9 @@ DEME_KERNEL void calculatePrimitiveContactForces_SphTri(deme::DEMSimParams* simP
 }
 
 DEME_KERNEL void calculatePrimitiveContactForces_SphAnal(deme::DEMSimParams* simParams,
-                                                        deme::DEMDataDT* granData,
-                                                        deme::contactPairs_t startOffset,
-                                                        deme::contactPairs_t nContactPairs) {
+                                                         deme::DEMDataDT* granData,
+                                                         deme::contactPairs_t startOffset,
+                                                         deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myPrimitiveContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myPrimitiveContactID < startOffset + nContactPairs) {
         calculatePrimitiveContactForces_impl<deme::SPHERE_ANALYTICAL_CONTACT>(simParams, granData,
@@ -1239,9 +1246,9 @@ DEME_KERNEL void calculatePrimitiveContactForces_SphAnal(deme::DEMSimParams* sim
 }
 
 DEME_KERNEL void calculatePrimitiveContactForces_TriTri(deme::DEMSimParams* simParams,
-                                                       deme::DEMDataDT* granData,
-                                                       deme::contactPairs_t startOffset,
-                                                       deme::contactPairs_t nContactPairs) {
+                                                        deme::DEMDataDT* granData,
+                                                        deme::contactPairs_t startOffset,
+                                                        deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myPrimitiveContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myPrimitiveContactID < startOffset + nContactPairs) {
         calculatePrimitiveContactForces_impl<deme::TRIANGLE_TRIANGLE_CONTACT>(simParams, granData,
@@ -1250,9 +1257,9 @@ DEME_KERNEL void calculatePrimitiveContactForces_TriTri(deme::DEMSimParams* simP
 }
 
 DEME_KERNEL void calculatePrimitiveContactForces_TriAnal(deme::DEMSimParams* simParams,
-                                                        deme::DEMDataDT* granData,
-                                                        deme::contactPairs_t startOffset,
-                                                        deme::contactPairs_t nContactPairs) {
+                                                         deme::DEMDataDT* granData,
+                                                         deme::contactPairs_t startOffset,
+                                                         deme::contactPairs_t nContactPairs) {
     deme::contactPairs_t myPrimitiveContactID = startOffset + blockIdx.x * blockDim.x + threadIdx.x;
     if (myPrimitiveContactID < startOffset + nContactPairs) {
         calculatePrimitiveContactForces_impl<deme::TRIANGLE_ANALYTICAL_CONTACT>(simParams, granData,
