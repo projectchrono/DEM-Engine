@@ -196,7 +196,7 @@ std::shared_ptr<DEMMesh> load_triangle_template(DEMSolver& DEMSim,
                                                 float& out_mass,
                                                 float3& out_moi) {
     std::shared_ptr<DEMMesh> mesh_template =
-        DEMSim.LoadMeshType((GET_DATA_PATH() / "mesh/simpleTriangleShape4mm.stl").string(), mat_type, true, false);
+        DEMSim.LoadMeshType((GET_DATA_PATH() / "mesh/TriangleShape4mm.stl").string(), mat_type, true, false);
     if (!mesh_template)
         return nullptr;
 

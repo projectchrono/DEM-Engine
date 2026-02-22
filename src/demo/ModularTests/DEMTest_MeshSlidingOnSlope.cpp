@@ -32,13 +32,13 @@ int main() {
     const float slope_angle_rad = slope_angle_deg * PI / 180.0f;
 
     // Material properties
-    const float mu = 0.3f;    // friction coefficient
-    const float CoR = 0.3f;   // coefficient of restitution
-    const float E = 1e8f;     // Young's modulus (Pa)
-    const float nu = 0.3f;    // Poisson's ratio
+    const float mu = 0.3f;   // friction coefficient
+    const float CoR = 0.3f;  // coefficient of restitution
+    const float E = 1e8f;    // Young's modulus (Pa)
+    const float nu = 0.3f;   // Poisson's ratio
 
     // Cube geometry and mass (cube.obj is a unit cube, side = 1m before scale)
-    const float cube_scale = 0.3f;  // scale to 0.3 m per side
+    const float cube_scale = 0.3f;       // scale to 0.3 m per side
     const float cube_density = 2600.0f;  // kg/m^3 (rock-like)
     const float cube_mass = cube_density * cube_scale * cube_scale * cube_scale;
     // MOI of a solid cube: I = m*a^2/6 per axis
@@ -90,8 +90,7 @@ int main() {
     // Verification: R_y(-120 deg) * (1,0,0) = (-0.5, 0, 0.866) = (-sin30, 0, cos30). OK.
     // =========================================================================
     float4 slope_q = make_float4(0.f, 0.f, 0.f, 1.f);
-    slope_q = RotateQuat(slope_q, make_float3(0.f, 1.f, 0.f),
-                         static_cast<float>(-(PI / 2.0f + slope_angle_rad)));
+    slope_q = RotateQuat(slope_q, make_float3(0.f, 1.f, 0.f), static_cast<float>(-(PI / 2.0f + slope_angle_rad)));
 
     auto slope = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/thin_plate.obj").string(), mat);
     // thin_plate CoM is at (0,0,0) per its construction; set reasonable mass/MOI.
@@ -139,8 +138,8 @@ int main() {
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.Initialize();
 
-    std::cout << "\nCube init position: (" << cube_init_pos.x << ", "
-              << cube_init_pos.y << ", " << cube_init_pos.z << ")" << std::endl;
+    std::cout << "\nCube init position: (" << cube_init_pos.x << ", " << cube_init_pos.y << ", " << cube_init_pos.z
+              << ")" << std::endl;
     std::cout << "Running simulation for " << total_time << " s ..." << std::endl;
     std::cout << "----------------------------------------------------" << std::endl;
 
@@ -151,16 +150,13 @@ int main() {
         // Contact force = contact acceleration * mass
         float3 cnt_acc = cube_tracker->ContactAcc();
         float3 cnt_force = cnt_acc * cube_mass;
-        double force_mag = std::sqrt((double)cnt_force.x * cnt_force.x +
-                                     (double)cnt_force.y * cnt_force.y +
+        double force_mag = std::sqrt((double)cnt_force.x * cnt_force.x + (double)cnt_force.y * cnt_force.y +
                                      (double)cnt_force.z * cnt_force.z);
         force_mags.push_back(force_mag);
 
         float3 pos = cube_tracker->Pos();
         float3 vel = cube_tracker->Vel();
-        double vel_mag = std::sqrt((double)vel.x * vel.x +
-                                   (double)vel.y * vel.y +
-                                   (double)vel.z * vel.z);
+        double vel_mag = std::sqrt((double)vel.x * vel.x + (double)vel.y * vel.y + (double)vel.z * vel.z);
 
         std::cout << "t=" << i * frame_time << "s"
                   << "  pos=(" << pos.x << "," << pos.y << "," << pos.z << ")"
@@ -169,9 +165,8 @@ int main() {
 
         if (force_mag > 1.0) {
             float inv_f = static_cast<float>(1.0 / force_mag);
-            std::cout << "  F_dir=(" << cnt_force.x * inv_f
-                      << "," << cnt_force.y * inv_f
-                      << "," << cnt_force.z * inv_f << ")";
+            std::cout << "  F_dir=(" << cnt_force.x * inv_f << "," << cnt_force.y * inv_f << "," << cnt_force.z * inv_f
+                      << ")";
         }
         std::cout << std::endl;
 
@@ -190,8 +185,10 @@ int main() {
     double sum_f = 0.0, min_f = force_mags[0], max_f = force_mags[0];
     for (double f : force_mags) {
         sum_f += f;
-        if (f < min_f) min_f = f;
-        if (f > max_f) max_f = f;
+        if (f < min_f)
+            min_f = f;
+        if (f > max_f)
+            max_f = f;
     }
     double mean_f = sum_f / static_cast<double>(force_mags.size());
     double var = 0.0;

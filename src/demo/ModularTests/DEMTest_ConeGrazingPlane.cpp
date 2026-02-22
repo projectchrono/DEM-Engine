@@ -19,7 +19,9 @@
 #include <cmath>
 #include <iostream>
 #include <vector>
+#include <filesystem>
 
+using namespace std::filesystem;
 using namespace deme;
 
 int main() {
@@ -27,28 +29,28 @@ int main() {
     // Parameters
     // =========================================================================
     // Material properties (same for cone and plane)
-    const float mu = 0.3f;     // friction coefficient
-    const float CoR = 0.3f;    // coefficient of restitution
-    const float E = 1e8f;      // Young's modulus (Pa)
-    const float nu = 0.3f;     // Poisson's ratio
+    const float mu = 0.3f;   // friction coefficient
+    const float CoR = 0.3f;  // coefficient of restitution
+    const float E = 1e8f;    // Young's modulus (Pa)
+    const float nu = 0.3f;   // Poisson's ratio
 
     // Cone geometry (cone.obj: tip at origin, base at z=1, base radius=1)
-    const float cone_scale = 0.2f;       // scale factor: tip stays at origin
-    const float cone_height = cone_scale; // 0.2 m after scaling
-    const float cone_radius = cone_scale; // 0.2 m base radius after scaling
-    const float cone_density = 2600.0f;  // kg/m^3
+    const float cone_scale = 0.2f;         // scale factor: tip stays at origin
+    const float cone_height = cone_scale;  // 0.2 m after scaling
+    const float cone_radius = cone_scale;  // 0.2 m base radius after scaling
+    const float cone_density = 2600.0f;    // kg/m^3
     const float cone_volume = (1.0f / 3.0f) * PI * cone_radius * cone_radius * cone_height;
     const float cone_mass = cone_density * cone_volume;
     // MOI of solid cone about centroid (at 3/4 height from tip = 3/4 * cone_height)
     // Ix = Iy = 3m/20*r^2 + 3m/80*h^2, Iz = 3m/10*r^2
-    const float cone_Ixy = 3.0f * cone_mass / 20.0f * cone_radius * cone_radius +
-                           3.0f * cone_mass / 80.0f * cone_height * cone_height;
+    const float cone_Ixy =
+        3.0f * cone_mass / 20.0f * cone_radius * cone_radius + 3.0f * cone_mass / 80.0f * cone_height * cone_height;
     const float cone_Iz = 3.0f * cone_mass / 10.0f * cone_radius * cone_radius;
     const float3 cone_moi = make_float3(cone_Ixy, cone_Ixy, cone_Iz);
 
     // Grazing motion
-    const float graze_speed = 0.5f;    // prescribed x-velocity (m/s)
-    const float tip_penetration = 0.005f; // initial tip depth below plane (m)
+    const float graze_speed = 0.5f;        // prescribed x-velocity (m/s)
+    const float tip_penetration = 0.005f;  // initial tip depth below plane (m)
 
     // The cone centroid is at 3/4 of height from tip (in original mesh coordinates).
     // After Scale(cone_scale), centroid is at z = 0.75 * cone_scale above the tip.
@@ -90,6 +92,7 @@ int main() {
     // The plane has vertices at z=0 with normal (0,0,1).
     // =========================================================================
     auto plane = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/plane_20by20.obj").string(), mat);
+    plane->Scale(0.1f);
     plane->SetMass(1.0f);
     plane->SetMOI(make_float3(1.0f, 1.0f, 1.0f));
     plane->SetInitPos(make_float3(0.f, 0.f, 0.f));
@@ -104,9 +107,9 @@ int main() {
     // After Scale(cone_scale), tip is at (0, 0, -0.75*cone_scale) in local frame.
     // To place tip at z = -tip_penetration (below plane at z=0):
     //   SetInitPos z = -tip_penetration + centroid_above_tip
-    // Cone grazes from x=0 toward x = graze_speed * total_time.
+    // Cone grazes from x=-0.2 toward x = init_x + graze_speed * total_time.
     // =========================================================================
-    const float cone_init_x = 0.0f;
+    const float cone_init_x = -0.2f;
     const float cone_init_z = -tip_penetration + centroid_above_tip;
 
     auto cone = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cone.obj").string(), mat);
@@ -139,6 +142,10 @@ int main() {
     std::cout << "Running simulation for " << total_time << " s ..." << std::endl;
     std::cout << "----------------------------------------------------" << std::endl;
 
+    path out_dir = current_path();
+    out_dir /= "DEMTest_ConeGrazingPlane";
+    create_directory(out_dir);
+
     std::vector<double> force_mags;
     std::vector<double> force_z_components;
     const int n_frames = static_cast<int>(total_time / frame_time);
@@ -147,8 +154,7 @@ int main() {
         // Contact force = contact acceleration * mass
         float3 cnt_acc = cone_tracker->ContactAcc();
         float3 cnt_force = cnt_acc * cone_mass;
-        double force_mag = std::sqrt((double)cnt_force.x * cnt_force.x +
-                                     (double)cnt_force.y * cnt_force.y +
+        double force_mag = std::sqrt((double)cnt_force.x * cnt_force.x + (double)cnt_force.y * cnt_force.y +
                                      (double)cnt_force.z * cnt_force.z);
         force_mags.push_back(force_mag);
         force_z_components.push_back(static_cast<double>(cnt_force.z));
@@ -165,11 +171,15 @@ int main() {
 
         if (force_mag > 1e-3) {
             float inv_f = static_cast<float>(1.0 / force_mag);
-            std::cout << "  F_dir=(" << cnt_force.x * inv_f
-                      << "," << cnt_force.y * inv_f
-                      << "," << cnt_force.z * inv_f << ")";
+            std::cout << "  F_dir=(" << cnt_force.x * inv_f << "," << cnt_force.y * inv_f << "," << cnt_force.z * inv_f
+                      << ")";
         }
         std::cout << std::endl;
+
+        // Output
+        char meshfilename[200];
+        sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk", i);
+        DEMSim.WriteMeshFile(out_dir / meshfilename);
 
         if (i < n_frames) {
             DEMSim.DoDynamics(frame_time);
@@ -190,10 +200,14 @@ int main() {
         double fz = force_z_components[k];
         sum_f += f;
         sum_fz += fz;
-        if (f < min_f) min_f = f;
-        if (f > max_f) max_f = f;
-        if (fz < min_fz) min_fz = fz;
-        if (fz > max_fz) max_fz = fz;
+        if (f < min_f)
+            min_f = f;
+        if (f > max_f)
+            max_f = f;
+        if (fz < min_fz)
+            min_fz = fz;
+        if (fz > max_fz)
+            max_fz = fz;
     }
     double mean_f = sum_f / static_cast<double>(force_mags.size());
     double mean_fz = sum_fz / static_cast<double>(force_z_components.size());
