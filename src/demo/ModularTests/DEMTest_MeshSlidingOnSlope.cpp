@@ -48,8 +48,10 @@ int main() {
     const float3 cube_moi = make_float3(cube_moi_val, cube_moi_val, cube_moi_val);
 
     // Simulation time settings
-    const float step_size = 1e-5f;
+    const float step_size = 5e-6f;
     const float frame_time = 0.05f;
+    const int n_sub_samples = 250;                                        // sub-samples per frame for force averaging
+    const float sub_dt = frame_time / static_cast<float>(n_sub_samples);  // sub-step size
     const float total_time = 1.f;
 
     std::cout << "=====================================================" << std::endl;
@@ -153,33 +155,45 @@ int main() {
     const int n_frames = static_cast<int>(total_time / frame_time);
 
     for (int i = 1; i <= n_frames; i++) {
-        // Output
+        // Output mesh snapshot at the start of this interval
         char meshfilename[200];
         sprintf(meshfilename, "DEMTest_mesh_%04d.vtk", i);
         DEMSim.WriteMeshFile(out_dir / meshfilename);
 
-        DEMSim.DoDynamics(frame_time);
+        // Advance simulation in sub-steps and accumulate contact force readings
+        // to compute the average force over the interval [t_prev, t_center+half_window].
+        double sum_fx = 0.0, sum_fy = 0.0, sum_fz = 0.0;
+        for (int s = 0; s < n_sub_samples; s++) {
+            DEMSim.DoDynamics(sub_dt);
+            float3 cnt_acc = cube_tracker->ContactAcc();
+            sum_fx += cnt_acc.x;
+            sum_fy += cnt_acc.y;
+            sum_fz += cnt_acc.z;
+        }
 
-        // Contact force = contact acceleration * mass
-        float3 cnt_acc = cube_tracker->ContactAcc();
-        float3 cnt_force = cnt_acc * cube_mass;
-        double force_mag = std::sqrt((double)cnt_force.x * cnt_force.x + (double)cnt_force.y * cnt_force.y +
-                                     (double)cnt_force.z * cnt_force.z);
+        // Average contact force = (average contact acceleration) * mass
+        float3 avg_cnt_force;
+        avg_cnt_force.x = static_cast<float>(sum_fx / n_sub_samples) * cube_mass;
+        avg_cnt_force.y = static_cast<float>(sum_fy / n_sub_samples) * cube_mass;
+        avg_cnt_force.z = static_cast<float>(sum_fz / n_sub_samples) * cube_mass;
+        double force_mag =
+            std::sqrt((double)avg_cnt_force.x * avg_cnt_force.x + (double)avg_cnt_force.y * avg_cnt_force.y +
+                      (double)avg_cnt_force.z * avg_cnt_force.z);
         force_mags.push_back(force_mag);
 
         float3 pos = cube_tracker->Pos();
         float3 vel = cube_tracker->Vel();
         double vel_mag = std::sqrt((double)vel.x * vel.x + (double)vel.y * vel.y + (double)vel.z * vel.z);
 
-        std::cout << "t=" << i * frame_time << "s"
+        std::cout << "t=" << i * frame_time << "s (avg over " << n_sub_samples << " sub-steps)"
                   << "  pos=(" << pos.x << "," << pos.y << "," << pos.z << ")"
                   << "  |v|=" << vel_mag << " m/s"
-                  << "  |F_cnt|=" << force_mag << " N";
+                  << "  |F_cnt_avg|=" << force_mag << " N";
 
         if (force_mag > 1.0) {
             float inv_f = static_cast<float>(1.0 / force_mag);
-            std::cout << "  F_dir=(" << cnt_force.x * inv_f << "," << cnt_force.y * inv_f << "," << cnt_force.z * inv_f
-                      << ")";
+            std::cout << "  F_dir=(" << avg_cnt_force.x * inv_f << "," << avg_cnt_force.y * inv_f << ","
+                      << avg_cnt_force.z * inv_f << ")";
         }
         std::cout << std::endl;
     }
@@ -207,7 +221,8 @@ int main() {
     }
     double stddev_f = std::sqrt(var / static_cast<double>(force_mags.size()));
 
-    std::cout << "\n=== Contact Force Statistics (over " << force_mags.size() << " frames) ===" << std::endl;
+    std::cout << "\n=== Contact Force Statistics (over " << force_mags.size() << " frames, each averaged over "
+              << n_sub_samples << " sub-steps) ===" << std::endl;
     std::cout << "  Mean:   " << mean_f << " N" << std::endl;
     std::cout << "  Min:    " << min_f << " N" << std::endl;
     std::cout << "  Max:    " << max_f << " N" << std::endl;
