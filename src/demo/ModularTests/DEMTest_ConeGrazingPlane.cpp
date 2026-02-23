@@ -150,7 +150,14 @@ int main() {
     std::vector<double> force_z_components;
     const int n_frames = static_cast<int>(total_time / frame_time);
 
-    for (int i = 0; i <= n_frames; i++) {
+    for (int i = 1; i <= n_frames; i++) {
+        // Output
+        char meshfilename[200];
+        sprintf(meshfilename, "DEMTest_mesh_%04d.vtk", i);
+        DEMSim.WriteMeshFile(out_dir / meshfilename);
+
+        DEMSim.DoDynamics(frame_time);
+
         // Contact force = contact acceleration * mass
         float3 cnt_acc = cone_tracker->ContactAcc();
         float3 cnt_force = cnt_acc * cone_mass;
@@ -175,15 +182,6 @@ int main() {
                       << ")";
         }
         std::cout << std::endl;
-
-        // Output
-        char meshfilename[200];
-        sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk", i);
-        DEMSim.WriteMeshFile(out_dir / meshfilename);
-
-        if (i < n_frames) {
-            DEMSim.DoDynamics(frame_time);
-        }
     }
 
     // =========================================================================

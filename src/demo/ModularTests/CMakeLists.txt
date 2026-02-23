@@ -11,10 +11,11 @@ SET(LIBRARIES
 # ------------------------------------------------------------------------------
 
 SET(MODULAR_TESTS
+		DEMTest_ConeGrazingPlane
+		DEMTest_MeshSlidingOnSlope
 		DEMTest_MeshTemplate
 		DEMTest_PatchLocations
-		DEMTest_MeshPatch
-		DEMTest_ConeGrazingPlane
+		DEMTest_MeshPatch	
 )
 
 # ------------------------------------------------------------------------------
