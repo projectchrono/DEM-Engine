@@ -48,9 +48,9 @@ int main() {
     const float3 cube_moi = make_float3(cube_moi_val, cube_moi_val, cube_moi_val);
 
     // Simulation time settings
-    const float step_size = 1e-5f;
-    const float frame_time = 0.1f;
-    const int n_sub_samples = 10;                                        // sub-samples per frame for force averaging
+    const float step_size = 5e-6f;
+    const float frame_time = 0.05f;
+    const int n_sub_samples = 250;                                        // sub-samples per frame for force averaging
     const float sub_dt = frame_time / static_cast<float>(n_sub_samples);  // sub-step size
     const float total_time = 1.f;
 
@@ -176,9 +176,9 @@ int main() {
         avg_cnt_force.x = static_cast<float>(sum_fx / n_sub_samples) * cube_mass;
         avg_cnt_force.y = static_cast<float>(sum_fy / n_sub_samples) * cube_mass;
         avg_cnt_force.z = static_cast<float>(sum_fz / n_sub_samples) * cube_mass;
-        double force_mag = std::sqrt((double)avg_cnt_force.x * avg_cnt_force.x +
-                                     (double)avg_cnt_force.y * avg_cnt_force.y +
-                                     (double)avg_cnt_force.z * avg_cnt_force.z);
+        double force_mag =
+            std::sqrt((double)avg_cnt_force.x * avg_cnt_force.x + (double)avg_cnt_force.y * avg_cnt_force.y +
+                      (double)avg_cnt_force.z * avg_cnt_force.z);
         force_mags.push_back(force_mag);
 
         float3 pos = cube_tracker->Pos();

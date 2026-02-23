@@ -54,7 +54,7 @@ int main() {
     const float3 cone_moi = make_float3(cone_Ixy, cone_Ixy, cone_Iz);
 
     // Orbit parameters
-    const float orbit_omega = 1.0f;        // angular speed of orbit (rad/s)
+    const float orbit_omega = 2.0f;        // angular speed of orbit (rad/s)
     const float tip_penetration = 0.005f;  // initial tip depth into sphere surface (m)
 
     // The cone centroid is at 3/4 of height from tip (in original mesh coordinates).
@@ -69,9 +69,9 @@ int main() {
     const float orbit_vel = orbit_radius * orbit_omega;
 
     // Simulation time settings
-    const float step_size = 1e-5f;
+    const float step_size = 5e-6f;
     const float frame_time = 0.2f;
-    const int n_sub_samples = 10;                                        // sub-samples per frame for force averaging
+    const int n_sub_samples = 500;                                        // sub-samples per frame for force averaging
     const float sub_dt = frame_time / static_cast<float>(n_sub_samples);  // sub-step size
     const float total_time = 2.0f;
 
@@ -152,14 +152,14 @@ int main() {
 
     // Prescribe circular orbit: tangential velocity as a function of time.
     // The variable 't' represents simulation time in expression strings.
-    std::string vx_expr = to_string_with_precision(-orbit_vel) + " * sin(" +
-                          to_string_with_precision(orbit_omega) + " * t)";
-    std::string vy_expr = to_string_with_precision(orbit_vel) + " * cos(" +
-                          to_string_with_precision(orbit_omega) + " * t)";
+    std::string vx_expr =
+        to_string_with_precision(-orbit_vel) + " * sin(" + to_string_with_precision(orbit_omega) + " * t)";
+    std::string vy_expr =
+        to_string_with_precision(orbit_vel) + " * cos(" + to_string_with_precision(orbit_omega) + " * t)";
     DEMSim.SetFamilyPrescribedLinVel(1, vx_expr, vy_expr, "0");
     // Prescribe constant angular velocity about world z-axis to keep cone
     // pointed radially outward as it orbits.
-    DEMSim.SetFamilyPrescribedAngVel(1, "0", "0", to_string_with_precision(orbit_omega));
+    DEMSim.SetFamilyPrescribedAngVel(1, to_string_with_precision(-orbit_omega), "0", "0");
 
     // =========================================================================
     // Initialize and run
@@ -208,9 +208,9 @@ int main() {
         avg_cnt_force.x = static_cast<float>(sum_fx / n_sub_samples) * cone_mass;
         avg_cnt_force.y = static_cast<float>(sum_fy / n_sub_samples) * cone_mass;
         avg_cnt_force.z = static_cast<float>(sum_fz / n_sub_samples) * cone_mass;
-        double force_mag = std::sqrt((double)avg_cnt_force.x * avg_cnt_force.x +
-                                     (double)avg_cnt_force.y * avg_cnt_force.y +
-                                     (double)avg_cnt_force.z * avg_cnt_force.z);
+        double force_mag =
+            std::sqrt((double)avg_cnt_force.x * avg_cnt_force.x + (double)avg_cnt_force.y * avg_cnt_force.y +
+                      (double)avg_cnt_force.z * avg_cnt_force.z);
         force_mags.push_back(force_mag);
 
         // Radial direction at the center of this frame interval: cone is at angle
