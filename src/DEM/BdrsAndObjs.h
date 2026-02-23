@@ -115,12 +115,16 @@ class DEMExternObj : public DEMInitializer {
 
     /// Set mass
     void SetMass(float mass) { this->mass = mass; }
+    /// Get mass
+    float GetMass() const { return mass; }
     /// Set MOI (in principal frame)
     void SetMOI(float3 MOI) { this->MOI = MOI; }
     void SetMOI(const std::vector<float>& MOI) {
         assertThreeElements(MOI, "SetMOI", "MOI");
         SetMOI(make_float3(MOI[0], MOI[1], MOI[2]));
     }
+    /// Get MOI (in principal frame)
+    float3 GetMOI() const { return MOI; }
 
     /// @brief Set the initial quaternion for this object (before simulation initializes).
     /// @param rotQ Initial quaternion.
@@ -446,6 +450,8 @@ class DEMMesh : public DEMInitializer {
 
     /// Set mass.
     void SetMass(float mass) { this->mass = mass; }
+    /// Get mass.
+    float GetMass() const { return mass; }
     /// Set MOI (in principal frame).
     void SetMOI(float3 MOI) { this->MOI = MOI; }
     /// Set MOI (in principal frame).
@@ -460,6 +466,8 @@ class DEMMesh : public DEMInitializer {
     void ComputeMassProperties(double& volume, float3& center, float3& inertia, float3& inertia_products) const;
     /// Check if mesh is watertight (closed, manifold). Returns true if no boundary/non-manifold edges.
     bool IsWatertight(size_t* boundary_edges = nullptr, size_t* nonmanifold_edges = nullptr) const;
+    /// Get MOI (in principal frame).
+    float3 GetMOI() const { return MOI; }
     /// Set mesh family number.
     void SetFamily(unsigned int num) { this->family_code = num; }
 

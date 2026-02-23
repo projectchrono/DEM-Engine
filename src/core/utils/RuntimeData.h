@@ -22,6 +22,9 @@ class DEMERuntimeDataHelper_API DEMERuntimeDataHelper {
   public:
     static std::filesystem::path data_path;
     static std::filesystem::path include_path;
+
+    // This is for Python package's use only
+    static void SetPathPrefix(const std::filesystem::path& p);
 };
 
 #endif
