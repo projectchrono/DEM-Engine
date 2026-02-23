@@ -323,7 +323,6 @@ void DEMDynamicThread::migrateDataToDevice() {
     triPVStepP.toDeviceAsync(streamInfo.stream);
     triPVStepPV.toDeviceAsync(streamInfo.stream);
     triPVAccumP.toDeviceAsync(streamInfo.stream);
-    triPVAccumV.toDeviceAsync(streamInfo.stream);
     triPVAccumPV.toDeviceAsync(streamInfo.stream);
 
     // Might not be necessary... but it's a big call anyway, let's sync
@@ -677,7 +676,6 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(triPVStepP, 1, 0.f);
     DEME_DUAL_ARRAY_RESIZE(triPVStepPV, 1, 0.f);
     DEME_DUAL_ARRAY_RESIZE(triPVAccumP, 1, 0.f);
-    DEME_DUAL_ARRAY_RESIZE(triPVAccumV, 1, 0.f);
     DEME_DUAL_ARRAY_RESIZE(triPVAccumPV, 1, 0.f);
 
     // Resize to the number of clumps
@@ -3260,12 +3258,14 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                         "patchNormalForce", countPatch * sizeof(float));
                     float* patchSlipSpeed = (float*)solverScratchSpace.allocateTempVector(
                         "patchSlipSpeed", countPatch * sizeof(float));
-                    computePatchPVScalars(&simParams, &granData, finalNormals, startOffsetPatch, countPatch,
+                    computePatchPVScalars(&simParams, &granData, finalNormals, finalContactPoints,
+                                          startOffsetPatch, countPatch,
                                           patchNormalForce, patchSlipSpeed, streamInfo.stream);
                     accumulateTrianglePVFromPatchContacts(
                         &simParams, &granData, keys, primitivePatchAccumulators, patchContactAccumulators,
                         patchNormalForce, patchSlipSpeed, startOffsetPrimitive, startOffsetPatch, countPrimitive,
-                        triPVGlobalTriToLocal.device(), triPVAccumP.device(), triPVAccumPV.device(), streamInfo.stream);
+                        triPVGlobalTriToLocal.device(), triPVAccumP.device(),
+                        triPVAccumPV.device(), streamInfo.stream);
                     solverScratchSpace.finishUsingTempVector("patchNormalForce");
                     solverScratchSpace.finishUsingTempVector("patchSlipSpeed");
                 }
@@ -4746,8 +4746,9 @@ void DEMDynamicThread::configureTrianglePVTracking(const std::vector<bodyID_t>& 
         return;
     }
     if (solverFlags.useNoContactRecord) {
-        DEME_ERROR("%s",
-                   "Per-triangle P/V/PxV tracking requires contact-force recording. Do not use SetNoForceRecord().");
+        DEME_WARNING("%s",
+                     "Per-triangle P/V/PxV tracking is enabled while SetNoForceRecord() is active. "
+                     "Tracking will proceed; validate values for your scenario.");
     }
 
     std::vector<bodyID_t> owner_order;
@@ -4813,14 +4814,12 @@ void DEMDynamicThread::configureTrianglePVTracking(const std::vector<bodyID_t>& 
     DEME_DUAL_ARRAY_RESIZE(triPVStepP, alloc_size, 0.f);
     DEME_DUAL_ARRAY_RESIZE(triPVStepPV, alloc_size, 0.f);
     DEME_DUAL_ARRAY_RESIZE(triPVAccumP, alloc_size, 0.f);
-    DEME_DUAL_ARRAY_RESIZE(triPVAccumV, alloc_size, 0.f);
     DEME_DUAL_ARRAY_RESIZE(triPVAccumPV, alloc_size, 0.f);
 
     triPVGlobalTriToLocal.toDeviceAsync(streamInfo.stream);
     triPVStepP.toDeviceAsync(streamInfo.stream);
     triPVStepPV.toDeviceAsync(streamInfo.stream);
     triPVAccumP.toDeviceAsync(streamInfo.stream);
-    triPVAccumV.toDeviceAsync(streamInfo.stream);
     triPVAccumPV.toDeviceAsync(streamInfo.stream);
     syncMemoryTransfer();
 
@@ -4860,9 +4859,6 @@ void DEMDynamicThread::disableTrianglePVTracking() {
     if (triPVAccumP.size() > 0) {
         DEME_GPU_CALL(cudaMemsetAsync(triPVAccumP.device(), 0, triPVAccumP.size() * sizeof(float), streamInfo.stream));
     }
-    if (triPVAccumV.size() > 0) {
-        DEME_GPU_CALL(cudaMemsetAsync(triPVAccumV.device(), 0, triPVAccumV.size() * sizeof(float), streamInfo.stream));
-    }
     if (triPVAccumPV.size() > 0) {
         DEME_GPU_CALL(
             cudaMemsetAsync(triPVAccumPV.device(), 0, triPVAccumPV.size() * sizeof(float), streamInfo.stream));
@@ -4897,7 +4893,16 @@ bool DEMDynamicThread::getTrackedOwnerTrianglePV(bodyID_t ownerID,
         for (size_t i = 0; i < count; i++) {
             avgP[i] = triPVAccumP[offset + i] * inv_steps;
             avgPV[i] = triPVAccumPV[offset + i] * inv_steps;
+            if (!std::isfinite(avgP[i]) || avgP[i] < 0.f) {
+                avgP[i] = 0.f;
+            }
+            if (!std::isfinite(avgPV[i]) || avgPV[i] < 0.f) {
+                avgPV[i] = 0.f;
+            }
             avgV[i] = (avgP[i] > DEME_TINY_FLOAT) ? (avgPV[i] / avgP[i]) : 0.f;
+            if (!std::isfinite(avgV[i]) || avgV[i] < 0.f) {
+                avgV[i] = 0.f;
+            }
         }
     }
 

@@ -508,6 +508,9 @@ std::shared_ptr<ContactInfoContainer> DEMSolver::GetContactDetailedInfo(float fo
 std::vector<float3> DEMSolver::GetOwnerPosition(bodyID_t ownerID, bodyID_t n) const {
     return dT->getOwnerPos(ownerID, n);
 }
+std::vector<float3> DEMSolver::GetClumpPositionsHandover() const {
+    return dT->getOwnerPos(0, nOwnerClumps);
+}
 std::vector<float3> DEMSolver::GetOwnerAngVel(bodyID_t ownerID, bodyID_t n) const {
     return dT->getOwnerAngVel(ownerID, n);
 }
@@ -990,6 +993,53 @@ std::vector<float3> DEMSolver::GetMeshNodesGlobal(bodyID_t ownerID) {
         applyFrameTransformLocalToGlobal<float3, float3, float4>(pnt, mesh_pos, mesh_oriQ);
     }
     return nodes;
+}
+
+bool DEMSolver::GetMeshTriangleGeoRange(bodyID_t ownerID, bodyID_t& geoID_begin, size_t& n_triangles) {
+    assertSysInit("GetMeshTriangleGeoRange");
+    if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
+        return false;
+    }
+
+    geoID_begin = 0;
+    n_triangles = 0;
+    for (const auto& mesh : m_meshes) {
+        if (mesh->owner == ownerID) {
+            // Geometry wildcards for meshes are patch-based in this branch.
+            n_triangles = mesh->GetNumPatches();
+            return true;
+        }
+        geoID_begin += mesh->GetNumPatches();
+    }
+    return false;
+}
+
+bool DEMSolver::GetMeshTrianglePVHandover(bodyID_t ownerID,
+                                          std::vector<float>& triP,
+                                          std::vector<float>& triV,
+                                          std::vector<float>& triPxV,
+                                          const std::string& nameP,
+                                          const std::string& nameV,
+                                          const std::string& namePxV) {
+    assertSysInit("GetMeshTrianglePVHandover");
+
+    bodyID_t geo_begin = 0;
+    size_t n_tri = 0;
+    if (!GetMeshTriangleGeoRange(ownerID, geo_begin, n_tri)) {
+        return false;
+    }
+    if (m_geo_wc_num.find(nameP) == m_geo_wc_num.end() || m_geo_wc_num.find(nameV) == m_geo_wc_num.end() ||
+        m_geo_wc_num.find(namePxV) == m_geo_wc_num.end()) {
+        return false;
+    }
+
+    triP.clear();
+    triV.clear();
+    triPxV.clear();
+    dT->getPatchWildcardValue(triP, geo_begin, m_geo_wc_num.at(nameP), n_tri);
+    dT->getPatchWildcardValue(triV, geo_begin, m_geo_wc_num.at(nameV), n_tri);
+    dT->getPatchWildcardValue(triPxV, geo_begin, m_geo_wc_num.at(namePxV), n_tri);
+    return triP.size() == n_tri && triV.size() == n_tri && triPxV.size() == n_tri;
 }
 
 double DEMSolver::GetSimTime() const {
