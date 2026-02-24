@@ -167,9 +167,8 @@ inline __device__ bool clampPatchPenetrationByOwnerBounds(const deme::DEMSimPara
     }
     double cappedMaxOverlap = maxOverlap;
     if (apply_shape_depth_cap) {
-        // Tri-tri penetration rate limiter:
-        // cap overlap by what relative normal approach can create within one dT step.
-        // This avoids force spikes from occasional geometric outliers without hardcoded size ratios.
+        // Rate-limit geometric depth outliers for tri-tri, but keep a scale-based lower bound so
+        // existing sharp contacts are not over-clamped to near-zero overlap.
         float3 n = contactNormal;
         const float n2 = n.x * n.x + n.y * n.y + n.z * n.z;
         if (isfinite(n2) && n2 > DEME_TINY_FLOAT) {
@@ -198,11 +197,15 @@ inline __device__ bool clampPatchPenetrationByOwnerBounds(const deme::DEMSimPara
             }
             const double drift_factor = sqrt(static_cast<double>(drift_steps));
             const double motion_cap =
-                static_cast<double>(closing_speed) * static_cast<double>(simParams->dyn.h) *
-                drift_factor +
+                4.0 * static_cast<double>(closing_speed) * static_cast<double>(simParams->dyn.h) * drift_factor +
                 static_cast<double>(fmaxf(0.5f * simParams->dyn.beta + extraMarginSize, 0.f)) + 1e-7;
-            if (motion_cap > 0.0) {
-                cappedMaxOverlap = fmin(cappedMaxOverlap, motion_cap);
+
+            const float pair_scale = sqrtf(fmaxf(radA * radB, 0.f));
+            const float shape_scale = sqrtf(fmaxf(fminf(radA, radB) * pair_scale, 0.f));
+            const double min_shape_cap = static_cast<double>(0.0041f * shape_scale);
+            const double relaxed_cap = fmax(motion_cap, min_shape_cap);
+            if (relaxed_cap > 0.0) {
+                cappedMaxOverlap = fmin(cappedMaxOverlap, relaxed_cap);
             }
         }
     }
