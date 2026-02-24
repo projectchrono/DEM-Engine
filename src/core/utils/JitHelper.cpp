@@ -47,7 +47,7 @@ std::string sanitizeFilename(const std::string& name) {
 
 std::filesystem::path JitHelper::KERNEL_DIR = DEMERuntimeDataHelper::data_path / "kernel";
 std::filesystem::path JitHelper::KERNEL_INCLUDE_DIR = DEMERuntimeDataHelper::include_path;
-std::filesystem::path JitHelper::CACHE_DIR = JitHelper::resolveCacheDir();
+std::filesystem::path JitHelper::CACHE_DIR;
 
 JitHelper::Header::Header(const std::filesystem::path& sourcefile) {
     this->_source = JitHelper::loadSourceFile(sourcefile);
@@ -122,6 +122,8 @@ JitHelper::CachedProgram JitHelper::buildProgram(const std::string& name,
                                     "|cuda:" + std::to_string(getCudaVersion()) + "|arch:" + arch_tag;
     std::string program_hash = hashString(fingerprint);
 
+    static std::once_flag cache_dir_init_flag;
+    std::call_once(cache_dir_init_flag, []() { CACHE_DIR = resolveCacheDir(); });
     const auto program_dir = CACHE_DIR / program_hash;
     auto storage = std::make_shared<CachedProgram::ProgramStorage>(code, flags);
     storage->programHash = program_hash;

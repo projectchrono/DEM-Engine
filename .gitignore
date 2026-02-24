@@ -1,10 +1,64 @@
-build*
+# Build directories
+build*/
+cmake-build-*/
+
+# IDE / editor configs
 .vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+_deps/
+
+# Compiled binaries and libraries
+*.o
+*.a
+*.so
+*.so.*
+*.dll
+*.dylib
+*.exe
+*.out
+*.app
+*.pdb
+
+# CUDA build artifacts
+*.cubin
+*.fatbin
+*.ptx
+*.sass
+*.cuobj
+
+# Python packaging / artifacts
+*.egg-info/
+*.egg
+*.whl
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+dist/
+.cache/
+
+# Ninja / Make generated files
+*.ninja
+*.ninja_deps
+*.ninja_log
+Makefile
+
+# Simulation output
 *.vtk
 *.csv
-*.egg-info/
-.cache/
-dist/
 output/*
 post/*
+
+# CodeQL
+_codeql_detected_source_root
 
