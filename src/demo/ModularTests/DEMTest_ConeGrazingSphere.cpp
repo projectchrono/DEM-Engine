@@ -22,6 +22,7 @@
 #include <iostream>
 #include <vector>
 #include <filesystem>
+#include <system_error>
 
 using namespace std::filesystem;
 using namespace deme;
@@ -178,9 +179,13 @@ int main() {
     std::cout << "Running simulation for " << total_time << " s ..." << std::endl;
     std::cout << "----------------------------------------------------" << std::endl;
 
-    path out_dir = current_path();
-    out_dir /= "DEMTest_ConeGrazingSphere";
-    create_directory(out_dir);
+    path out_dir = current_path() / "modular_test_output" / "DEMTest_ConeGrazingSphere";
+    std::error_code dir_ec;
+    create_directories(out_dir, dir_ec);
+    if (dir_ec || !is_directory(out_dir)) {
+        std::cerr << "Failed to create output directory: " << out_dir << " (" << dir_ec.message() << ")" << std::endl;
+        return 1;
+    }
 
     std::vector<double> force_mags;
     std::vector<double> force_r_components;  // radial (outward) force component

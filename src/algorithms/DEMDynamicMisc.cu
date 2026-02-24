@@ -772,12 +772,13 @@ void computeFinalContactPointsPerPatch(double3* totalWeightedContactPoints,
 __global__ void computePatchPVScalars_impl(const DEMSimParams* simParams,
                                            DEMDataDT* granData,
                                            const float3* finalNormals,
+                                           const double3* finalContactPoints,
                                            contactPairs_t startOffsetPatch,
                                            contactPairs_t countPatch,
                                            float* patchNormalForce,
                                            float* patchSlipSpeed) {
     contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= countPatch || !patchNormalForce || !patchSlipSpeed) {
+    if (idx >= countPatch || !patchNormalForce || !patchSlipSpeed || !finalContactPoints) {
         return;
     }
 
@@ -814,39 +815,103 @@ __global__ void computePatchPVScalars_impl(const DEMSimParams* simParams,
 
     float3 velCPA = make_float3(0.f, 0.f, 0.f);
     float3 velCPB = make_float3(0.f, 0.f, 0.f);
+    const double3 cp_d = finalContactPoints[idx];
+    if (!isfinite(cp_d.x) || !isfinite(cp_d.y) || !isfinite(cp_d.z)) {
+        return;
+    }
+    const float3 cp_global = make_float3((float)cp_d.x, (float)cp_d.y, (float)cp_d.z);
 
     if (ownerA != NULL_BODYID && ownerA < simParams->nOwnerBodies) {
         float3 linVelA = make_float3(granData->vX[ownerA], granData->vY[ownerA], granData->vZ[ownerA]);
-        float3 angVelA = make_float3(granData->omgBarX[ownerA], granData->omgBarY[ownerA], granData->omgBarZ[ownerA]);
-        float3 rA_local = granData->contactPointGeometryA[patchContactID];
+        float3 angVelA_local =
+            make_float3(granData->omgBarX[ownerA], granData->omgBarY[ownerA], granData->omgBarZ[ownerA]);
         const float4 oriA = make_float4(granData->oriQx[ownerA], granData->oriQy[ownerA], granData->oriQz[ownerA],
                                         granData->oriQw[ownerA]);
-        float3 rotVelA = cross(angVelA, rA_local);
-        applyOriQToVector3<float, oriQ_t>(rotVelA.x, rotVelA.y, rotVelA.z, oriA.w, oriA.x, oriA.y, oriA.z);
-        velCPA = linVelA + rotVelA;
+        if (isfinite(linVelA.x) && isfinite(linVelA.y) && isfinite(linVelA.z) && isfinite(angVelA_local.x) &&
+            isfinite(angVelA_local.y) && isfinite(angVelA_local.z)) {
+            float3 angVelA_global = angVelA_local;
+            applyOriQToVector3<float, oriQ_t>(angVelA_global.x, angVelA_global.y, angVelA_global.z, oriA.w, oriA.x,
+                                              oriA.y, oriA.z);
+
+            double3 comA;
+            voxelIDToPosition<double, voxelID_t, subVoxelPos_t>(
+                comA.x, comA.y, comA.z, granData->voxelID[ownerA], granData->locX[ownerA], granData->locY[ownerA],
+                granData->locZ[ownerA], simParams->nvXp2, simParams->nvYp2, simParams->voxelSize, simParams->l);
+            comA.x += simParams->LBFX;
+            comA.y += simParams->LBFY;
+            comA.z += simParams->LBFZ;
+
+            float3 rA_global =
+                make_float3(cp_global.x - (float)comA.x, cp_global.y - (float)comA.y, cp_global.z - (float)comA.z);
+            if (granData->ownerBoundRadius) {
+                const float bound_r = fmaxf(granData->ownerBoundRadius[ownerA], 0.f);
+                if (isfinite(bound_r) && bound_r > DEME_TINY_FLOAT) {
+                    const float geom_tol = fmaxf(simParams->dyn.beta + simParams->maxFamilyExtraMargin, 0.f) + 1e-4f;
+                    const float max_lever = fmaxf(bound_r + geom_tol, 1e-3f);
+                    const float r2 = dot(rA_global, rA_global);
+                    const float max2 = max_lever * max_lever;
+                    if (isfinite(r2) && r2 > max2) {
+                        rA_global *= max_lever * rsqrtf(r2);
+                    }
+                }
+            }
+            velCPA = linVelA + cross(angVelA_global, rA_global);
+        }
     }
 
     if (ownerB != NULL_BODYID && ownerB < simParams->nOwnerBodies) {
         float3 linVelB = make_float3(granData->vX[ownerB], granData->vY[ownerB], granData->vZ[ownerB]);
-        float3 angVelB = make_float3(granData->omgBarX[ownerB], granData->omgBarY[ownerB], granData->omgBarZ[ownerB]);
-        float3 rB_local = granData->contactPointGeometryB[patchContactID];
+        float3 angVelB_local =
+            make_float3(granData->omgBarX[ownerB], granData->omgBarY[ownerB], granData->omgBarZ[ownerB]);
         const float4 oriB = make_float4(granData->oriQx[ownerB], granData->oriQy[ownerB], granData->oriQz[ownerB],
                                         granData->oriQw[ownerB]);
-        float3 rotVelB = cross(angVelB, rB_local);
-        applyOriQToVector3<float, oriQ_t>(rotVelB.x, rotVelB.y, rotVelB.z, oriB.w, oriB.x, oriB.y, oriB.z);
-        velCPB = linVelB + rotVelB;
+        if (isfinite(linVelB.x) && isfinite(linVelB.y) && isfinite(linVelB.z) && isfinite(angVelB_local.x) &&
+            isfinite(angVelB_local.y) && isfinite(angVelB_local.z)) {
+            float3 angVelB_global = angVelB_local;
+            applyOriQToVector3<float, oriQ_t>(angVelB_global.x, angVelB_global.y, angVelB_global.z, oriB.w, oriB.x,
+                                              oriB.y, oriB.z);
+
+            double3 comB;
+            voxelIDToPosition<double, voxelID_t, subVoxelPos_t>(
+                comB.x, comB.y, comB.z, granData->voxelID[ownerB], granData->locX[ownerB], granData->locY[ownerB],
+                granData->locZ[ownerB], simParams->nvXp2, simParams->nvYp2, simParams->voxelSize, simParams->l);
+            comB.x += simParams->LBFX;
+            comB.y += simParams->LBFY;
+            comB.z += simParams->LBFZ;
+
+            float3 rB_global =
+                make_float3(cp_global.x - (float)comB.x, cp_global.y - (float)comB.y, cp_global.z - (float)comB.z);
+            if (granData->ownerBoundRadius) {
+                const float bound_r = fmaxf(granData->ownerBoundRadius[ownerB], 0.f);
+                if (isfinite(bound_r) && bound_r > DEME_TINY_FLOAT) {
+                    const float geom_tol = fmaxf(simParams->dyn.beta + simParams->maxFamilyExtraMargin, 0.f) + 1e-4f;
+                    const float max_lever = fmaxf(bound_r + geom_tol, 1e-3f);
+                    const float r2 = dot(rB_global, rB_global);
+                    const float max2 = max_lever * max_lever;
+                    if (isfinite(r2) && r2 > max2) {
+                        rB_global *= max_lever * rsqrtf(r2);
+                    }
+                }
+            }
+            velCPB = linVelB + cross(angVelB_global, rB_global);
+        }
     }
 
     const float3 relVel = velCPA - velCPB;
     const float vRelN = dot(relVel, normal);
     const float3 vRelT = relVel - vRelN * normal;
+    const float slipSpeed = length(vRelT);
+    if (!isfinite(slipSpeed) || !(slipSpeed >= 0.f)) {
+        return;
+    }
     patchNormalForce[idx] = normalForce;
-    patchSlipSpeed[idx] = length(vRelT);
+    patchSlipSpeed[idx] = slipSpeed;
 }
 
 void computePatchPVScalars(DEMSimParams* simParams,
                            DEMDataDT* granData,
                            const float3* finalNormals,
+                           const double3* finalContactPoints,
                            contactPairs_t startOffsetPatch,
                            contactPairs_t countPatch,
                            float* patchNormalForce,
@@ -855,7 +920,8 @@ void computePatchPVScalars(DEMSimParams* simParams,
     size_t blocks_needed = (countPatch + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         computePatchPVScalars_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            simParams, granData, finalNormals, startOffsetPatch, countPatch, patchNormalForce, patchSlipSpeed);
+            simParams, granData, finalNormals, finalContactPoints, startOffsetPatch, countPatch, patchNormalForce,
+            patchSlipSpeed);
     }
 }
 
@@ -909,7 +975,11 @@ __global__ void accumulateTrianglePVFromPatchContacts_impl(const DEMSimParams* s
         return;
     }
 
-    if (decodeTypeA(primType) == GEO_T_TRIANGLE) {
+    const geoType_t typeA = decodeTypeA(primType);
+    const geoType_t typeB = decodeTypeB(primType);
+
+    // Track only particle(=sphere)-triangle contributions for diagnostic P/V/PxV.
+    if (typeA == GEO_T_TRIANGLE && typeB == GEO_T_SPHERE) {
         bool triGhost = false, triGhostNeg = false;
         const bodyID_t triA = cylPeriodicDecodeID(granData->idPrimitiveA[primContactID], triGhost, triGhostNeg);
         if (triA < simParams->nTriGM) {
@@ -920,7 +990,7 @@ __global__ void accumulateTrianglePVFromPatchContacts_impl(const DEMSimParams* s
             }
         }
     }
-    if (decodeTypeB(primType) == GEO_T_TRIANGLE) {
+    if (typeB == GEO_T_TRIANGLE && typeA == GEO_T_SPHERE) {
         bool triGhost = false, triGhostNeg = false;
         const bodyID_t triB = cylPeriodicDecodeID(granData->idPrimitiveB[primContactID], triGhost, triGhostNeg);
         if (triB < simParams->nTriGM) {

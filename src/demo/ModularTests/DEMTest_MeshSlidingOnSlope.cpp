@@ -20,6 +20,7 @@
 #include <iostream>
 #include <vector>
 #include <filesystem>
+#include <system_error>
 
 using namespace deme;
 using namespace std::filesystem;
@@ -147,9 +148,13 @@ int main() {
     std::cout << "Running simulation for " << total_time << " s ..." << std::endl;
     std::cout << "----------------------------------------------------" << std::endl;
 
-    path out_dir = current_path();
-    out_dir /= "DEMTest_MeshSlidingOnSlope";
-    create_directory(out_dir);
+    path out_dir = current_path() / "modular_test_output" / "DEMTest_MeshSlidingOnSlope";
+    std::error_code dir_ec;
+    create_directories(out_dir, dir_ec);
+    if (dir_ec || !is_directory(out_dir)) {
+        std::cerr << "Failed to create output directory: " << out_dir << " (" << dir_ec.message() << ")" << std::endl;
+        return 1;
+    }
 
     std::vector<double> force_mags;
     const int n_frames = static_cast<int>(total_time / frame_time);

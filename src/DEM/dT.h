@@ -288,7 +288,6 @@ class DEMDynamicThread {
     DualArray<float> triPVStepP = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<float> triPVStepPV = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<float> triPVAccumP = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<float> triPVAccumV = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<float> triPVAccumPV = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     std::vector<bodyID_t> triPVOwnerOrder;
     std::vector<size_t> triPVOwnerOffsets;
@@ -782,6 +781,8 @@ class DEMDynamicThread {
                                    std::vector<float>& avgV,
                                    std::vector<float>& avgPV,
                                    bool reset_window = true);
+    /// Reset the current per-triangle PV accumulation window.
+    void resetTrackedTrianglePVWindow();
 
     /// Get owner of contact geometry (sphere, triangle, analytical entity).
     bodyID_t getGeoOwnerID(const bodyID_t& geo, const geoType_t& type) const;
