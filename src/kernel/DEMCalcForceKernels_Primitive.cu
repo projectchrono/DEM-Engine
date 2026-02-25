@@ -1152,6 +1152,19 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
 
         _forceModelContactWildcardWrite_;
     } else {  // If this is the kernel for a mesh-related contact, another follow-up kernel is needed to compute force
+        if constexpr (AType == deme::GEO_T_SPHERE && BType == deme::GEO_T_TRIANGLE) {
+            if (ContactType != deme::NOT_A_CONTACT) {
+                const float3 cpRelToSphere = to_float3(contactPnt - bodyAPos);
+                const float cpRel2 = dot(cpRelToSphere, cpRelToSphere);
+                const float maxSphereReach =
+                    ARadius + fmaxf(simParams->dyn.beta + simParams->maxFamilyExtraMargin + extraMarginSize, 0.f) + 1e-6f;
+                if (!isfinite(cpRel2) || cpRel2 > maxSphereReach * maxSphereReach) {
+                    ContactType = deme::NOT_A_CONTACT;
+                    overlapDepth = -1.0;
+                    overlapArea = 0.0;
+                }
+            }
+        }
         // Cylindrical periodic: if this primitive belongs to a non-minimum-image pair, it must not
         // contribute to patch aggregation (normals/penetration/area/contact point).
         if (cylPeriodicSkipPair) {

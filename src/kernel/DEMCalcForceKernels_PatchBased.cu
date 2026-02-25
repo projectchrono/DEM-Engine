@@ -729,6 +729,19 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
 
     // Patch-level geometric invariant guard for real owner-owner contacts.
     // Prevent rare depth outliers from injecting unphysical force/energy.
+    if constexpr (AType == deme::GEO_T_SPHERE && BType == deme::GEO_T_TRIANGLE) {
+        if (ContactType != deme::NOT_A_CONTACT) {
+            const float3 cpRelToSphere = to_float3(contactPnt - bodyAPos);
+            const float cpRel2 = dot(cpRelToSphere, cpRelToSphere);
+            const float maxSphereReach =
+                ARadius + fmaxf(simParams->dyn.beta + simParams->maxFamilyExtraMargin + extraMarginSize, 0.f) + 1e-6f;
+            if (!isfinite(cpRel2) || cpRel2 > maxSphereReach * maxSphereReach) {
+                ContactType = deme::NOT_A_CONTACT;
+                overlapDepth = -DEME_HUGE_FLOAT;
+                overlapArea = 0.0;
+            }
+        }
+    }
     if constexpr (BType != deme::GEO_T_ANALYTICAL) {
         constexpr bool apply_shape_depth_cap = (AType == deme::GEO_T_TRIANGLE) && (BType == deme::GEO_T_TRIANGLE);
         if (ContactType != deme::NOT_A_CONTACT &&
