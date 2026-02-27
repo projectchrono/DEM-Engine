@@ -20,9 +20,41 @@
 # version of the CUDA Toolkit
 #
 # Minimum CUDA version: 7.0
-# Maximum CUDA version: 11.6
+# Note: newer CUDA versions are supported as long as NVCC supports
+# `--list-gpu-arch` (preferred) or the fallback version map below includes them.
 
 function(cuda_supported_architectures)
+
+	# Prefer querying NVCC directly so we don't have to guess which SMs each
+	# CUDA toolkit version supports (this avoids regressions when a machine has
+	# a CUDA 12.x toolkit that does *not* yet support the newest architectures).
+	if (DEFINED CMAKE_CUDA_COMPILER AND EXISTS "${CMAKE_CUDA_COMPILER}")
+		execute_process(
+			COMMAND "${CMAKE_CUDA_COMPILER}" --list-gpu-arch
+			RESULT_VARIABLE _cudasup_nvcc_res
+			OUTPUT_VARIABLE _cudasup_nvcc_out
+			ERROR_VARIABLE _cudasup_nvcc_err
+			OUTPUT_STRIP_TRAILING_WHITESPACE
+		)
+
+		if (_cudasup_nvcc_res EQUAL 0)
+			# NVCC prints one `compute_XX` per line; extract the numeric suffixes.
+			string(REGEX MATCHALL "compute_([0-9]+)" _cudasup_matches "${_cudasup_nvcc_out}")
+			set(_cudasup_archs "")
+			foreach(_m ${_cudasup_matches})
+				string(REPLACE "compute_" "" _a "${_m}")
+				list(APPEND _cudasup_archs "${_a}")
+			endforeach()
+
+			list(REMOVE_DUPLICATES _cudasup_archs)
+			list(SORT _cudasup_archs COMPARE NATURAL)
+
+			if (_cudasup_archs)
+				set(CUDASUP_ARCHITECTURES ${_cudasup_archs} CACHE INTERNAL "")
+				return()
+			endif()
+		endif()
+	endif()
 
 	# Supported CUDA compute capabilities by toolkit version
 	set(cu7 20 30 35 50 52)
@@ -31,8 +63,9 @@ function(cuda_supported_architectures)
 	set(cu10 30 35 50 52 60 61 70 72 75)
 	set(cu11 35 50 52 60 61 70 72 75 80)
 	set(cu11_x 35 50 52 60 61 70 72 75 80 86)
-	set(cu12_x 50 52 60 61 70 72 75 80 86 89 120)
-	set(cu13_x 75 80 86 89 90 100 120 121)
+	set(cu12_x 50 52 60 61 70 72 75 80 86 89 90)
+	set(cu12_8_plus 50 52 60 61 70 72 75 80 86 89 90 100 101 120)
+	set(cu13_x 75 80 86 89 90 100 101 120 121)
 
 	if (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 7)
 		set(CUDASUP_ARCHITECTURES ${cu7} CACHE INTERNAL "")
@@ -60,6 +93,10 @@ function(cuda_supported_architectures)
 
 	if (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12)
 		set(CUDASUP_ARCHITECTURES ${cu12_x} CACHE INTERNAL "")
+	endif()
+
+	if (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8)
+		set(CUDASUP_ARCHITECTURES ${cu12_8_plus} CACHE INTERNAL "")
 	endif()
 	
     if (CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13)

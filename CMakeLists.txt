@@ -43,11 +43,23 @@ fix_ninja_colors()
 
 find_package(CUDAToolkit REQUIRED)
 
-# Find CUB library (this might need to be done in source-level config)
-find_package(
-	CUB REQUIRED
-	HINTS ${CUDAToolkit_ROOT}/lib64/cmake/cub
-)
+# Provide CUB as a header-only dependency.
+#
+# Some CUDA toolkit installs ship a `cub-config.cmake` that hard-depends on a
+# separately discoverable `libcudacxx` CMake package; if that package is missing
+# configuration fails even though the headers are present. DEM-Engine only needs
+# the headers, so we model CUB as an imported INTERFACE target from the CUDA
+# toolkit include directories.
+if(NOT TARGET CUB::CUB)
+	add_library(CUB::CUB INTERFACE IMPORTED)
+	if(DEFINED CUDAToolkit_INCLUDE_DIRS)
+		target_include_directories(CUB::CUB INTERFACE "${CUDAToolkit_INCLUDE_DIRS}")
+	elseif(DEFINED CUDAToolkit_INCLUDE_DIR)
+		target_include_directories(CUB::CUB INTERFACE "${CUDAToolkit_INCLUDE_DIR}")
+	else()
+		target_include_directories(CUB::CUB INTERFACE "${CUDAToolkit_ROOT}/include")
+	endif()
+endif()
 
 # Find NVIDIA's Jitify library 
 find_path(
@@ -297,4 +309,3 @@ install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/src/kernel/ DESTINATION ${CMAKE_INST
 # Build embedded demos
 # ---------------------------------------------------------------------------- #
 add_subdirectory(src/demo)
-
