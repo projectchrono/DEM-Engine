@@ -583,7 +583,20 @@ bool DEMSolver::GetTrackedOwnerTrianglePV(bodyID_t ownerID,
                                           std::vector<float>& avgPV,
                                           bool reset_window) {
     assertSysInit("GetTrackedOwnerTrianglePV");
-    return dT->getTrackedOwnerTrianglePV(ownerID, avgP, avgV, avgPV, reset_window);
+    const bool ok = dT->getTrackedOwnerTrianglePV(ownerID, avgP, avgV, avgPV, reset_window);
+    if (!ok) {
+        return false;
+    }
+    // Wear consumes and resets the tracking window inside DoDynamics; serve the last cached window for display queries.
+    if (!reset_window && dT->triPVWindowSteps == 0) {
+        auto it = m_last_tri_pv_snapshot.find(ownerID);
+        if (it != m_last_tri_pv_snapshot.end()) {
+            avgP = it->second.avgP;
+            avgV = it->second.avgV;
+            avgPV = it->second.avgPV;
+        }
+    }
+    return true;
 }
 
 void DEMSolver::EnableMeshWearModel(bodyID_t ownerID,
@@ -3042,6 +3055,54 @@ void DEMSolver::refreshTrianglePVTrackingOwners() {
     } else {
         dT->configureTrianglePVTracking(merged);
     }
+    m_last_tri_pv_snapshot.clear();
+}
+
+void DEMSolver::cacheTrackedTrianglePVWindow() {
+    m_last_tri_pv_snapshot.clear();
+    if (!dT->triPVTrackingEnabled) {
+        return;
+    }
+
+    if (dT->triPVWindowSteps > 0) {
+        dT->triPVAccumP.toHost();
+        dT->triPVAccumPV.toHost();
+    }
+    const float inv_steps = (dT->triPVWindowSteps > 0) ? (1.f / static_cast<float>(dT->triPVWindowSteps)) : 0.f;
+
+    for (const auto& kv : dT->triPVOwnerToSlot) {
+        const bodyID_t owner = kv.first;
+        const size_t slot = kv.second;
+        if (slot >= dT->triPVOwnerOffsets.size() || slot >= dT->triPVOwnerCounts.size()) {
+            continue;
+        }
+        const size_t offset = dT->triPVOwnerOffsets[slot];
+        const size_t count = dT->triPVOwnerCounts[slot];
+        TrianglePVSnapshot snap;
+        snap.avgP.assign(count, 0.f);
+        snap.avgV.assign(count, 0.f);
+        snap.avgPV.assign(count, 0.f);
+        if (count > 0 && dT->triPVWindowSteps > 0) {
+            for (size_t i = 0; i < count; i++) {
+                float p = dT->triPVAccumP[offset + i] * inv_steps;
+                float pv = dT->triPVAccumPV[offset + i] * inv_steps;
+                if (!std::isfinite(p) || p < 0.f) {
+                    p = 0.f;
+                }
+                if (!std::isfinite(pv) || pv < 0.f) {
+                    pv = 0.f;
+                }
+                float v = (p > DEME_TINY_FLOAT) ? (pv / p) : 0.f;
+                if (!std::isfinite(v) || v < 0.f) {
+                    v = 0.f;
+                }
+                snap.avgP[i] = p;
+                snap.avgV[i] = v;
+                snap.avgPV[i] = pv;
+            }
+        }
+        m_last_tri_pv_snapshot.emplace(owner, std::move(snap));
+    }
 }
 
 bool DEMSolver::applyMeshWearModel(bodyID_t ownerID, MeshWearModelState& model) {
@@ -3246,10 +3307,12 @@ void DEMSolver::updateMeshWearModels(double call_start_time, double call_end_tim
     }
 
     if (evals.empty()) {
+        cacheTrackedTrianglePVWindow();
         dT->resetTrackedTrianglePVWindow();
         return;
     }
     if (!has_active_wear) {
+        cacheTrackedTrianglePVWindow();
         dT->resetTrackedTrianglePVWindow();
         return;
     }
@@ -3282,6 +3345,7 @@ void DEMSolver::updateMeshWearModels(double call_start_time, double call_end_tim
         }
     }
 
+    cacheTrackedTrianglePVWindow();
     dT->resetTrackedTrianglePVWindow();
 
     if (owners_to_apply.empty()) {

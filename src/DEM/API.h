@@ -1965,6 +1965,13 @@ class DEMSolver {
     std::unordered_map<bodyID_t, unsigned int> m_owner_mesh_map;
     // User-requested per-triangle P/V/P*V debug tracking owners.
     std::vector<bodyID_t> m_user_tri_pv_tracking_owners;
+    struct TrianglePVSnapshot {
+        std::vector<float> avgP;
+        std::vector<float> avgV;
+        std::vector<float> avgPV;
+    };
+    // Last tracked P/V/PxV window cached on the API side before wear resets device accumulators.
+    std::unordered_map<bodyID_t, TrianglePVSnapshot> m_last_tri_pv_snapshot;
     struct MeshWearModelState {
         double wear_rate = 0.0;
         double update_interval = 0.0;
@@ -2268,6 +2275,8 @@ class DEMSolver {
     bool findOwnerTriangleRange(bodyID_t ownerID, size_t& tri_start, size_t& tri_count);
     /// Rebuild dT per-triangle PV tracking owner list from user-tracking and wear-model owners.
     void refreshTrianglePVTrackingOwners();
+    /// Cache current tracked P/V/PxV window on host side before resetting the tracking window.
+    void cacheTrackedTrianglePVWindow();
     /// Fold the just-finished dynamics call's P*V into active wear models, and apply geometry updates if due.
     void updateMeshWearModels(double call_start_time, double call_end_time);
     /// Apply one bounded pending-wear chunk of one mesh owner to its node positions.
