@@ -79,7 +79,7 @@ int main() {
     DEMSolver DEMSim;
     DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.InstructBoxDomainDimension(2, 2, 2);
+    DEMSim.InstructBoxDomainDimension(20, 20, 20);
     // No gravity: motion is fully prescribed
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, 0));
     // Enable mesh-mesh contacts (required for cylinder-cylinder contact)
@@ -129,6 +129,11 @@ int main() {
     // Initialize and run
     // =========================================================================
     DEMSim.SetInitTimeStep(step_size);
+    // Ensure deep penetration detection
+    //// TODO: Change it to SetTriTriPenetration after penetration kT-dT transfer is implemented
+    DEMSim.SetExpandSafetyAdder(1e2);
+    DEMSim.SetInitBinNumTarget(10);
+    DEMSim.SetErrorOutAvgContacts(1000);
     DEMSim.Initialize();
 
     // The two cylinders start intersecting; tell the solver the expected
