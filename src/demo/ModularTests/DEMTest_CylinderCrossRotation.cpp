@@ -40,10 +40,10 @@ int main() {
     const float nu = 0.3f;   // Poisson's ratio
 
     // cyl_r1_h2.obj: cylinder with radius=1, height=2 (axis along z, z in [-1,1])
-    const float cyl_scale = 0.1f;                      // scale factor
-    const float cyl_radius = cyl_scale;                // 0.1 m after scaling
-    const float cyl_height = 2.0f * cyl_scale;         // 0.2 m after scaling
-    const float cyl_density = 2600.0f;                 // kg/m^3
+    const float cyl_scale = 0.1f;               // scale factor
+    const float cyl_radius = cyl_scale;         // 0.1 m after scaling
+    const float cyl_height = 2.0f * cyl_scale;  // 0.2 m after scaling
+    const float cyl_density = 2600.0f;          // kg/m^3
     const float cyl_volume = (float)PI * cyl_radius * cyl_radius * cyl_height;
     const float cyl_mass = cyl_density * cyl_volume;
     // MOI of solid cylinder about centroid:
@@ -54,7 +54,7 @@ int main() {
 
     // Rotation: Cylinder B rotates from 90 deg (cross) to 0 deg (co-axial)
     // about the world y-axis. omega_y < 0 takes the axis from +x toward +z.
-    const float total_time = 1.0f;  // s
+    const float total_time = 1.0f;                          // s
     const float omega_y = -(float)(PI / 2.0) / total_time;  // rad/s
 
     // Simulation time settings
@@ -71,8 +71,8 @@ int main() {
     std::cout << "Cylinder height:  " << cyl_height << " m" << std::endl;
     std::cout << "Cylinder mass:    " << cyl_mass << " kg" << std::endl;
     std::cout << "omega_y:          " << omega_y << " rad/s" << std::endl;
-    std::cout << "Total rotation:   " << omega_y * total_time * 180.0f / (float)PI << " deg over " << total_time
-              << " s" << std::endl;
+    std::cout << "Total rotation:   " << omega_y * total_time * 180.0f / (float)PI << " deg over " << total_time << " s"
+              << std::endl;
     std::cout << "=====================================================" << std::endl;
 
     // =========================================================================
@@ -206,8 +206,8 @@ int main() {
                   << "  #MM_contacts=" << mm_cnt;
 
         if (mm_cnt > 0) {
-            float nm = std::sqrt(avg_normal.x * avg_normal.x + avg_normal.y * avg_normal.y +
-                                 avg_normal.z * avg_normal.z);
+            float nm =
+                std::sqrt(avg_normal.x * avg_normal.x + avg_normal.y * avg_normal.y + avg_normal.z * avg_normal.z);
             if (nm > 1e-6f) {
                 float inv_nm = 1.0f / nm;
                 std::cout << "  avg_normal=(" << avg_normal.x * inv_nm << "," << avg_normal.y * inv_nm << ","

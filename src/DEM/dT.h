@@ -228,6 +228,8 @@ class DEMDynamicThread {
     // Some of dT's own work arrays
     // Force of each contact event. It is the force that bodyA feels. They are in global.
     DualArray<float3> contactForces = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // Optional contact normals.
+    DualArray<float3> contactNormals = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // An imaginary `force' in each contact event that produces torque only, and does not affect the linear motion. It
     // will rise in our default rolling resistance model, which is just a torque model; yet, our contact registration is
     // contact pair-based, meaning we do not know the specs of each contact body, so we can register force only, not

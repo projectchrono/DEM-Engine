@@ -65,6 +65,7 @@ void DEMDynamicThread::packDataPointers() {
 
     contactForces.bindDevicePointer(&(granData->contactForces));
     contactTorque_convToForce.bindDevicePointer(&(granData->contactTorque_convToForce));
+    contactNormals.bindDevicePointer(&(granData->contactNormals));
     contactPointGeometryA.bindDevicePointer(&(granData->contactPointGeometryA));
     contactPointGeometryB.bindDevicePointer(&(granData->contactPointGeometryB));
     contactPatchDirectionRespected.bindDevicePointer(&(granData->contactPatchDirectionRespected));
@@ -154,6 +155,7 @@ void DEMDynamicThread::migrateDataToDevice() {
     familyExtraMarginSize.toDeviceAsync(streamInfo.stream);
 
     contactForces.toDeviceAsync(streamInfo.stream);
+    contactNormals.toDeviceAsync(streamInfo.stream);
     contactTorque_convToForce.toDeviceAsync(streamInfo.stream);
     contactPointGeometryA.toDeviceAsync(streamInfo.stream);
     contactPointGeometryB.toDeviceAsync(streamInfo.stream);
@@ -250,6 +252,7 @@ void DEMDynamicThread::migrateContactInfoToHost() {
 
     // Contact results
     contactForces.toHost();
+    contactNormals.toHost();
     contactTorque_convToForce.toHost();
     contactPointGeometryA.toHost();
     contactPointGeometryB.toHost();
@@ -589,6 +592,9 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
             DEME_DUAL_ARRAY_RESIZE(contactTorque_convToForce, cnt_arr_size, make_float3(0));
             DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, cnt_arr_size, make_float3(0));
             DEME_DUAL_ARRAY_RESIZE(contactPointGeometryB, cnt_arr_size, make_float3(0));
+            if (simParams->storeNormal) {
+                DEME_DUAL_ARRAY_RESIZE(contactNormals, cnt_arr_size, make_float3(0));
+            }
         }
         // Allocate memory for each wildcard array
         contactWildcards.resize(simParams->nContactWildcards);
@@ -1804,16 +1810,8 @@ std::shared_ptr<ContactInfoContainer> DEMDynamicThread::generateContactInfo(floa
 
         // To get contact normal: it's just contact point - sphereA center, that gives you the outward normal for body A
         if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NORMAL) {
-            size_t compOffset = (solverFlags.useClumpJitify) ? clumpComponentOffsetExt[geoA] : geoA;
-            float3 this_sp_deviation;
-            this_sp_deviation.x = relPosSphereX[compOffset];
-            this_sp_deviation.y = relPosSphereY[compOffset];
-            this_sp_deviation.z = relPosSphereZ[compOffset];
-            applyOriQToVector3<float, float>(this_sp_deviation.x, this_sp_deviation.y, this_sp_deviation.z, oriQA.w,
-                                             oriQA.x, oriQA.y, oriQA.z);
-            float3 pos = CoM + this_sp_deviation;
-            float3 normal = normalize(cntPntA - pos);
-            contactInfo.Get<float3>("Normal")[useful_cnt] = normal;
+            // If CNT_OUTPUT_CONTENT::NORMAL is on, then contactNormals is always stored
+            contactInfo.Get<float3>("Normal")[useful_cnt] = contactNormals[i];
         }
 
         // Torque is in global already...
@@ -2041,6 +2039,9 @@ inline void DEMDynamicThread::contactPrimitivesArraysResize(size_t nContactPairs
         DEME_DUAL_ARRAY_RESIZE(contactTorque_convToForce, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryB, nContactPairs, make_float3(0));
+        if (simParams->storeNormal) {
+            DEME_DUAL_ARRAY_RESIZE(contactNormals, nContactPairs, make_float3(0));
+        }
         // NEW: Resize SAT satisfaction array for tracking tri-tri physical contact
         DEME_DUAL_ARRAY_RESIZE(contactPatchDirectionRespected, nContactPairs, 0);
     }
