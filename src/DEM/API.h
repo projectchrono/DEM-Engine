@@ -1549,6 +1549,9 @@ class DEMSolver {
     /// Enable/disable outputting geometry wildcard values to the contact file.
     void EnableGeometryWildcardOutput(bool enable = true) { m_is_out_geo_wildcards = enable; }
 
+    /// @brief Let the solver store the contact normal information for every contact (or disable it).
+    void EnableStoreNormals(bool enable = true);
+
     /// @brief Set the verbosity level of the solver.
     /// @param verbose "QUIET", "ERROR", "WARNING", "INFO", "METRIC" or "DEBUG". Recommend "INFO".
     void SetVerbosity(const std::string& verbose);

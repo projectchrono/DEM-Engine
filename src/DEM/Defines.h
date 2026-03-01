@@ -332,6 +332,8 @@ struct DEMSimParams {
     float maxFamilyExtraMargin = 0.f;
     // Stepping method
     TIME_INTEGRATOR stepping = TIME_INTEGRATOR::FORWARD_EULER;
+    // Whether needs to store the contact normal
+    bool storeNormal = false;
 
     // Number of wildcards (extra property) arrays associated with contacts and owners and geometries
     unsigned int nContactWildcards;
@@ -439,6 +441,7 @@ struct DEMDataDT {
 
     // Some dT's own work array pointers
     float3* contactForces;
+    float3* contactNormals;
     float3* contactTorque_convToForce;
     float3* contactPointGeometryA;
     float3* contactPointGeometryB;
