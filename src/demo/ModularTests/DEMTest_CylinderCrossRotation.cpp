@@ -60,8 +60,6 @@ int main() {
     // Simulation time settings
     const float step_size = 1e-5f;
     const float frame_time = 0.05f;  // 20 frames total
-    const int n_sub_samples = 500;   // sub-samples per frame for force averaging
-    const float sub_dt = frame_time / static_cast<float>(n_sub_samples);
     const int n_frames = static_cast<int>(total_time / frame_time);
 
     std::cout << "=====================================================" << std::endl;
@@ -118,7 +116,7 @@ int main() {
     cyl_b->Scale(cyl_scale);
     cyl_b->SetMass(cyl_mass);
     cyl_b->SetMOI(cyl_moi);
-    cyl_b->SetInitPos(make_float3(0.f, 0.f, 0.f));
+    cyl_b->SetInitPos(make_float3(0.f, 0.f, 0.05f));
     cyl_b->SetInitQuat(cyl_b_init_q);
     cyl_b->SetFamily(1);
     auto cyl_b_tracker = DEMSim.Track(cyl_b);
@@ -150,59 +148,42 @@ int main() {
     std::vector<float3> avg_normals;
 
     for (int i = 1; i <= n_frames; i++) {
+        DEMSim.DoDynamics(frame_time);
+
         // Write mesh snapshot at the start of this interval
         char meshfilename[200];
         sprintf(meshfilename, "DEMTest_mesh_%04d.vtk", i);
         DEMSim.WriteMeshFile(out_dir / meshfilename);
 
-        // Advance simulation in sub-steps; accumulate contact-force readings
-        double sum_fx = 0.0, sum_fy = 0.0, sum_fz = 0.0;
-        for (int s = 0; s < n_sub_samples; s++) {
-            DEMSim.DoDynamics(sub_dt);
-            float3 cnt_acc = cyl_b_tracker->ContactAcc();
-            sum_fx += cnt_acc.x;
-            sum_fy += cnt_acc.y;
-            sum_fz += cnt_acc.z;
-        }
-
-        // Average contact force = (avg contact acceleration) * mass
-        float3 avg_force;
-        avg_force.x = static_cast<float>(sum_fx / n_sub_samples) * cyl_mass;
-        avg_force.y = static_cast<float>(sum_fy / n_sub_samples) * cyl_mass;
-        avg_force.z = static_cast<float>(sum_fz / n_sub_samples) * cyl_mass;
-        double force_mag = std::sqrt((double)avg_force.x * avg_force.x + (double)avg_force.y * avg_force.y +
-                                     (double)avg_force.z * avg_force.z);
-        force_mags.push_back(force_mag);
-
         // Query the detailed contact info to get average contact normal
         // (0.0 threshold: include all contacts, even those with zero force)
         auto cnt_info = DEMSim.GetContactDetailedInfo(0.0f);
-        float3 avg_normal = make_float3(0.f, 0.f, 0.f);
+        float3 avg_normal = make_float3(0.f), avg_force = make_float3(0.f);
         int mm_cnt = 0;
         const auto& cnt_types = cnt_info->GetContactType();
         const auto& cnt_normals = cnt_info->GetNormal();
+        const auto& cnt_forces = cnt_info->GetForce();
         for (size_t k = 0; k < cnt_types.size(); k++) {
-            if (cnt_types[k] == "MM") {  // mesh-mesh (triangle-triangle) contacts
-                avg_normal.x += cnt_normals[k].x;
-                avg_normal.y += cnt_normals[k].y;
-                avg_normal.z += cnt_normals[k].z;
+            if (cnt_types[k] == "MM") {  // mesh-mesh (triangle--triangle) contacts
+                avg_normal += cnt_normals[k];
+                avg_force += cnt_forces[k];
                 mm_cnt++;
             }
         }
         if (mm_cnt > 0) {
             float inv_n = 1.0f / static_cast<float>(mm_cnt);
-            avg_normal.x *= inv_n;
-            avg_normal.y *= inv_n;
-            avg_normal.z *= inv_n;
+            avg_normal *= inv_n;
+            avg_force *= inv_n;
         }
         avg_normals.push_back(avg_normal);
+        force_mags.push_back(length(avg_force));
 
         // Current angle of Cylinder B axis from the z-axis
         float angle_deg = 90.0f + omega_y * static_cast<float>(i) * frame_time * 180.0f / (float)PI;
 
         std::cout << "t=" << i * frame_time << "s"
                   << "  axis_angle_from_z=" << angle_deg << " deg"
-                  << "  |F_cnt_avg|=" << force_mag << " N"
+                  << "  |F_cnt_avg|=" << length(avg_force) << " N"
                   << "  #MM_contacts=" << mm_cnt;
 
         if (mm_cnt > 0) {
@@ -241,8 +222,7 @@ int main() {
     }
     double stddev_f = std::sqrt(var / static_cast<double>(force_mags.size()));
 
-    std::cout << "\n=== Contact Force Statistics (over " << force_mags.size() << " frames, each averaged over "
-              << n_sub_samples << " sub-steps) ===" << std::endl;
+    std::cout << "\n=== Contact Force Statistics (over " << force_mags.size() << " frames) ===" << std::endl;
     std::cout << "  Mean:   " << mean_f << " N" << std::endl;
     std::cout << "  Min:    " << min_f << " N" << std::endl;
     std::cout << "  Max:    " << max_f << " N" << std::endl;

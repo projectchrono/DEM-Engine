@@ -2506,7 +2506,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 // These can be used for subsequent force calculations
                 // std::cout << "Patch-based contact penetration, area, normal, contact point for contact type "
                 //           << (int)contact_type << ":" << std::endl;
-                // displayDeviceArray<double>(finalPenetrations, countPatch);
+                // displayDeviceArray<double>(finalPenetrations.data(), countPatch);
                 // displayDeviceArray<double>(finalAreas, countPatch);
                 // displayDeviceFloat3(finalNormals, countPatch);
                 // displayDeviceFloat3<double3>(finalContactPoints, countPatch);
