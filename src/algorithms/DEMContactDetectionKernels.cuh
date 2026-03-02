@@ -587,6 +587,7 @@ __global__ void propagateActiveTriLabels(const uint64_t* keys,
                                          const bodyID_t* triNeighbor1,
                                          const bodyID_t* triNeighbor2,
                                          const bodyID_t* triNeighbor3,
+                                         size_t* changed,
                                          size_t n) {
     contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
@@ -631,6 +632,9 @@ __global__ void propagateActiveTriLabels(const uint64_t* keys,
             }
         }
         labelsOut[myID] = label;
+        if (label != labelsIn[myID]) {
+            *changed = 1;
+        }
     }
 }
 

@@ -176,10 +176,14 @@ int main() {
         float tip_x = pos.x;
         float tip_z = pos.z - centroid_above_tip;
 
+        // Also inspect how many contacts we have
+        auto cnt_info = DEMSim.GetContactDetailedInfo(0.0f);
+        int num_cnts = cnt_info->GetContactType().size();
+
         std::cout << "t=" << i * frame_time << "s"
                   << "  tip_x=" << tip_x << " m"
                   << "  tip_z=" << tip_z << " m"
-                  << "  |F_cnt|=" << force_mag << " N";
+                  << "  #MM_contacts=" << num_cnts << "  |F_cnt|=" << force_mag << " N";
 
         if (force_mag > 1e-3) {
             float inv_f = static_cast<float>(1.0 / force_mag);
