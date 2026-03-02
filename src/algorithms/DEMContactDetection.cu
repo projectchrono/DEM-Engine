@@ -1649,20 +1649,27 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                                                                          this_stream, scratchPad);
                     }
 
-                    // Label propagation iterations.
-                    const int kLabelIters = 4;
+                    // Label propagation until convergence.
+                    scratchPad.allocateDualStruct("labelChanged");
                     bodyID_t* labelsIn = activeLabelsA;
                     bodyID_t* labelsOut = activeLabelsB;
-                    for (int iter = 0; iter < kLabelIters; ++iter) {
+                    for (size_t iter = 0; iter < numUniqueActiveTri; ++iter) {
+                        DEME_GPU_CALL(cudaMemsetAsync(scratchPad.getDualStructDevice("labelChanged"), 0,
+                                                      sizeof(size_t), this_stream));
                         propagateActiveTriLabels<<<dim3(blocks_needed_active), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
                                                    this_stream>>>(
                             activeTriKeysUnique, labelsIn, labelsOut, groupActiveStart, groupActiveCount,
                             granData->triNeighborIndex, granData->triNeighbor1, granData->triNeighbor2,
-                            granData->triNeighbor3, numUniqueActiveTri);
+                            granData->triNeighbor3, scratchPad.getDualStructDevice("labelChanged"),
+                            numUniqueActiveTri);
                         bodyID_t* tmp = labelsIn;
                         labelsIn = labelsOut;
                         labelsOut = tmp;
+                        scratchPad.syncDualStructDeviceToHost("labelChanged");
+                        if (*scratchPad.getDualStructHost("labelChanged") == 0)
+                            break;
                     }
+                    scratchPad.finishUsingDualStruct("labelChanged");
                     finalActiveLabels = labelsIn;
                 }
 
