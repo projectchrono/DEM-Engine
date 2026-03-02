@@ -9,6 +9,8 @@
 class GpuManager {
   public:
     GpuManager(unsigned int total_streams = 1);
+    // Construct using explicit device IDs (one stream per device ID).
+    GpuManager(const std::vector<int>& device_ids);
     ~GpuManager();
 
     struct StreamInfo {
@@ -24,7 +26,7 @@ class GpuManager {
     // Returns the HIGHEST number of streams per device.
     unsigned int getMaxStreamsPerDevice();
 
-    int scanNumDevices();
+    static int scanNumDevices();
 
     // DO NOT USE UNLESS YOU INTEND TO MANUALLY HANDLE YOUR STREAMS.
     const std::vector<StreamInfo>& getStreamsFromDevice(int index);

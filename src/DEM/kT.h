@@ -342,7 +342,7 @@ class DEMKinematicThread {
 
     // Put sim data array pointers in place
     void packDataPointers();
-    void packTransferPointers(DEMDynamicThread*& dT);
+    void packTransferPointers(DEMDynamicThread* dT);
 
     // Move array data to or from device
     void migrateDataToDevice();

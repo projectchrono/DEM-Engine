@@ -269,7 +269,7 @@ bodyID_t DEMDynamicThread::getGeoOwnerID(const bodyID_t& geoB, const contact_t& 
 }
 
 // packTransferPointers
-void DEMDynamicThread::packTransferPointers(DEMKinematicThread*& kT) {
+void DEMDynamicThread::packTransferPointers(DEMKinematicThread* kT) {
     // These are the pointers for sending data to dT
     granData->pKTOwnedBuffer_absVel = kT->absVel_buffer.data();
     granData->pKTOwnedBuffer_voxelID = kT->voxelID_buffer.data();

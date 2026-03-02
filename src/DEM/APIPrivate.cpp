@@ -1280,8 +1280,8 @@ void DEMSolver::packDataPointers() {
     kT->packDataPointers();
     // Each worker thread needs pointers used for data transfering. Note this step must be done after packDataPointers
     // are called, so each thread has its own pointers packed.
-    dT->packTransferPointers(kT);
-    kT->packTransferPointers(dT);
+    dT->packTransferPointers(kT.get());
+    kT->packTransferPointers(dT.get());
     // Finally, the API needs to map all mesh to their owners
     for (const auto& mmesh : m_meshes) {
         m_owner_mesh_map[mmesh->owner] = mmesh->cache_offset;
