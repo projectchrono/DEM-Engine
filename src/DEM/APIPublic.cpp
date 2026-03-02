@@ -21,6 +21,10 @@
 namespace deme {
 
 DEMSolver::DEMSolver(unsigned int nGPUs) {
+    if (nGPUs == 0) {
+        DEME_ERROR("DEMSolver was set to use 0 GPUs and that is currently not supported.");
+    }
+
     dTkT_InteractionManager = std::make_unique<ThreadManager>();
     kTMain_InteractionManager = std::make_unique<WorkerReportChannel>();
     dTMain_InteractionManager = std::make_unique<WorkerReportChannel>();
@@ -31,8 +35,7 @@ DEMSolver::DEMSolver(unsigned int nGPUs) {
     // Determine which device IDs to use: scan available GPUs, use at most 2
     int detected = GpuManager::scanNumDevices();
     if (nGPUs > 2) {
-        DEME_WARNING(
-            "DEMSolver was requested to use %u GPUs, but at most 2 are supported. Using 2 GPUs.", nGPUs);
+        DEME_WARNING("DEMSolver was requested to use %u GPUs, but at most 2 are supported. Using 2 GPUs.", nGPUs);
         nGPUs = 2;
     }
     // Build a 2-element device ID list (one per thread); both threads share the same device when using 1 GPU
@@ -43,6 +46,7 @@ DEMSolver::DEMSolver(unsigned int nGPUs) {
     } else {
         device_ids = {0, 0};
     }
+    // Always use id list to avoid GpuManager deciding device usage by itself
     dTkT_GpuManager = std::make_unique<GpuManager>(device_ids);
 
     // Thread-based worker creation may be needed as the workers allocate DualStructs on construction
@@ -88,15 +92,15 @@ DEMSolver::DEMSolver(std::vector<int> device_ids) {
         }
     }
     if (device_ids.size() > 2) {
-        DEME_WARNING(
-            "DEMSolver was given %zu device IDs, but at most 2 are supported. Using only the first 2.",
-            device_ids.size());
+        DEME_WARNING("DEMSolver was given %zu device IDs, but at most 2 are supported. Using only the first 2.",
+                     device_ids.size());
         device_ids.resize(2);
     }
     // When only one device is specified, both threads run on that device
     if (device_ids.size() == 1) {
         device_ids = {device_ids[0], device_ids[0]};
     }
+    // Always use id list to avoid GpuManager deciding device usage by itself
     dTkT_GpuManager = std::make_unique<GpuManager>(device_ids);
 
     // Thread-based worker creation may be needed as the workers allocate DualStructs on construction
@@ -1974,13 +1978,13 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::s
 }
 
 std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity) {
-    DEMInspector insp(this, this->dT, quantity);
+    DEMInspector insp(this, this->dT.get(), quantity);
     m_inspectors.push_back(std::make_shared<DEMInspector>(std::move(insp)));
     return m_inspectors.back();
 }
 
 std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity, const std::string& region) {
-    DEMInspector insp(this, this->dT, quantity, region);
+    DEMInspector insp(this, this->dT.get(), quantity, region);
     m_inspectors.push_back(std::make_shared<DEMInspector>(std::move(insp)));
     return m_inspectors.back();
 }
