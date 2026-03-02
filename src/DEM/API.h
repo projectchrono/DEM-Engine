@@ -1811,12 +1811,12 @@ class DEMSolver {
     // DEM system's workers, helpers, friends
     ////////////////////////////////////////////////////////////////////////////////
 
-    std::unique_ptr<WorkerReportChannel> kTMain_InteractionManager;
-    std::unique_ptr<WorkerReportChannel> dTMain_InteractionManager;
     std::unique_ptr<GpuManager> dTkT_GpuManager;
     std::unique_ptr<ThreadManager> dTkT_InteractionManager;
-    std::unique_ptr<DEMKinematicThread> kT;
+    std::unique_ptr<WorkerReportChannel> dTMain_InteractionManager;
+    std::unique_ptr<WorkerReportChannel> kTMain_InteractionManager;
     std::unique_ptr<DEMDynamicThread> dT;
+    std::unique_ptr<DEMKinematicThread> kT;
 
     ////////////////////////////////////////////////////////////////////////////////
     // DEM system's private methods
