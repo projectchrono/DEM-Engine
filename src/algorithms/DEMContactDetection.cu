@@ -1690,22 +1690,75 @@ if (meshOwnerPos) {
                                                                          this_stream, scratchPad);
                     }
 
-                    // Label propagation iterations.
-                    const int kLabelIters = 4;
+                    // ---- Option B: Precompute active-triangle neighbor positions (in activeTriKeysUnique) once.
+                    // triNeighbor{1,2,3} are precomputed global edge-neighbor triangle IDs, but we still need a
+                    // per-step mapping "neighbor triID -> position in the ACTIVE list" to avoid per-iteration
+                    // binary searches.
+                    contactPairs_t* activeTriNeighborPos =
+                        (contactPairs_t*)scratchPad.allocateTempVector("activeTriNeighborPos",
+                                                                       numUniqueActiveTri * 3 * sizeof(contactPairs_t));
+                    buildActiveTriNeighborPos<<<dim3(blocks_needed_active), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                               this_stream>>>(activeTriKeysUnique, groupActiveStart, groupActiveCount,
+                                                              granData->triNeighborIndex, granData->triNeighbor1,
+                                                              granData->triNeighbor2, granData->triNeighbor3,
+                                                              activeTriNeighborPos, numUniqueActiveTri);
+
+                    // ---- Option A: Adaptive label propagation (check for convergence every few iterations).
+                    // We check only the *last* iteration in a small batch (default: 4) to avoid host/device sync
+                    // each iteration. Worst-case wasted work is (batchSize-1) extra iterations.
+                    const int kCheckEvery = 4;
+                    const int kMaxLabelItersCap = 512;
+                    int maxIters = (int)numUniqueActiveTri;
+                    if (maxIters > kMaxLabelItersCap) {
+                        maxIters = kMaxLabelItersCap;
+                    }
+                    scratchPad.allocateDualArray("activeTriLabelChanged", sizeof(contactPairs_t));
+                    auto* changedHostRaw = scratchPad.getDualArrayHost("activeTriLabelChanged");
+                    auto* changedDevRaw = scratchPad.getDualArrayDevice("activeTriLabelChanged");
+                    contactPairs_t* changedDev = reinterpret_cast<contactPairs_t*>(changedDevRaw);
+
                     bodyID_t* labelsIn = activeLabelsA;
                     bodyID_t* labelsOut = activeLabelsB;
-                    for (int iter = 0; iter < kLabelIters; ++iter) {
-                        propagateActiveTriLabels<<<dim3(blocks_needed_active), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                                   this_stream>>>(activeTriKeysUnique, labelsIn, labelsOut,
-                                                                  groupActiveStart, groupActiveCount,
-                                                                  granData->triNeighborIndex,
-                                                                  granData->triNeighbor1, granData->triNeighbor2,
-                                                                  granData->triNeighbor3, numUniqueActiveTri);
+                    int iter = 0;
+                    while (iter < maxIters) {
+                        int remaining = maxIters - iter;
+                        int batch = remaining < kCheckEvery ? remaining : kCheckEvery;
+
+                        // Batch iterations except the last one: no convergence flag.
+                        for (int b = 0; b < batch - 1; ++b) {
+                            propagateActiveTriLabelsFromNeighborPos<<<dim3(blocks_needed_active),
+                                                                      dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                                                      this_stream>>>(labelsIn, labelsOut,
+                                                                                     activeTriNeighborPos, nullptr,
+                                                                                     numUniqueActiveTri);
+                            bodyID_t* tmp = labelsIn;
+                            labelsIn = labelsOut;
+                            labelsOut = tmp;
+                            ++iter;
+                        }
+
+                        // Last iteration in the batch: check if this iteration changes anything.
+                        DEME_GPU_CALL(cudaMemsetAsync(changedDev, 0, sizeof(contactPairs_t), this_stream));
+                        propagateActiveTriLabelsFromNeighborPos<<<dim3(blocks_needed_active),
+                                                                  dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                                                  this_stream>>>(labelsIn, labelsOut,
+                                                                                 activeTriNeighborPos, changedDev,
+                                                                                 numUniqueActiveTri);
                         bodyID_t* tmp = labelsIn;
                         labelsIn = labelsOut;
                         labelsOut = tmp;
+                        ++iter;
+
+                        scratchPad.syncDualArrayDeviceToHost("activeTriLabelChanged");
+                        const contactPairs_t changed = *reinterpret_cast<contactPairs_t*>(changedHostRaw);
+                        if (changed == 0) {
+                            break;
+                        }
                     }
                     finalActiveLabels = labelsIn;
+
+                    scratchPad.finishUsingDualArray("activeTriLabelChanged");
+                    scratchPad.finishUsingTempVector("activeTriNeighborPos");
                 }
 
                 scratchPad.finishUsingTempVector("activeTriKeys_sorted");
