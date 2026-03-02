@@ -991,8 +991,8 @@ __global__ void accumulateTrianglePVFromPatchContacts_impl(const DEMSimParams* s
     const geoType_t typeA = decodeTypeA(primType);
     const geoType_t typeB = decodeTypeB(primType);
 
-    // Track only particle(=sphere)-triangle contributions for diagnostic P/V/PxV.
-    if (typeA == GEO_T_TRIANGLE && typeB == GEO_T_SPHERE) {
+    // Track any contact contribution on triangle sides (sphere-triangle and triangle-triangle).
+    if (typeA == GEO_T_TRIANGLE) {
         bool triGhost = false, triGhostNeg = false;
         const bodyID_t triA = cylPeriodicDecodeID(granData->idPrimitiveA[primContactID], triGhost, triGhostNeg);
         if (triA < simParams->nTriGM) {
@@ -1003,7 +1003,7 @@ __global__ void accumulateTrianglePVFromPatchContacts_impl(const DEMSimParams* s
             }
         }
     }
-    if (typeB == GEO_T_TRIANGLE && typeA == GEO_T_SPHERE) {
+    if (typeB == GEO_T_TRIANGLE) {
         bool triGhost = false, triGhostNeg = false;
         const bodyID_t triB = cylPeriodicDecodeID(granData->idPrimitiveB[primContactID], triGhost, triGhostNeg);
         if (triB < simParams->nTriGM) {

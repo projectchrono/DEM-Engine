@@ -28,19 +28,18 @@ inline __device__ float triRadiusFromNodes(const float3& center,
 // If clump templates are jitified, they will be below
 _clumpTemplateDefs_;
 
+
 inline __device__ void fillSharedMemTriangles(deme::DEMSimParams* simParams,
                                               deme::DEMDataKT* granData,
                                               const deme::spheresBinTouches_t& myThreadID,
-                                              const deme::bodyID_t& triID,
+                                              const deme::bodyID_t& triID_in,
                                               deme::bodyID_t* triOwnerIDs,
                                               deme::bodyID_t* triIDs,
                                               deme::family_t* triOwnerFamilies,
-                                              float3* sandwichANode1,
-                                              float3* sandwichANode2,
-                                              float3* sandwichANode3,
-                                              float3* sandwichBNode1,
-                                              float3* sandwichBNode2,
-                                              float3* sandwichBNode3,
+                                              const float3* tri_vA1_all,
+                                              const float3* tri_vB1_all,
+                                              const float3* tri_vC1_all,
+                                              const float3* tri_shift_all,
                                               float3* triANode1,
                                               float3* triANode2,
                                               float3* triANode3,
@@ -51,76 +50,50 @@ inline __device__ void fillSharedMemTriangles(deme::DEMSimParams* simParams,
                                               signed char* triGhostFlags) {
     bool is_ghost = false;
     bool ghost_neg = false;
-    deme::bodyID_t tri_id = triID;
-    if (triID & deme::CYL_PERIODIC_GHOST_FLAG) {
-        tri_id = cylPeriodicDecodeID(triID, is_ghost, ghost_neg);
+    deme::bodyID_t tri_id = triID_in;
+    if (triID_in & deme::CYL_PERIODIC_GHOST_FLAG) {
+        tri_id = cylPeriodicDecodeID(triID_in, is_ghost, ghost_neg);
         is_ghost = is_ghost && simParams->useCylPeriodic;
     }
     triGhostFlags[myThreadID] = is_ghost ? (ghost_neg ? -1 : 1) : 0;
 
-    deme::bodyID_t ownerID = granData->ownerTriMesh[tri_id];
+    const deme::bodyID_t ownerID = granData->ownerTriMesh[tri_id];
     triIDs[myThreadID] = tri_id;
     triOwnerIDs[myThreadID] = ownerID;
     triOwnerFamilies[myThreadID] = granData->familyID[ownerID];
-    float3 ownerXYZ;
-    float3 node1, node2, node3;
 
-    voxelIDToPosition<float, deme::voxelID_t, deme::subVoxelPos_t>(
-        ownerXYZ.x, ownerXYZ.y, ownerXYZ.z, granData->voxelID[ownerID], granData->locX[ownerID],
-        granData->locY[ownerID], granData->locZ[ownerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-    float myOriQw = granData->oriQw[ownerID];
-    float myOriQx = granData->oriQx[ownerID];
-    float myOriQy = granData->oriQy[ownerID];
-    float myOriQz = granData->oriQz[ownerID];
-
-    // These locations does not include the LBF offset, which is fine since we only care about relative positions here
-    {
-        node1 = sandwichANode1[tri_id];
-        node2 = sandwichANode2[tri_id];
-        node3 = sandwichANode3[tri_id];
-        applyOriQToVector3<float, deme::oriQ_t>(node1.x, node1.y, node1.z, myOriQw, myOriQx, myOriQy, myOriQz);
-        applyOriQToVector3<float, deme::oriQ_t>(node2.x, node2.y, node2.z, myOriQw, myOriQx, myOriQy, myOriQz);
-        applyOriQToVector3<float, deme::oriQ_t>(node3.x, node3.y, node3.z, myOriQw, myOriQx, myOriQy, myOriQz);
-        triANode1[myThreadID] = ownerXYZ + node1;
-        triANode2[myThreadID] = ownerXYZ + node2;
-        triANode3[myThreadID] = ownerXYZ + node3;
-    }
-    {
-        node1 = sandwichBNode1[tri_id];
-        node2 = sandwichBNode2[tri_id];
-        node3 = sandwichBNode3[tri_id];
-        applyOriQToVector3<float, deme::oriQ_t>(node1.x, node1.y, node1.z, myOriQw, myOriQx, myOriQy, myOriQz);
-        applyOriQToVector3<float, deme::oriQ_t>(node2.x, node2.y, node2.z, myOriQw, myOriQx, myOriQy, myOriQz);
-        applyOriQToVector3<float, deme::oriQ_t>(node3.x, node3.y, node3.z, myOriQw, myOriQx, myOriQy, myOriQz);
-        triBNode1[myThreadID] = ownerXYZ + node1;
-        triBNode2[myThreadID] = ownerXYZ + node2;
-        triBNode3[myThreadID] = ownerXYZ + node3;
-    }
+    // Load precomputed world-space A-face and shift.
+    float3 A1 = tri_vA1_all[tri_id];
+    float3 A2 = tri_vB1_all[tri_id];
+    float3 A3 = tri_vC1_all[tri_id];
+    float3 sh = tri_shift_all[tri_id];
 
     if (is_ghost) {
         const float sin_span = ghost_neg ? -simParams->cylPeriodicSinSpan : simParams->cylPeriodicSinSpan;
-        triANode1[myThreadID] = cylPeriodicRotate(triANode1[myThreadID], simParams->cylPeriodicOrigin,
-                                                  simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                  simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
-        triANode2[myThreadID] = cylPeriodicRotate(triANode2[myThreadID], simParams->cylPeriodicOrigin,
-                                                  simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                  simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
-        triANode3[myThreadID] = cylPeriodicRotate(triANode3[myThreadID], simParams->cylPeriodicOrigin,
-                                                  simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                  simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
-        triBNode1[myThreadID] = cylPeriodicRotate(triBNode1[myThreadID], simParams->cylPeriodicOrigin,
-                                                  simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                  simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
-        triBNode2[myThreadID] = cylPeriodicRotate(triBNode2[myThreadID], simParams->cylPeriodicOrigin,
-                                                  simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                  simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
-        triBNode3[myThreadID] = cylPeriodicRotate(triBNode3[myThreadID], simParams->cylPeriodicOrigin,
-                                                  simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                  simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
+        A1 = cylPeriodicRotate(A1, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
+                               simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
+        A2 = cylPeriodicRotate(A2, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
+                               simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
+        A3 = cylPeriodicRotate(A3, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
+                               simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
+        // sh is a vector; rotate around origin (0,0,0)
+        sh = cylPeriodicRotate(sh, make_float3(0.f, 0.f, 0.f), simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
+                               simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
     }
+
+    triANode1[myThreadID] = A1;
+    triANode2[myThreadID] = A2;
+    triANode3[myThreadID] = A3;
+
+    // Reconstruct B-face (opposite normal) from A-face + shift; swap nodes 2<->3.
+    triBNode1[myThreadID] = A1 + sh;
+    triBNode2[myThreadID] = A3 + sh;
+    triBNode3[myThreadID] = A2 + sh;
+
     triCenters[myThreadID] = triangleCentroid<float3>(triANode1[myThreadID], triANode2[myThreadID],
                                                       triANode3[myThreadID]);
 }
+
 
 template <typename T1, typename T2>
 inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
@@ -242,12 +215,10 @@ DEME_KERNEL void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParam
                                                    deme::binsTriangleTouchPairs_t* triIDsLookUpTable,
                                                    deme::binContactPairs_t* numTriSphContactsInEachBin,
                                                    deme::binContactPairs_t* numTriTriContactsInEachBin,
-                                                   float3* sandwichANode1,
-                                                   float3* sandwichANode2,
-                                                   float3* sandwichANode3,
-                                                   float3* sandwichBNode1,
-                                                   float3* sandwichBNode2,
-                                                   float3* sandwichBNode3,
+                                                   const float3* tri_vA1_all,
+                                                   const float3* tri_vB1_all,
+                                                   const float3* tri_vC1_all,
+                                                   const float3* tri_shift_all,
                                                    size_t nActiveBinsForTri,
                                                    bool meshUniversalContact) {
     // Shared storage for bodies involved in this bin. Pre-allocated so that each threads can easily use.
@@ -315,8 +286,7 @@ DEME_KERNEL void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParam
         if (myThreadID < this_batch_active_count) {
             deme::bodyID_t triID = triIDsEachBinTouches_sorted[thisTriTableEntry + processed_count + myThreadID];
             fillSharedMemTriangles(simParams, granData, myThreadID, triID, triOwnerIDs, triIDs, triOwnerFamilies,
-                                   sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1, sandwichBNode2,
-                                   sandwichBNode3, triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3,
+                                   tri_vA1_all, tri_vB1_all, tri_vC1_all, tri_shift_all, triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3,
                                    triCenters, triGhostFlags);
         }
         __syncthreads();
@@ -519,8 +489,7 @@ if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, ghostA, ghostA_neg, tr
                         // fast. And it's not really shared mem filling, just using that function to get the info.
                         deme::bodyID_t cur_triID = triIDsEachBinTouches_sorted[thisTriTableEntry + cur_ind];
                         fillSharedMemTriangles(simParams, granData, 0, cur_triID, &cur_ownerID, &cur_bodyID,
-                                               &cur_ownerFamily, sandwichANode1, sandwichANode2, sandwichANode3,
-                                               sandwichBNode1, sandwichBNode2, sandwichBNode3, &cur_triANode1,
+                                               &cur_ownerFamily, tri_vA1_all, tri_vB1_all, tri_vC1_all, tri_shift_all, &cur_triANode1,
                                                &cur_triANode2, &cur_triANode3, &cur_triBNode1, &cur_triBNode2,
                                                &cur_triBNode3, &cur_triCenter, &cur_isGhost);
                     }
@@ -607,12 +576,10 @@ DEME_KERNEL void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                                                 deme::bodyID_t* idTriA_mm,
                                                 deme::bodyID_t* idTriB_mm,
                                                 deme::contact_t* dType_mm,
-                                                float3* sandwichANode1,
-                                                float3* sandwichANode2,
-                                                float3* sandwichANode3,
-                                                float3* sandwichBNode1,
-                                                float3* sandwichBNode2,
-                                                float3* sandwichBNode3,
+                                                const float3* tri_vA1_all,
+                                                   const float3* tri_vB1_all,
+                                                   const float3* tri_vC1_all,
+                                                   const float3* tri_shift_all,
                                                 size_t nActiveBinsForTri,
                                                 bool meshUniversalContact) {
     // Shared storage for bodies involved in this bin. Pre-allocated so that each threads can easily use.
@@ -676,8 +643,7 @@ DEME_KERNEL void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
         if (myThreadID < this_batch_active_count) {
             deme::bodyID_t triID = triIDsEachBinTouches_sorted[thisTriTableEntry + processed_count + myThreadID];
             fillSharedMemTriangles(simParams, granData, myThreadID, triID, triOwnerIDs, triIDs, triOwnerFamilies,
-                                   sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1, sandwichBNode2,
-                                   sandwichBNode3, triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3,
+                                   tri_vA1_all, tri_vB1_all, tri_vC1_all, tri_shift_all, triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3,
                                    triCenters, triGhostFlags);
         }
         __syncthreads();
@@ -911,8 +877,7 @@ if (!cylPeriodicShouldUseGhostPair(ownerPosA, radA_owner, ghostA, ghostA_neg, tr
                         // fast. And it's not really shared mem filling, just using that function to get the info.
                         deme::bodyID_t cur_triID = triIDsEachBinTouches_sorted[thisTriTableEntry + cur_ind];
                         fillSharedMemTriangles(simParams, granData, 0, cur_triID, &cur_ownerID, &cur_bodyID,
-                                               &cur_ownerFamily, sandwichANode1, sandwichANode2, sandwichANode3,
-                                               sandwichBNode1, sandwichBNode2, sandwichBNode3, &cur_triANode1,
+                                               &cur_ownerFamily, tri_vA1_all, tri_vB1_all, tri_vC1_all, tri_shift_all, &cur_triANode1,
                                                &cur_triANode2, &cur_triANode3, &cur_triBNode1, &cur_triBNode2,
                                                &cur_triBNode3, &cur_triCenter, &cur_isGhost);
                     }
