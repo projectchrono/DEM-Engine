@@ -8,3 +8,4 @@ dist/
 output/*
 post/*
 
+_codeql*
