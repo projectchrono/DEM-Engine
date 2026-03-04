@@ -129,7 +129,12 @@ DEMSolver::DEMSolver(std::vector<int> device_ids) {
 DEMSolver::~DEMSolver() {
     if (sys_initialized)
         DoDynamicsThenSync(0.0);
-    // unique_ptrs are automatically destroyed in reverse declaration order
+    kT.reset();
+    dT.reset();
+    kTMain_InteractionManager.reset();
+    dTMain_InteractionManager.reset();
+    dTkT_InteractionManager.reset();
+    dTkT_GpuManager.reset();
 }
 
 void DEMSolver::SetVerbosity(const std::string& verbose) {
