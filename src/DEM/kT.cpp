@@ -525,7 +525,7 @@ void DEMKinematicThread::migrateDeviceModifiableInfoToHost() {
     migrateFamilyToHost();
 }
 
-void DEMKinematicThread::packTransferPointers(DEMDynamicThread*& dT) {
+void DEMKinematicThread::packTransferPointers(DEMDynamicThread* dT) {
     // Set the pointers to dT owned buffers
     granData->pDTOwnedBuffer_nContactPairs = &(dT->nContactPairs_buffer);
     granData->pDTOwnedBuffer_idGeometryA = dT->idGeometryA_buffer.data();

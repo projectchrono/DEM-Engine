@@ -21,36 +21,113 @@
 namespace deme {
 
 DEMSolver::DEMSolver(unsigned int nGPUs) {
-    dTkT_InteractionManager = new ThreadManager();
-    kTMain_InteractionManager = new WorkerReportChannel();
-    dTMain_InteractionManager = new WorkerReportChannel();
+    if (nGPUs == 0) {
+        DEME_ERROR("DEMSolver was set to use 0 GPUs and that is currently not supported.");
+    }
 
-    // 2 means 2 threads (nGPUs is currently not used)
-    dTkT_GpuManager = new GpuManager(2);
+    dTkT_InteractionManager = std::make_unique<ThreadManager>();
+    kTMain_InteractionManager = std::make_unique<WorkerReportChannel>();
+    dTMain_InteractionManager = std::make_unique<WorkerReportChannel>();
 
     // Set default solver params
     setDefaultSolverParams();
+
+    // Determine which device IDs to use: scan available GPUs, use at most 2
+    int detected = GpuManager::scanNumDevices();
+    if (nGPUs > 2) {
+        DEME_WARNING("DEMSolver was requested to use %u GPUs, but at most 2 are supported. Using 2 GPUs.", nGPUs);
+        nGPUs = 2;
+    }
+    // Build a 2-element device ID list (one per thread); both threads share the same device when using 1 GPU
+    unsigned int nToUse = std::min((unsigned int)detected, nGPUs);
+    std::vector<int> device_ids;
+    if (nToUse >= 2) {
+        device_ids = {0, 1};
+    } else {
+        device_ids = {0, 0};
+    }
+    // Always use id list to avoid GpuManager deciding device usage by itself
+    dTkT_GpuManager = std::make_unique<GpuManager>(device_ids);
 
     // Thread-based worker creation may be needed as the workers allocate DualStructs on construction
     std::thread dT_construct([&]() {
         // Get a device/stream ID to use from the GPU Manager
         const GpuManager::StreamInfo dT_stream_info = dTkT_GpuManager->getAvailableStream();
         DEME_GPU_CALL(cudaSetDevice(dT_stream_info.device));
-        dT = new DEMDynamicThread(dTMain_InteractionManager, dTkT_InteractionManager, dT_stream_info);
+        dT = std::make_unique<DEMDynamicThread>(dTMain_InteractionManager.get(), dTkT_InteractionManager.get(),
+                                                dT_stream_info);
     });
 
     std::thread kT_construct([&]() {
         const GpuManager::StreamInfo kT_stream_info = dTkT_GpuManager->getAvailableStream();
         DEME_GPU_CALL(cudaSetDevice(kT_stream_info.device));
-        kT = new DEMKinematicThread(kTMain_InteractionManager, dTkT_InteractionManager, kT_stream_info);
+        kT = std::make_unique<DEMKinematicThread>(kTMain_InteractionManager.get(), dTkT_InteractionManager.get(),
+                                                  kT_stream_info);
     });
 
     dT_construct.join();
     kT_construct.join();
 
     // Make friends
-    dT->kT = kT;
-    kT->dT = dT;
+    dT->kT = kT.get();
+    kT->dT = dT.get();
+
+    // Specify force model
+    m_force_model[DEFAULT_FORCE_MODEL_NAME] =
+        std::make_shared<DEMForceModel>(std::move(DEMForceModel(FORCE_MODEL::HERTZIAN)));
+}
+
+DEMSolver::DEMSolver(std::vector<int> device_ids) {
+    dTkT_InteractionManager = std::make_unique<ThreadManager>();
+    kTMain_InteractionManager = std::make_unique<WorkerReportChannel>();
+    dTMain_InteractionManager = std::make_unique<WorkerReportChannel>();
+
+    // Set default solver params
+    setDefaultSolverParams();
+
+    // Validate device IDs against the number of physically available GPUs
+    int detected = GpuManager::scanNumDevices();
+    if (device_ids.empty()) {
+        DEME_ERROR("DEMSolver was given an empty device ID list. Please provide at least one device ID.");
+    }
+    for (int id : device_ids) {
+        if (id < 0 || id >= detected) {
+            DEME_ERROR("DEMSolver was given device ID %d, but only %d GPU device(s) are available.", id, detected);
+        }
+    }
+    if (device_ids.size() > 2) {
+        DEME_WARNING("DEMSolver was given %zu device IDs, but at most 2 are supported. Using only the first 2.",
+                     device_ids.size());
+        device_ids.resize(2);
+    }
+    // When only one device is specified, both threads run on that device
+    if (device_ids.size() == 1) {
+        device_ids = {device_ids[0], device_ids[0]};
+    }
+    // Always use id list to avoid GpuManager deciding device usage by itself
+    dTkT_GpuManager = std::make_unique<GpuManager>(device_ids);
+
+    // Thread-based worker creation may be needed as the workers allocate DualStructs on construction
+    std::thread dT_construct([&]() {
+        const GpuManager::StreamInfo dT_stream_info = dTkT_GpuManager->getAvailableStream();
+        DEME_GPU_CALL(cudaSetDevice(dT_stream_info.device));
+        dT = std::make_unique<DEMDynamicThread>(dTMain_InteractionManager.get(), dTkT_InteractionManager.get(),
+                                                dT_stream_info);
+    });
+
+    std::thread kT_construct([&]() {
+        const GpuManager::StreamInfo kT_stream_info = dTkT_GpuManager->getAvailableStream();
+        DEME_GPU_CALL(cudaSetDevice(kT_stream_info.device));
+        kT = std::make_unique<DEMKinematicThread>(kTMain_InteractionManager.get(), dTkT_InteractionManager.get(),
+                                                  kT_stream_info);
+    });
+
+    dT_construct.join();
+    kT_construct.join();
+
+    // Make friends
+    dT->kT = kT.get();
+    kT->dT = dT.get();
 
     // Specify force model
     m_force_model[DEFAULT_FORCE_MODEL_NAME] =
@@ -60,12 +137,12 @@ DEMSolver::DEMSolver(unsigned int nGPUs) {
 DEMSolver::~DEMSolver() {
     if (sys_initialized)
         DoDynamicsThenSync(0.0);
-    delete kT;
-    delete dT;
-    delete kTMain_InteractionManager;
-    delete dTMain_InteractionManager;
-    delete dTkT_InteractionManager;
-    delete dTkT_GpuManager;
+    kT.reset();
+    dT.reset();
+    kTMain_InteractionManager.reset();
+    dTMain_InteractionManager.reset();
+    dTkT_InteractionManager.reset();
+    dTkT_GpuManager.reset();
 }
 
 void DEMSolver::SetVerbosity(const std::string& verbose) {
@@ -1919,13 +1996,13 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::s
 }
 
 std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity) {
-    DEMInspector insp(this, this->dT, quantity);
+    DEMInspector insp(this, this->dT.get(), quantity);
     m_inspectors.push_back(std::make_shared<DEMInspector>(std::move(insp)));
     return m_inspectors.back();
 }
 
 std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity, const std::string& region) {
-    DEMInspector insp(this, this->dT, quantity, region);
+    DEMInspector insp(this, this->dT.get(), quantity, region);
     m_inspectors.push_back(std::make_shared<DEMInspector>(std::move(insp)));
     return m_inspectors.back();
 }

@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <set>
 #include <stdexcept>
 #include <iostream>
 
@@ -29,6 +30,24 @@ GpuManager::GpuManager(unsigned int total_streams) {
         // cudaStreamCreate(&new_stream);
 
         this->streams[current_device].push_back(StreamInfo{(signed)current_device, new_stream, false});
+    }
+}
+
+GpuManager::GpuManager(const std::vector<int>& device_ids) {
+    // ndevices counts distinct physical devices in use
+    std::set<int> unique_ids(device_ids.begin(), device_ids.end());
+    ndevices = static_cast<int>(unique_ids.size());
+
+    if (!device_ids.empty()) {
+        int max_id = *std::max_element(device_ids.begin(), device_ids.end());
+        this->streams.resize(max_id + 1);
+    }
+
+    // Each entry in device_ids creates one stream; duplicate device IDs are intentional and result in multiple
+    // streams on the same device (used when both kT and dT threads run on the same physical device).
+    for (int dev_id : device_ids) {
+        cudaStream_t new_stream = nullptr;
+        this->streams[dev_id].push_back(StreamInfo{dev_id, new_stream, false});
     }
 }
 
