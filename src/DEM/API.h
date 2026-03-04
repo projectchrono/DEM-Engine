@@ -10,6 +10,7 @@
 #include <set>
 #include <cfloat>
 #include <functional>
+#include <memory>
 
 #include "kT.h"
 #include "dT.h"
@@ -48,7 +49,11 @@ class DEMTracker;
 /// Main DEM-Engine solver.
 class DEMSolver {
   public:
+    /// Default constructor: scans available GPUs and uses at most 2.
     DEMSolver(unsigned int nGPUs = 2);
+    /// Construct using explicit GPU device IDs. Errors if any ID is unavailable. Warns and uses the first 2 if more
+    /// than 2 are given.
+    DEMSolver(std::vector<int> device_ids);
     ~DEMSolver();
 
     /// Set output detail level.
@@ -1806,12 +1811,12 @@ class DEMSolver {
     // DEM system's workers, helpers, friends
     ////////////////////////////////////////////////////////////////////////////////
 
-    WorkerReportChannel* kTMain_InteractionManager;
-    WorkerReportChannel* dTMain_InteractionManager;
-    GpuManager* dTkT_GpuManager;
-    ThreadManager* dTkT_InteractionManager;
-    DEMKinematicThread* kT;
-    DEMDynamicThread* dT;
+    std::unique_ptr<GpuManager> dTkT_GpuManager;
+    std::unique_ptr<ThreadManager> dTkT_InteractionManager;
+    std::unique_ptr<WorkerReportChannel> dTMain_InteractionManager;
+    std::unique_ptr<WorkerReportChannel> kTMain_InteractionManager;
+    std::unique_ptr<DEMDynamicThread> dT;
+    std::unique_ptr<DEMKinematicThread> kT;
 
     ////////////////////////////////////////////////////////////////////////////////
     // DEM system's private methods

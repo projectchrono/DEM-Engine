@@ -579,7 +579,9 @@ void DEMSolver::decideCDMarginStrat() {
 
 void DEMSolver::reportInitStats() const {
     DEME_INFO("\n");
-    DEME_INFO("Number of total active devices: %d", dTkT_GpuManager->getNumDevices());
+
+    DEME_INFO("Number of system devices detected: %d", GpuManager::scanNumDevices());
+    DEME_INFO("Number of active devices used by DEME: %d", dTkT_GpuManager->getNumDevices());
 
     DEME_INFO("User-specified X-dimension range: [%.7g, %.7g]", m_user_box_min.x, m_user_box_max.x);
     DEME_INFO("User-specified Y-dimension range: [%.7g, %.7g]", m_user_box_min.y, m_user_box_max.y);
@@ -1280,8 +1282,8 @@ void DEMSolver::packDataPointers() {
     kT->packDataPointers();
     // Each worker thread needs pointers used for data transfering. Note this step must be done after packDataPointers
     // are called, so each thread has its own pointers packed.
-    dT->packTransferPointers(kT);
-    kT->packTransferPointers(dT);
+    dT->packTransferPointers(kT.get());
+    kT->packTransferPointers(dT.get());
     // Finally, the API needs to map all mesh to their owners
     for (const auto& mmesh : m_meshes) {
         m_owner_mesh_map[mmesh->owner] = mmesh->cache_offset;
@@ -1313,21 +1315,21 @@ void DEMSolver::validateUserInputs() {
     //     LoadClumpType.");
     // }
 
-    // If not 2 GPUs detected, output warnings as needed
-    int ndevices = dTkT_GpuManager->getNumDevices();
-    if (ndevices == 0) {
-        DEME_ERROR(
-            "No GPU device is detected. Try lspci and see what you get.\nIf you indeed have GPU devices, maybe you "
-            "should try rebooting or reinstalling cuda components?");
-        // } else if (ndevices == 1) {
-        //     DEME_WARNING(
-        //         "One GPU device is detected. On consumer cards, DEME's performance edge is limited with only one"
-        //         "GPU.\nTry allocating 2 GPU devices if possible.");
-    } else if (ndevices > 2) {
-        DEME_WARNING(
-            "More than two GPU devices are detected.\nCurrently, DEME can make use of at most two devices.\nMore "
-            "devices will not improve the performance.");
-    }
+    // // If not 2 GPUs detected, output warnings as needed
+    // int ndevices = dTkT_GpuManager->getNumDevices();
+    // if (ndevices == 0) {
+    //     DEME_ERROR(
+    //         "No GPU device is detected. Try lspci and see what you get.\nIf you indeed have GPU devices, maybe you "
+    //         "should try rebooting or reinstalling cuda components?");
+    //     // } else if (ndevices == 1) {
+    //     //     DEME_WARNING(
+    //     //         "One GPU device is detected. On consumer cards, DEME's performance edge is limited with only one"
+    //     //         "GPU.\nTry allocating 2 GPU devices if possible.");
+    // } else if (ndevices > 2) {
+    //     DEME_WARNING(
+    //         "More than two GPU devices are detected.\nCurrently, DEME can make use of at most two devices.\nMore "
+    //         "devices will not improve the performance.");
+    // }
 
     // Box size OK?
     float3 user_box_size = m_user_box_max - m_user_box_min;
