@@ -1164,11 +1164,35 @@ void DEMSolver::preprocessTriangleObjs() {
                 "A meshed object is loaded but does not have associated material.\nPlease assign material to meshes "
                 "via SetMaterial."));
         }
+        const float shell_half_thickness = fmaxf(mesh_obj->GetShellHalfThickness(), 0.f);
 
         const MeshCanonicalizationResult canonicalization = canonicalizeMeshOwnerFrame(*mesh_obj);
         n_mesh_frame_canonicalized += canonicalization.transformed ? 1 : 0;
         n_mesh_moi_rescaled += canonicalization.moi_rescaled ? 1 : 0;
         n_mesh_moi_inconsistent += canonicalization.moi_inconsistent ? 1 : 0;
+
+        if (mesh_obj->IsShell() && (mesh_obj->mass < 1e-15 || length(mesh_obj->MOI) < 1e-15)) {
+            const float old_mass = mesh_obj->mass;
+            const float old_moi_mag = length(mesh_obj->MOI);
+            double shell_volume = 0.0;
+            float3 shell_center = make_float3(0, 0, 0);
+            float3 shell_inertia = make_float3(0, 0, 0);
+            mesh_obj->ComputeMassProperties(shell_volume, shell_center, shell_inertia);
+
+            const double shell_inertia_norm = static_cast<double>(length(shell_inertia));
+            if (shell_volume > 1e-20 && std::isfinite(shell_volume) && shell_inertia_norm > 1e-20 &&
+                std::isfinite(shell_inertia_norm)) {
+                const double target_mass = (mesh_obj->mass > 1e-15) ? static_cast<double>(mesh_obj->mass) : shell_volume;
+                const float mass_scale = static_cast<float>(target_mass / shell_volume);
+                mesh_obj->mass = static_cast<float>(target_mass);
+                mesh_obj->MOI = shell_inertia * mass_scale;
+                DEME_WARNING(
+                    "Shell mesh %s had near-zero mass/MOI (mass: %.9g, MOI magnitude: %.9g). Recomputed from shell "
+                    "geometry and thickness (mass: %.9g, MOI magnitude: %.9g).",
+                    mesh_obj->filename.empty() ? "<in-memory mesh>" : mesh_obj->filename.c_str(), old_mass, old_moi_mag,
+                    mesh_obj->mass, length(mesh_obj->MOI));
+            }
+        }
 
         // Put the mesh into the host-side cache
         m_meshes.push_back(mesh_obj);
@@ -1312,7 +1336,7 @@ void DEMSolver::preprocessTriangleObjs() {
                 float r2 = dist2(tri.p1);
                 r2 = std::max(r2, dist2(tri.p2));
                 r2 = std::max(r2, dist2(tri.p3));
-                const float radius = std::sqrt(r2);
+                const float radius = std::sqrt(r2) + shell_half_thickness;
                 if (radius > m_largest_tri_radius) {
                     m_largest_tri_radius = radius;
                 }

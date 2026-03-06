@@ -760,6 +760,7 @@ void DEMKinematicThread::packDataPointers() {
     oriQy.bindDevicePointer(&(granData->oriQy));
     oriQz.bindDevicePointer(&(granData->oriQz));
     granData->ownerBoundRadius = nullptr;
+    granData->ownerMeshShellHalfThickness = nullptr;
     ownerCylGhostActive.bindDevicePointer(&(granData->ownerCylGhostActive));
     marginSizeSphere.bindDevicePointer(&(granData->marginSizeSphere));
     marginSizeTriangle.bindDevicePointer(&(granData->marginSizeTriangle));
@@ -886,6 +887,13 @@ void DEMKinematicThread::packTransferPointers(DEMDynamicThread*& dT) {
     granData->pDTOwnedBuffer_nPrimitiveContacts = &(dT->nPrimitiveContactPairs_buffer);
     granData->pDTOwnedBuffer_nPatchContacts = &(dT->nPatchContactPairs_buffer);
     granData->ownerBoundRadius = dT->ownerBoundRadius.data();
+    granData->ownerMeshShellHalfThickness = nullptr;
+    for (size_t owner = 0; owner < dT->simParams->nOwnerBodies; owner++) {
+        if (dT->ownerMeshShellHalfThickness[owner] > DEME_TINY_FLOAT) {
+            granData->ownerMeshShellHalfThickness = dT->ownerMeshShellHalfThickness.data();
+            break;
+        }
+    }
     const int write_idx = dT->kt_write_buf;
     granData->pDTOwnedBuffer_idPrimitiveA = dT->idPrimitiveA_buffer[write_idx].data();
     granData->pDTOwnedBuffer_idPrimitiveB = dT->idPrimitiveB_buffer[write_idx].data();

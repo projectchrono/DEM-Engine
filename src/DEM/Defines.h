@@ -459,6 +459,8 @@ struct DEMDataDT {
     bodyID_t* ownerAnalBody;
     notStupidBool_t* ownerMeshConvex;
     notStupidBool_t* ownerMeshNeverWinner;
+    // Per-owner shell half-thickness (0 for regular meshes/clumps/analytical owners).
+    float* ownerMeshShellHalfThickness;
     bodyID_t* triPatchID;
     // Map global triangle ID -> compact neighbor index (NULL_BODYID if neighbors are not stored)
     bodyID_t* triNeighborIndex;
@@ -551,6 +553,8 @@ struct DEMDataKT {
     bodyID_t* ownerAnalBody;
     notStupidBool_t* ownerMeshConvex;
     notStupidBool_t* ownerMeshNeverWinner;
+    // Per-owner shell half-thickness (0 for regular meshes/clumps/analytical owners).
+    float* ownerMeshShellHalfThickness;
     bodyID_t* triPatchID;
     // Map global triangle ID -> compact neighbor index (NULL_BODYID if neighbors are not stored)
     bodyID_t* triNeighborIndex;

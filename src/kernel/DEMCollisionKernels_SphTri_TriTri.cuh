@@ -406,6 +406,282 @@ __device__ bool snap_to_face(const T1& A, const T1& B, const T1& C, const T1& P,
     return false;
 }
 
+template <typename T2>
+__device__ __forceinline__ T2 clamp01(const T2& x) {
+    return x < (T2)0 ? (T2)0 : (x > (T2)1 ? (T2)1 : x);
+}
+
+
+template <typename T2>
+__device__ __forceinline__ T2 clampRange(const T2& x, const T2& lo, const T2& hi) {
+    return x < lo ? lo : (x > hi ? hi : x);
+}
+
+template <typename T1, typename T2>
+__device__ bool checkSphereTriPrismCandidate(const T1& outerA,
+                                             const T1& outerB,
+                                             const T1& outerC,
+                                             const T1& innerA,
+                                             const T1& sphere_pos,
+                                             const T2 radius,
+                                             T2& depth,
+                                             T1& closest) {
+    const T1 n_out = normalize(cross(outerB - outerA, outerC - outerA));
+    const T1 shift = innerA - outerA;
+    const T2 thick = fabs(dot(shift, n_out));
+
+    T1 tri_closest;
+    snap_to_face<T1, T2>(outerA, outerB, outerC, sphere_pos, tri_closest);
+
+    const T2 z = dot(sphere_pos - outerA, n_out);
+    const T2 zc = clampRange<T2>(z, (T2)(-thick), (T2)0);
+    closest = tri_closest + zc * n_out;
+
+    const T1 d = sphere_pos - closest;
+    const T2 dist = length(d);
+    depth = radius - dist;
+    return depth > (T2)0;
+}
+
+template <typename T1, typename T2>
+__device__ bool checkSphereOuterTriPrismBarrier(const T1& A,
+                                                const T1& B,
+                                                const T1& C,
+                                                const T1& sphere_pos,
+                                                const T2 radius,
+                                                const T2 shell_half,
+                                                T1& normal,
+                                                T2& depth,
+                                                T2& overlapArea,
+                                                T1& pt1) {
+    const T1 n_out = normalize(cross(B - A, C - A));
+    const T1 outerA = A + shell_half * n_out;
+    const T1 outerB = B + shell_half * n_out;
+    const T1 outerC = C + shell_half * n_out;
+    const T1 inward = ((T2)-2 * shell_half) * n_out;
+    const T2 inward_len2 = dot(inward, inward);
+
+    bool have_candidate = false;
+    bool best_is_barrier = false;
+    T2 best_metric = DEME_HUGE_FLOAT;
+    T2 best_depth = (T2)(-DEME_HUGE_FLOAT);
+    T1 best_normal = n_out;
+    T1 best_pt = outerA;
+
+    // Outer-face barrier: one-sided, no normal flip. If the sphere center is already inside,
+    // this remains active and pushes it back out.
+    T1 face_loc;
+    const bool face_is_edge = snap_to_face<T1, T2>(outerA, outerB, outerC, sphere_pos, face_loc);
+    if (!face_is_edge) {
+        const T2 h = dot(sphere_pos - outerA, n_out);
+        const T2 cand_depth = radius - h;
+        if (cand_depth > (T2)0) {
+            have_candidate = true;
+            best_is_barrier = true;
+            best_metric = h;
+            best_depth = cand_depth;
+            best_normal = n_out;
+            best_pt = face_loc;
+        }
+    }
+
+    const T1 verts[3] = {outerA, outerB, outerC};
+    for (int i = 0; i < 3; i++) {
+        const T1 base = verts[i];
+        const T1 next = verts[(i + 1) % 3];
+        const T1 edge = next - base;
+        const T2 edge_len2 = dot(edge, edge);
+        if (edge_len2 <= (T2)DEME_TINY_FLOAT) {
+            continue;
+        }
+
+        const T1 rel = sphere_pos - base;
+        const T2 u_raw = dot(rel, edge) / edge_len2;
+        const T2 w_raw = inward_len2 > (T2)DEME_TINY_FLOAT ? dot(rel, inward) / inward_len2 : (T2)0;
+
+        // Side-wall barrier when the orthogonal projection lands inside the rectangle extents.
+        if (u_raw >= (T2)0 && u_raw <= (T2)1 && w_raw >= (T2)0 && w_raw <= (T2)1) {
+            T1 s_out = normalize(cross(edge, n_out));
+            const T2 g = dot(rel, s_out);
+            const T2 cand_depth = radius - g;
+            if (cand_depth > (T2)0) {
+                if (!have_candidate || g < best_metric) {
+                    have_candidate = true;
+                    best_is_barrier = true;
+                    best_metric = g;
+                    best_depth = cand_depth;
+                    best_normal = s_out;
+                    best_pt = base + clampRange<T2>(u_raw, (T2)0, (T2)1) * edge + clampRange<T2>(w_raw, (T2)0, (T2)1) * inward;
+                }
+            }
+        }
+
+        // Rectangle closest-point candidate for edge/vertex grazing contacts.
+        const T2 u = clampRange<T2>(u_raw, (T2)0, (T2)1);
+        const T2 w = clampRange<T2>(w_raw, (T2)0, (T2)1);
+        const T1 rect_q = base + u * edge + w * inward;
+        const T1 d = sphere_pos - rect_q;
+        const T2 dist = length(d);
+        const T2 cand_depth = radius - dist;
+        if (cand_depth > (T2)0) {
+            const T2 metric = dist;
+            if (!have_candidate || (!best_is_barrier && metric < best_metric)) {
+                have_candidate = true;
+                best_is_barrier = false;
+                best_metric = metric;
+                best_depth = cand_depth;
+                if (dist > (T2)DEME_TINY_FLOAT) {
+                    best_normal = ((T2)1 / dist) * d;
+                } else {
+                    best_normal = normalize(cross(edge, n_out));
+                }
+                best_pt = rect_q;
+            }
+        }
+    }
+
+    if (!have_candidate) {
+        depth = (T2)(-DEME_HUGE_FLOAT);
+        overlapArea = (T2)0;
+        return false;
+    }
+
+    // Cap recovery depth to avoid explosive impulses if a particle already ended up deep inside.
+    // Keep this intentionally conservative so first-time recovery contacts do not inject excessive energy.
+    const T2 max_recovery_depth = (T2)0.02 * radius;
+    const T2 capped_depth = best_depth > max_recovery_depth ? max_recovery_depth : best_depth;
+    depth = capped_depth;
+    normal = best_normal;
+    // Keep the contact point on/near the sphere-side interface midpoint so downstream
+    // lever-arm logic stays bounded even for deep barrier recoveries.
+    const T2 sphere_to_cp = radius - (T2)0.5 * capped_depth;
+    pt1 = sphere_pos - sphere_to_cp * normal;
+
+    const float depth_f = static_cast<float>(capped_depth);
+    const float radius_f = static_cast<float>(radius);
+    const float overlap_area_f = static_cast<float>(deme::PI) * (2.0f * radius_f * depth_f - depth_f * depth_f);
+    overlapArea = overlap_area_f > 0.0f ? static_cast<T2>(overlap_area_f) : (T2)0;
+    return true;
+}
+
+template <typename T1, typename T2>
+__device__ __forceinline__ T2 closestPtSegmentSegment(const T1& p1,
+                                                      const T1& q1,
+                                                      const T1& p2,
+                                                      const T1& q2,
+                                                      T1& c1,
+                                                      T1& c2) {
+    constexpr T2 EPS = (T2)1e-20;
+    const T1 d1 = q1 - p1;
+    const T1 d2 = q2 - p2;
+    const T1 r = p1 - p2;
+    const T2 a = dot(d1, d1);
+    const T2 e = dot(d2, d2);
+    const T2 f = dot(d2, r);
+
+    T2 s = (T2)0;
+    T2 t = (T2)0;
+
+    if (a <= EPS && e <= EPS) {
+        c1 = p1;
+        c2 = p2;
+        return dot(c1 - c2, c1 - c2);
+    }
+    if (a <= EPS) {
+        s = (T2)0;
+        t = clamp01<T2>(f / e);
+    } else {
+        const T2 c = dot(d1, r);
+        if (e <= EPS) {
+            t = (T2)0;
+            s = clamp01<T2>(-c / a);
+        } else {
+            const T2 b = dot(d1, d2);
+            const T2 denom = a * e - b * b;
+            if (denom > EPS) {
+                s = clamp01<T2>((b * f - c * e) / denom);
+            } else {
+                s = (T2)0;
+            }
+            t = (b * s + f) / e;
+            if (t < (T2)0) {
+                t = (T2)0;
+                s = clamp01<T2>(-c / a);
+            } else if (t > (T2)1) {
+                t = (T2)1;
+                s = clamp01<T2>((b - c) / a);
+            }
+        }
+    }
+
+    c1 = p1 + d1 * s;
+    c2 = p2 + d2 * t;
+    return dot(c1 - c2, c1 - c2);
+}
+
+template <typename T1, typename T2>
+__device__ __forceinline__ T2 closestPtTriTriDistance(const T1& A1,
+                                                       const T1& B1,
+                                                       const T1& C1,
+                                                       const T1& A2,
+                                                       const T1& B2,
+                                                       const T1& C2,
+                                                       T1& outA,
+                                                       T1& outB) {
+    const T1 triA[3] = {A1, B1, C1};
+    const T1 triB[3] = {A2, B2, C2};
+
+    T2 best2 = DEME_HUGE_FLOAT;
+    outA = A1;
+    outB = A2;
+
+    // Edge-edge pairs (9)
+    for (int i = 0; i < 3; i++) {
+        const T1 pA = triA[i];
+        const T1 qA = triA[(i + 1) % 3];
+        for (int j = 0; j < 3; j++) {
+            const T1 pB = triB[j];
+            const T1 qB = triB[(j + 1) % 3];
+            T1 cA, cB;
+            const T2 d2 = closestPtSegmentSegment<T1, T2>(pA, qA, pB, qB, cA, cB);
+            if (d2 < best2) {
+                best2 = d2;
+                outA = cA;
+                outB = cB;
+            }
+        }
+    }
+
+    // Vertices of A against face B
+    for (int i = 0; i < 3; i++) {
+        T1 q;
+        snap_to_face<T1, T2>(A2, B2, C2, triA[i], q);
+        const T2 d2 = dot(triA[i] - q, triA[i] - q);
+        if (d2 < best2) {
+            best2 = d2;
+            outA = triA[i];
+            outB = q;
+        }
+    }
+
+    // Vertices of B against face A
+    for (int i = 0; i < 3; i++) {
+        T1 q;
+        snap_to_face<T1, T2>(A1, B1, C1, triB[i], q);
+        const T2 d2 = dot(q - triB[i], q - triB[i]);
+        if (d2 < best2) {
+            best2 = d2;
+            outA = q;
+            outB = triB[i];
+        }
+    }
+
+    if (best2 < (T2)0) {
+        best2 = (T2)0;
+    }
+    return sqrt(best2);
+}
+
 /**
 /brief TRIANGLE FACE--SPHERE COLLISION DETECTION
 

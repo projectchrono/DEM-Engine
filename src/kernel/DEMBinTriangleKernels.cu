@@ -48,7 +48,11 @@ DEME_KERNEL void makeTriangleSandwich(deme::DEMSimParams* simParams,
         const float3 p1 = granData->relPosNode1[triID];
         const float3 p2 = granData->relPosNode2[triID];
         const float3 p3 = granData->relPosNode3[triID];
-        const float margin = granData->marginSizeTriangle[triID];
+        float margin = granData->marginSizeTriangle[triID];
+        if (granData->ownerMeshShellHalfThickness) {
+            const deme::bodyID_t ownerID = granData->ownerTriMesh[triID];
+            margin += fmaxf(granData->ownerMeshShellHalfThickness[ownerID], 0.f);
+        }
 
         // Get the incenter of this triangle.
         // This is because we use the incenter to enalrge a triangle. See for example, this

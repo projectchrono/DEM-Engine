@@ -114,6 +114,15 @@ inline __device__ float maxOwnerLocalLever(const deme::DEMSimParams* simParams,
     return max_local_lever;
 }
 
+inline __device__ float ownerShellHalfThickness(const deme::DEMSimParams* simParams,
+                                                const deme::DEMDataDT* granData,
+                                                deme::bodyID_t ownerID) {
+    if (!granData->ownerMeshShellHalfThickness || ownerID == deme::NULL_BODYID || ownerID >= simParams->nOwnerBodies) {
+        return 0.f;
+    }
+    return fmaxf(granData->ownerMeshShellHalfThickness[ownerID], 0.f);
+}
+
 inline __device__ void clampLocalContactPoint(float3& p, float max_norm) {
     if (!isfinite(p.x) || !isfinite(p.y) || !isfinite(p.z)) {
         p = make_float3(0.f, 0.f, 0.f);
@@ -733,8 +742,10 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
         if (ContactType != deme::NOT_A_CONTACT) {
             const float3 cpRelToSphere = to_float3(contactPnt - bodyAPos);
             const float cpRel2 = dot(cpRelToSphere, cpRelToSphere);
+            const float shell_half_B = ownerShellHalfThickness(simParams, granData, ownerB);
             const float maxSphereReach =
-                ARadius + fmaxf(simParams->dyn.beta + simParams->maxFamilyExtraMargin + extraMarginSize, 0.f) + 1e-6f;
+                ARadius + shell_half_B +
+                fmaxf(simParams->dyn.beta + simParams->maxFamilyExtraMargin + extraMarginSize, 0.f) + 1e-6f;
             if (!isfinite(cpRel2) || cpRel2 > maxSphereReach * maxSphereReach) {
                 ContactType = deme::NOT_A_CONTACT;
                 overlapDepth = -DEME_HUGE_FLOAT;

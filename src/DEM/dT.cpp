@@ -125,6 +125,7 @@ void DEMDynamicThread::packDataPointers() {
     ownerTriMesh.bindDevicePointer(&(granData->ownerTriMesh));
     ownerMeshConvex.bindDevicePointer(&(granData->ownerMeshConvex));
     ownerMeshNeverWinner.bindDevicePointer(&(granData->ownerMeshNeverWinner));
+    ownerMeshShellHalfThickness.bindDevicePointer(&(granData->ownerMeshShellHalfThickness));
     ownerPatchMesh.bindDevicePointer(&(granData->ownerPatchMesh));
     triPatchID.bindDevicePointer(&(granData->triPatchID));
     triNeighborIndex.bindDevicePointer(&(granData->triNeighborIndex));
@@ -297,6 +298,7 @@ void DEMDynamicThread::migrateDataToDevice() {
     ownerTriMesh.toDeviceAsync(streamInfo.stream);
     ownerMeshConvex.toDeviceAsync(streamInfo.stream);
     ownerMeshNeverWinner.toDeviceAsync(streamInfo.stream);
+    ownerMeshShellHalfThickness.toDeviceAsync(streamInfo.stream);
     ownerPatchMesh.toDeviceAsync(streamInfo.stream);
     triPatchID.toDeviceAsync(streamInfo.stream);
     triNeighborIndex.toDeviceAsync(streamInfo.stream);
@@ -704,6 +706,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(angAccSpecified, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(ownerMeshConvex, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(ownerMeshNeverWinner, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerMeshShellHalfThickness, nOwnerBodies, 0);
 
     // Resize the family mask `matrix' (in fact it is flattened)
     DEME_DUAL_ARRAY_RESIZE(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
@@ -1248,8 +1251,10 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         // If got here, it is a mesh
         ownerTypes[i + owner_offset_for_mesh_obj] = OWNER_T_MESH;
 
+        const float shell_half_thickness = fmaxf(input_mesh_objs.at(i)->GetShellHalfThickness(), 0.f);
+
         // Per-owner circumscribed radius (used by cylindrical periodicity wrap decisions).
-        // For a mesh, use the maximum distance of any vertex to the mesh local origin.
+        // For a mesh, use the maximum distance of any vertex to the mesh local origin plus shell half-thickness.
         // Note: DEME assumes the mesh is defined in its CoM (or reference) frame; if not, this bound will
         // be conservative, which is still safe.
         float this_owner_bound_radius = 0.f;
@@ -1259,6 +1264,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                 this_owner_bound_radius = dist;
             }
         }
+        this_owner_bound_radius += shell_half_thickness;
         ownerBoundRadius[i + owner_offset_for_mesh_obj] = this_owner_bound_radius;
         if (this_owner_bound_radius > max_owner_bound_radius) {
             max_owner_bound_radius = this_owner_bound_radius;
@@ -1371,6 +1377,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         familyID[owner_id] = this_family_num;
         ownerMeshConvex[owner_id] = input_mesh_obj_convex.at(i);
         ownerMeshNeverWinner[owner_id] = input_mesh_obj_never_winner.at(i);
+        ownerMeshShellHalfThickness[owner_id] = shell_half_thickness;
 
         // Cached initial values for wildcards of this mesh is not needed anymore
         m_meshes.back()->ClearWildcards();

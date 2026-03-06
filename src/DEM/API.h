@@ -810,6 +810,10 @@ class DEMSolver {
 
     /// @brief Load a mesh-represented object into the simulation, using the internal mesh format.
     std::shared_ptr<DEMMesh> AddMesh(DEMMesh& mesh);
+    /// @brief Load a shell mesh (triangular surface + finite thickness) into the simulation.
+    /// @param mesh Mesh object.
+    /// @param shell_thickness Full shell thickness (must be >= 0).
+    std::shared_ptr<DEMMesh> AddShellMesh(DEMMesh& mesh, float shell_thickness);
 
     /// @brief Load a mesh-represented object from a mesh file (.obj or .stl).
     /// @param filename Path to the mesh file.
@@ -821,6 +825,12 @@ class DEMSolver {
                                                     const std::shared_ptr<DEMMaterial>& mat,
                                                     bool load_normals = true,
                                                     bool load_uv = false);
+    /// @brief Load a shell mesh from a mesh file (.obj/.stl/.ply).
+    std::shared_ptr<DEMMesh> AddWavefrontShellObject(const std::string& filename,
+                                                     const std::shared_ptr<DEMMaterial>& mat,
+                                                     float shell_thickness,
+                                                     bool load_normals = true,
+                                                     bool load_uv = false);
     /// @brief Load a mesh-represented object from a mesh file (.obj or .stl).
     /// @param filename Path to the mesh file.
     /// @param load_normals Whether to load normals from the file.
@@ -829,6 +839,11 @@ class DEMSolver {
     std::shared_ptr<DEMMesh> AddWavefrontMeshObject(const std::string& filename,
                                                     bool load_normals = true,
                                                     bool load_uv = false);
+    /// @brief Load a shell mesh from a mesh file (.obj/.stl/.ply), without assigning material.
+    std::shared_ptr<DEMMesh> AddWavefrontShellObject(const std::string& filename,
+                                                     float shell_thickness,
+                                                     bool load_normals = true,
+                                                     bool load_uv = false);
     /// A legacy method. Use AddMesh instead.
     std::shared_ptr<DEMMesh> AddWavefrontMeshObject(DEMMesh& mesh) { return AddMesh(mesh); }
 
