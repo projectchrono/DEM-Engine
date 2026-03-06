@@ -39,11 +39,21 @@ if (overlapDepth > 0) {
 
     const float mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
 
-    // Contact radius: use area only when a triangle is involved, otherwise fall back to classic Hertz form
+    // Contact radius:
+    // - sphere/analytical and sphere/sphere contacts: classic Hertz a = sqrt(R_eff * delta)
+    // - sphere/triangle contacts: ALSO use Hertz with R_eff = sphere radius (triangle treated as locally flat)
+    //   This avoids patch-size dependence when one smooth contact spans multiple mesh triangles.
+    // - triangle/triangle (and other triangle-involved contacts without a sphere): fall back to area-based proxy.
     const bool tri_involved = (AType == deme::GEO_T_TRIANGLE) || (BType == deme::GEO_T_TRIANGLE);
     float cnt_rad;
     if (tri_involved) {
-        cnt_rad = sqrtf(overlapArea / deme::PI);
+        if constexpr (AType == deme::GEO_T_SPHERE && BType == deme::GEO_T_TRIANGLE) {
+            cnt_rad = sqrtf(overlapDepth * ARadius);
+        } else if constexpr (BType == deme::GEO_T_SPHERE && AType == deme::GEO_T_TRIANGLE) {
+            cnt_rad = sqrtf(overlapDepth * BRadius);
+        } else {
+            cnt_rad = sqrtf(overlapArea / deme::PI);
+        }
     } else {
         const float effective_radius =
             (BType == deme::GEO_T_ANALYTICAL) ? ARadius : (ARadius * BRadius) / (ARadius + BRadius);
