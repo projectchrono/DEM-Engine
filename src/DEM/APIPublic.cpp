@@ -41,6 +41,183 @@ inline bool hasPendingWear(const std::vector<float>& pending_depth) {
     return false;
 }
 
+inline bool computeClumpUnionMassPropsApprox(const DEMClumpTemplate& clump,
+                                             double& volume,
+                                             float3& center,
+                                             float3& inertia) {
+    volume = 0.0;
+    center = make_float3(0, 0, 0);
+    inertia = make_float3(0, 0, 0);
+    if (clump.nComp == 0 || clump.radii.size() != clump.nComp || clump.relPos.size() != clump.nComp) {
+        return false;
+    }
+
+    float3 bb_min = make_float3(std::numeric_limits<float>::infinity());
+    float3 bb_max = make_float3(-std::numeric_limits<float>::infinity());
+    for (size_t i = 0; i < clump.nComp; i++) {
+        const float r = clump.radii[i];
+        if (!(r > DEME_TINY_FLOAT) || !std::isfinite(r)) {
+            continue;
+        }
+        const float3 c = clump.relPos[i];
+        bb_min.x = std::min(bb_min.x, c.x - r);
+        bb_min.y = std::min(bb_min.y, c.y - r);
+        bb_min.z = std::min(bb_min.z, c.z - r);
+        bb_max.x = std::max(bb_max.x, c.x + r);
+        bb_max.y = std::max(bb_max.y, c.y + r);
+        bb_max.z = std::max(bb_max.z, c.z + r);
+    }
+
+    const double lx = static_cast<double>(bb_max.x) - bb_min.x;
+    const double ly = static_cast<double>(bb_max.y) - bb_min.y;
+    const double lz = static_cast<double>(bb_max.z) - bb_min.z;
+    if (!(lx > 0.0) || !(ly > 0.0) || !(lz > 0.0) || !std::isfinite(lx) || !std::isfinite(ly) || !std::isfinite(lz)) {
+        return false;
+    }
+
+    const double bbox_vol = lx * ly * lz;
+
+    auto radical_inverse = [](uint64_t n, uint32_t base) {
+        double inv_base = 1.0 / static_cast<double>(base);
+        double inv_bi = inv_base;
+        double val = 0.0;
+        while (n) {
+            const uint32_t d = static_cast<uint32_t>(n % base);
+            val += static_cast<double>(d) * inv_bi;
+            n /= base;
+            inv_bi *= inv_base;
+        }
+        return val;
+    };
+
+    struct RunningStat {
+        double mean = 0.0;
+        double m2 = 0.0;
+        size_t n = 0;
+        void add(double x) {
+            n++;
+            const double d = x - mean;
+            mean += d / static_cast<double>(n);
+            const double d2 = x - mean;
+            m2 += d * d2;
+        }
+        double var() const { return (n > 1) ? (m2 / static_cast<double>(n - 1)) : 0.0; }
+    };
+
+    // E[I], E[I x], E[I y], E[I z], E[I xx], E[I yy], E[I zz], E[I xy], E[I yz], E[I zx]
+    std::array<RunningStat, 10> stats;
+    constexpr double z99 = 2.576;            // 99% confidence interval factor
+    constexpr double target_rel_err = 0.01;  // 1% target relative error
+    constexpr size_t min_samples = 100000;
+    constexpr size_t max_samples = 4000000;
+    constexpr size_t check_stride = 10000;
+
+    bool converged = false;
+    size_t n_total = 0;
+    for (size_t i = 0; i < max_samples; i++) {
+        const uint64_t idx = static_cast<uint64_t>(i + 1);
+        const double u = radical_inverse(idx, 2);
+        const double v = radical_inverse(idx, 3);
+        const double w = radical_inverse(idx, 5);
+        const double x = static_cast<double>(bb_min.x) + u * lx;
+        const double y = static_cast<double>(bb_min.y) + v * ly;
+        const double z = static_cast<double>(bb_min.z) + w * lz;
+
+        bool inside = false;
+        for (size_t s = 0; s < clump.nComp; s++) {
+            const double dx = x - clump.relPos[s].x;
+            const double dy = y - clump.relPos[s].y;
+            const double dz = z - clump.relPos[s].z;
+            const double rr = static_cast<double>(clump.radii[s]) * clump.radii[s];
+            if (dx * dx + dy * dy + dz * dz <= rr) {
+                inside = true;
+                break;
+            }
+        }
+
+        const double I = inside ? 1.0 : 0.0;
+        stats[0].add(I);
+        stats[1].add(I * x);
+        stats[2].add(I * y);
+        stats[3].add(I * z);
+        stats[4].add(I * x * x);
+        stats[5].add(I * y * y);
+        stats[6].add(I * z * z);
+        stats[7].add(I * x * y);
+        stats[8].add(I * y * z);
+        stats[9].add(I * z * x);
+        n_total++;
+
+        if (n_total < min_samples || (n_total % check_stride) != 0) {
+            continue;
+        }
+        const double mean_I = stats[0].mean;
+        if (!(mean_I > 1e-14)) {
+            continue;
+        }
+        const double stderr_I = std::sqrt(std::max(0.0, stats[0].var()) / static_cast<double>(n_total));
+        const double rel_err_I = z99 * stderr_I / mean_I;
+
+        const double m2_sum = stats[4].mean + stats[5].mean + stats[6].mean;
+        double rel_err_m2 = 0.0;
+        if (m2_sum > 1e-14) {
+            const double var_sum =
+                std::max(0.0, stats[4].var()) + std::max(0.0, stats[5].var()) + std::max(0.0, stats[6].var());
+            const double stderr_sum = std::sqrt(var_sum / static_cast<double>(n_total));
+            rel_err_m2 = z99 * stderr_sum / m2_sum;
+        }
+
+        if (rel_err_I <= target_rel_err && rel_err_m2 <= target_rel_err) {
+            converged = true;
+            break;
+        }
+    }
+
+    const double inside_frac = stats[0].mean;
+    if (!(inside_frac > 0.0) || !std::isfinite(inside_frac)) {
+        return false;
+    }
+    volume = bbox_vol * inside_frac;
+    if (!(volume > 0.0) || !std::isfinite(volume)) {
+        return false;
+    }
+
+    const double cx = stats[1].mean / inside_frac;
+    const double cy = stats[2].mean / inside_frac;
+    const double cz = stats[3].mean / inside_frac;
+    center = make_float3(static_cast<float>(cx), static_cast<float>(cy), static_cast<float>(cz));
+
+    const double int_xx = bbox_vol * stats[4].mean;
+    const double int_yy = bbox_vol * stats[5].mean;
+    const double int_zz = bbox_vol * stats[6].mean;
+    const double int_xy = bbox_vol * stats[7].mean;
+    const double int_yz = bbox_vol * stats[8].mean;
+    const double int_zx = bbox_vol * stats[9].mean;
+
+    double Ixx = int_yy + int_zz;
+    double Iyy = int_xx + int_zz;
+    double Izz = int_xx + int_yy;
+    double Ixy = -int_xy;
+    double Iyz = -int_yz;
+    double Izx = -int_zx;
+
+    Ixx -= volume * (cy * cy + cz * cz);
+    Iyy -= volume * (cx * cx + cz * cz);
+    Izz -= volume * (cx * cx + cy * cy);
+    Ixy += volume * cx * cy;
+    Iyz += volume * cy * cz;
+    Izx += volume * cz * cx;
+
+    inertia = make_float3(static_cast<float>(Ixx), static_cast<float>(Iyy), static_cast<float>(Izz));
+    if (!converged) {
+        DEME_WARNING(
+            "Clump union mass/MOI estimator hit sample cap (%zu) before 99%%-confidence 1%%-error target; using best "
+            "estimate.",
+            n_total);
+    }
+    return std::isfinite(Ixx) && std::isfinite(Iyy) && std::isfinite(Izz) && Ixx > 0.0 && Iyy > 0.0 && Izz > 0.0;
+}
+
 }  // namespace
 
 DEMSolver::DEMSolver(unsigned int nGPUs) {
@@ -592,7 +769,20 @@ bool DEMSolver::GetTrackedOwnerTrianglePV(bodyID_t ownerID,
                                           std::vector<float>& avgPV,
                                           bool reset_window) {
     assertSysInit("GetTrackedOwnerTrianglePV");
-    return dT->getTrackedOwnerTrianglePV(ownerID, avgP, avgV, avgPV, reset_window);
+    const bool ok = dT->getTrackedOwnerTrianglePV(ownerID, avgP, avgV, avgPV, reset_window);
+    if (!ok) {
+        return false;
+    }
+    // Wear consumes and resets the tracking window inside DoDynamics; serve the last cached window for display queries.
+    if (!reset_window && dT->triPVWindowSteps == 0) {
+        auto it = m_last_tri_pv_snapshot.find(ownerID);
+        if (it != m_last_tri_pv_snapshot.end()) {
+            avgP = it->second.avgP;
+            avgV = it->second.avgV;
+            avgPV = it->second.avgPV;
+        }
+    }
+    return true;
 }
 
 void DEMSolver::EnableMeshWearModel(bodyID_t ownerID,
@@ -2202,6 +2392,29 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clu
             "agree with nComp.",
             clump.nComp, clump.radii.size(), clump.relPos.size(), clump.materials.size());
     }
+    const bool mass_missing = !clump.mass_specified && clump.mass < 1e-15;
+    const bool moi_missing = !clump.moi_specified && length(clump.MOI) < 1e-15;
+    if (mass_missing || moi_missing || clump.volume <= 0.f) {
+        double union_volume = 0.0;
+        float3 union_center = make_float3(0, 0, 0);
+        float3 union_inertia = make_float3(0, 0, 0);
+        if (computeClumpUnionMassPropsApprox(clump, union_volume, union_center, union_inertia)) {
+            if (clump.volume <= 0.f) {
+                clump.volume = static_cast<float>(union_volume);
+            }
+            if (mass_missing) {
+                clump.mass = static_cast<float>(union_volume);
+            }
+            if (moi_missing) {
+                const float mass_scale = (union_volume > 1e-20) ? static_cast<float>(clump.mass / union_volume) : 1.f;
+                clump.MOI = union_inertia * mass_scale;
+            }
+        } else if (mass_missing || moi_missing) {
+            DEME_WARNING(
+                "Clump type requested auto mass/MOI, but union-of-spheres mass properties could not be estimated.");
+        }
+    }
+
     if (clump.mass < 1e-15 || length(clump.MOI) < 1e-15) {
         DEME_WARNING(
             "A type of clump is instructed to have near-zero (or negative) mass or moment of inertia (mass: %.9g, MOI "
@@ -2231,8 +2444,8 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(float mass,
                                                            const std::string filename,
                                                            const std::shared_ptr<DEMMaterial>& sp_material) {
     DEMClumpTemplate clump;
-    clump.mass = mass;
-    clump.MOI = moi;
+    clump.SetMass(mass);
+    clump.SetMOI(moi);
     clump.ReadComponentFromFile(filename);
     std::vector<std::shared_ptr<DEMMaterial>> sp_materials(clump.nComp, sp_material);
     clump.materials = sp_materials;
@@ -2245,8 +2458,8 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(
     const std::string filename,
     const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
     DEMClumpTemplate clump;
-    clump.mass = mass;
-    clump.MOI = moi;
+    clump.SetMass(mass);
+    clump.SetMOI(moi);
     clump.ReadComponentFromFile(filename);
     clump.materials = sp_materials;
     return LoadClumpType(clump);
@@ -2259,8 +2472,8 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(
     const std::vector<float3>& sp_locations_xyz,
     const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
     DEMClumpTemplate clump;
-    clump.mass = mass;
-    clump.MOI = moi;
+    clump.SetMass(mass);
+    clump.SetMOI(moi);
     clump.radii = sp_radii;
     clump.relPos = sp_locations_xyz;
     clump.materials = sp_materials;
@@ -2426,6 +2639,38 @@ std::shared_ptr<DEMMesh> DEMSolver::AddMesh(DEMMesh& mesh) {
     if (mesh.GetNumTriangles() == 0) {
         DEME_WARNING(std::string("It seems that a mesh contains 0 triangle facet at the time it is loaded."));
     }
+    if (!mesh.mass_specified || !mesh.moi_specified) {
+        double volume = 0.0;
+        float3 center = make_float3(0, 0, 0);
+        float3 unit_inertia = make_float3(0, 0, 0);
+        mesh.ComputeMassProperties(volume, center, unit_inertia);
+        if (volume > 1e-20 && std::isfinite(volume) && length(unit_inertia) > 1e-20 &&
+            std::isfinite(length(unit_inertia))) {
+            if (!mesh.mass_specified) {
+                mesh.mass = static_cast<float>(volume);
+            }
+            if (!mesh.moi_specified) {
+                const float scale = static_cast<float>(mesh.mass / volume);
+                mesh.MOI = unit_inertia * scale;
+            }
+        } else if (!mesh.mass_specified || !mesh.moi_specified) {
+            DEME_WARNING(
+                "Mesh %s requested auto mass/MOI, but geometric mass properties could not be computed (volume: %.9g, "
+                "unit MOI magnitude: %.9g).",
+                mesh.filename.empty() ? "<in-memory mesh>" : mesh.filename.c_str(), volume, length(unit_inertia));
+        }
+    }
+    if (!mesh.IsShell()) {
+        size_t boundary_edges = 0;
+        size_t nonmanifold_edges = 0;
+        if (!mesh.IsWatertight(&boundary_edges, &nonmanifold_edges)) {
+            const char* mesh_name = mesh.filename.empty() ? "<in-memory mesh>" : mesh.filename.c_str();
+            DEME_WARNING(
+                "Mesh %s is not watertight (boundary edges: %zu, non-manifold edges: %zu). Volume/MOI may be "
+                "inaccurate.",
+                mesh_name, boundary_edges, nonmanifold_edges);
+        }
+    }
     // load_order should be its position in the cache array, not nTriObjLoad
     mesh.load_order = cached_mesh_objs.size();
 
@@ -2434,6 +2679,11 @@ std::shared_ptr<DEMMesh> DEMSolver::AddMesh(DEMMesh& mesh) {
 
     cached_mesh_objs.push_back(std::make_shared<DEMMesh>(std::move(mesh)));
     return cached_mesh_objs.back();
+}
+
+std::shared_ptr<DEMMesh> DEMSolver::AddShellMesh(DEMMesh& mesh, float shell_thickness) {
+    mesh.SetShellThickness(shell_thickness);
+    return AddMesh(mesh);
 }
 
 namespace {
@@ -2466,6 +2716,21 @@ std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontMeshObject(const std::string& fi
     return AddWavefrontMeshObject(mesh);
 }
 
+std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontShellObject(const std::string& filename,
+                                                            const std::shared_ptr<DEMMaterial>& mat,
+                                                            float shell_thickness,
+                                                            bool load_normals,
+                                                            bool load_uv) {
+    DEMMesh mesh;
+    mesh.SetShellThickness(shell_thickness);
+    bool flag = loadMeshByExtension(mesh, filename, load_normals, load_uv);
+    if (!flag) {
+        DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
+    }
+    mesh.SetMaterial(mat);
+    return AddMesh(mesh);
+}
+
 std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
                                                            bool load_normals,
                                                            bool load_uv) {
@@ -2475,6 +2740,19 @@ std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontMeshObject(const std::string& fi
         DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
     }
     return AddWavefrontMeshObject(mesh);
+}
+
+std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontShellObject(const std::string& filename,
+                                                            float shell_thickness,
+                                                            bool load_normals,
+                                                            bool load_uv) {
+    DEMMesh mesh;
+    mesh.SetShellThickness(shell_thickness);
+    bool flag = loadMeshByExtension(mesh, filename, load_normals, load_uv);
+    if (!flag) {
+        DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
+    }
+    return AddMesh(mesh);
 }
 
 std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(DEMMesh& mesh) {
@@ -3047,6 +3325,54 @@ void DEMSolver::refreshTrianglePVTrackingOwners() {
     } else {
         dT->configureTrianglePVTracking(merged);
     }
+    m_last_tri_pv_snapshot.clear();
+}
+
+void DEMSolver::cacheTrackedTrianglePVWindow() {
+    m_last_tri_pv_snapshot.clear();
+    if (!dT->triPVTrackingEnabled) {
+        return;
+    }
+
+    if (dT->triPVWindowSteps > 0) {
+        dT->triPVAccumP.toHost();
+        dT->triPVAccumPV.toHost();
+    }
+    const float inv_steps = (dT->triPVWindowSteps > 0) ? (1.f / static_cast<float>(dT->triPVWindowSteps)) : 0.f;
+
+    for (const auto& kv : dT->triPVOwnerToSlot) {
+        const bodyID_t owner = kv.first;
+        const size_t slot = kv.second;
+        if (slot >= dT->triPVOwnerOffsets.size() || slot >= dT->triPVOwnerCounts.size()) {
+            continue;
+        }
+        const size_t offset = dT->triPVOwnerOffsets[slot];
+        const size_t count = dT->triPVOwnerCounts[slot];
+        TrianglePVSnapshot snap;
+        snap.avgP.assign(count, 0.f);
+        snap.avgV.assign(count, 0.f);
+        snap.avgPV.assign(count, 0.f);
+        if (count > 0 && dT->triPVWindowSteps > 0) {
+            for (size_t i = 0; i < count; i++) {
+                float p = dT->triPVAccumP[offset + i] * inv_steps;
+                float pv = dT->triPVAccumPV[offset + i] * inv_steps;
+                if (!std::isfinite(p) || p < 0.f) {
+                    p = 0.f;
+                }
+                if (!std::isfinite(pv) || pv < 0.f) {
+                    pv = 0.f;
+                }
+                float v = (p > DEME_TINY_FLOAT) ? (pv / p) : 0.f;
+                if (!std::isfinite(v) || v < 0.f) {
+                    v = 0.f;
+                }
+                snap.avgP[i] = p;
+                snap.avgV[i] = v;
+                snap.avgPV[i] = pv;
+            }
+        }
+        m_last_tri_pv_snapshot.emplace(owner, std::move(snap));
+    }
 }
 
 bool DEMSolver::applyMeshWearModel(bodyID_t ownerID, MeshWearModelState& model) {
@@ -3249,10 +3575,12 @@ void DEMSolver::updateMeshWearModels(double call_start_time, double call_end_tim
     }
 
     if (evals.empty()) {
+        cacheTrackedTrianglePVWindow();
         dT->resetTrackedTrianglePVWindow();
         return;
     }
     if (!has_active_wear) {
+        cacheTrackedTrianglePVWindow();
         dT->resetTrackedTrianglePVWindow();
         return;
     }
@@ -3285,6 +3613,7 @@ void DEMSolver::updateMeshWearModels(double call_start_time, double call_end_tim
         }
     }
 
+    cacheTrackedTrianglePVWindow();
     dT->resetTrackedTrianglePVWindow();
 
     if (owners_to_apply.empty()) {

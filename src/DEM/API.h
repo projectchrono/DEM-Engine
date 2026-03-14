@@ -804,6 +804,10 @@ class DEMSolver {
 
     /// @brief Load a mesh-represented object into the simulation, using the internal mesh format.
     std::shared_ptr<DEMMesh> AddMesh(DEMMesh& mesh);
+    /// @brief Load a shell mesh (triangular surface + finite thickness) into the simulation.
+    /// @param mesh Mesh object.
+    /// @param shell_thickness Full shell thickness (must be >= 0).
+    std::shared_ptr<DEMMesh> AddShellMesh(DEMMesh& mesh, float shell_thickness);
 
     /// @brief Load a mesh-represented object from a mesh file (.obj or .stl).
     /// @param filename Path to the mesh file.
@@ -815,6 +819,12 @@ class DEMSolver {
                                                     const std::shared_ptr<DEMMaterial>& mat,
                                                     bool load_normals = true,
                                                     bool load_uv = false);
+    /// @brief Load a shell mesh from a mesh file (.obj/.stl/.ply).
+    std::shared_ptr<DEMMesh> AddWavefrontShellObject(const std::string& filename,
+                                                     const std::shared_ptr<DEMMaterial>& mat,
+                                                     float shell_thickness,
+                                                     bool load_normals = true,
+                                                     bool load_uv = false);
     /// @brief Load a mesh-represented object from a mesh file (.obj or .stl).
     /// @param filename Path to the mesh file.
     /// @param load_normals Whether to load normals from the file.
@@ -823,6 +833,11 @@ class DEMSolver {
     std::shared_ptr<DEMMesh> AddWavefrontMeshObject(const std::string& filename,
                                                     bool load_normals = true,
                                                     bool load_uv = false);
+    /// @brief Load a shell mesh from a mesh file (.obj/.stl/.ply), without assigning material.
+    std::shared_ptr<DEMMesh> AddWavefrontShellObject(const std::string& filename,
+                                                     float shell_thickness,
+                                                     bool load_normals = true,
+                                                     bool load_uv = false);
     /// A legacy method. Use AddMesh instead.
     std::shared_ptr<DEMMesh> AddWavefrontMeshObject(DEMMesh& mesh) { return AddMesh(mesh); }
 
@@ -1962,6 +1977,13 @@ class DEMSolver {
     std::unordered_map<bodyID_t, unsigned int> m_owner_mesh_map;
     // User-requested per-triangle P/V/P*V debug tracking owners.
     std::vector<bodyID_t> m_user_tri_pv_tracking_owners;
+    struct TrianglePVSnapshot {
+        std::vector<float> avgP;
+        std::vector<float> avgV;
+        std::vector<float> avgPV;
+    };
+    // Last tracked P/V/PxV window cached on the API side before wear resets device accumulators.
+    std::unordered_map<bodyID_t, TrianglePVSnapshot> m_last_tri_pv_snapshot;
     struct MeshWearModelState {
         double wear_rate = 0.0;
         double update_interval = 0.0;
@@ -2265,6 +2287,8 @@ class DEMSolver {
     bool findOwnerTriangleRange(bodyID_t ownerID, size_t& tri_start, size_t& tri_count);
     /// Rebuild dT per-triangle PV tracking owner list from user-tracking and wear-model owners.
     void refreshTrianglePVTrackingOwners();
+    /// Cache current tracked P/V/PxV window on host side before resetting the tracking window.
+    void cacheTrackedTrianglePVWindow();
     /// Fold the just-finished dynamics call's P*V into active wear models, and apply geometry updates if due.
     void updateMeshWearModels(double call_start_time, double call_end_time);
     /// Apply one bounded pending-wear chunk of one mesh owner to its node positions.

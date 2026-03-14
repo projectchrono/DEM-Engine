@@ -211,10 +211,11 @@ void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
 // The reduction operator is component-wise associative (sum + max), therefore it can safely be used
 // with CUB ReduceByKey.
 struct PatchContactAccum {
-    double sumProjArea;     ///< Sum of projected contact areas (per patch)
-    double maxProjPen;      ///< Max projected penetration (per patch)
-    double sumWeight;       ///< Sum of weights w = projectedPenetration * projectedArea (per patch)
-    double3 sumWeightedCP;  ///< Sum of (contactPoint * w) (per patch)
+    double sumProjArea;         ///< Sum of projected contact areas (per patch)
+    double maxProjPen;          ///< Max projected penetration (per patch)
+    double sumWeight;           ///< Sum of weights w = projectedPenetration * projectedArea (per patch)
+    double3 sumWeightedCP;      ///< Sum of (contactPoint * w) (per patch)
+    double3 sumAreaWeightedCP;  ///< Sum of (contactPoint * projectedArea), for near-zero penetration fallback
 
     __host__ __device__ __forceinline__ PatchContactAccum operator+(const PatchContactAccum& other) const {
         PatchContactAccum out;
@@ -224,6 +225,9 @@ struct PatchContactAccum {
         out.sumWeightedCP =
             make_double3(sumWeightedCP.x + other.sumWeightedCP.x, sumWeightedCP.y + other.sumWeightedCP.y,
                          sumWeightedCP.z + other.sumWeightedCP.z);
+        out.sumAreaWeightedCP = make_double3(sumAreaWeightedCP.x + other.sumAreaWeightedCP.x,
+                                             sumAreaWeightedCP.y + other.sumAreaWeightedCP.y,
+                                             sumAreaWeightedCP.z + other.sumAreaWeightedCP.z);
         return out;
     }
 };
@@ -233,6 +237,7 @@ struct PatchContactAccum {
 //   - maxProjPen:  projected penetration contribution (to be reduced by max)
 //   - sumWeight:   weight contribution (for contact point averaging)
 //   - sumWeightedCP: weighted contact point contribution
+//   - sumAreaWeightedCP: area-weighted CP contribution (fallback when sumWeight ~ 0)
 void computePatchContactAccumulators(DEMDataDT* granData,
                                      const float3* votedNormals,
                                      const contactPairs_t* keys,

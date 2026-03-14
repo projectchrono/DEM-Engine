@@ -19,6 +19,7 @@
 #include <core/ApiVersion.h>
 #include "RuntimeData.h"
 #include "JitHelper.h"
+#include "Logger.hpp"
 
 namespace {
 
@@ -213,7 +214,7 @@ std::shared_ptr<jitify::experimental::KernelInstantiation> JitHelper::CachedProg
         }
     }
     if (!inst) {  // Compile if changed and not already there and make user aware
-        std::cout << "jit-compiling for " << m_name << " ..." << std::endl;
+        DEME_INFO("jit-compiling for %s ...", m_name.c_str());
         if (!m_storage->program) {
             m_storage->program = std::make_unique<jitify::experimental::Program>(
                 m_storage->code, std::vector<std::string>(), m_storage->flags);

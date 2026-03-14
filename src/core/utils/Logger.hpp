@@ -215,7 +215,9 @@ class Logger : private NonCopyable, public Singleton<Logger> {
                 oss << "[STATUS]  ";
                 break;
         }
-        oss << Log.source << ": " << Log.message << " (" << Log.file << ":" << Log.line << ")";
+        oss << Log.source << ": " << Log.message;
+        if (Log.type == MessageType::Error)
+            oss << " (" << Log.file << ":" << Log.line << ")";
         if (!Log.identifier.empty() && Log.type == MessageType::Status)
             oss << " [id: " << Log.identifier << "]";
         return oss.str();
@@ -231,20 +233,23 @@ class Logger : private NonCopyable, public Singleton<Logger> {
 // Logging utils for easy usage
 // -----------------------------
 
-#define DEME_GET_VERBOSITY() Logger::GetInstance().GetVerbosity()
+#define DEME_GET_VERBOSITY() deme::Logger::GetInstance().GetVerbosity()
 
-#define DEME_ERROR(...) \
-    throw SolverException(Logger::GetInstance().Logf(MessageType::Error, __func__, __FILE__, __LINE__, __VA_ARGS__))
+#define DEME_ERROR(...)          \
+    throw deme::SolverException( \
+        deme::Logger::GetInstance().Logf(deme::MessageType::Error, __func__, __FILE__, __LINE__, __VA_ARGS__))
 
 #define DEME_ERROR_NOTHROW(...) \
-    Logger::GetInstance().Logf(MessageType::Error, __func__, __FILE__, __LINE__, __VA_ARGS__)
+    deme::Logger::GetInstance().Logf(deme::MessageType::Error, __func__, __FILE__, __LINE__, __VA_ARGS__)
 
-#define DEME_WARNING(...) Logger::GetInstance().Logf(MessageType::Warning, __func__, __FILE__, __LINE__, __VA_ARGS__)
+#define DEME_WARNING(...) \
+    deme::Logger::GetInstance().Logf(deme::MessageType::Warning, __func__, __FILE__, __LINE__, __VA_ARGS__)
 
-#define DEME_INFO(...) Logger::GetInstance().Logf(MessageType::Info, __func__, __FILE__, __LINE__, __VA_ARGS__)
+#define DEME_INFO(...) \
+    deme::Logger::GetInstance().Logf(deme::MessageType::Info, __func__, __FILE__, __LINE__, __VA_ARGS__)
 
 #define DEME_STATUS(identifier, ...) \
-    Logger::GetInstance().LogStatusf(identifier, __func__, __FILE__, __LINE__, __VA_ARGS__)
+    deme::Logger::GetInstance().LogStatusf(identifier, __func__, __FILE__, __LINE__, __VA_ARGS__)
 
 #define DEME_GPU_CALL(code)                                                                                           \
     {                                                                                                                 \

@@ -349,12 +349,15 @@ __global__ void computePatchContactAccumulators_impl(DEMDataDT* granData,
         const double3 contactPoint = to_double3(granData->contactTorque_convToForce[myContactID]);
         const double3 weightedCP =
             make_double3(contactPoint.x * weight, contactPoint.y * weight, contactPoint.z * weight);
+        const double3 areaWeightedCP = make_double3(contactPoint.x * projectedArea, contactPoint.y * projectedArea,
+                                                    contactPoint.z * projectedArea);
 
         PatchContactAccum acc;
         acc.sumProjArea = projectedArea;
         acc.maxProjPen = projectedPenetration;
         acc.sumWeight = weight;
         acc.sumWeightedCP = weightedCP;
+        acc.sumAreaWeightedCP = areaWeightedCP;
         accumulators[idx] = acc;
     }
 }
@@ -400,9 +403,19 @@ __global__ void finalizePatchResultsFromAccumulators_impl(const PatchContactAccu
                 const double invW = 1.0 / acc.sumWeight;
                 finalContactPoints[idx] =
                     make_double3(acc.sumWeightedCP.x * invW, acc.sumWeightedCP.y * invW, acc.sumWeightedCP.z * invW);
+            } else if (projectedArea > 0.0 && isfinite(acc.sumAreaWeightedCP.x) && isfinite(acc.sumAreaWeightedCP.y) &&
+                       isfinite(acc.sumAreaWeightedCP.z)) {
+                const double invA = 1.0 / projectedArea;
+                finalContactPoints[idx] = make_double3(acc.sumAreaWeightedCP.x * invA, acc.sumAreaWeightedCP.y * invA,
+                                                       acc.sumAreaWeightedCP.z * invA);
             } else {
-                // If total weight is 0, contact point is set to (0,0,0)
-                finalContactPoints[idx] = make_double3(0.0, 0.0, 0.0);
+                // Last fallback: max-penetration primitive CP.
+                const double3 cp_fallback = zeroAreaContactPoints[idx];
+                if (isfinite(cp_fallback.x) && isfinite(cp_fallback.y) && isfinite(cp_fallback.z)) {
+                    finalContactPoints[idx] = cp_fallback;
+                } else {
+                    finalContactPoints[idx] = make_double3(0.0, 0.0, 0.0);
+                }
             }
         } else {
             // Zero-area case: fallback to max-penetration primitive's results
@@ -978,8 +991,8 @@ __global__ void accumulateTrianglePVFromPatchContacts_impl(const DEMSimParams* s
     const geoType_t typeA = decodeTypeA(primType);
     const geoType_t typeB = decodeTypeB(primType);
 
-    // Track only particle(=sphere)-triangle contributions for diagnostic P/V/PxV.
-    if (typeA == GEO_T_TRIANGLE && typeB == GEO_T_SPHERE) {
+    // Track any contact contribution on triangle sides (sphere-triangle and triangle-triangle).
+    if (typeA == GEO_T_TRIANGLE) {
         bool triGhost = false, triGhostNeg = false;
         const bodyID_t triA = cylPeriodicDecodeID(granData->idPrimitiveA[primContactID], triGhost, triGhostNeg);
         if (triA < simParams->nTriGM) {
@@ -990,7 +1003,7 @@ __global__ void accumulateTrianglePVFromPatchContacts_impl(const DEMSimParams* s
             }
         }
     }
-    if (typeB == GEO_T_TRIANGLE && typeA == GEO_T_SPHERE) {
+    if (typeB == GEO_T_TRIANGLE) {
         bool triGhost = false, triGhostNeg = false;
         const bodyID_t triB = cylPeriodicDecodeID(granData->idPrimitiveB[primContactID], triGhost, triGhostNeg);
         if (triB < simParams->nTriGM) {

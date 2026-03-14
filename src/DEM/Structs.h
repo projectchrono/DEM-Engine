@@ -750,17 +750,25 @@ class DEMClumpTemplate {
   public:
     float mass = 0;
     float3 MOI = make_float3(0);
+    bool mass_specified = false;
+    bool moi_specified = false;
     std::vector<float> radii;
     std::vector<float3> relPos;
     std::vector<std::shared_ptr<DEMMaterial>> materials;
     unsigned int nComp = 0;  // Number of components
 
     /// Set mass.
-    void SetMass(float mass) { this->mass = mass; }
+    void SetMass(float mass) {
+        this->mass = mass;
+        this->mass_specified = true;
+    }
     /// Get mass.
     float GetMass() const { return mass; }
     /// Set MOI (in principal frame).
-    void SetMOI(float3 MOI) { this->MOI = MOI; }
+    void SetMOI(float3 MOI) {
+        this->MOI = MOI;
+        this->moi_specified = true;
+    }
     /// Set MOI (in principal frame).
     void SetMOI(const std::vector<float>& MOI) {
         assertThreeElements(MOI, "SetMOI", "MOI");

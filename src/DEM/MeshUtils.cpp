@@ -850,7 +850,7 @@ std::vector<float3> DEMMesh::ComputePatchLocations() const {
 }
 
 // Compute volume, centroid and MOI in CoM frame (unit density).
-// ATTENTION: Only correct for "watertight" meshes with fine and non-degenerated triangles.
+// ATTENTION: For solid meshes, this assumes a watertight mesh with fine and non-degenerate triangles.
 void DEMMesh::ComputeMassProperties(double& volume, float3& center, float3& inertia) const {
     float3 inertia_products = make_float3(0, 0, 0);
     ComputeMassProperties(volume, center, inertia, inertia_products);
@@ -859,6 +859,110 @@ void DEMMesh::ComputeMassProperties(double& volume, float3& center, float3& iner
 // Compute volume, centroid and full inertia tensor in CoM frame (unit density).
 // ATTENTION: Only correct for "watertight" meshes with fine and non-degenerated triangles.
 void DEMMesh::ComputeMassProperties(double& volume, float3& center, float3& inertia, float3& inertia_products) const {
+    if (IsShell() && GetShellThickness() > DEME_TINY_FLOAT) {
+        const double thickness = static_cast<double>(GetShellThickness());
+        double area_total = 0.0;
+        double mx = 0.0;
+        double my = 0.0;
+        double mz = 0.0;
+
+        for (const auto& face : m_face_v_indices) {
+            const float3& a = m_vertices[face.x];
+            const float3& b = m_vertices[face.y];
+            const float3& c = m_vertices[face.z];
+            const float3 n = cross(b - a, c - a);
+            const double area = 0.5 * static_cast<double>(length(n));
+            if (area <= DEME_TINY_FLOAT) {
+                continue;
+            }
+            area_total += area;
+            mx += area * static_cast<double>(a.x + b.x + c.x) / 3.0;
+            my += area * static_cast<double>(a.y + b.y + c.y) / 3.0;
+            mz += area * static_cast<double>(a.z + b.z + c.z) / 3.0;
+        }
+
+        if (!(area_total > 0.0) || !std::isfinite(area_total)) {
+            volume = 0.0;
+            center = make_float3(0, 0, 0);
+            inertia = make_float3(0, 0, 0);
+            inertia_products = make_float3(0, 0, 0);
+            return;
+        }
+
+        const double cx = mx / area_total;
+        const double cy = my / area_total;
+        const double cz = mz / area_total;
+        const double vol = area_total * thickness;
+
+        double Ixx = 0.0;
+        double Iyy = 0.0;
+        double Izz = 0.0;
+        double Ixy = 0.0;
+        double Iyz = 0.0;
+        double Izx = 0.0;
+
+        for (const auto& face : m_face_v_indices) {
+            const float3& a = m_vertices[face.x];
+            const float3& b = m_vertices[face.y];
+            const float3& c = m_vertices[face.z];
+
+            const float3 n_vec = cross(b - a, c - a);
+            const double n_len = static_cast<double>(length(n_vec));
+            const double area = 0.5 * n_len;
+            if (area <= DEME_TINY_FLOAT) {
+                continue;
+            }
+
+            const double ax = static_cast<double>(a.x), ay = static_cast<double>(a.y), az = static_cast<double>(a.z);
+            const double bx = static_cast<double>(b.x), by = static_cast<double>(b.y), bz = static_cast<double>(b.z);
+            const double cxv = static_cast<double>(c.x), cyv = static_cast<double>(c.y), czv = static_cast<double>(c.z);
+
+            const double int_xx = area * ((ax * ax + bx * bx + cxv * cxv) + (ax * bx + ax * cxv + bx * cxv)) / 6.0;
+            const double int_yy = area * ((ay * ay + by * by + cyv * cyv) + (ay * by + ay * cyv + by * cyv)) / 6.0;
+            const double int_zz = area * ((az * az + bz * bz + czv * czv) + (az * bz + az * czv + bz * czv)) / 6.0;
+            const double int_xy = area * ((ax * ay + bx * by + cxv * cyv) / 6.0 +
+                                          (ax * by + bx * ay + ax * cyv + cxv * ay + bx * cyv + cxv * by) / 12.0);
+            const double int_yz = area * ((ay * az + by * bz + cyv * czv) / 6.0 +
+                                          (ay * bz + by * az + ay * czv + cyv * az + by * czv + cyv * bz) / 12.0);
+            const double int_zx = area * ((az * ax + bz * bx + czv * cxv) / 6.0 +
+                                          (az * bx + bz * ax + az * cxv + czv * ax + bz * cxv + czv * bx) / 12.0);
+
+            // Mid-surface lamina contribution with areal density = thickness (unit volumetric density).
+            Ixx += thickness * (int_yy + int_zz);
+            Iyy += thickness * (int_xx + int_zz);
+            Izz += thickness * (int_xx + int_yy);
+            Ixy -= thickness * int_xy;
+            Iyz -= thickness * int_yz;
+            Izx -= thickness * int_zx;
+
+            // Through-thickness contribution for centered extrusion along facet normal.
+            const double nx = static_cast<double>(n_vec.x) / n_len;
+            const double ny = static_cast<double>(n_vec.y) / n_len;
+            const double nz = static_cast<double>(n_vec.z) / n_len;
+            const double coeff = area * thickness * thickness * thickness / 12.0;
+            Ixx += coeff * (1.0 - nx * nx);
+            Iyy += coeff * (1.0 - ny * ny);
+            Izz += coeff * (1.0 - nz * nz);
+            Ixy += coeff * (-nx * ny);
+            Iyz += coeff * (-ny * nz);
+            Izx += coeff * (-nz * nx);
+        }
+
+        // Shift inertia tensor from origin to center of mass.
+        Ixx -= vol * (cy * cy + cz * cz);
+        Iyy -= vol * (cx * cx + cz * cz);
+        Izz -= vol * (cx * cx + cy * cy);
+        Ixy += vol * cx * cy;
+        Iyz += vol * cy * cz;
+        Izx += vol * cz * cx;
+
+        volume = vol;
+        center = make_float3(static_cast<float>(cx), static_cast<float>(cy), static_cast<float>(cz));
+        inertia = make_float3(static_cast<float>(Ixx), static_cast<float>(Iyy), static_cast<float>(Izz));
+        inertia_products = make_float3(static_cast<float>(Ixy), static_cast<float>(Iyz), static_cast<float>(Izx));
+        return;
+    }
+
     double vol = 0.0;
     double mx = 0.0;
     double my = 0.0;

@@ -577,6 +577,65 @@ __global__ void countActiveTriPerGroup(const uint64_t* keys, contactPairs_t* gro
     }
 }
 
+// Sentinel for "not present" in the active-triangle key list.
+// NOTE: contactPairs_t is uint32_t.
+constexpr contactPairs_t DEME_INVALID_ACTIVE_TRI_POS = 0xffffffffu;
+
+// Precompute, for each active triangle (in keys[]), the positions of its 3 edge-neighbors in the same active list.
+// The output is an array of length 3*n, laid out as [nb0, nb1, nb2] per active triangle.
+// If a neighbor is not present (or boundary), the corresponding position is DEME_INVALID_ACTIVE_TRI_POS.
+__global__ void buildActiveTriNeighborPos(const uint64_t* keys,
+                                          const contactPairs_t* groupStart,
+                                          const contactPairs_t* groupCount,
+                                          const bodyID_t* triNeighborIndex,
+                                          const bodyID_t* triNeighbor1,
+                                          const bodyID_t* triNeighbor2,
+                                          const bodyID_t* triNeighbor3,
+                                          contactPairs_t* outNeighborPos,
+                                          size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const uint64_t key = keys[myID];
+        const contactPairs_t grp = static_cast<contactPairs_t>(key >> 32);
+        const bodyID_t triID = static_cast<bodyID_t>(key & 0xffffffffull);
+        const contactPairs_t start = groupStart[grp];
+        const contactPairs_t count = groupCount[grp];
+
+        // Default: no neighbors.
+        outNeighborPos[3 * myID + 0] = DEME_INVALID_ACTIVE_TRI_POS;
+        outNeighborPos[3 * myID + 1] = DEME_INVALID_ACTIVE_TRI_POS;
+        outNeighborPos[3 * myID + 2] = DEME_INVALID_ACTIVE_TRI_POS;
+
+        const bodyID_t nb_idx = triNeighborIndex[triID];
+        if (nb_idx == NULL_BODYID || count == 0) {
+            return;
+        }
+
+        const bodyID_t nbs[3] = {triNeighbor1[nb_idx], triNeighbor2[nb_idx], triNeighbor3[nb_idx]};
+        for (int e = 0; e < 3; ++e) {
+            const bodyID_t nb = nbs[e];
+            if (nb == NULL_BODYID) {
+                continue;
+            }
+            const uint64_t target = (static_cast<uint64_t>(grp) << 32) | static_cast<uint64_t>(nb);
+            contactPairs_t left = 0;
+            contactPairs_t right = count;
+            while (left < right) {
+                contactPairs_t mid = left + (right - left) / 2;
+                const uint64_t mid_key = keys[start + mid];
+                if (mid_key < target) {
+                    left = mid + 1;
+                } else {
+                    right = mid;
+                }
+            }
+            if (left < count && keys[start + left] == target) {
+                outNeighborPos[3 * myID + e] = start + left;
+            }
+        }
+    }
+}
+
 // Label propagation for active triangles within each group.
 __global__ void propagateActiveTriLabels(const uint64_t* keys,
                                          const bodyID_t* labelsIn,
@@ -635,6 +694,60 @@ __global__ void propagateActiveTriLabels(const uint64_t* keys,
         if (label != labelsIn[myID]) {
             *changed = 1;
         }
+    }
+}
+
+// Label propagation using precomputed neighbor positions (avoids per-iteration binary searches).
+// If changedFlag is non-null, it will be set to 1 if any label changes in this iteration.
+__global__ void propagateActiveTriLabelsFromNeighborPos(const bodyID_t* labelsIn,
+                                                        bodyID_t* labelsOut,
+                                                        const contactPairs_t* neighborPos,
+                                                        contactPairs_t* changedFlag,
+                                                        size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // Block-local change flag to reduce global atomics.
+    __shared__ int blockChanged;
+    if (threadIdx.x == 0) {
+        blockChanged = 0;
+    }
+    __syncthreads();
+
+    if (myID < n) {
+        const bodyID_t oldLabel = labelsIn[myID];
+        bodyID_t label = oldLabel;
+        const contactPairs_t p0 = neighborPos[3 * myID + 0];
+        const contactPairs_t p1 = neighborPos[3 * myID + 1];
+        const contactPairs_t p2 = neighborPos[3 * myID + 2];
+
+        if (p0 != DEME_INVALID_ACTIVE_TRI_POS) {
+            const bodyID_t nb_label = labelsIn[p0];
+            if (nb_label < label) {
+                label = nb_label;
+            }
+        }
+        if (p1 != DEME_INVALID_ACTIVE_TRI_POS) {
+            const bodyID_t nb_label = labelsIn[p1];
+            if (nb_label < label) {
+                label = nb_label;
+            }
+        }
+        if (p2 != DEME_INVALID_ACTIVE_TRI_POS) {
+            const bodyID_t nb_label = labelsIn[p2];
+            if (nb_label < label) {
+                label = nb_label;
+            }
+        }
+
+        labelsOut[myID] = label;
+        if (changedFlag != nullptr && label != oldLabel) {
+            atomicExch(&blockChanged, 1);
+        }
+    }
+
+    __syncthreads();
+    if (changedFlag != nullptr && threadIdx.x == 0 && blockChanged) {
+        atomicExch(changedFlag, (contactPairs_t)1);
     }
 }
 

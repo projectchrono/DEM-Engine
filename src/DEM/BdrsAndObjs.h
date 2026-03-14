@@ -368,6 +368,9 @@ class DEMMesh : public DEMInitializer {
     float mass = 1.f;
     // Mesh's MOI
     float3 MOI = make_float3(1.f);
+    // Whether mass/MOI were explicitly specified by the user.
+    bool mass_specified = false;
+    bool moi_specified = false;
 
     std::string filename;  ///< file string if loading an obj file
 
@@ -378,6 +381,10 @@ class DEMMesh : public DEMInitializer {
     bool is_convex = false;
     // If true, this mesh is never selected as the winner side for island labeling.
     bool never_winner = false;
+    // If true, this mesh is treated as a shell surface with finite thickness in contact handling.
+    bool is_shell = false;
+    // Physical shell thickness (full thickness, not half-thickness), in simulation length unit.
+    float shell_thickness = 0.f;
 
     DEMMesh() { obj_type = OWNER_TYPE::MESH; }
     DEMMesh(std::string input_file) {
@@ -423,6 +430,25 @@ class DEMMesh : public DEMInitializer {
     void SetNeverWinner(bool never = true) { never_winner = never; }
     /// Query whether this mesh is marked as never-winner.
     bool IsNeverWinner() const { return never_winner; }
+    /// Treat this mesh as a shell surface with finite thickness. Thickness must be finite and non-negative.
+    void SetShellThickness(float thickness) {
+        if (!std::isfinite(thickness) || thickness < 0.f) {
+            DEME_ERROR("Shell thickness must be finite and non-negative (got %.9g).", thickness);
+        }
+        shell_thickness = thickness;
+        is_shell = thickness > DEME_TINY_FLOAT;
+    }
+    /// Disable shell mode (fallback to zero-thickness triangle surface behavior).
+    void DisableShell() {
+        is_shell = false;
+        shell_thickness = 0.f;
+    }
+    /// Query whether this mesh is configured as a shell.
+    bool IsShell() const { return is_shell; }
+    /// Get full shell thickness.
+    float GetShellThickness() const { return shell_thickness; }
+    /// Get half shell thickness (used internally by kernels).
+    float GetShellHalfThickness() const { return (is_shell && shell_thickness > 0.f) ? 0.5f * shell_thickness : 0.f; }
 
     /// Access the n-th triangle in mesh
     DEMTriangle GetTriangle(size_t index) const {  // No need to wrap (for Shlok)
@@ -449,17 +475,24 @@ class DEMMesh : public DEMInitializer {
     }
 
     /// Set mass.
-    void SetMass(float mass) { this->mass = mass; }
+    void SetMass(float mass) {
+        this->mass = mass;
+        this->mass_specified = true;
+    }
     /// Get mass.
     float GetMass() const { return mass; }
     /// Set MOI (in principal frame).
-    void SetMOI(float3 MOI) { this->MOI = MOI; }
+    void SetMOI(float3 MOI) {
+        this->MOI = MOI;
+        this->moi_specified = true;
+    }
     /// Set MOI (in principal frame).
     void SetMOI(const std::vector<float>& MOI) {
         assertThreeElements(MOI, "SetMOI", "MOI");
         SetMOI(make_float3(MOI[0], MOI[1], MOI[2]));
     }
     /// Compute volume, centroid and MOI in CoM frame (unit density).
+    /// For shells (`SetShellThickness`), uses a centered-thickening shell model: volume = surface area * thickness.
     void ComputeMassProperties(double& volume, float3& center, float3& inertia) const;
     /// Compute volume, centroid and full inertia tensor in CoM frame (unit density).
     /// `inertia_products` stores tensor terms (Ixy, Iyz, Izx).
@@ -604,6 +637,9 @@ class DEMMesh : public DEMInitializer {
         assertPositive(s, "Scale", "s");
         for (auto& node : m_vertices) {
             node *= s;
+        }
+        if (is_shell) {
+            shell_thickness *= s;
         }
         double double_s = (double)std::abs(s);
         mass *= double_s * double_s * double_s;

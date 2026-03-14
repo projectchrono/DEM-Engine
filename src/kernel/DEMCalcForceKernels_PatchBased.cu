@@ -614,14 +614,30 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
         }
     }
 
+    //// NO CLAMPING. CURRENT FORCE IMPLEMENTATION IS PHYSICAL AND STABLE.
     // // Patch-level geometric invariant guard for real owner-owner contacts.
     // // Prevent rare depth outliers from injecting unphysical force/energy.
+    // if constexpr (AType == deme::GEO_T_SPHERE && BType == deme::GEO_T_TRIANGLE) {
+    //     if (ContactType != deme::NOT_A_CONTACT) {
+    //         const float3 cpRelToSphere = to_float3(contactPnt - bodyAPos);
+    //         const float cpRel2 = dot(cpRelToSphere, cpRelToSphere);
+    //         const float shell_half_B = ownerShellHalfThickness(simParams, granData, ownerB);
+    //         const float maxSphereReach =
+    //             ARadius + shell_half_B +
+    //             fmaxf(simParams->dyn.beta + simParams->maxFamilyExtraMargin + extraMarginSize, 0.f) + 1e-6f;
+    //         if (!isfinite(cpRel2) || cpRel2 > maxSphereReach * maxSphereReach) {
+    //             ContactType = deme::NOT_A_CONTACT;
+    //             overlapDepth = -DEME_HUGE_FLOAT;
+    //             overlapArea = 0.0;
+    //         }
+    //     }
+    // }
     // if constexpr (BType != deme::GEO_T_ANALYTICAL) {
     //     constexpr bool apply_shape_depth_cap = (AType == deme::GEO_T_TRIANGLE) && (BType == deme::GEO_T_TRIANGLE);
     //     if (ContactType != deme::NOT_A_CONTACT &&
     //         !clampPatchPenetrationByOwnerBounds(simParams, granData, ownerA, ownerB, AOwnerPos, BOwnerPos,
-    //         contactPnt,
-    //                                             B2A, extraMarginSize, overlapDepth, apply_shape_depth_cap)) {
+    //                                             contactPnt, B2A, extraMarginSize, overlapDepth,
+    //                                             apply_shape_depth_cap)) {
     //         ContactType = deme::NOT_A_CONTACT;
     //         overlapDepth = -DEME_HUGE_FLOAT;
     //         overlapArea = 0.0;
@@ -878,6 +894,15 @@ inline __device__ float maxOwnerLocalLever(const deme::DEMSimParams* simParams,
     return max_local_lever;
 }
 
+inline __device__ float ownerShellHalfThickness(const deme::DEMSimParams* simParams,
+                                                const deme::DEMDataDT* granData,
+                                                deme::bodyID_t ownerID) {
+    if (!granData->ownerMeshShellHalfThickness || ownerID == deme::NULL_BODYID || ownerID >= simParams->nOwnerBodies) {
+        return 0.f;
+    }
+    return fmaxf(granData->ownerMeshShellHalfThickness[ownerID], 0.f);
+}
+
 inline __device__ void clampLocalContactPoint(float3& p, float max_norm) {
     if (!isfinite(p.x) || !isfinite(p.y) || !isfinite(p.z)) {
         p = make_float3(0.f, 0.f, 0.f);
@@ -941,10 +966,9 @@ inline __device__ bool clampPatchPenetrationByOwnerBounds(const deme::DEMSimPara
 
             const float3 vA = make_float3(granData->vX[ownerA], granData->vY[ownerA], granData->vZ[ownerA]);
             const float3 vB = make_float3(granData->vX[ownerB], granData->vY[ownerB], granData->vZ[ownerB]);
-            const float3 wA =
-                make_float3(granData->omgBarX[ownerA], granData->omgBarY[ownerA], granData->omgBarZ[ownerA]);
-            const float3 wB =
-                make_float3(granData->omgBarX[ownerB], granData->omgBarY[ownerB], granData->omgBarZ[ownerB]);
+            const float3 wA = make_float3(granData->omgBarX[ownerA], granData->omgBarY[ownerA],
+granData->omgBarZ[ownerA]); const float3 wB = make_float3(granData->omgBarX[ownerB], granData->omgBarY[ownerB],
+granData->omgBarZ[ownerB]);
 
             float3 rA = to_float3(contactPnt - AOwnerPos);
             float3 rB = to_float3(contactPnt - BOwnerPos);

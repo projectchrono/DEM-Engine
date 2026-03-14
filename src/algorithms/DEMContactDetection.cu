@@ -532,7 +532,8 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
         bodyID_t* triIDsEachBinTouches_sorted;
         trianglesBinTouches_t* numTrianglesBinTouches;
         binsTriangleTouchPairs_t* triIDsLookUpTable;
-        float3 *sandwichANode1, *sandwichANode2, *sandwichANode3, *sandwichBNode1, *sandwichBNode2, *sandwichBNode3;
+        float3 *tri_vA1 = nullptr, *tri_vB1 = nullptr, *tri_vC1 = nullptr, *tri_shift = nullptr;
+        float3 *sandwichANode1, *sandwichANode2, *sandwichANode3, *sandwichBNode1;
         // The following two pointers are device pointers, as outside this (simParams->nTriGM > 0) block, they are only
         // used as read-only ingredients in kernels. But their data is stored using DualArray, as the data need at some
         // point be processed on host.
@@ -547,16 +548,14 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
             sandwichANode1 = (float3*)scratchPad.allocateTempVector("sandwichANode1", CD_temp_arr_bytes);
             sandwichANode2 = sandwichANode1 + simParams->nTriGM;
             sandwichANode3 = sandwichANode2 + simParams->nTriGM;
-            sandwichBNode1 = (float3*)scratchPad.allocateTempVector("sandwichBNode1", CD_temp_arr_bytes);
-            sandwichBNode2 = sandwichBNode1 + simParams->nTriGM;
-            sandwichBNode3 = sandwichBNode2 + simParams->nTriGM;
+            sandwichBNode1 =
+                (float3*)scratchPad.allocateTempVector("sandwichBNode1", simParams->nTriGM * sizeof(float3));
             size_t blocks_needed_for_tri =
                 (simParams->nTriGM + DEME_NUM_TRIANGLE_PER_BLOCK - 1) / DEME_NUM_TRIANGLE_PER_BLOCK;
             bin_triangle_kernels->kernel("makeTriangleSandwich")
                 .instantiate()
                 .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
-                .launch(&simParams, &granData, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
-                        sandwichBNode2, sandwichBNode3);
+                .launch(&simParams, &granData, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1);
 
             // 1st step: register the number of triangle--bin touching pairs for each triangle for further processing.
             // We also use the opportunity to find how many analytical objects each triangle touches.
@@ -572,13 +571,10 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
 
             // Triangle prepass: compute world vertices/bounds/shift once, reuse in both sweeps.
             CD_temp_arr_bytes = simParams->nTriGM * sizeof(float3);
-            float3* tri_vA1 = (float3*)scratchPad.allocateTempVector("tri_vA1", CD_temp_arr_bytes);
-            float3* tri_vB1 = (float3*)scratchPad.allocateTempVector("tri_vB1", CD_temp_arr_bytes);
-            float3* tri_vC1 = (float3*)scratchPad.allocateTempVector("tri_vC1", CD_temp_arr_bytes);
-            float3* tri_vA2 = (float3*)scratchPad.allocateTempVector("tri_vA2", CD_temp_arr_bytes);
-            float3* tri_vB2 = (float3*)scratchPad.allocateTempVector("tri_vB2", CD_temp_arr_bytes);
-            float3* tri_vC2 = (float3*)scratchPad.allocateTempVector("tri_vC2", CD_temp_arr_bytes);
-            float3* tri_shift = (float3*)scratchPad.allocateTempVector("tri_shift", CD_temp_arr_bytes);
+            tri_vA1 = (float3*)scratchPad.allocateTempVector("tri_vA1", CD_temp_arr_bytes);
+            tri_vB1 = (float3*)scratchPad.allocateTempVector("tri_vB1", CD_temp_arr_bytes);
+            tri_vC1 = (float3*)scratchPad.allocateTempVector("tri_vC1", CD_temp_arr_bytes);
+            tri_shift = (float3*)scratchPad.allocateTempVector("tri_shift", CD_temp_arr_bytes);
 
             CD_temp_arr_bytes = simParams->nTriGM * sizeof(int3);
             int3* tri_L1 = (int3*)scratchPad.allocateTempVector("tri_L1", CD_temp_arr_bytes);
@@ -590,13 +586,39 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
             uint8_t* tri_ok1 = (uint8_t*)scratchPad.allocateTempVector("tri_ok1", CD_temp_arr_bytes);
             uint8_t* tri_ok2 = (uint8_t*)scratchPad.allocateTempVector("tri_ok2", CD_temp_arr_bytes);
 
+            // Precompute mesh-owner pose (position + rotation matrix rows) once per step (mesh owners only).
+            float3 *meshOwnerPos = nullptr, *meshR1 = nullptr, *meshR2 = nullptr, *meshR3 = nullptr;
+            if (simParams->nTriMeshes > 0) {
+                CD_temp_arr_bytes = simParams->nTriMeshes * sizeof(float3);
+                meshOwnerPos = (float3*)scratchPad.allocateTempVector("meshOwnerPos", CD_temp_arr_bytes);
+                meshR1 = (float3*)scratchPad.allocateTempVector("meshR1", CD_temp_arr_bytes);
+                meshR2 = (float3*)scratchPad.allocateTempVector("meshR2", CD_temp_arr_bytes);
+                meshR3 = (float3*)scratchPad.allocateTempVector("meshR3", CD_temp_arr_bytes);
+                size_t blocks_needed_for_mesh_owner =
+                    (simParams->nTriMeshes + DEME_NUM_TRIANGLE_PER_BLOCK - 1) / DEME_NUM_TRIANGLE_PER_BLOCK;
+                bin_triangle_kernels->kernel("precomputeMeshOwnerPose")
+                    .instantiate()
+                    .configure(dim3(blocks_needed_for_mesh_owner), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
+                    .launch(&simParams, &granData, meshOwnerPos, meshR1, meshR2, meshR3);
+            }
+
             bin_triangle_kernels->kernel("precomputeTriangleSandwichData")
                 .instantiate()
                 .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
-                .launch(&simParams, &granData, tri_vA1, tri_vB1, tri_vC1, tri_vA2, tri_vB2, tri_vC2, tri_shift, tri_L1,
-                        tri_U1, tri_L2, tri_U2, tri_ok1, tri_ok2, sandwichANode1, sandwichANode2, sandwichANode3,
-                        sandwichBNode1, sandwichBNode2, sandwichBNode3);
+                .launch(&simParams, &granData, tri_vA1, tri_vB1, tri_vC1, tri_shift, tri_L1, tri_U1, tri_L2, tri_U2,
+                        tri_ok1, tri_ok2, meshOwnerPos, meshR1, meshR2, meshR3, sandwichANode1, sandwichANode2,
+                        sandwichANode3, sandwichBNode1);
 
+            if (meshOwnerPos) {
+                scratchPad.finishUsingTempVector("meshOwnerPos");
+                scratchPad.finishUsingTempVector("meshR1");
+                scratchPad.finishUsingTempVector("meshR2");
+                scratchPad.finishUsingTempVector("meshR3");
+            }
+
+            // Sandwich nodes are no longer needed beyond prepass.
+            scratchPad.finishUsingTempVector("sandwichANode1");
+            scratchPad.finishUsingTempVector("sandwichBNode1");
             if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
                 CD_temp_arr_bytes = simParams->nOwnerBodies * sizeof(unsigned int);
                 ownerGhostFlags = (unsigned int*)scratchPad.allocateTempVector("ownerGhostFlags", CD_temp_arr_bytes);
@@ -604,16 +626,15 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 bin_triangle_kernels->kernel("markCylPeriodicOwnerGhosts")
                     .instantiate()
                     .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
-                    .launch(&simParams, &granData, tri_vA1, tri_vB1, tri_vC1, tri_vA2, tri_vB2, tri_vC2,
-                            ownerGhostFlags);
+                    .launch(&simParams, &granData, tri_vA1, tri_vB1, tri_vC1, tri_shift, ownerGhostFlags);
             }
 
             bin_triangle_kernels->kernel("getNumberOfBinsEachTriangleTouches")
                 .instantiate()
                 .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
                 .launch(&simParams, &granData, numBinsTriTouches, numAnalGeoTriTouches, tri_vA1, tri_vB1, tri_vC1,
-                        tri_vA2, tri_vB2, tri_vC2, tri_shift, tri_L1, tri_U1, tri_L2, tri_U2, tri_ok1, tri_ok2,
-                        ownerGhostFlags, solverFlags.meshUniversalContact);
+                        tri_shift, tri_L1, tri_U1, tri_L2, tri_U2, tri_ok1, tri_ok2, ownerGhostFlags,
+                        solverFlags.meshUniversalContact);
 
             // std::cout << "numBinsTriTouches: " << std::endl;
             // displayDeviceArray<binsTriangleTouches_t>(numBinsTriTouches, simParams->nTriGM);
@@ -687,20 +708,12 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 .instantiate()
                 .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
                 .launch(&simParams, &granData, numBinsTriTouchesScan, numAnalGeoTriTouchesScan, binIDsEachTriTouches,
-                        triIDsEachBinTouches, tri_vA1, tri_vB1, tri_vC1, tri_vA2, tri_vB2, tri_vC2, tri_shift, tri_L1,
-                        tri_U1, tri_L2, tri_U2, tri_ok1, tri_ok2, ownerGhostFlags, idTriA, idGeoB, dType,
-                        solverFlags.meshUniversalContact);
+                        triIDsEachBinTouches, tri_vA1, tri_vB1, tri_vC1, tri_shift, tri_L1, tri_U1, tri_L2, tri_U2,
+                        tri_ok1, tri_ok2, ownerGhostFlags, idTriA, idGeoB, dType, solverFlags.meshUniversalContact);
 
             if (ownerGhostFlags) {
                 scratchPad.finishUsingTempVector("ownerGhostFlags");
             }
-            scratchPad.finishUsingTempVector("tri_vA1");
-            scratchPad.finishUsingTempVector("tri_vB1");
-            scratchPad.finishUsingTempVector("tri_vC1");
-            scratchPad.finishUsingTempVector("tri_vA2");
-            scratchPad.finishUsingTempVector("tri_vB2");
-            scratchPad.finishUsingTempVector("tri_vC2");
-            scratchPad.finishUsingTempVector("tri_shift");
             scratchPad.finishUsingTempVector("tri_L1");
             scratchPad.finishUsingTempVector("tri_U1");
             scratchPad.finishUsingTempVector("tri_L2");
@@ -869,8 +882,8 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                     .launch(&simParams, &granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
                             sphereIDsLookUpTable, mapTriActBinToSphActBin, triIDsEachBinTouches_sorted,
                             activeBinIDsForTri, numTrianglesBinTouches, triIDsLookUpTable, numTriSphContactsInEachBin,
-                            numTriTriContactsInEachBin, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
-                            sandwichBNode2, sandwichBNode3, *pNumActiveBinsForTri, solverFlags.meshUniversalContact);
+                            numTriTriContactsInEachBin, tri_vA1, tri_vB1, tri_vC1, tri_shift, *pNumActiveBinsForTri,
+                            solverFlags.meshUniversalContact);
                 // std::cout << "numTriSphContactsInEachBin: " << std::endl;
                 // displayDeviceArray<binContactPairs_t>(numTriSphContactsInEachBin, *pNumActiveBinsForTri);
                 // std::cout << "numTriTriContactsInEachBin: " << std::endl;
@@ -1005,8 +1018,8 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                             sphereIDsLookUpTable, mapTriActBinToSphActBin, triIDsEachBinTouches_sorted,
                             activeBinIDsForTri, numTrianglesBinTouches, triIDsLookUpTable, triSphContactReportOffsets,
                             triTriContactReportOffsets, idSphA_sm, idTriB_sm, dType_sm, idTriA_mm, idTriB_mm, dType_mm,
-                            sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1, sandwichBNode2,
-                            sandwichBNode3, *pNumActiveBinsForTri, solverFlags.meshUniversalContact);
+                            tri_vA1, tri_vB1, tri_vC1, tri_shift, *pNumActiveBinsForTri,
+                            solverFlags.meshUniversalContact);
             }
             // std::cout << "idPrimitiveA: " << std::endl;
             // displayDeviceArray<bodyID_t>(granData->idPrimitiveA, *scratchPad.numPrimitiveContacts);
@@ -1021,8 +1034,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
         scratchPad.finishUsingDualArray("activeBinIDs");
         scratchPad.finishUsingTempVector("numSpheresBinTouches");
         scratchPad.finishUsingTempVector("sphereIDsLookUpTable");
-        scratchPad.finishUsingTempVector("sandwichANode1");
-        scratchPad.finishUsingTempVector("sandwichBNode1");
         scratchPad.finishUsingTempVector("triIDsEachBinTouches_sorted");
         scratchPad.finishUsingDualArray("activeBinIDsForTri");
         scratchPad.finishUsingTempVector("numTrianglesBinTouches");
@@ -1034,6 +1045,14 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
         scratchPad.finishUsingTempVector("sphSphContactReportOffsets");
         scratchPad.finishUsingTempVector("triSphContactReportOffsets");
         scratchPad.finishUsingTempVector("triTriContactReportOffsets");
+
+        // Release triangle precompute buffers (needed by tri contact kernels above)
+        if (simParams->nTriGM > 0) {
+            scratchPad.finishUsingTempVector("tri_vA1");
+            scratchPad.finishUsingTempVector("tri_vB1");
+            scratchPad.finishUsingTempVector("tri_vC1");
+            scratchPad.finishUsingTempVector("tri_shift");
+        }
 
         scratchPad.finishUsingDualStruct("numActiveBins");
         scratchPad.finishUsingDualStruct("numActiveBinsForTri");
@@ -1649,27 +1668,71 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                                                                          this_stream, scratchPad);
                     }
 
-                    // Label propagation until convergence.
-                    scratchPad.allocateDualStruct("labelChanged");
+                    // ---- Option B: Precompute active-triangle neighbor positions (in activeTriKeysUnique) once.
+                    // triNeighbor{1,2,3} are precomputed global edge-neighbor triangle IDs, but we still need a
+                    // per-step mapping "neighbor triID -> position in the ACTIVE list" to avoid per-iteration
+                    // binary searches.
+                    contactPairs_t* activeTriNeighborPos = (contactPairs_t*)scratchPad.allocateTempVector(
+                        "activeTriNeighborPos", numUniqueActiveTri * 3 * sizeof(contactPairs_t));
+                    buildActiveTriNeighborPos<<<dim3(blocks_needed_active), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                                this_stream>>>(activeTriKeysUnique, groupActiveStart, groupActiveCount,
+                                                               granData->triNeighborIndex, granData->triNeighbor1,
+                                                               granData->triNeighbor2, granData->triNeighbor3,
+                                                               activeTriNeighborPos, numUniqueActiveTri);
+
+                    // ---- Option A: Adaptive label propagation (check for convergence every few iterations).
+                    // We check only the *last* iteration in a small batch (default: 4) to avoid host/device sync
+                    // each iteration. Worst-case wasted work is (batchSize-1) extra iterations.
+                    const int kCheckEvery = 4;
+                    const int kMaxLabelItersCap = 512;
+                    int maxIters = (int)numUniqueActiveTri;
+                    if (maxIters > kMaxLabelItersCap) {
+                        maxIters = kMaxLabelItersCap;
+                    }
+                    scratchPad.allocateDualArray("activeTriLabelChanged", sizeof(contactPairs_t));
+                    auto* changedHostRaw = scratchPad.getDualArrayHost("activeTriLabelChanged");
+                    auto* changedDevRaw = scratchPad.getDualArrayDevice("activeTriLabelChanged");
+                    contactPairs_t* changedDev = reinterpret_cast<contactPairs_t*>(changedDevRaw);
+
                     bodyID_t* labelsIn = activeLabelsA;
                     bodyID_t* labelsOut = activeLabelsB;
-                    for (size_t iter = 0; iter < numUniqueActiveTri; ++iter) {
-                        DEME_GPU_CALL(cudaMemsetAsync(scratchPad.getDualStructDevice("labelChanged"), 0, sizeof(size_t),
-                                                      this_stream));
-                        propagateActiveTriLabels<<<dim3(blocks_needed_active), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                                   this_stream>>>(
-                            activeTriKeysUnique, labelsIn, labelsOut, groupActiveStart, groupActiveCount,
-                            granData->triNeighborIndex, granData->triNeighbor1, granData->triNeighbor2,
-                            granData->triNeighbor3, scratchPad.getDualStructDevice("labelChanged"), numUniqueActiveTri);
+                    int iter = 0;
+                    while (iter < maxIters) {
+                        int remaining = maxIters - iter;
+                        int batch = remaining < kCheckEvery ? remaining : kCheckEvery;
+
+                        // Batch iterations except the last one: no convergence flag.
+                        for (int b = 0; b < batch - 1; ++b) {
+                            propagateActiveTriLabelsFromNeighborPos<<<
+                                dim3(blocks_needed_active), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+                                labelsIn, labelsOut, activeTriNeighborPos, nullptr, numUniqueActiveTri);
+                            bodyID_t* tmp = labelsIn;
+                            labelsIn = labelsOut;
+                            labelsOut = tmp;
+                            ++iter;
+                        }
+
+                        // Last iteration in the batch: check if this iteration changes anything.
+                        DEME_GPU_CALL(cudaMemsetAsync(changedDev, 0, sizeof(contactPairs_t), this_stream));
+                        propagateActiveTriLabelsFromNeighborPos<<<dim3(blocks_needed_active),
+                                                                  dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+                            labelsIn, labelsOut, activeTriNeighborPos, changedDev, numUniqueActiveTri);
                         bodyID_t* tmp = labelsIn;
                         labelsIn = labelsOut;
                         labelsOut = tmp;
-                        scratchPad.syncDualStructDeviceToHost("labelChanged");
-                        if (*scratchPad.getDualStructHost("labelChanged") == 0)
+                        ++iter;
+
+                        scratchPad.syncDualArrayDeviceToHost("activeTriLabelChanged");
+                        const contactPairs_t changed = *reinterpret_cast<contactPairs_t*>(changedHostRaw);
+                        if (changed == 0) {
                             break;
+                        }
                     }
                     scratchPad.finishUsingDualStruct("labelChanged");
                     finalActiveLabels = labelsIn;
+
+                    scratchPad.finishUsingDualArray("activeTriLabelChanged");
+                    scratchPad.finishUsingTempVector("activeTriNeighborPos");
                 }
 
                 scratchPad.finishUsingTempVector("activeTriKeys_sorted");

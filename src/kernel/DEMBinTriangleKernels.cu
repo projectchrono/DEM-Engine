@@ -45,17 +45,18 @@ DEME_KERNEL void makeTriangleSandwich(deme::DEMSimParams* simParams,
                                       float3* sandwichANode1,
                                       float3* sandwichANode2,
                                       float3* sandwichANode3,
-                                      float3* sandwichBNode1,
-                                      float3* sandwichBNode2,
-                                      float3* sandwichBNode3) {
+                                      float3* sandwichBNode1) {
     deme::bodyID_t triID = blockIdx.x * blockDim.x + threadIdx.x;
     if (triID < simParams->nTriGM) {
         // Get my component offset info from global array
         const float3 p1 = granData->relPosNode1[triID];
         const float3 p2 = granData->relPosNode2[triID];
         const float3 p3 = granData->relPosNode3[triID];
-        const deme::bodyID_t myOwnerID = granData->ownerTriMesh[triID];
-        const float margin = granData->marginSizeTriangle[triID];
+        float margin = granData->marginSizeTriangle[triID];
+        if (granData->ownerMeshShellHalfThickness) {
+            const deme::bodyID_t ownerID = granData->ownerTriMesh[triID];
+            margin += fmaxf(granData->ownerMeshShellHalfThickness[ownerID], 0.f);
+        }
 
         // Get the incenter of this triangle.
         // This is because we use the incenter to enalrge a triangle. See for example, this
@@ -69,9 +70,55 @@ DEME_KERNEL void makeTriangleSandwich(deme::DEMSimParams* simParams,
         sandwichANode3[triID] = sandwichVertex(p3, incenter, p1 - p3, triNormal, margin);
         // The other sandwich triangle needs to have an opposite normal direction
         sandwichBNode1[triID] = sandwichVertex(p1, incenter, p2 - p1, -triNormal, margin);
-        sandwichBNode2[triID] = sandwichVertex(p3, incenter, p1 - p3, -triNormal, margin);
-        sandwichBNode3[triID] = sandwichVertex(p2, incenter, p3 - p2, -triNormal, margin);
     }
+}
+
+// Precompute mesh-owner pose (position + rotation matrix rows) once per time step.
+// Mesh owners are assumed to occupy the last `nTriMeshes` owner slots:
+// [0 .. nOwnerClumps-1] clumps, [.. + nExtObj -1] external objects, [.. + nTriMeshes -1] meshes.
+// This matches kT initialization (owner_offset_for_mesh_obj = nExistOwners + nClumps + nExtObj).
+DEME_KERNEL void precomputeMeshOwnerPose(deme::DEMSimParams* simParams,
+                                         deme::DEMDataKT* granData,
+                                         float3* meshOwnerPos,  // length nTriMeshes
+                                         float3* meshR1,        // length nTriMeshes (row 0)
+                                         float3* meshR2,        // length nTriMeshes (row 1)
+                                         float3* meshR3) {      // length nTriMeshes (row 2)
+    const deme::bodyID_t mesh_i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (mesh_i >= simParams->nTriMeshes) {
+        return;
+    }
+    const deme::bodyID_t mesh_owner_start = simParams->nOwnerBodies - simParams->nTriMeshes;
+    const deme::bodyID_t ownerID = mesh_owner_start + mesh_i;
+
+    float3 ownerXYZ;
+    voxelIDToPosition<float, deme::voxelID_t, deme::subVoxelPos_t>(
+        ownerXYZ.x, ownerXYZ.y, ownerXYZ.z, granData->voxelID[ownerID], granData->locX[ownerID],
+        granData->locY[ownerID], granData->locZ[ownerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
+    meshOwnerPos[mesh_i] = ownerXYZ;
+
+    const float qw = granData->oriQw[ownerID];
+    const float qx = granData->oriQx[ownerID];
+    const float qy = granData->oriQy[ownerID];
+    const float qz = granData->oriQz[ownerID];
+
+    // Convert quaternion to rotation matrix rows (right-handed, active rotation).
+    const float xx = qx * qx;
+    const float yy = qy * qy;
+    const float zz = qz * qz;
+    const float xy = qx * qy;
+    const float xz = qx * qz;
+    const float yz = qy * qz;
+    const float wx = qw * qx;
+    const float wy = qw * qy;
+    const float wz = qw * qz;
+
+    meshR1[mesh_i] = make_float3(1.f - 2.f * (yy + zz), 2.f * (xy - wz), 2.f * (xz + wy));
+    meshR2[mesh_i] = make_float3(2.f * (xy + wz), 1.f - 2.f * (xx + zz), 2.f * (yz - wx));
+    meshR3[mesh_i] = make_float3(2.f * (xz - wy), 2.f * (yz + wx), 1.f - 2.f * (xx + yy));
+}
+
+inline __device__ float3 applyRotRows(const float3& v, const float3& r1, const float3& r2, const float3& r3) {
+    return make_float3(dot(r1, v), dot(r2, v), dot(r3, v));
 }
 
 // Compute triangle AABB -> bin index bounds using mixed precision (FP32 fast path + FP64 fallback).
@@ -163,51 +210,105 @@ inline __device__ bool figureOutNodeAndBoundingBox(deme::DEMSimParams* simParams
     return boundingBoxIntersectBinAxisBounds(L, U, vA, vB, vC, simParams);
 }
 
-DEME_KERNEL void precomputeTriangleSandwichData(deme::DEMSimParams* simParams,
-                                                deme::DEMDataKT* granData,
-                                                // World-space vertices for both sandwich triangles
-                                                float3* vA1_all,
-                                                float3* vB1_all,
-                                                float3* vC1_all,
-                                                float3* vA2_all,
-                                                float3* vB2_all,
-                                                float3* vC2_all,
-                                                // Per-triangle translation B = A + shift_world
-                                                float3* shift_world_all,
-                                                // Per-triangle bounds for A and B (only valid if ok flag true)
-                                                int3* LA_all,
-                                                int3* UA_all,
-                                                int3* LB_all,
-                                                int3* UB_all,
-                                                // ok flags
-                                                unsigned char* ok1_all,
-                                                unsigned char* ok2_all,
-                                                // sandwich nodes (local, as produced by makeTriangleSandwich)
-                                                float3* nodeA1,
-                                                float3* nodeB1,
-                                                float3* nodeC1,
-                                                float3* nodeA2,
-                                                float3* nodeB2,
-                                                float3* nodeC2) {
-    deme::bodyID_t triID = blockIdx.x * blockDim.x + threadIdx.x;
+DEME_KERNEL void precomputeTriangleSandwichData(
+    deme::DEMSimParams* simParams,
+    deme::DEMDataKT* granData,
+    // World-space vertices for A-face triangle
+    float3* vA1_all,
+    float3* vB1_all,
+    float3* vC1_all,
+    // Per-triangle translation B = A + shift_world (world-space)
+    float3* shift_world_all,
+    // Per-triangle bounds for A and B (only valid if ok flag true)
+    int3* LA_all,
+    int3* UA_all,
+    int3* LB_all,
+    int3* UB_all,
+    // ok flags for A and B
+    unsigned char* ok1_all,
+    unsigned char* ok2_all,
+    // Precomputed mesh-owner pose (length nTriMeshes); may be nullptr if no meshes
+    const float3* meshOwnerPos,
+    const float3* meshR1,
+    const float3* meshR2,
+    const float3* meshR3,
+    // sandwich nodes (local, as produced by makeTriangleSandwich)
+    const float3* nodeA1,
+    const float3* nodeA2,
+    const float3* nodeA3,
+    const float3* nodeB1_only) {
+    const deme::bodyID_t triID = blockIdx.x * blockDim.x + threadIdx.x;
     if (triID >= simParams->nTriGM) {
         return;
     }
 
-    float3 vA1, vB1, vC1, vA2, vB2, vC2;
-    deme::binID_t L1[3], L2[3], U1[3], U2[3];
+    const deme::bodyID_t ownerID = granData->ownerTriMesh[triID];
+    const deme::bodyID_t mesh_owner_start = simParams->nOwnerBodies - simParams->nTriMeshes;
 
-    const bool ok1 = figureOutNodeAndBoundingBox(simParams, granData, triID, vA1, vB1, vC1, L1, U1, nodeA1[triID],
-                                                 nodeB1[triID], nodeC1[triID]);
-    const bool ok2 = figureOutNodeAndBoundingBox(simParams, granData, triID, vA2, vB2, vC2, L2, U2, nodeA2[triID],
-                                                 nodeB2[triID], nodeC2[triID]);
+    float3 ownerXYZ;
+    float3 r1, r2, r3;
+
+    // Fast path: mesh owners live in [mesh_owner_start, mesh_owner_start + nTriMeshes)
+    if (simParams->nTriMeshes > 0 && meshOwnerPos && ownerID >= mesh_owner_start &&
+        ownerID < (mesh_owner_start + (deme::bodyID_t)simParams->nTriMeshes)) {
+        const deme::bodyID_t mi = ownerID - mesh_owner_start;
+        ownerXYZ = meshOwnerPos[mi];
+        r1 = meshR1[mi];
+        r2 = meshR2[mi];
+        r3 = meshR3[mi];
+    } else {
+        // Fallback: compute pose directly
+        voxelIDToPosition<float, deme::voxelID_t, deme::subVoxelPos_t>(
+            ownerXYZ.x, ownerXYZ.y, ownerXYZ.z, granData->voxelID[ownerID], granData->locX[ownerID],
+            granData->locY[ownerID], granData->locZ[ownerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
+
+        const float qw = granData->oriQw[ownerID];
+        const float qx = granData->oriQx[ownerID];
+        const float qy = granData->oriQy[ownerID];
+        const float qz = granData->oriQz[ownerID];
+
+        const float xx = qx * qx;
+        const float yy = qy * qy;
+        const float zz = qz * qz;
+        const float xy = qx * qy;
+        const float xz = qx * qz;
+        const float yz = qy * qz;
+        const float wx = qw * qx;
+        const float wy = qw * qy;
+        const float wz = qw * qz;
+
+        r1 = make_float3(1.f - 2.f * (yy + zz), 2.f * (xy - wz), 2.f * (xz + wy));
+        r2 = make_float3(2.f * (xy + wz), 1.f - 2.f * (xx + zz), 2.f * (yz - wx));
+        r3 = make_float3(2.f * (xz - wy), 2.f * (yz + wx), 1.f - 2.f * (xx + yy));
+    }
+
+    // Transform A-face nodes to world.
+    const float3 lA1 = nodeA1[triID];
+    const float3 lA2 = nodeA2[triID];
+    const float3 lA3 = nodeA3[triID];
+
+    const float3 vA1 = ownerXYZ + applyRotRows(lA1, r1, r2, r3);
+    const float3 vB1 = ownerXYZ + applyRotRows(lA2, r1, r2, r3);
+    const float3 vC1 = ownerXYZ + applyRotRows(lA3, r1, r2, r3);
 
     vA1_all[triID] = vA1;
     vB1_all[triID] = vB1;
     vC1_all[triID] = vC1;
-    vA2_all[triID] = vA2;
-    vB2_all[triID] = vB2;
-    vC2_all[triID] = vC2;
+
+    // Compute shift_world from B1 - A1 in local, then rotate (no translation).
+    const float3 lB1 = nodeB1_only[triID];
+    float3 shift_local = make_float3(lB1.x - lA1.x, lB1.y - lA1.y, lB1.z - lA1.z);
+    const float3 shift_world = applyRotRows(shift_local, r1, r2, r3);
+    shift_world_all[triID] = shift_world;
+
+    // Compute bounds for A and B (B is reconstructed from A + shift; note permutation for opposite normal).
+    deme::binID_t L1[3], U1[3], L2[3], U2[3];
+    const bool ok1 = boundingBoxIntersectBinAxisBounds(L1, U1, vA1, vB1, vC1, simParams);
+
+    const float3 vA2 = vA1 + shift_world;
+    const float3 vB2 = vC1 + shift_world;  // swap 2<->3 for inverted normal
+    const float3 vC2 = vB1 + shift_world;
+    const bool ok2 = boundingBoxIntersectBinAxisBounds(L2, U2, vA2, vB2, vC2, simParams);
 
     ok1_all[triID] = (unsigned char)(ok1 ? 1 : 0);
     ok2_all[triID] = (unsigned char)(ok2 ? 1 : 0);
@@ -220,21 +321,6 @@ DEME_KERNEL void precomputeTriangleSandwichData(deme::DEMSimParams* simParams,
         LB_all[triID] = make_int3(L2[0], L2[1], L2[2]);
         UB_all[triID] = make_int3(U2[0], U2[1], U2[2]);
     }
-
-    // Precompute sandwich translation (B = A + shift_world) in numerically safe way.
-    float3 shift_world = make_float3(0.f, 0.f, 0.f);
-    if (ok2) {
-        const deme::bodyID_t owner = granData->ownerTriMesh[triID];
-        const float qw = granData->oriQw[owner];
-        const float qx = granData->oriQx[owner];
-        const float qy = granData->oriQy[owner];
-        const float qz = granData->oriQz[owner];
-        float3 shift_local = make_float3(nodeA2[triID].x - nodeA1[triID].x, nodeA2[triID].y - nodeA1[triID].y,
-                                         nodeA2[triID].z - nodeA1[triID].z);
-        applyOriQToVector3<float, deme::oriQ_t>(shift_local.x, shift_local.y, shift_local.z, qw, qx, qy, qz);
-        shift_world = shift_local;
-    }
-    shift_world_all[triID] = shift_world;
 }
 
 DEME_KERNEL void markCylPeriodicOwnerGhosts(deme::DEMSimParams* simParams,
@@ -242,9 +328,7 @@ DEME_KERNEL void markCylPeriodicOwnerGhosts(deme::DEMSimParams* simParams,
                                             const float3* vA1,
                                             const float3* vB1,
                                             const float3* vC1,
-                                            const float3* vA2,
-                                            const float3* vB2,
-                                            const float3* vC2,
+                                            const float3* shift_world,
                                             unsigned int* ownerGhostFlags) {
     const deme::bodyID_t triID = blockIdx.x * blockDim.x + threadIdx.x;
     if (triID >= simParams->nTriGM) {
@@ -255,9 +339,11 @@ DEME_KERNEL void markCylPeriodicOwnerGhosts(deme::DEMSimParams* simParams,
     const float3 A1 = vA1[triID];
     const float3 B1 = vB1[triID];
     const float3 C1 = vC1[triID];
-    const float3 A2 = vA2[triID];
-    const float3 B2 = vB2[triID];
-    const float3 C2 = vC2[triID];
+    const float3 sh = shift_world[triID];
+
+    const float3 A2 = A1 + sh;
+    const float3 B2 = C1 + sh;  // swapped
+    const float3 C2 = B1 + sh;
 
     const float3 centroid =
         make_float3((A1.x + B1.x + C1.x) / 3.f, (A1.y + B1.y + C1.y) / 3.f, (A1.z + B1.z + C1.z) / 3.f);
@@ -305,7 +391,6 @@ DEME_KERNEL void markCylPeriodicOwnerGhosts(deme::DEMSimParams* simParams,
     }
 }
 
-// Prepass versions of the existing kernels (signature includes precomputed arrays).
 DEME_KERNEL void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams,
                                                     deme::DEMDataKT* granData,
                                                     deme::binsTriangleTouches_t* numBinsTriTouches,
@@ -314,9 +399,6 @@ DEME_KERNEL void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParam
                                                     const float3* vA1_all,
                                                     const float3* vB1_all,
                                                     const float3* vC1_all,
-                                                    const float3* vA2_all,
-                                                    const float3* vB2_all,
-                                                    const float3* vC2_all,
                                                     const float3* shift_world_all,
                                                     const int3* LA_all,
                                                     const int3* UA_all,
@@ -345,10 +427,10 @@ DEME_KERNEL void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParam
     const float3 vA1 = vA1_all[triID];
     const float3 vB1 = vB1_all[triID];
     const float3 vC1 = vC1_all[triID];
-    const float3 vA2 = vA2_all[triID];
-    const float3 vB2 = vB2_all[triID];
-    const float3 vC2 = vC2_all[triID];
     const float3 shift_world = shift_world_all[triID];
+    const float3 vA2 = vA1 + shift_world;
+    const float3 vB2 = vC1 + shift_world;  // swapped
+    const float3 vC2 = vB1 + shift_world;
 
     int3 LA = make_int3(0, 0, 0), UA = make_int3(-1, -1, -1);
     int3 LB = make_int3(0, 0, 0), UB = make_int3(-1, -1, -1);
@@ -393,42 +475,48 @@ DEME_KERNEL void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParam
     const float startY = binSizeF * (float)Ly + 0.5f * binSizeF;
     const float startZ = binSizeF * (float)Lz + 0.5f * binSizeF;
 
-    float BinCenter[3];
+    // Incremental bin-local coordinates: avoid recomputing (v - c) for every bin.
     for (deme::binID_t i = Lx, ix = 0; i <= Ux; i++, ix++) {
-        float cy0 = startY;
-        BinCenter[0] = startX + ix * binSizeF;
-        for (deme::binID_t j = Ly; j <= Uy; j++) {
-            float cz = startZ;
-            BinCenter[1] = cy0;
-            for (deme::binID_t k = Lz; k <= Uz; k++) {
-                BinCenter[2] = cz;
-                const float3 c = make_float3(BinCenter[0], BinCenter[1], BinCenter[2]);
+        const float cx = startX + (float)ix * binSizeF;
 
+        const float a0x = vA1.x - cx;
+        const float a1x = vB1.x - cx;
+        const float a2x = vC1.x - cx;
+
+        float cy = startY;
+        for (deme::binID_t j = Ly; j <= Uy; j++) {
+            const float a0y = vA1.y - cy;
+            const float a1y = vB1.y - cy;
+            const float a2y = vC1.y - cy;
+
+            float3 a0 = make_float3(a0x, a0y, vA1.z - startZ);
+            float3 a1 = make_float3(a1x, a1y, vB1.z - startZ);
+            float3 a2 = make_float3(a2x, a2y, vC1.z - startZ);
+
+            for (deme::binID_t k = Lz; k <= Uz; k++) {
                 const bool inA =
                     ok1 && (i >= (deme::binID_t)LA.x && i <= (deme::binID_t)UA.x && j >= (deme::binID_t)LA.y &&
                             j <= (deme::binID_t)UA.y && k >= (deme::binID_t)LA.z && k <= (deme::binID_t)UA.z);
                 const bool inB =
                     ok2 && (i >= (deme::binID_t)LB.x && i <= (deme::binID_t)UB.x && j >= (deme::binID_t)LB.y &&
                             j <= (deme::binID_t)UB.y && k >= (deme::binID_t)LB.z && k <= (deme::binID_t)UB.z);
-                if (!inA && !inB) {
-                    cz += binSizeF;
-                    continue;
+
+                if (inA || inB) {
+                    const bool hit =
+                        triBoxOverlapBinLocalEdgesUnionShiftFP32(a0, a1, a2, shift_world, binHalfSpan, inA, inB);
+                    if (hit) {
+                        numSDsTouched++;
+                    }
                 }
 
-                const float3 a0 = make_float3(vA1.x - c.x, vA1.y - c.y, vA1.z - c.z);
-                const float3 a1 = make_float3(vB1.x - c.x, vB1.y - c.y, vB1.z - c.z);
-                const float3 a2 = make_float3(vC1.x - c.x, vC1.y - c.y, vC1.z - c.z);
-                const bool hit =
-                    triBoxOverlapBinLocalEdgesUnionShiftFP32(a0, a1, a2, shift_world, binHalfSpan, inA, inB);
-                if (hit) {
-                    numSDsTouched++;
-                }
-                cz += binSizeF;
+                // Advance bin center in +Z => (v.z - cz) decreases.
+                a0.z -= binSizeF;
+                a1.z -= binSizeF;
+                a2.z -= binSizeF;
             }
-            cy0 += binSizeF;
+            cy += binSizeF;
         }
     }
-
     deme::binsTriangleTouches_t ghostBins = 0;
     if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
         const deme::bodyID_t ownerID = granData->ownerTriMesh[triID];
@@ -519,39 +607,45 @@ DEME_KERNEL void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParam
                 const float startYG = binSizeFG * (float)gLy + 0.5f * binSizeFG;
                 const float startZG = binSizeFG * (float)gLz + 0.5f * binSizeFG;
 
-                float BinCenterG[3];
+                // Incremental bin-local coordinates for ghost bins.
                 for (deme::binID_t i = gLx, ix = 0; i <= gUx; i++, ix++) {
-                    float cy0 = startYG;
-                    BinCenterG[0] = startXG + ix * binSizeFG;
-                    for (deme::binID_t j = gLy; j <= gUy; j++) {
-                        float cz = startZG;
-                        BinCenterG[1] = cy0;
-                        for (deme::binID_t k = gLz; k <= gUz; k++) {
-                            BinCenterG[2] = cz;
-                            const float3 c = make_float3(BinCenterG[0], BinCenterG[1], BinCenterG[2]);
+                    const float cx = startXG + (float)ix * binSizeFG;
 
+                    const float a0x = gA1.x - cx;
+                    const float a1x = gB1.x - cx;
+                    const float a2x = gC1.x - cx;
+
+                    float cy = startYG;
+                    for (deme::binID_t j = gLy; j <= gUy; j++) {
+                        const float a0y = gA1.y - cy;
+                        const float a1y = gB1.y - cy;
+                        const float a2y = gC1.y - cy;
+
+                        float3 a0 = make_float3(a0x, a0y, gA1.z - startZG);
+                        float3 a1 = make_float3(a1x, a1y, gB1.z - startZG);
+                        float3 a2 = make_float3(a2x, a2y, gC1.z - startZG);
+
+                        for (deme::binID_t k = gLz; k <= gUz; k++) {
                             const bool inA = gok1 && (i >= (deme::binID_t)gL1[0] && i <= (deme::binID_t)gU1[0] &&
                                                       j >= (deme::binID_t)gL1[1] && j <= (deme::binID_t)gU1[1] &&
                                                       k >= (deme::binID_t)gL1[2] && k <= (deme::binID_t)gU1[2]);
                             const bool inB = gok2 && (i >= (deme::binID_t)gL2[0] && i <= (deme::binID_t)gU2[0] &&
                                                       j >= (deme::binID_t)gL2[1] && j <= (deme::binID_t)gU2[1] &&
                                                       k >= (deme::binID_t)gL2[2] && k <= (deme::binID_t)gU2[2]);
-                            if (!inA && !inB) {
-                                cz += binSizeFG;
-                                continue;
+
+                            if (inA || inB) {
+                                const bool hit = triBoxOverlapBinLocalEdgesUnionShiftFP32(a0, a1, a2, gShift,
+                                                                                          binHalfSpanG, inA, inB);
+                                if (hit) {
+                                    ghost_count++;
+                                }
                             }
 
-                            const float3 a0 = make_float3(gA1.x - c.x, gA1.y - c.y, gA1.z - c.z);
-                            const float3 a1 = make_float3(gB1.x - c.x, gB1.y - c.y, gB1.z - c.z);
-                            const float3 a2 = make_float3(gC1.x - c.x, gC1.y - c.y, gC1.z - c.z);
-                            const bool hit =
-                                triBoxOverlapBinLocalEdgesUnionShiftFP32(a0, a1, a2, gShift, binHalfSpanG, inA, inB);
-                            if (hit) {
-                                ghost_count++;
-                            }
-                            cz += binSizeFG;
+                            a0.z -= binSizeFG;
+                            a1.z -= binSizeFG;
+                            a2.z -= binSizeFG;
                         }
-                        cy0 += binSizeFG;
+                        cy += binSizeFG;
                     }
                 }
                 ghostBins += ghost_count;
@@ -626,39 +720,45 @@ DEME_KERNEL void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParam
                 const float startYG = binSizeFG * (float)gLy + 0.5f * binSizeFG;
                 const float startZG = binSizeFG * (float)gLz + 0.5f * binSizeFG;
 
-                float BinCenterG[3];
+                // Incremental bin-local coordinates for ghost bins.
                 for (deme::binID_t i = gLx, ix = 0; i <= gUx; i++, ix++) {
-                    float cy0 = startYG;
-                    BinCenterG[0] = startXG + ix * binSizeFG;
-                    for (deme::binID_t j = gLy; j <= gUy; j++) {
-                        float cz = startZG;
-                        BinCenterG[1] = cy0;
-                        for (deme::binID_t k = gLz; k <= gUz; k++) {
-                            BinCenterG[2] = cz;
-                            const float3 c = make_float3(BinCenterG[0], BinCenterG[1], BinCenterG[2]);
+                    const float cx = startXG + (float)ix * binSizeFG;
 
+                    const float a0x = gA1.x - cx;
+                    const float a1x = gB1.x - cx;
+                    const float a2x = gC1.x - cx;
+
+                    float cy = startYG;
+                    for (deme::binID_t j = gLy; j <= gUy; j++) {
+                        const float a0y = gA1.y - cy;
+                        const float a1y = gB1.y - cy;
+                        const float a2y = gC1.y - cy;
+
+                        float3 a0 = make_float3(a0x, a0y, gA1.z - startZG);
+                        float3 a1 = make_float3(a1x, a1y, gB1.z - startZG);
+                        float3 a2 = make_float3(a2x, a2y, gC1.z - startZG);
+
+                        for (deme::binID_t k = gLz; k <= gUz; k++) {
                             const bool inA = gok1 && (i >= (deme::binID_t)gL1[0] && i <= (deme::binID_t)gU1[0] &&
                                                       j >= (deme::binID_t)gL1[1] && j <= (deme::binID_t)gU1[1] &&
                                                       k >= (deme::binID_t)gL1[2] && k <= (deme::binID_t)gU1[2]);
                             const bool inB = gok2 && (i >= (deme::binID_t)gL2[0] && i <= (deme::binID_t)gU2[0] &&
                                                       j >= (deme::binID_t)gL2[1] && j <= (deme::binID_t)gU2[1] &&
                                                       k >= (deme::binID_t)gL2[2] && k <= (deme::binID_t)gU2[2]);
-                            if (!inA && !inB) {
-                                cz += binSizeFG;
-                                continue;
+
+                            if (inA || inB) {
+                                const bool hit = triBoxOverlapBinLocalEdgesUnionShiftFP32(a0, a1, a2, gShift,
+                                                                                          binHalfSpanG, inA, inB);
+                                if (hit) {
+                                    ghost_count++;
+                                }
                             }
 
-                            const float3 a0 = make_float3(gA1.x - c.x, gA1.y - c.y, gA1.z - c.z);
-                            const float3 a1 = make_float3(gB1.x - c.x, gB1.y - c.y, gB1.z - c.z);
-                            const float3 a2 = make_float3(gC1.x - c.x, gC1.y - c.y, gC1.z - c.z);
-                            const bool hit =
-                                triBoxOverlapBinLocalEdgesUnionShiftFP32(a0, a1, a2, gShift, binHalfSpanG, inA, inB);
-                            if (hit) {
-                                ghost_count++;
-                            }
-                            cz += binSizeFG;
+                            a0.z -= binSizeFG;
+                            a1.z -= binSizeFG;
+                            a2.z -= binSizeFG;
                         }
-                        cy0 += binSizeFG;
+                        cy += binSizeFG;
                     }
                 }
                 ghostBins += ghost_count;
@@ -732,9 +832,6 @@ DEME_KERNEL void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                                                   const float3* vA1_all,
                                                   const float3* vB1_all,
                                                   const float3* vC1_all,
-                                                  const float3* vA2_all,
-                                                  const float3* vB2_all,
-                                                  const float3* vC2_all,
                                                   const float3* shift_world_all,
                                                   const int3* LA_all,
                                                   const int3* UA_all,
@@ -763,10 +860,10 @@ DEME_KERNEL void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
     const float3 vA1 = vA1_all[triID];
     const float3 vB1 = vB1_all[triID];
     const float3 vC1 = vC1_all[triID];
-    const float3 vA2 = vA2_all[triID];
-    const float3 vB2 = vB2_all[triID];
-    const float3 vC2 = vC2_all[triID];
     const float3 shift_world = shift_world_all[triID];
+    const float3 vA2 = vA1 + shift_world;
+    const float3 vB2 = vC1 + shift_world;  // swapped
+    const float3 vC2 = vB1 + shift_world;
 
     int3 LA = make_int3(0, 0, 0), UA = make_int3(-1, -1, -1);
     int3 LB = make_int3(0, 0, 0), UB = make_int3(-1, -1, -1);
@@ -815,49 +912,53 @@ DEME_KERNEL void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
     const float startY = binSizeF * (float)Ly + 0.5f * binSizeF;
     const float startZ = binSizeF * (float)Lz + 0.5f * binSizeF;
 
-    float BinCenter[3];
+    // Incremental bin-local coordinates: avoid recomputing (v - c) for every bin.
     for (deme::binID_t i = Lx, ix = 0; i <= Ux; i++, ix++) {
-        float cy0 = startY;
-        BinCenter[0] = startX + ix * binSizeF;
-        for (deme::binID_t j = Ly; j <= Uy; j++) {
-            float cz = startZ;
-            BinCenter[1] = cy0;
-            for (deme::binID_t k = Lz; k <= Uz; k++) {
-                BinCenter[2] = cz;
-                const float3 c = make_float3(BinCenter[0], BinCenter[1], BinCenter[2]);
+        const float cx = startX + (float)ix * binSizeF;
 
+        const float a0x = vA1.x - cx;
+        const float a1x = vB1.x - cx;
+        const float a2x = vC1.x - cx;
+
+        float cy = startY;
+        for (deme::binID_t j = Ly; j <= Uy; j++) {
+            const float a0y = vA1.y - cy;
+            const float a1y = vB1.y - cy;
+            const float a2y = vC1.y - cy;
+
+            float3 a0 = make_float3(a0x, a0y, vA1.z - startZ);
+            float3 a1 = make_float3(a1x, a1y, vB1.z - startZ);
+            float3 a2 = make_float3(a2x, a2y, vC1.z - startZ);
+
+            for (deme::binID_t k = Lz; k <= Uz; k++) {
                 const bool inA =
                     ok1 && (i >= (deme::binID_t)LA.x && i <= (deme::binID_t)UA.x && j >= (deme::binID_t)LA.y &&
                             j <= (deme::binID_t)UA.y && k >= (deme::binID_t)LA.z && k <= (deme::binID_t)UA.z);
                 const bool inB =
                     ok2 && (i >= (deme::binID_t)LB.x && i <= (deme::binID_t)UB.x && j >= (deme::binID_t)LB.y &&
                             j <= (deme::binID_t)UB.y && k >= (deme::binID_t)LB.z && k <= (deme::binID_t)UB.z);
-                if (!inA && !inB) {
-                    cz += binSizeF;
-                    continue;
-                }
 
-                const float3 a0 = make_float3(vA1.x - c.x, vA1.y - c.y, vA1.z - c.z);
-                const float3 a1 = make_float3(vB1.x - c.x, vB1.y - c.y, vB1.z - c.z);
-                const float3 a2 = make_float3(vC1.x - c.x, vC1.y - c.y, vC1.z - c.z);
-                const bool hit =
-                    triBoxOverlapBinLocalEdgesUnionShiftFP32(a0, a1, a2, shift_world, binHalfSpan, inA, inB);
-                if (hit) {
-                    const deme::binsTriangleTouchPairs_t outIdx = myReportOffset + count;
-                    if (outIdx < myUpperBound) {
-                        binIDsEachTriTouches[outIdx] =
-                            binIDFrom3Indices<deme::binID_t>(i, j, k, simParams->nbX, simParams->nbY, simParams->nbZ);
-                        triIDsEachBinTouches[outIdx] = triID;
+                if (inA || inB) {
+                    const bool hit =
+                        triBoxOverlapBinLocalEdgesUnionShiftFP32(a0, a1, a2, shift_world, binHalfSpan, inA, inB);
+                    if (hit) {
+                        const deme::binsTriangleTouchPairs_t outIdx = myReportOffset + count;
+                        if (outIdx < myUpperBound) {
+                            binIDsEachTriTouches[outIdx] = binIDFrom3Indices<deme::binID_t>(
+                                i, j, k, simParams->nbX, simParams->nbY, simParams->nbZ);
+                            triIDsEachBinTouches[outIdx] = triID;
+                        }
+                        count++;
                     }
-                    count++;
                 }
 
-                cz += binSizeF;
+                a0.z -= binSizeF;
+                a1.z -= binSizeF;
+                a2.z -= binSizeF;
             }
-            cy0 += binSizeF;
+            cy += binSizeF;
         }
     }
-
     if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
         const deme::bodyID_t ownerID = granData->ownerTriMesh[triID];
         const unsigned int ghost_flags = ownerGhostFlags ? ownerGhostFlags[ownerID] : 0u;
@@ -946,45 +1047,51 @@ DEME_KERNEL void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                 const float startYG = binSizeFG * (float)gLy + 0.5f * binSizeFG;
                 const float startZG = binSizeFG * (float)gLz + 0.5f * binSizeFG;
 
-                float BinCenterG[3];
+                // Incremental bin-local coordinates for ghost bins.
                 for (deme::binID_t i = gLx, ix = 0; i <= gUx; i++, ix++) {
-                    float cy0 = startYG;
-                    BinCenterG[0] = startXG + ix * binSizeFG;
-                    for (deme::binID_t j = gLy; j <= gUy; j++) {
-                        float cz = startZG;
-                        BinCenterG[1] = cy0;
-                        for (deme::binID_t k = gLz; k <= gUz; k++) {
-                            BinCenterG[2] = cz;
-                            const float3 c = make_float3(BinCenterG[0], BinCenterG[1], BinCenterG[2]);
+                    const float cx = startXG + (float)ix * binSizeFG;
 
+                    const float a0x = gA1.x - cx;
+                    const float a1x = gB1.x - cx;
+                    const float a2x = gC1.x - cx;
+
+                    float cy = startYG;
+                    for (deme::binID_t j = gLy; j <= gUy; j++) {
+                        const float a0y = gA1.y - cy;
+                        const float a1y = gB1.y - cy;
+                        const float a2y = gC1.y - cy;
+
+                        float3 a0 = make_float3(a0x, a0y, gA1.z - startZG);
+                        float3 a1 = make_float3(a1x, a1y, gB1.z - startZG);
+                        float3 a2 = make_float3(a2x, a2y, gC1.z - startZG);
+
+                        for (deme::binID_t k = gLz; k <= gUz; k++) {
                             const bool inA = gok1 && (i >= (deme::binID_t)gL1[0] && i <= (deme::binID_t)gU1[0] &&
                                                       j >= (deme::binID_t)gL1[1] && j <= (deme::binID_t)gU1[1] &&
                                                       k >= (deme::binID_t)gL1[2] && k <= (deme::binID_t)gU1[2]);
                             const bool inB = gok2 && (i >= (deme::binID_t)gL2[0] && i <= (deme::binID_t)gU2[0] &&
                                                       j >= (deme::binID_t)gL2[1] && j <= (deme::binID_t)gU2[1] &&
                                                       k >= (deme::binID_t)gL2[2] && k <= (deme::binID_t)gU2[2]);
-                            if (!inA && !inB) {
-                                cz += binSizeFG;
-                                continue;
+
+                            if (inA || inB) {
+                                const bool hit = triBoxOverlapBinLocalEdgesUnionShiftFP32(a0, a1, a2, gShift,
+                                                                                          binHalfSpanG, inA, inB);
+                                if (hit) {
+                                    const deme::binsTriangleTouchPairs_t outIdx = myReportOffset + count;
+                                    if (outIdx < myUpperBound) {
+                                        binIDsEachTriTouches[outIdx] = binIDFrom3Indices<deme::binID_t>(
+                                            i, j, k, simParams->nbX, simParams->nbY, simParams->nbZ);
+                                        triIDsEachBinTouches[outIdx] = cylPeriodicEncodeGhostID(triID, false);
+                                    }
+                                    count++;
+                                }
                             }
 
-                            const float3 a0 = make_float3(gA1.x - c.x, gA1.y - c.y, gA1.z - c.z);
-                            const float3 a1 = make_float3(gB1.x - c.x, gB1.y - c.y, gB1.z - c.z);
-                            const float3 a2 = make_float3(gC1.x - c.x, gC1.y - c.y, gC1.z - c.z);
-                            const bool hit =
-                                triBoxOverlapBinLocalEdgesUnionShiftFP32(a0, a1, a2, gShift, binHalfSpanG, inA, inB);
-                            if (hit) {
-                                const deme::binsTriangleTouchPairs_t outIdx = myReportOffset + count;
-                                if (outIdx < myUpperBound) {
-                                    binIDsEachTriTouches[outIdx] = binIDFrom3Indices<deme::binID_t>(
-                                        i, j, k, simParams->nbX, simParams->nbY, simParams->nbZ);
-                                    triIDsEachBinTouches[outIdx] = cylPeriodicEncodeGhostID(triID, false);
-                                }
-                                count++;
-                            }
-                            cz += binSizeFG;
+                            a0.z -= binSizeFG;
+                            a1.z -= binSizeFG;
+                            a2.z -= binSizeFG;
                         }
-                        cy0 += binSizeFG;
+                        cy += binSizeFG;
                     }
                 }
             }
@@ -1057,45 +1164,51 @@ DEME_KERNEL void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                 const float startYG = binSizeFG * (float)gLy + 0.5f * binSizeFG;
                 const float startZG = binSizeFG * (float)gLz + 0.5f * binSizeFG;
 
-                float BinCenterG[3];
+                // Incremental bin-local coordinates for ghost bins.
                 for (deme::binID_t i = gLx, ix = 0; i <= gUx; i++, ix++) {
-                    float cy0 = startYG;
-                    BinCenterG[0] = startXG + ix * binSizeFG;
-                    for (deme::binID_t j = gLy; j <= gUy; j++) {
-                        float cz = startZG;
-                        BinCenterG[1] = cy0;
-                        for (deme::binID_t k = gLz; k <= gUz; k++) {
-                            BinCenterG[2] = cz;
-                            const float3 c = make_float3(BinCenterG[0], BinCenterG[1], BinCenterG[2]);
+                    const float cx = startXG + (float)ix * binSizeFG;
 
+                    const float a0x = gA1.x - cx;
+                    const float a1x = gB1.x - cx;
+                    const float a2x = gC1.x - cx;
+
+                    float cy = startYG;
+                    for (deme::binID_t j = gLy; j <= gUy; j++) {
+                        const float a0y = gA1.y - cy;
+                        const float a1y = gB1.y - cy;
+                        const float a2y = gC1.y - cy;
+
+                        float3 a0 = make_float3(a0x, a0y, gA1.z - startZG);
+                        float3 a1 = make_float3(a1x, a1y, gB1.z - startZG);
+                        float3 a2 = make_float3(a2x, a2y, gC1.z - startZG);
+
+                        for (deme::binID_t k = gLz; k <= gUz; k++) {
                             const bool inA = gok1 && (i >= (deme::binID_t)gL1[0] && i <= (deme::binID_t)gU1[0] &&
                                                       j >= (deme::binID_t)gL1[1] && j <= (deme::binID_t)gU1[1] &&
                                                       k >= (deme::binID_t)gL1[2] && k <= (deme::binID_t)gU1[2]);
                             const bool inB = gok2 && (i >= (deme::binID_t)gL2[0] && i <= (deme::binID_t)gU2[0] &&
                                                       j >= (deme::binID_t)gL2[1] && j <= (deme::binID_t)gU2[1] &&
                                                       k >= (deme::binID_t)gL2[2] && k <= (deme::binID_t)gU2[2]);
-                            if (!inA && !inB) {
-                                cz += binSizeFG;
-                                continue;
+
+                            if (inA || inB) {
+                                const bool hit = triBoxOverlapBinLocalEdgesUnionShiftFP32(a0, a1, a2, gShift,
+                                                                                          binHalfSpanG, inA, inB);
+                                if (hit) {
+                                    const deme::binsTriangleTouchPairs_t outIdx = myReportOffset + count;
+                                    if (outIdx < myUpperBound) {
+                                        binIDsEachTriTouches[outIdx] = binIDFrom3Indices<deme::binID_t>(
+                                            i, j, k, simParams->nbX, simParams->nbY, simParams->nbZ);
+                                        triIDsEachBinTouches[outIdx] = cylPeriodicEncodeGhostID(triID, true);
+                                    }
+                                    count++;
+                                }
                             }
 
-                            const float3 a0 = make_float3(gA1.x - c.x, gA1.y - c.y, gA1.z - c.z);
-                            const float3 a1 = make_float3(gB1.x - c.x, gB1.y - c.y, gB1.z - c.z);
-                            const float3 a2 = make_float3(gC1.x - c.x, gC1.y - c.y, gC1.z - c.z);
-                            const bool hit =
-                                triBoxOverlapBinLocalEdgesUnionShiftFP32(a0, a1, a2, gShift, binHalfSpanG, inA, inB);
-                            if (hit) {
-                                const deme::binsTriangleTouchPairs_t outIdx = myReportOffset + count;
-                                if (outIdx < myUpperBound) {
-                                    binIDsEachTriTouches[outIdx] = binIDFrom3Indices<deme::binID_t>(
-                                        i, j, k, simParams->nbX, simParams->nbY, simParams->nbZ);
-                                    triIDsEachBinTouches[outIdx] = cylPeriodicEncodeGhostID(triID, true);
-                                }
-                                count++;
-                            }
-                            cz += binSizeFG;
+                            a0.z -= binSizeFG;
+                            a1.z -= binSizeFG;
+                            a2.z -= binSizeFG;
                         }
-                        cy0 += binSizeFG;
+                        cy += binSizeFG;
                     }
                 }
             }
