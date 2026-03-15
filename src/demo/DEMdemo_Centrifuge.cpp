@@ -15,6 +15,8 @@
 #include <DEM/API.h>
 #include <DEM/utils/Samplers.hpp>
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <chrono>
 #include <filesystem>
@@ -23,6 +25,9 @@ using namespace deme;
 using namespace std::filesystem;
 
 int main() {
+    // Keep default path exactly as before. Switch to true to enable cylindrical periodic wedge mode.
+    const bool use_cyl_periodic = false;
+
     DEMSolver DEMSim;
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     // Output family numbers (used to identify the centrifuging effect)
@@ -104,6 +109,40 @@ int main() {
     top_bot_planes->SetFamily(drum_family);
     auto planes_tracker = DEMSim.Track(top_bot_planes);
 
+    float cyl_periodic_start = 0.0f;
+    float cyl_periodic_end = 0.5f * PI;
+    float two_pi = 2.0f * PI;
+    float cyl_periodic_span = cyl_periodic_end - cyl_periodic_start;
+    if (cyl_periodic_span < 0.0f) {
+        cyl_periodic_span += two_pi;
+    }
+    float cyl_min_radius = 0.0f;
+    float cyl_wedge_clear = 0.0f;
+    if (use_cyl_periodic) {
+        float max_particle_bound_r = 0.0f;
+        for (const auto& tpl : clump_types) {
+            float tpl_bound = 0.0f;
+            const size_t n_comp = tpl->radii.size();
+            for (size_t i = 0; i < n_comp; i++) {
+                const float3 rp = tpl->relPos[i];
+                const float rr = tpl->radii[i];
+                const float comp_bound = std::sqrt(rp.x * rp.x + rp.y * rp.y + rp.z * rp.z) + rr;
+                tpl_bound = std::max(tpl_bound, comp_bound);
+            }
+            max_particle_bound_r = std::max(max_particle_bound_r, tpl_bound);
+        }
+        if (max_particle_bound_r <= 0.0f) {
+            max_particle_bound_r = scaling * std::cbrt(2.0f);
+        }
+        cyl_wedge_clear = max_particle_bound_r + safe_delta;
+        float cyl_min_radius_geom = 0.0f;
+        if (cyl_periodic_span > 1e-6f && std::sin(0.5f * cyl_periodic_span) > 1e-6f) {
+            cyl_min_radius_geom = cyl_wedge_clear / std::sin(0.5f * cyl_periodic_span);
+        }
+        cyl_min_radius = std::max(max_particle_bound_r + safe_delta, cyl_min_radius_geom);
+        DEMSim.SetCylindricalPeriodicity(SPATIAL_DIR::Z, cyl_periodic_start, cyl_periodic_end, cyl_min_radius);
+    }
+
     // Then sample some particles inside the drum
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_type;
     std::vector<float3> input_xyz;
@@ -114,8 +153,44 @@ int main() {
     auto input_material_xyz =
         DEMBoxGridSampler(sample_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight),
                           scaling * std::cbrt(2.0) * 2.1, scaling * std::cbrt(2.0) * 2.1, scaling * 2 * 2.1);
+    // Keep the legacy non-periodic path exactly intact.
     input_xyz.insert(input_xyz.end(), input_material_xyz.begin(), input_material_xyz.end());
     unsigned int num_clumps = input_material_xyz.size();
+    if (use_cyl_periodic) {
+        input_xyz.clear();
+        auto in_periodic_wedge_with_margin = [&](float x, float y) {
+            const float r2 = x * x + y * y;
+            if (r2 < cyl_min_radius * cyl_min_radius) {
+                return false;
+            }
+            const float r = std::sqrt(r2);
+            float angle = std::atan2(y, x);
+            if (angle < 0.0f) {
+                angle += two_pi;
+            }
+            float rel = angle - cyl_periodic_start;
+            if (rel < 0.0f) {
+                rel += two_pi;
+            }
+            if (rel > cyl_periodic_span) {
+                return false;
+            }
+            const float d_start = r * std::sin(rel);
+            const float d_end = r * std::sin(cyl_periodic_span - rel);
+            return (d_start >= cyl_wedge_clear) && (d_end >= cyl_wedge_clear);
+        };
+        for (const auto& p : input_material_xyz) {
+            const float r2 = p.x * p.x + p.y * p.y;
+            if (r2 > sample_halfwidth * sample_halfwidth) {
+                continue;
+            }
+            if (!in_periodic_wedge_with_margin(p.x, p.y)) {
+                continue;
+            }
+            input_xyz.push_back(p);
+        }
+        num_clumps = input_xyz.size();
+    }
     // Casually select from generated clump types
     for (unsigned int i = 0; i < num_clumps; i++) {
         input_template_type.push_back(clump_types.at(i % clump_types.size()));
@@ -133,6 +208,8 @@ int main() {
     DEMSim.InstructBoxDomainDimension(5, 5, 5);
     float step_size = 5e-6;
     DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetGPUTimersEnabled(true);
+    // DEMSim.SetAdaptiveTimeStepType("hertz_const");
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.SetExpandSafetyType("auto");
     // If there is a velocity that an analytical object (i.e. the drum) has that you'd like the solver to take into
@@ -148,36 +225,35 @@ int main() {
 
     float time_end = 20.0;
     unsigned int fps = 20;
-    unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
+    float frame_time = 1.0 / fps;
+    // unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
     std::cout << "Output at " << fps << " FPS" << std::endl;
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
-    for (double t = 0; t < (double)time_end; t += step_size, curr_step++) {
-        if (curr_step % out_steps == 0) {
-            std::cout << "Frame: " << currframe << std::endl;
-            DEMSim.ShowThreadCollaborationStats();
-            char filename[100];
-            sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
-            DEMSim.WriteSphereFile(out_dir / filename);
-            currframe++;
-            max_v = max_v_finder->GetValue();
-            std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
+    for (double t = 0; t < (double)time_end; t += frame_time, curr_step++) {
+        std::cout << "Frame: " << currframe << std::endl;
+        DEMSim.ShowThreadCollaborationStats();
+        char filename[100];
+        sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+        DEMSim.WriteSphereFile(out_dir / filename);
+        currframe++;
+        max_v = max_v_finder->GetValue();
+        std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
 
-            // Torque on the side walls are?
-            float3 drum_moi = Drum_tracker->MOI();
-            float3 drum_acc = Drum_tracker->ContactAngAccLocal();
-            float3 drum_torque = drum_acc * drum_moi;
-            std::cout << "Contact torque on the side walls is " << drum_torque.x << ", " << drum_torque.y << ", "
-                      << drum_torque.z << std::endl;
+        // Torque on the side walls are?
+        float3 drum_moi = Drum_tracker->MOI();
+        float3 drum_acc = Drum_tracker->ContactAngAccLocal();
+        float3 drum_torque = drum_acc * drum_moi;
+        std::cout << "Contact torque on the side walls is " << drum_torque.x << ", " << drum_torque.y << ", "
+                  << drum_torque.z << std::endl;
 
-            // The force on the bottom plane?
-            float3 force_on_BC = planes_tracker->ContactAcc() * planes_tracker->Mass();
-            std::cout << "Contact force on bottom plane is " << force_on_BC.z << std::endl;
-        }
+        // The force on the bottom plane?
+        float3 force_on_BC = planes_tracker->ContactAcc() * planes_tracker->Mass();
+        std::cout << "Contact force on bottom plane is " << force_on_BC.z << std::endl;
 
-        DEMSim.DoDynamics(step_size);
+        DEMSim.DoDynamics(frame_time);
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);

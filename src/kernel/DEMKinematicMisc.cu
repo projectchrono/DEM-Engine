@@ -4,6 +4,8 @@
 #include <DEM/Defines.h>
 _kernelIncludes_;
 
+// Layout revision marker: keep baked JIT fingerprints in sync with DEMDataKT changes.
+
 // Definitions of analytical entites and clump components are below
 _clumpTemplateDefs_;
 _analyticalEntityDefs_;
@@ -22,21 +24,24 @@ __device__ __forceinline__ float getApproxAbsVel(deme::DEMSimParams* simParams,
             "max-velocity-exceeded-allowance).\n",
             static_cast<unsigned long long>(ownerID));
     }
-    // Compute this primitive sphere's velocity including the contribution from its owner's angular velocity. This is an
-    // estimation as no direction is considered.
-    float vel = abs_v + length(myRelPos) * abs_angv;
+    // Compute this primitive sphere's velocity, optionally including the owner's angular velocity contribution.
+    float vel = abs_v;
+    if (simParams->useAngVelMargin) {
+        // This is an estimation as no direction is considered.
+        vel += length(myRelPos) * abs_angv;
+    }
 
-    vel = fminf(vel, simParams->approxMaxVel);
+    vel = fminf(vel, simParams->dyn.approxMaxVel);
     return vel;
 }
 
-__global__ void computeMarginFromAbsv_implSph(deme::DEMSimParams* simParams,
-                                              deme::DEMDataKT* granData,
-                                              const float* absVel_owner,
-                                              const float* absAngVel_owner,
-                                              float* ts,
-                                              unsigned int* maxDrift,
-                                              size_t n) {
+DEME_KERNEL void computeMarginFromAbsv_implSph(deme::DEMSimParams* simParams,
+                                               deme::DEMDataKT* granData,
+                                               const float* absVel_owner,
+                                               const float* absAngVel_owner,
+                                               float* ts,
+                                               unsigned int* maxDrift,
+                                               size_t n) {
     size_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;
     if (sphereID < n) {
         float3 myRelPos;
@@ -50,20 +55,20 @@ __global__ void computeMarginFromAbsv_implSph(deme::DEMSimParams* simParams,
         float vel = getApproxAbsVel(simParams, ownerID, absVel_owner, absAngVel_owner, myRelPos);
         unsigned int my_family = granData->familyID[ownerID];
         granData->marginSizeSphere[sphereID] =
-            (double)(vel * simParams->expSafetyMulti + simParams->expSafetyAdder) * (*ts) * (*maxDrift) +
+            (double)(vel * simParams->dyn.expSafetyMulti + simParams->dyn.expSafetyAdder) * (*ts) * (*maxDrift) +
             granData->familyExtraMarginSize[my_family];
     }
 }
 
-__global__ void computeMarginFromAbsv_implTri(deme::DEMSimParams* simParams,
-                                              deme::DEMDataKT* granData,
-                                              const float* absVel_owner,
-                                              const float* absAngVel_owner,
-                                              float* ts,
-                                              unsigned int* maxDrift,
-                                              double* maxTriTriPenetration,
-                                              bool meshUniversalContact,
-                                              size_t n) {
+DEME_KERNEL void computeMarginFromAbsv_implTri(deme::DEMSimParams* simParams,
+                                               deme::DEMDataKT* granData,
+                                               const float* absVel_owner,
+                                               const float* absAngVel_owner,
+                                               float* ts,
+                                               unsigned int* maxDrift,
+                                               double* maxTriTriPenetration,
+                                               bool meshUniversalContact,
+                                               size_t n) {
     size_t triID = blockIdx.x * blockDim.x + threadIdx.x;
     if (triID < n) {
         float3 triBNode1 = granData->relPosNode1[triID];
@@ -87,23 +92,23 @@ __global__ void computeMarginFromAbsv_implTri(deme::DEMSimParams* simParams,
         // We hope that penetrationMargin is small, so it's absorbed into the velocity-induce margin.
         // But if not, it should prevail to avoid losing contacts involving triangles inside another mesh.
         double finalMargin =
-            (double)(vel * simParams->expSafetyMulti + simParams->expSafetyAdder) * (*ts) * (*maxDrift) +
+            (double)(vel * simParams->dyn.expSafetyMulti + simParams->dyn.expSafetyAdder) * (*ts) * (*maxDrift) +
             granData->familyExtraMarginSize[my_family];
-        if (finalMargin < penetrationMargin) {
-            finalMargin = penetrationMargin;
-        }
+        // if (finalMargin < penetrationMargin) {
+        //     finalMargin = penetrationMargin;
+        // }
 
         granData->marginSizeTriangle[triID] = finalMargin;
     }
 }
 
-__global__ void computeMarginFromAbsv_implAnal(deme::DEMSimParams* simParams,
-                                               deme::DEMDataKT* granData,
-                                               const float* absVel_owner,
-                                               const float* absAngVel_owner,
-                                               float* ts,
-                                               unsigned int* maxDrift,
-                                               size_t n) {
+DEME_KERNEL void computeMarginFromAbsv_implAnal(deme::DEMSimParams* simParams,
+                                                deme::DEMDataKT* granData,
+                                                const float* absVel_owner,
+                                                const float* absAngVel_owner,
+                                                float* ts,
+                                                unsigned int* maxDrift,
+                                                size_t n) {
     size_t objID = blockIdx.x * blockDim.x + threadIdx.x;
     if (objID < n) {
         deme::bodyID_t ownerID = granData->ownerAnalBody[objID];
@@ -112,7 +117,7 @@ __global__ void computeMarginFromAbsv_implAnal(deme::DEMSimParams* simParams,
         float vel = getApproxAbsVel(simParams, ownerID, absVel_owner, absAngVel_owner, myRelPos);
         unsigned int my_family = granData->familyID[ownerID];
         granData->marginSizeAnalytical[objID] =
-            (double)(vel * simParams->expSafetyMulti + simParams->expSafetyAdder) * (*ts) * (*maxDrift) +
+            (double)(vel * simParams->dyn.expSafetyMulti + simParams->dyn.expSafetyAdder) * (*ts) * (*maxDrift) +
             granData->familyExtraMarginSize[my_family];
     }
 }

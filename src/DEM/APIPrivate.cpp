@@ -13,10 +13,354 @@
 #include <thread>
 #include <chrono>
 #include <cstring>
+#include <cstdint>
+#include <cmath>
 #include <limits>
 #include <algorithm>
+#include <map>
+#include <tuple>
+#include <unordered_map>
+#include <array>
 
 namespace deme {
+
+namespace {
+
+struct EdgeInfo {
+    size_t tri = 0;
+    int edge = 0;
+};
+
+inline uint64_t makeEdgeKey(int a, int b) {
+    const uint32_t lo = static_cast<uint32_t>(std::min(a, b));
+    const uint32_t hi = static_cast<uint32_t>(std::max(a, b));
+    return (static_cast<uint64_t>(lo) << 32) | static_cast<uint64_t>(hi);
+}
+
+std::vector<std::array<bodyID_t, 3>> buildTriangleEdgeNeighbors(const std::vector<int3>& face_v_indices,
+                                                                const std::vector<float3>& vertices) {
+    const size_t n_faces = face_v_indices.size();
+    std::vector<std::array<bodyID_t, 3>> neighbors(n_faces, {NULL_BODYID, NULL_BODYID, NULL_BODYID});
+    if (n_faces == 0) {
+        return neighbors;
+    }
+
+    std::vector<size_t> canon;
+    if (!vertices.empty()) {
+        const double eps = computeVertexQuantEps(vertices);
+        canon = buildCanonicalVertexMap(vertices, eps);
+    }
+
+    std::unordered_map<uint64_t, std::vector<EdgeInfo>> edge_map;
+    edge_map.reserve(n_faces * 3);
+
+    for (size_t i = 0; i < n_faces; ++i) {
+        const int3& face = face_v_indices[i];
+        const int v0_raw = face.x;
+        const int v1_raw = face.y;
+        const int v2_raw = face.z;
+        if (v0_raw < 0 || v1_raw < 0 || v2_raw < 0) {
+            continue;
+        }
+        int v0 = v0_raw;
+        int v1 = v1_raw;
+        int v2 = v2_raw;
+        if (!canon.empty()) {
+            if (static_cast<size_t>(v0_raw) >= canon.size() || static_cast<size_t>(v1_raw) >= canon.size() ||
+                static_cast<size_t>(v2_raw) >= canon.size()) {
+                continue;
+            }
+            v0 = static_cast<int>(canon[static_cast<size_t>(v0_raw)]);
+            v1 = static_cast<int>(canon[static_cast<size_t>(v1_raw)]);
+            v2 = static_cast<int>(canon[static_cast<size_t>(v2_raw)]);
+        }
+        if (v0 == v1 || v1 == v2 || v2 == v0) {
+            continue;
+        }
+        const uint64_t e0 = makeEdgeKey(v0, v1);
+        const uint64_t e1 = makeEdgeKey(v1, v2);
+        const uint64_t e2 = makeEdgeKey(v2, v0);
+        edge_map[e0].push_back(EdgeInfo{i, 0});
+        edge_map[e1].push_back(EdgeInfo{i, 1});
+        edge_map[e2].push_back(EdgeInfo{i, 2});
+    }
+
+    for (const auto& entry : edge_map) {
+        const auto& info = entry.second;
+        if (info.size() == 2) {
+            const EdgeInfo& a = info[0];
+            const EdgeInfo& b = info[1];
+            neighbors[a.tri][a.edge] = static_cast<bodyID_t>(b.tri);
+            neighbors[b.tri][b.edge] = static_cast<bodyID_t>(a.tri);
+        }
+    }
+
+    return neighbors;
+}
+
+struct MeshCanonicalizationResult {
+    bool transformed = false;
+    bool moi_rescaled = false;
+    bool moi_inconsistent = false;
+    double center_norm = 0.0;
+    double offdiag_rel = 0.0;
+};
+
+inline float4 normalizeQuatSafe(const float4& q) {
+    const double n2 = static_cast<double>(q.x) * q.x + static_cast<double>(q.y) * q.y + static_cast<double>(q.z) * q.z +
+                      static_cast<double>(q.w) * q.w;
+    if (!(n2 > 0.0) || !std::isfinite(n2)) {
+        return make_float4(0, 0, 0, 1);
+    }
+    const float inv_n = static_cast<float>(1.0 / std::sqrt(n2));
+    return make_float4(q.x * inv_n, q.y * inv_n, q.z * inv_n, q.w * inv_n);
+}
+
+inline bool inferUniformScale(const float3& target, const float3& source, double& out_scale) {
+    constexpr double tiny = 1e-20;
+    const double src[3] = {source.x, source.y, source.z};
+    const double dst[3] = {target.x, target.y, target.z};
+    double ratios[3] = {0.0, 0.0, 0.0};
+    int n = 0;
+    for (int i = 0; i < 3; i++) {
+        if (!std::isfinite(src[i]) || !std::isfinite(dst[i])) {
+            return false;
+        }
+        if (std::abs(src[i]) <= tiny) {
+            return false;
+        }
+        const double r = dst[i] / src[i];
+        if (!(r > tiny) || !std::isfinite(r)) {
+            return false;
+        }
+        ratios[n++] = r;
+    }
+    if (n != 3) {
+        return false;
+    }
+    const double mean = (ratios[0] + ratios[1] + ratios[2]) / 3.0;
+    const double denom = std::max(std::abs(mean), tiny);
+    double max_rel_dev = 0.0;
+    for (int i = 0; i < 3; i++) {
+        max_rel_dev = std::max(max_rel_dev, std::abs(ratios[i] - mean) / denom);
+    }
+    if (max_rel_dev > 2e-2) {
+        return false;
+    }
+    out_scale = mean;
+    return true;
+}
+
+inline bool jacobiEigenSymmetric3(const double in_A[3][3], double eigvals[3], double eigvecs[3][3]) {
+    double A[3][3];
+    for (int r = 0; r < 3; r++) {
+        for (int c = 0; c < 3; c++) {
+            A[r][c] = in_A[r][c];
+            eigvecs[r][c] = (r == c) ? 1.0 : 0.0;
+        }
+    }
+
+    constexpr int max_iters = 32;
+    constexpr double eps = 1e-18;
+    for (int it = 0; it < max_iters; it++) {
+        int p = 0;
+        int q = 1;
+        double max_off = std::abs(A[0][1]);
+        const double off_02 = std::abs(A[0][2]);
+        const double off_12 = std::abs(A[1][2]);
+        if (off_02 > max_off) {
+            p = 0;
+            q = 2;
+            max_off = off_02;
+        }
+        if (off_12 > max_off) {
+            p = 1;
+            q = 2;
+            max_off = off_12;
+        }
+
+        const double diag_scale = std::abs(A[0][0]) + std::abs(A[1][1]) + std::abs(A[2][2]) + eps;
+        if (max_off <= diag_scale * 1e-14) {
+            break;
+        }
+
+        const double app = A[p][p];
+        const double aqq = A[q][q];
+        const double apq = A[p][q];
+        if (std::abs(apq) <= eps) {
+            continue;
+        }
+
+        const double tau = (aqq - app) / (2.0 * apq);
+        const double t =
+            (tau >= 0.0) ? (1.0 / (tau + std::sqrt(1.0 + tau * tau))) : (-1.0 / (-tau + std::sqrt(1.0 + tau * tau)));
+        const double c = 1.0 / std::sqrt(1.0 + t * t);
+        const double s = t * c;
+
+        for (int k = 0; k < 3; k++) {
+            if (k == p || k == q) {
+                continue;
+            }
+            const double aik = A[k][p];
+            const double akq = A[k][q];
+            A[k][p] = c * aik - s * akq;
+            A[p][k] = A[k][p];
+            A[k][q] = c * akq + s * aik;
+            A[q][k] = A[k][q];
+        }
+
+        A[p][p] = c * c * app - 2.0 * s * c * apq + s * s * aqq;
+        A[q][q] = s * s * app + 2.0 * s * c * apq + c * c * aqq;
+        A[p][q] = 0.0;
+        A[q][p] = 0.0;
+
+        for (int k = 0; k < 3; k++) {
+            const double vkp = eigvecs[k][p];
+            const double vkq = eigvecs[k][q];
+            eigvecs[k][p] = c * vkp - s * vkq;
+            eigvecs[k][q] = s * vkp + c * vkq;
+        }
+    }
+
+    eigvals[0] = A[0][0];
+    eigvals[1] = A[1][1];
+    eigvals[2] = A[2][2];
+    return std::isfinite(eigvals[0]) && std::isfinite(eigvals[1]) && std::isfinite(eigvals[2]);
+}
+
+inline float4 quatFromRotationMatrix(const double R[3][3]) {
+    float4 q = make_float4(0, 0, 0, 1);
+    const double trace = R[0][0] + R[1][1] + R[2][2];
+    if (trace > 0.0) {
+        const double s = std::sqrt(trace + 1.0) * 2.0;
+        q.w = static_cast<float>(0.25 * s);
+        q.x = static_cast<float>((R[2][1] - R[1][2]) / s);
+        q.y = static_cast<float>((R[0][2] - R[2][0]) / s);
+        q.z = static_cast<float>((R[1][0] - R[0][1]) / s);
+    } else if (R[0][0] > R[1][1] && R[0][0] > R[2][2]) {
+        const double s = std::sqrt(1.0 + R[0][0] - R[1][1] - R[2][2]) * 2.0;
+        q.w = static_cast<float>((R[2][1] - R[1][2]) / s);
+        q.x = static_cast<float>(0.25 * s);
+        q.y = static_cast<float>((R[0][1] + R[1][0]) / s);
+        q.z = static_cast<float>((R[0][2] + R[2][0]) / s);
+    } else if (R[1][1] > R[2][2]) {
+        const double s = std::sqrt(1.0 + R[1][1] - R[0][0] - R[2][2]) * 2.0;
+        q.w = static_cast<float>((R[0][2] - R[2][0]) / s);
+        q.x = static_cast<float>((R[0][1] + R[1][0]) / s);
+        q.y = static_cast<float>(0.25 * s);
+        q.z = static_cast<float>((R[1][2] + R[2][1]) / s);
+    } else {
+        const double s = std::sqrt(1.0 + R[2][2] - R[0][0] - R[1][1]) * 2.0;
+        q.w = static_cast<float>((R[1][0] - R[0][1]) / s);
+        q.x = static_cast<float>((R[0][2] + R[2][0]) / s);
+        q.y = static_cast<float>((R[1][2] + R[2][1]) / s);
+        q.z = static_cast<float>(0.25 * s);
+    }
+    return normalizeQuatSafe(q);
+}
+
+MeshCanonicalizationResult canonicalizeMeshOwnerFrame(DEMMesh& mesh) {
+    MeshCanonicalizationResult result;
+
+    double volume = 0.0;
+    float3 center = make_float3(0, 0, 0);
+    float3 inertia = make_float3(0, 0, 0);
+    float3 inertia_products = make_float3(0, 0, 0);
+    mesh.ComputeMassProperties(volume, center, inertia, inertia_products);
+    if (!(volume > 0.0) || !std::isfinite(volume)) {
+        return result;
+    }
+
+    result.center_norm = std::sqrt(center.x * center.x + center.y * center.y + center.z * center.z);
+    const double diag_norm = std::abs(inertia.x) + std::abs(inertia.y) + std::abs(inertia.z);
+    const double offdiag_norm = std::sqrt(static_cast<double>(inertia_products.x) * inertia_products.x +
+                                          static_cast<double>(inertia_products.y) * inertia_products.y +
+                                          static_cast<double>(inertia_products.z) * inertia_products.z);
+    result.offdiag_rel = offdiag_norm / std::max(diag_norm, 1e-20);
+
+    float bound_r = 0.f;
+    for (const auto& v : mesh.m_vertices) {
+        bound_r = std::max(bound_r, length(v));
+    }
+    const double center_tol = std::max(1e-7, 1e-5 * std::max(1e-3, static_cast<double>(bound_r)));
+    constexpr double offdiag_tol = 1e-6;
+    if (result.center_norm <= center_tol && result.offdiag_rel <= offdiag_tol) {
+        return result;
+    }
+
+    double A[3][3] = {
+        {inertia.x, inertia_products.x, inertia_products.z},
+        {inertia_products.x, inertia.y, inertia_products.y},
+        {inertia_products.z, inertia_products.y, inertia.z},
+    };
+    double eigvals[3] = {0.0, 0.0, 0.0};
+    double eigvecs[3][3] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
+    if (!jacobiEigenSymmetric3(A, eigvals, eigvecs)) {
+        return result;
+    }
+
+    std::array<int, 3> order = {0, 1, 2};
+    std::sort(order.begin(), order.end(), [&](int l, int r) { return eigvals[l] < eigvals[r]; });
+
+    double R[3][3] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
+    for (int col = 0; col < 3; col++) {
+        const int src_col = order[col];
+        double nrm = 0.0;
+        for (int row = 0; row < 3; row++) {
+            R[row][col] = eigvecs[row][src_col];
+            nrm += R[row][col] * R[row][col];
+        }
+        nrm = std::sqrt(std::max(nrm, 1e-30));
+        for (int row = 0; row < 3; row++) {
+            R[row][col] /= nrm;
+        }
+    }
+
+    const double det = R[0][0] * (R[1][1] * R[2][2] - R[1][2] * R[2][1]) -
+                       R[0][1] * (R[1][0] * R[2][2] - R[1][2] * R[2][0]) +
+                       R[0][2] * (R[1][0] * R[2][1] - R[1][1] * R[2][0]);
+    if (det < 0.0) {
+        for (int row = 0; row < 3; row++) {
+            R[row][2] = -R[row][2];
+        }
+    }
+
+    const float4 principal_q = quatFromRotationMatrix(R);
+    float3 principal_inertia = make_float3(static_cast<float>(std::max(0.0, eigvals[order[0]])),
+                                           static_cast<float>(std::max(0.0, eigvals[order[1]])),
+                                           static_cast<float>(std::max(0.0, eigvals[order[2]])));
+
+    const float3 old_init_pos = mesh.init_pos;
+    const float4 old_init_ori = mesh.init_oriQ;
+
+    mesh.InformCentroidPrincipal(center, principal_q);
+    if (mesh.patch_locations_explicitly_set) {
+        for (auto& p_loc : mesh.m_patch_locations) {
+            applyFrameTransformGlobalToLocal(p_loc, center, principal_q);
+        }
+    }
+
+    float3 new_init_pos = center;
+    applyFrameTransformLocalToGlobal(new_init_pos, old_init_pos, old_init_ori);
+    mesh.init_pos = new_init_pos;
+    mesh.init_oriQ = normalizeQuatSafe(hostHamiltonProduct(old_init_ori, principal_q));
+
+    double scale_from_old = 0.0;
+    double scale_from_principal = 0.0;
+    const bool moi_from_old = inferUniformScale(mesh.MOI, inertia, scale_from_old);
+    const bool moi_from_principal = inferUniformScale(mesh.MOI, principal_inertia, scale_from_principal);
+    if (moi_from_old && !moi_from_principal) {
+        mesh.MOI = principal_inertia * static_cast<float>(scale_from_old);
+        result.moi_rescaled = true;
+    } else if (!moi_from_principal && result.offdiag_rel > 1e-4) {
+        result.moi_inconsistent = true;
+    }
+
+    result.transformed = true;
+    return result;
+}
+
+}  // namespace
 
 void DEMSolver::assertSysInit(const std::string& method_name) {
     if (!sys_initialized) {
@@ -191,7 +535,8 @@ void DEMSolver::postResourceGen() {
 
 void DEMSolver::updateTotalEntityNum() {
     nDistinctClumpBodyTopologies = m_template_clump_mass.size();
-    nDistinctMassProperties = nDistinctClumpBodyTopologies + nExtObj + nTriMeshes;
+    const size_t mesh_mass_entries = jitify_mass_moi ? m_mesh_mass_jit.size() : m_mesh_obj_mass.size();
+    nDistinctMassProperties = nDistinctClumpBodyTopologies + nExtObj + mesh_mass_entries;
 
     // Also, external objects may introduce more material types
     nMatTuples = m_loaded_materials.size();
@@ -240,6 +585,33 @@ void DEMSolver::postResourceGenChecksAndTabKeeping() {
                 "properties",
                 nDistinctMassProperties, std::numeric_limits<inertiaOffset_t>::max() - 1,
                 std::numeric_limits<inertiaOffset_t>::max());
+        }
+        // Mass + MOI are jitified into constant memory (4 floats per entry across mass/moi arrays). Guard against
+        // over-subscribing the device constant memory, which results in CUDA_ERROR_INVALID_PTX at JIT time.
+        {
+            constexpr size_t kBytesPerMassEntry = 4 * sizeof(float);  // mass + 3 MOI components
+            // Use the most conservative constant memory size across the devices we will launch on.
+            int devices[] = {dT->streamInfo.device, kT->streamInfo.device};
+            size_t min_const_mem = std::numeric_limits<size_t>::max();
+            for (int dev : devices) {
+                cudaDeviceProp prop{};
+                if (cudaGetDeviceProperties(&prop, dev) == cudaSuccess) {
+                    min_const_mem = std::min(min_const_mem, static_cast<size_t>(prop.totalConstMem));
+                }
+            }
+            if (min_const_mem != std::numeric_limits<size_t>::max()) {
+                const size_t needed_bytes = kBytesPerMassEntry * nDistinctMassProperties;
+                // Keep a small safety margin for other constant symbols.
+                const size_t safety_margin = 1024;
+                if (needed_bytes + safety_margin > min_const_mem) {
+                    DEME_WARNING(
+                        "Mass/MOI jitification would require %zu bytes of constant memory for %u entries, "
+                        "exceeding device capacity (%zu bytes). Falling back to flattened mass properties. "
+                        "Call DisableJitifyMassProperties() to suppress this message.",
+                        needed_bytes, nDistinctMassProperties, min_const_mem);
+                    jitify_mass_moi = false;
+                }
+            }
         }
     }
 
@@ -304,12 +676,6 @@ void DEMSolver::jitifyKernels() {
     std::thread dT_build([&]() {
         DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
         dT->jitifyKernels(m_subs, m_jitify_options);
-
-        // Now, inspectors need to be jitified too... but the current design jitify inspector kernels at the first time
-        // they are used. for (auto& insp : m_inspectors) {
-        //     insp->Initialize(m_subs);
-        // }
-
         // Solver system's own max vel inspector should be init-ed. Don't bother init-ing it while using, because it is
         // called at high frequency, let's save an if check. Forced initialization (since doing it before system
         // completes init).
@@ -319,8 +685,19 @@ void DEMSolver::jitifyKernels() {
         m_approx_angvel_func->Initialize(m_subs, m_jitify_options, true);
         dT->approxAngVelFunc = m_approx_angvel_func;
     });
+
     kT_build.join();
     dT_build.join();
+
+    // Eagerly initialize user-created inspectors so their kernels compile before first use
+    for (auto& insp : m_inspectors) {
+        if (insp) {
+            insp->Initialize(m_subs, m_jitify_options, true);
+            if (insp->inspection_kernel) {
+                insp->inspection_kernel->kernel(insp->kernel_name).instantiate();
+            }
+        }
+    }
 }
 
 void DEMSolver::getContacts_impl(std::vector<bodyID_t>& idA,
@@ -483,10 +860,14 @@ void DEMSolver::figureOutNV() {
 
 void DEMSolver::decideBinSize() {
     // find the smallest radius
+    m_largest_radius = 0.f;
     for (auto elem : m_template_sp_radii) {
         for (auto radius : elem) {
             if (radius < m_smallest_radius) {
                 m_smallest_radius = radius;
+            }
+            if (radius > m_largest_radius) {
+                m_largest_radius = radius;
             }
         }
     }
@@ -682,6 +1063,10 @@ void DEMSolver::preprocessAnalyticalObjs() {
                     addAnalCompTemplate(ANAL_OBJ_TYPE_CYL_INF, comp_mat.at(i), thisLoadExtObj, param.cyl.center,
                                         param.cyl.dir, param.cyl.radius, 0, 0, param.cyl.normal);
                     break;
+                case OBJ_COMPONENT::PLANAR_CYL:
+                    addAnalCompTemplate(ANAL_OBJ_TYPE_PLANAR_CYL, comp_mat.at(i), thisLoadExtObj, param.cyl.center,
+                                        param.cyl.dir, param.cyl.radius, 0, 0, param.cyl.normal);
+                    break;
                 default:
                     DEME_ERROR(std::string("There is at least one analytical boundary that has a type not supported."));
             }
@@ -754,6 +1139,18 @@ void DEMSolver::preprocessClumps() {
 
 void DEMSolver::preprocessTriangleObjs() {
     nTriMeshes += cached_mesh_objs.size();
+    m_mesh_mass_jit.clear();
+    m_mesh_moi_jit.clear();
+    m_mesh_mass_offsets.clear();
+    size_t n_mesh_frame_canonicalized = 0;
+    size_t n_mesh_moi_rescaled = 0;
+    size_t n_mesh_moi_inconsistent = 0;
+    // Build a map from (mass, MOI) -> jitify index so identical mesh instances share one constant entry.
+    std::map<std::tuple<float, float, float, float>, inertiaOffset_t> mesh_mass_map;
+    for (inertiaOffset_t idx = 0; idx < m_mesh_mass_jit.size(); idx++) {
+        const auto& moi = m_mesh_moi_jit.at(idx);
+        mesh_mass_map.emplace(std::make_tuple(m_mesh_mass_jit.at(idx), moi.x, moi.y, moi.z), idx);
+    }
     bodyID_t thisMeshObj =
         0;  // In preprocessing, this starts from 0 since if this is an update, the previous mesh objects are already
             // loaded and processed. This is the offset for the new ones being added in this update.
@@ -766,6 +1163,37 @@ void DEMSolver::preprocessTriangleObjs() {
                 "A meshed object is loaded but does not have associated material.\nPlease assign material to meshes "
                 "via SetMaterial."));
         }
+        const float shell_half_thickness = fmaxf(mesh_obj->GetShellHalfThickness(), 0.f);
+
+        const MeshCanonicalizationResult canonicalization = canonicalizeMeshOwnerFrame(*mesh_obj);
+        n_mesh_frame_canonicalized += canonicalization.transformed ? 1 : 0;
+        n_mesh_moi_rescaled += canonicalization.moi_rescaled ? 1 : 0;
+        n_mesh_moi_inconsistent += canonicalization.moi_inconsistent ? 1 : 0;
+
+        if (mesh_obj->IsShell() && (mesh_obj->mass < 1e-15 || length(mesh_obj->MOI) < 1e-15)) {
+            const float old_mass = mesh_obj->mass;
+            const float old_moi_mag = length(mesh_obj->MOI);
+            double shell_volume = 0.0;
+            float3 shell_center = make_float3(0, 0, 0);
+            float3 shell_inertia = make_float3(0, 0, 0);
+            mesh_obj->ComputeMassProperties(shell_volume, shell_center, shell_inertia);
+
+            const double shell_inertia_norm = static_cast<double>(length(shell_inertia));
+            if (shell_volume > 1e-20 && std::isfinite(shell_volume) && shell_inertia_norm > 1e-20 &&
+                std::isfinite(shell_inertia_norm)) {
+                const double target_mass =
+                    (mesh_obj->mass > 1e-15) ? static_cast<double>(mesh_obj->mass) : shell_volume;
+                const float mass_scale = static_cast<float>(target_mass / shell_volume);
+                mesh_obj->mass = static_cast<float>(target_mass);
+                mesh_obj->MOI = shell_inertia * mass_scale;
+                DEME_WARNING(
+                    "Shell mesh %s had near-zero mass/MOI (mass: %.9g, MOI magnitude: %.9g). Recomputed from shell "
+                    "geometry and thickness (mass: %.9g, MOI magnitude: %.9g).",
+                    mesh_obj->filename.empty() ? "<in-memory mesh>" : mesh_obj->filename.c_str(), old_mass, old_moi_mag,
+                    mesh_obj->mass, length(mesh_obj->MOI));
+            }
+        }
+
         // Put the mesh into the host-side cache
         m_meshes.push_back(mesh_obj);
         // Note that cache_offset needs to be modified by dT in init. This info is important if we need to modify the
@@ -779,21 +1207,88 @@ void DEMSolver::preprocessTriangleObjs() {
         }
         m_mesh_obj_mass.push_back(mesh_obj->mass);
         m_mesh_obj_moi.push_back(mesh_obj->MOI);
+        // Record jitify entry (dedup identical mesh mass/MOI combos)
+        const auto mass_moi_key = std::make_tuple(mesh_obj->mass, mesh_obj->MOI.x, mesh_obj->MOI.y, mesh_obj->MOI.z);
+        auto [it, inserted] = mesh_mass_map.emplace(mass_moi_key, static_cast<inertiaOffset_t>(mesh_mass_map.size()));
+        if (inserted) {
+            m_mesh_mass_jit.push_back(mesh_obj->mass);
+            m_mesh_moi_jit.push_back(mesh_obj->MOI);
+        }
+        m_mesh_mass_offsets.push_back(it->second);
 
         m_input_mesh_obj_xyz.push_back(mesh_obj->init_pos);
         m_input_mesh_obj_rot.push_back(mesh_obj->init_oriQ);
         m_input_mesh_obj_family.push_back(mesh_obj->family_code);
+        m_input_mesh_obj_convex.push_back(mesh_obj->is_convex ? 1 : 0);
+        m_input_mesh_obj_never_winner.push_back(mesh_obj->never_winner ? 1 : 0);
         m_mesh_facet_owner.insert(m_mesh_facet_owner.end(), mesh_obj->GetNumTriangles(), thisMeshObj);
 
-        // Initialize patch IDs if not already set (default: all facets in patch 0)
-        if (!mesh_obj->patches_explicitly_set && mesh_obj->m_patch_ids.empty()) {
-            mesh_obj->SetPatchIDs({0});
+        const bodyID_t tri_offset = static_cast<bodyID_t>(m_mesh_facets.size());
+        std::vector<std::array<bodyID_t, 3>> local_neighbors;
+        if (mesh_obj->IsConvex() && mesh_obj->IsNeverWinner()) {
+            local_neighbors.assign(mesh_obj->GetNumTriangles(), {NULL_BODYID, NULL_BODYID, NULL_BODYID});
+        } else {
+            local_neighbors = buildTriangleEdgeNeighbors(mesh_obj->m_face_v_indices, mesh_obj->m_vertices);
+        }
+
+        // Preserve explicit mesh patching. If user did not provide patches, default to single-patch semantics.
+        if (!mesh_obj->patches_explicitly_set) {
+            if (mesh_obj->GetNumTriangles() > 0) {
+                mesh_obj->m_patch_ids.assign(mesh_obj->GetNumTriangles(), 0);
+            } else {
+                mesh_obj->m_patch_ids.clear();
+            }
+            mesh_obj->nPatches = 1;
+        } else {
+            if (mesh_obj->m_patch_ids.size() != mesh_obj->GetNumTriangles()) {
+                DEME_WARNING(
+                    "Mesh has explicit patching enabled, but patch ID count (%zu) does not match triangle count "
+                    "(%zu). Falling back to single-patch mode for this mesh.",
+                    mesh_obj->m_patch_ids.size(), mesh_obj->GetNumTriangles());
+                mesh_obj->m_patch_ids.assign(mesh_obj->GetNumTriangles(), 0);
+                mesh_obj->nPatches = 1;
+                mesh_obj->patches_explicitly_set = false;
+            }
+        }
+
+        if (mesh_obj->nPatches == 0) {
+            mesh_obj->nPatches = 1;
+            mesh_obj->m_patch_ids.assign(mesh_obj->GetNumTriangles(), 0);
+            mesh_obj->patches_explicitly_set = false;
+        }
+
+        // Validate patch IDs and recover robustly if malformed.
+        bool patch_id_invalid = false;
+        for (size_t facet_idx = 0; facet_idx < mesh_obj->GetNumTriangles(); facet_idx++) {
+            const bodyID_t patch_id = mesh_obj->m_patch_ids.at(facet_idx);
+            if (patch_id >= mesh_obj->GetNumPatches()) {
+                patch_id_invalid = true;
+                break;
+            }
+        }
+        if (patch_id_invalid) {
+            DEME_WARNING("Mesh patch IDs are out of range. Falling back to single-patch mode for this mesh.");
+            mesh_obj->m_patch_ids.assign(mesh_obj->GetNumTriangles(), 0);
+            mesh_obj->nPatches = 1;
+            mesh_obj->patches_explicitly_set = false;
+        }
+
+        // Material array must align with number of patches.
+        if (mesh_obj->materials.empty()) {
+            DEME_ERROR("A mesh has no patch materials after preprocessing.");
+        }
+        if (mesh_obj->materials.size() != mesh_obj->GetNumPatches()) {
+            auto mat = mesh_obj->materials.front();
+            mesh_obj->materials.assign(mesh_obj->GetNumPatches(), mat);
+            DEME_WARNING(
+                "Mesh patch material count did not match patch count; using first material for all %u patches.",
+                mesh_obj->GetNumPatches());
         }
 
         // Populate patch owner and material arrays (one entry per patch in this mesh)
         // Note patch_id in a mesh is always 0-based, and contiguous
         std::vector<materialsOffset_t> patch_materials(mesh_obj->GetNumPatches());
-        for (size_t facet_idx = 0; facet_idx < mesh_obj->GetNumPatches(); facet_idx++) {
+        for (size_t facet_idx = 0; facet_idx < mesh_obj->GetNumTriangles(); facet_idx++) {
             // patch_id is per-triangle
             bodyID_t patch_id = mesh_obj->m_patch_ids.at(facet_idx);
             // Assign this facet's material to its patch (will overwrite for each facet, but they should be consistent
@@ -828,7 +1323,30 @@ void DEMSolver::preprocessTriangleObjs() {
                     tri.p3 = tmp;
                 }
             }
+            {
+                const float3 centroid =
+                    make_float3((tri.p1.x + tri.p2.x + tri.p3.x) / 3.f, (tri.p1.y + tri.p2.y + tri.p3.y) / 3.f,
+                                (tri.p1.z + tri.p2.z + tri.p3.z) / 3.f);
+                auto dist2 = [&](const float3& p) {
+                    const float dx = p.x - centroid.x;
+                    const float dy = p.y - centroid.y;
+                    const float dz = p.z - centroid.z;
+                    return dx * dx + dy * dy + dz * dz;
+                };
+                float r2 = dist2(tri.p1);
+                r2 = std::max(r2, dist2(tri.p2));
+                r2 = std::max(r2, dist2(tri.p3));
+                const float radius = std::sqrt(r2) + shell_half_thickness;
+                if (radius > m_largest_tri_radius) {
+                    m_largest_tri_radius = radius;
+                }
+            }
             m_mesh_facets.push_back(tri);
+
+            const auto& nb = local_neighbors[i];
+            m_mesh_facet_neighbor1.push_back(nb[0] == NULL_BODYID ? NULL_BODYID : nb[0] + tri_offset);
+            m_mesh_facet_neighbor2.push_back(nb[1] == NULL_BODYID ? NULL_BODYID : nb[1] + tri_offset);
+            m_mesh_facet_neighbor3.push_back(nb[2] == NULL_BODYID ? NULL_BODYID : nb[2] + tri_offset);
         }
         thisLoadPatchCount += mesh_obj->GetNumPatches();
 
@@ -836,6 +1354,18 @@ void DEMSolver::preprocessTriangleObjs() {
         nMeshPatches += mesh_obj->GetNumPatches();  // This is used to keep track of the total number of patches across
                                                     // all meshes, potentially multiple mesh loads
         thisMeshObj++;
+    }
+    if (n_mesh_frame_canonicalized > 0) {
+        DEME_INFO(
+            "Canonicalized %zu mesh owner frames to centroid/principal axes before initialization (MOI rescaled: %zu).",
+            n_mesh_frame_canonicalized, n_mesh_moi_rescaled);
+    }
+    if (n_mesh_moi_inconsistent > 0) {
+        DEME_WARNING(
+            "%zu mesh owners required centroid/principal-frame canonicalization, but their MOI values did not appear "
+            "proportional to either the original or principal unit-density inertia tensor. Check user-specified MOI "
+            "for consistency.",
+            n_mesh_moi_inconsistent);
     }
     DEME_DEBUG_PRINTF("Total number of mesh patches after this update: %zu", nMeshPatches);
     DEME_DEBUG_PRINTF("Total number of mesh triangles after this update: %zu", nTriGM);
@@ -1074,6 +1604,7 @@ void DEMSolver::setSolverParams() {
     // Time step constant-ness and expand factor constant-ness
     dT->solverFlags.isStepConst = ts_size_is_const;
     kT->solverFlags.isExpandFactorFixed = use_user_defined_expand_factor;
+    dT->solverFlags.isExpandFactorFixed = use_user_defined_expand_factor;
 
     // Jitify or not
     dT->solverFlags.useClumpJitify = jitify_clump_templates;
@@ -1112,8 +1643,8 @@ void DEMSolver::setSolverParams() {
     // dT->solverFlags.should_sort_pairs = should_sort_contacts;
 
     // Error out policies
-    kT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
-    dT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
+    kT->solverFlags.errOutAvgPrimitiveCnts = threshold_error_out_num_cnts;
+    dT->solverFlags.errOutAvgPrimitiveCnts = threshold_error_out_num_cnts;
     // simParams-stored variables need to be sync-ed to device
     kT->simParams->errOutBinSphNum = threshold_too_many_spheres_in_bin;
     dT->simParams->errOutBinSphNum = threshold_too_many_spheres_in_bin;
@@ -1145,7 +1676,13 @@ void DEMSolver::setSolverParams() {
     dT->solverFlags.upperBoundFutureDrift = upper_bound_future_drift;
     dT->solverFlags.targetDriftMoreThanAvg = max_drift_ahead_of_avg_drift;
     dT->solverFlags.targetDriftMultipleOfAvg = max_drift_multiple_of_avg_drift;
-    dT->accumStepUpdater.SetCacheSize(max_drift_gauge_history_size);
+    kT->solverFlags.futureDriftEffDriftSafetyFactor = future_drift_eff_drift_safety_factor;
+    dT->solverFlags.futureDriftEffDriftSafetyFactor = future_drift_eff_drift_safety_factor;
+    kT->solverFlags.futureDriftSendUpperBoundRatio = future_drift_send_upper_bound_ratio;
+    dT->solverFlags.futureDriftSendUpperBoundRatio = future_drift_send_upper_bound_ratio;
+    kT->solverFlags.futureDriftSendLowerBoundRatio = future_drift_send_lower_bound_ratio;
+    dT->solverFlags.futureDriftSendLowerBoundRatio = future_drift_send_lower_bound_ratio;
+    // accumStepUpdater removed; FutureDriftRegulator manages its own window size.
 }
 
 void DEMSolver::setSimParams() {
@@ -1179,37 +1716,128 @@ void DEMSolver::setSimParams() {
             DEME_MAX_WILDCARD_NUM);
     }
     DEME_DEBUG_PRINTF("%u contact wildcards are in the force model.", nContactWildcards);
-
     // Error-out velocity should be no smaller than the max velocity we can expect
     if (threshold_error_out_vel < m_approx_max_vel) {
         // Silently bring down m_approx_max_vel
         m_approx_max_vel = threshold_error_out_vel;
     }
-
+    {  // Adaptive Timestep -- currently only Hertz const.
+        if (adapt_ts_type == ADAPT_TS_TYPE::HERTZ_CONST) {
+            auto sqr = [](double x) { return x * x; };
+            auto effective_E = [&](double E1, double nu1, double E2, double nu2) -> double {
+                if (E1 <= 0.0 || E2 <= 0.0)
+                    return 0.0;
+                return 1.0 / (((1.0 - sqr(nu1)) / E1) + ((1.0 - sqr(nu2)) / E2));
+            };  // max effektive E* over all material contacts
+            double Eeff_max = 0.0;
+            for (size_t i = 0; i < m_loaded_materials.size(); ++i) {
+                const auto& A = m_loaded_materials[i]->mat_prop;
+                const double E1 = (A.count("E") ? (double)A.at("E") : 0.0);
+                const double nu1 = (A.count("nu") ? (double)A.at("nu") : 0.3);
+                for (size_t j = i; j < m_loaded_materials.size(); ++j) {
+                    const auto& B = m_loaded_materials[j]->mat_prop;
+                    const double E2 = (B.count("E") ? (double)B.at("E") : 0.0);
+                    const double nu2 = (B.count("nu") ? (double)B.at("nu") : 0.3);
+                    const double Ee = effective_E(E1, nu1, E2, nu2);
+                    if (Ee > Eeff_max)
+                        Eeff_max = Ee;
+                }
+            }  // lowest mass
+            double min_mass = std::numeric_limits<double>::infinity();
+            for (double m : m_template_clump_mass)
+                if (m > 0.0 && m < min_mass)
+                    min_mass = m;
+            const double r_min = (double)m_smallest_radius;
+            if (std::isfinite(min_mass) && r_min > 0.0 && Eeff_max > 0.0) {
+                const double R_eff = 0.5 * r_min;
+                const double m_eff = 0.5 * min_mass;
+                const double KH = FOUR_OVER_THREE * std::sqrt(0.1) * Eeff_max * R_eff;
+                const double dt_hertz = (PI / (2.0 * N_DT)) * std::sqrt(m_eff / KH);
+                if (dt_hertz > 0.0 && std::isfinite(dt_hertz)) {
+                    m_ts_size = dt_hertz;  // <- set const. timestep
+                    DEME_INFO(
+                        "Adaptive time step 'hertz_const': dt = %.9g  (m_min=%.6g, r_min=%.6g, E*=%.6g, N_DT=%.1f)",
+                        m_ts_size, min_mass, r_min, Eeff_max, N_DT);
+                } else {
+                    DEME_WARNING("hertz_const erzeugte ungueltigen dt; behalte bisherigen Wert %.7g.", m_ts_size);
+                }
+            } else {
+                DEME_WARNING("hertz_const: fehlende/ungueltige Daten (m_min=%g, r_min=%g, E*=%g); dt bleibt %.7g.",
+                             min_mass, r_min, Eeff_max, m_ts_size);
+            }
+        }
+    }
+    if (!m_use_angvel_margin_user_set) {
+        bool has_multi_sphere_clump = false;
+        for (const auto& radii : m_template_sp_radii) {
+            if (radii.size() > 1) {
+                has_multi_sphere_clump = true;
+                break;
+            }
+        }
+        const bool has_mesh = nTriGM > 0;
+        m_use_angvel_margin = has_multi_sphere_clump || has_mesh;
+    }
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
                      m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_max_tritri_penetration,
-                     m_expand_safety_multi, m_expand_base_vel, m_force_model->m_contact_wildcards,
+                     m_expand_safety_multi, m_expand_base_vel, m_use_angvel_margin, m_force_model->m_contact_wildcards,
                      m_force_model->m_owner_wildcards, m_force_model->m_geo_wildcards);
     kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
                      m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_max_tritri_penetration,
-                     m_expand_safety_multi, m_expand_base_vel, m_force_model->m_contact_wildcards,
+                     m_expand_safety_multi, m_expand_base_vel, m_use_angvel_margin, m_force_model->m_contact_wildcards,
                      m_force_model->m_owner_wildcards, m_force_model->m_geo_wildcards);
+
+    auto apply_cyl_periodic = [&](DualStruct<DEMSimParams>& params) {
+        params->useCylPeriodic = m_use_cyl_periodic ? 1 : 0;
+        params->useCylPeriodicDiagCounters = m_cyl_periodic_diag ? 1 : 0;
+        params->cylPeriodicAxis = static_cast<unsigned char>(m_cyl_periodic_axis);
+        params->cylPeriodicStart = m_cyl_periodic_start;
+        params->cylPeriodicSpan = m_cyl_periodic_span;
+        params->cylPeriodicMinRadius = m_cyl_periodic_min_radius;
+        params->cylPeriodicCosSpan = m_cyl_periodic_cos_span;
+        params->cylPeriodicSinSpan = m_cyl_periodic_sin_span;
+        params->cylPeriodicCosHalfSpan = m_cyl_periodic_cos_half_span;
+        params->cylPeriodicSinHalfSpan = m_cyl_periodic_sin_half_span;
+        params->cylPeriodicAxisVec = m_cyl_periodic_axis_vec;
+        params->cylPeriodicU = m_cyl_periodic_u;
+        params->cylPeriodicV = m_cyl_periodic_v;
+        params->cylPeriodicStartNormal = m_cyl_periodic_start_normal;
+        params->cylPeriodicEndNormal = m_cyl_periodic_end_normal;
+        params->cylPeriodicOrigin = make_float3(-params->LBFX, -params->LBFY, -params->LBFZ);
+        params->maxSphereRadius = m_largest_radius;
+        params->maxTriRadius = m_largest_tri_radius;
+        params->maxFamilyExtraMargin = m_max_family_extra_margin;
+    };
+    apply_cyl_periodic(dT->simParams);
+    apply_cyl_periodic(kT->simParams);
 }
 
 void DEMSolver::allocateGPUArrays() {
+    size_t tri_neighbors = 0;
+    for (const auto& mesh_obj : cached_mesh_objs) {
+        if (!mesh_obj) {
+            continue;
+        }
+        if (!(mesh_obj->IsConvex() && mesh_obj->IsNeverWinner())) {
+            tri_neighbors += mesh_obj->GetNumTriangles();
+        }
+    }
+    nTriNeighbors = tri_neighbors;
+
     // Resize arrays based on the statistical data we have
     std::thread dThread = std::move(std::thread([this]() {
         this->dT->allocateGPUArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
-                                    this->nSpheresGM, this->nTriGM, this->nMeshPatches, this->nAnalGM,
-                                    this->nExtraContacts, this->nDistinctMassProperties,
+                                    this->nSpheresGM, this->nTriGM, this->nTriNeighbors, this->nMeshPatches,
+                                    this->nAnalGM, this->nExtraContacts, this->nDistinctMassProperties,
                                     this->nDistinctClumpBodyTopologies, this->nDistinctClumpComponents,
                                     this->nJitifiableClumpComponents, this->nMatTuples);
     }));
     std::thread kThread = std::move(std::thread([this]() {
         this->kT->allocateGPUArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
-                                    this->nSpheresGM, this->nTriGM, this->nAnalGM, this->nExtraContacts,
-                                    this->nDistinctMassProperties, this->nDistinctClumpBodyTopologies,
-                                    this->nDistinctClumpComponents, this->nJitifiableClumpComponents, this->nMatTuples);
+                                    this->nSpheresGM, this->nTriGM, this->nTriNeighbors, this->nAnalGM,
+                                    this->nExtraContacts, this->nDistinctMassProperties,
+                                    this->nDistinctClumpBodyTopologies, this->nDistinctClumpComponents,
+                                    this->nJitifiableClumpComponents, this->nMatTuples);
     }));
     dThread.join();
     kThread.join();
@@ -1227,8 +1855,9 @@ void DEMSolver::initializeGPUArrays() {
         // Analytical objects' initial stats
         m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
         // Meshed objects' initial stats
-        cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner,
-        m_mesh_facet_patch, m_mesh_facets, m_mesh_patch_owner, m_mesh_patch_materials,
+        cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_input_mesh_obj_convex,
+        m_input_mesh_obj_never_winner, m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facet_neighbor1,
+        m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets, m_mesh_patch_owner, m_mesh_patch_materials,
         // Clump template name mapping
         m_template_number_name_map,
         // Clump template info (mass, sphere components, materials etc.)
@@ -1236,7 +1865,7 @@ void DEMSolver::initializeGPUArrays() {
         // Analytical obj physics properties
         m_ext_obj_mass, m_ext_obj_moi, m_ext_obj_comp_num,
         // Meshed obj physics properties
-        m_mesh_obj_mass, m_mesh_obj_moi,
+        m_mesh_obj_mass, m_mesh_obj_moi, m_mesh_mass_jit, m_mesh_moi_jit, m_mesh_mass_offsets,
         // Universal template info
         m_loaded_materials,
         // Family mask
@@ -1250,7 +1879,8 @@ void DEMSolver::initializeGPUArrays() {
         // Analytical objects' initial stats
         m_input_ext_obj_family,
         // Meshed objects' initial stats
-        m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facets,
+        m_input_mesh_obj_family, m_input_mesh_obj_convex, m_input_mesh_obj_never_winner, m_mesh_facet_owner,
+        m_mesh_facet_patch, m_mesh_facet_neighbor1, m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets,
         // Analytical obj physics properties
         m_ext_obj_comp_num,
         // Family mask
@@ -1267,6 +1897,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
                                       size_t nSpheres,
                                       size_t nTriMesh,
                                       size_t nFacets,
+                                      size_t nTriNeighbors,
                                       size_t nMeshPatches,
                                       unsigned int nExtObj,
                                       unsigned int nAnalGM) {
@@ -1280,14 +1911,15 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // Analytical objects' initial stats
         m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
         // Meshed objects' initial stats
-        cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner,
-        m_mesh_facet_patch, m_mesh_facets, m_mesh_patch_owner, m_mesh_patch_materials,
+        cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_input_mesh_obj_convex,
+        m_input_mesh_obj_never_winner, m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facet_neighbor1,
+        m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets, m_mesh_patch_owner, m_mesh_patch_materials,
         // Clump template info (mass, sphere components, materials etc.)
         flattened_clump_templates,
         // Analytical obj physics properties
         m_ext_obj_mass, m_ext_obj_moi, m_ext_obj_comp_num,
         // Meshed obj physics properties
-        m_mesh_obj_mass, m_mesh_obj_moi,
+        m_mesh_obj_mass, m_mesh_obj_moi, m_mesh_mass_jit, m_mesh_moi_jit, m_mesh_mass_offsets,
         // Universal template info
         m_loaded_materials,
         // Family mask
@@ -1295,14 +1927,15 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // I/O and misc.
         m_no_output_families, m_tracked_objs,
         // Number of entities, old
-        nOwners, nClumps, nSpheres, nTriMesh, nFacets, nMeshPatches, nExtObj, nAnalGM);
+        nOwners, nClumps, nSpheres, nTriMesh, nFacets, nTriNeighbors, nMeshPatches, nExtObj, nAnalGM);
     kT->updateClumpMeshArrays(
         // Clump batchs' initial stats
         cached_input_clump_batches,
         // Analytical objects' initial stats
         m_input_ext_obj_family,
         // Meshed objects' initial stats
-        m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facets,
+        m_input_mesh_obj_family, m_input_mesh_obj_convex, m_input_mesh_obj_never_winner, m_mesh_facet_owner,
+        m_mesh_facet_patch, m_mesh_facet_neighbor1, m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets,
         // Analytical obj physics properties
         m_ext_obj_comp_num,
         // Family mask
@@ -1310,7 +1943,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // Templates and misc.
         flattened_clump_templates,
         // Number of entities, old
-        nOwners, nClumps, nSpheres, nTriMesh, nFacets, nMeshPatches, nExtObj, nAnalGM);
+        nOwners, nClumps, nSpheres, nTriMesh, nFacets, nTriNeighbors, nMeshPatches, nExtObj, nAnalGM);
 }
 
 void DEMSolver::packDataPointers() {
@@ -1327,7 +1960,10 @@ void DEMSolver::packDataPointers() {
 }
 
 void DEMSolver::migrateSimParamsToDevice() {
+    DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
     dT->simParams.toDevice();
+
+    DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
     kT->simParams.toDevice();
 }
 
@@ -1562,6 +2198,14 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     if (!no_recording_contact_forces) {
         contact_info_write_strat = FORCE_INFO_WRITE_BACK_STRAT();
     }
+    std::string contact_info_clear_strat = " ";
+    if (!no_recording_contact_forces) {
+        contact_info_clear_strat =
+            "granData->contactPointGeometryA[myContactID] = make_float3(0,0,0);"
+            "granData->contactPointGeometryB[myContactID] = make_float3(0,0,0);"
+            "granData->contactForces[myContactID] = make_float3(0,0,0);"
+            "granData->contactTorque_convToForce[myContactID] = make_float3(0,0,0)";
+    }
 
     if (ensure_kernel_line_num) {
         model = compact_code(model);
@@ -1570,12 +2214,15 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         ingredient_acquisition_B = compact_code(ingredient_acquisition_B);
         whether_reduce_in_kernel = compact_code(whether_reduce_in_kernel);
         contact_info_write_strat = compact_code(contact_info_write_strat);
+        contact_info_clear_strat = compact_code(contact_info_clear_strat);
     }
     strMap["_DEMForceModel_;"] = model;
     strMap["_forceModelPrerequisites_;"] = model_prerequisites;
     strMap["_forceModelIngredientDefinition_;"] = ingredient_definition;
     strMap["_forceModelIngredientAcqForA_;"] = ingredient_acquisition_A;
     strMap["_forceModelIngredientAcqForB_;"] = ingredient_acquisition_B;
+    strMap["_forceModelHasLinVel_"] = (added_ingredients["ALinVel"] || added_ingredients["BLinVel"]) ? "1" : "0";
+    strMap["_forceModelHasRotVel_"] = (added_ingredients["ARotVel"] || added_ingredients["BRotVel"]) ? "1" : "0";
     // Geo wildcard acquisition is contact type-dependent.
     strMap["_forceModelGeoWildcardAcqForASph_;"] = geo_wc_acquisition_A_sph;
     strMap["_forceModelGeoWildcardAcqForAMeshPatch_;"] = geo_wc_acquisition_A_patch;
@@ -1590,8 +2237,9 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     strMap["_forceModelContactWildcardWrite_;"] = cnt_wildcard_write_back;
     strMap["_forceModelContactWildcardDestroy_;"] = cnt_wildcard_destroy_record;
 
-    strMap["_forceCollectInPlaceStrat_;"] = whether_reduce_in_kernel;
-    strMap["_contactInfoWrite_;"] = contact_info_write_strat;
+    strMap["_forceCollectInPlaceStrat_"] = whether_reduce_in_kernel;
+    strMap["_contactInfoWrite_"] = contact_info_write_strat;
+    strMap["_contactInfoClear_"] = contact_info_clear_strat;
 
     DEME_DEBUG_PRINTF("Model ingredient definition:\n%s", ingredient_definition.c_str());
 
@@ -1839,11 +2487,11 @@ inline void DEMSolver::equipMassMoiVolume(std::unordered_map<std::string, std::s
             moiY += to_string_with_precision(m_ext_obj_moi.at(i).y) + ",";
             moiZ += to_string_with_precision(m_ext_obj_moi.at(i).z) + ",";
         }
-        for (unsigned int i = 0; i < m_mesh_obj_mass.size(); i++) {
-            MassProperties += to_string_with_precision(m_mesh_obj_mass.at(i)) + ",";
-            moiX += to_string_with_precision(m_mesh_obj_moi.at(i).x) + ",";
-            moiY += to_string_with_precision(m_mesh_obj_moi.at(i).y) + ",";
-            moiZ += to_string_with_precision(m_mesh_obj_moi.at(i).z) + ",";
+        for (unsigned int i = 0; i < m_mesh_mass_jit.size(); i++) {
+            MassProperties += to_string_with_precision(m_mesh_mass_jit.at(i)) + ",";
+            moiX += to_string_with_precision(m_mesh_moi_jit.at(i).x) + ",";
+            moiY += to_string_with_precision(m_mesh_moi_jit.at(i).y) + ",";
+            moiZ += to_string_with_precision(m_mesh_moi_jit.at(i).z) + ",";
         }
         if (nDistinctMassProperties == 0) {
             MassProperties += "0";

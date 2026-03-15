@@ -246,11 +246,10 @@ float* DEMInspector::dT_GetValue() {
                            m_reduceRes, false);
 }
 
-float* DEMInspector::dT_GetDeviceValue() {
-    // assertInit(); // This one the user should not use
-    // This returns a device pointer instead of a host pointer
-    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, m_reduceResArr,
-                           m_reduceRes, true);
+float* DEMInspector::dT_GetDeviceValues() {
+    // Device-only inspection path to avoid host syncs in dT's worker thread.
+    return dT->inspectCallDeviceNoReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
+                                         m_reduceResArr, m_reduceRes);
 }
 
 void DEMInspector::ReleaseData() {
@@ -294,11 +293,11 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
     my_subs["_inRegionPolicy_"] = in_region_specifier;
     my_subs["_quantityQueryProcess_"] = inspection_code;
     if (thing_to_insp == INSPECT_ENTITY_TYPE::SPHERE) {
-        inspection_kernel = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMSphereQueryKernels", JitHelper::KERNEL_DIR / "DEMSphereQueryKernels.cu", my_subs, options)));
+        inspection_kernel = std::make_shared<JitHelper::CachedProgram>(JitHelper::buildProgram(
+            "DEMSphereQueryKernels", JitHelper::KERNEL_DIR / "DEMSphereQueryKernels.cu", my_subs, options));
     } else if (thing_to_insp == INSPECT_ENTITY_TYPE::CLUMP || thing_to_insp == INSPECT_ENTITY_TYPE::EVERYTHING) {
-        inspection_kernel = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMOwnerQueryKernels", JitHelper::KERNEL_DIR / "DEMOwnerQueryKernels.cu", my_subs, options)));
+        inspection_kernel = std::make_shared<JitHelper::CachedProgram>(JitHelper::buildProgram(
+            "DEMOwnerQueryKernels", JitHelper::KERNEL_DIR / "DEMOwnerQueryKernels.cu", my_subs, options));
     } else {
         DEME_ERROR(std::string(
             "Sorry, an inspector object you are using is not implemented yet.\nConsider letting the developers "

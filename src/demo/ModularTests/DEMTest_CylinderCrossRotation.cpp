@@ -77,7 +77,7 @@ int main() {
     // Solver setup
     // =========================================================================
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity("INFO");
+    DEMSim.SetVerbosity("ERROR");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.InstructBoxDomainDimension(20, 20, 20);
     // No gravity: motion is fully prescribed
@@ -145,9 +145,13 @@ int main() {
     std::cout << "Cylinder B axis starts along +x (90 deg from z) and ends along +z (co-axial)." << std::endl;
     std::cout << "----------------------------------------------------" << std::endl;
 
-    path out_dir = current_path();
-    out_dir /= "DEMTest_CylinderCrossRotation";
-    create_directory(out_dir);
+    path out_dir = current_path() / "modular_test_output" / "DEMTest_CylinderCrossRotation";
+    std::error_code dir_ec;
+    create_directories(out_dir, dir_ec);
+    if (dir_ec || !is_directory(out_dir)) {
+        std::cerr << "Failed to create output directory: " << out_dir << " (" << dir_ec.message() << ")" << std::endl;
+        return 1;
+    }
 
     std::vector<double> force_mags;
     std::vector<float3> avg_normals;

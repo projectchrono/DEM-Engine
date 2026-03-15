@@ -7,8 +7,39 @@
 #include <kernel/DEMHelperKernels.cuh>
 
 #include <stdio.h>
+#include <math.h>
 
 namespace deme {
+
+struct CylGhostDebugRecord {
+    int type;  // 1 = triangle
+    bodyID_t geo_id;
+    bodyID_t owner_id;
+    unsigned char ghost_neg;
+    float3 pos;
+    float3 ghost_pos;
+    float dist_start;
+    float dist_end;
+    float ghost_dist;
+};
+
+inline __device__ float distSquaredPoint(const float3& p, const float3& c) {
+    const float dx = p.x - c.x;
+    const float dy = p.y - c.y;
+    const float dz = p.z - c.z;
+    return dx * dx + dy * dy + dz * dz;
+}
+
+inline __device__ void updatePlaneMinMax(const float3& p,
+                                         const float3& origin,
+                                         const float3& n,
+                                         float& min_d,
+                                         float& max_d) {
+    const float3 pg = p - origin;
+    const float d = dot(pg, n);
+    min_d = DEME_MIN(min_d, d);
+    max_d = DEME_MAX(max_d, d);
+}
 
 // Kernel to add a constant offset to each element of an array
 __global__ void addOffsetToArray(contactPairs_t* arr, contactPairs_t offset, size_t n) {
@@ -34,6 +65,109 @@ __global__ void markBoolIf(notStupidBool_t* bool_arr, notStupidBool_t* value_arr
             bool_arr[myID] = 1;
         } else {
             bool_arr[myID] = 0;
+        }
+    }
+}
+
+__global__ void collectCylGhostDebugTriangles(DEMSimParams* simParams,
+                                              DEMDataKT* granData,
+                                              const float3* vA1,
+                                              const float3* vB1,
+                                              const float3* vC1,
+                                              const float3* vA2,
+                                              const float3* vB2,
+                                              const float3* vC2,
+                                              CylGhostDebugRecord* records,
+                                              unsigned long long* count,
+                                              unsigned long long max_records) {
+    const bodyID_t triID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (triID >= simParams->nTriGM) {
+        return;
+    }
+    const float3 A1 = vA1[triID];
+    const float3 B1 = vB1[triID];
+    const float3 C1 = vC1[triID];
+    const float3 A2 = vA2[triID];
+    const float3 B2 = vB2[triID];
+    const float3 C2 = vC2[triID];
+
+    const float3 centroid =
+        make_float3((A1.x + B1.x + C1.x) / 3.f, (A1.y + B1.y + C1.y) / 3.f, (A1.z + B1.z + C1.z) / 3.f);
+    float r2 = distSquaredPoint(A1, centroid);
+    r2 = DEME_MAX(r2, distSquaredPoint(B1, centroid));
+    r2 = DEME_MAX(r2, distSquaredPoint(C1, centroid));
+    r2 = DEME_MAX(r2, distSquaredPoint(A2, centroid));
+    r2 = DEME_MAX(r2, distSquaredPoint(B2, centroid));
+    r2 = DEME_MAX(r2, distSquaredPoint(C2, centroid));
+    const float myTriRadius = sqrtf(r2);
+
+    const float max_other =
+        (simParams->maxSphereRadius > simParams->maxTriRadius) ? simParams->maxSphereRadius : simParams->maxTriRadius;
+    const float other_margin = simParams->dyn.beta + simParams->maxFamilyExtraMargin;
+    const float ghost_dist = myTriRadius + max_other + other_margin;
+
+    const float3 origin = simParams->cylPeriodicOrigin;
+    const float3 n_start = simParams->cylPeriodicStartNormal;
+    const float3 n_end = simParams->cylPeriodicEndNormal;
+    const float3 pos_global = centroid - origin;
+    const float dist_start = dot(pos_global, n_start);
+    const float dist_end = dot(pos_global, n_end);
+
+    float min_d = DEME_HUGE_FLOAT;
+    float max_d = -DEME_HUGE_FLOAT;
+    updatePlaneMinMax(A1, origin, n_start, min_d, max_d);
+    updatePlaneMinMax(B1, origin, n_start, min_d, max_d);
+    updatePlaneMinMax(C1, origin, n_start, min_d, max_d);
+    updatePlaneMinMax(A2, origin, n_start, min_d, max_d);
+    updatePlaneMinMax(B2, origin, n_start, min_d, max_d);
+    updatePlaneMinMax(C2, origin, n_start, min_d, max_d);
+
+    if (min_d <= ghost_dist && max_d >= -ghost_dist) {
+        const float3 ghost_pos =
+            cylPeriodicRotate(centroid, origin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
+                              simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, simParams->cylPeriodicSinSpan);
+        const unsigned long long idx = atomicAdd(count, 1ULL);
+        if (idx < max_records) {
+            CylGhostDebugRecord rec;
+            rec.type = 1;
+            rec.geo_id = triID;
+            rec.owner_id = granData->ownerTriMesh[triID];
+            rec.ghost_neg = 0;
+            rec.pos = centroid;
+            rec.ghost_pos = ghost_pos;
+            rec.dist_start = dist_start;
+            rec.dist_end = dist_end;
+            rec.ghost_dist = ghost_dist;
+            records[idx] = rec;
+        }
+    }
+
+    min_d = DEME_HUGE_FLOAT;
+    max_d = -DEME_HUGE_FLOAT;
+    updatePlaneMinMax(A1, origin, n_end, min_d, max_d);
+    updatePlaneMinMax(B1, origin, n_end, min_d, max_d);
+    updatePlaneMinMax(C1, origin, n_end, min_d, max_d);
+    updatePlaneMinMax(A2, origin, n_end, min_d, max_d);
+    updatePlaneMinMax(B2, origin, n_end, min_d, max_d);
+    updatePlaneMinMax(C2, origin, n_end, min_d, max_d);
+
+    if (min_d <= ghost_dist && max_d >= -ghost_dist) {
+        const float3 ghost_pos =
+            cylPeriodicRotate(centroid, origin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
+                              simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, -simParams->cylPeriodicSinSpan);
+        const unsigned long long idx = atomicAdd(count, 1ULL);
+        if (idx < max_records) {
+            CylGhostDebugRecord rec;
+            rec.type = 1;
+            rec.geo_id = triID;
+            rec.owner_id = granData->ownerTriMesh[triID];
+            rec.ghost_neg = 1;
+            rec.pos = centroid;
+            rec.ghost_pos = ghost_pos;
+            rec.dist_start = dist_start;
+            rec.dist_end = dist_end;
+            rec.ghost_dist = ghost_dist;
+            records[idx] = rec;
         }
     }
 }
@@ -107,34 +241,56 @@ __global__ void extractPatchInvolvedContactPatchIDPairs(patchIDPair_t* contactPa
                                                         size_t nContacts) {
     contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContacts) {
-        bodyID_t bodyA = idPrimitiveA[myID];
-        bodyID_t bodyB = idPrimitiveB[myID];
+        bodyID_t bodyA_raw = idPrimitiveA[myID];
+        bodyID_t bodyB_raw = idPrimitiveB[myID];
+        bool ghostA = false;
+        bool ghostB = false;
+        bool ghostA_neg = false;
+        bool ghostB_neg = false;
+        bodyID_t bodyA = cylPeriodicDecodeID(bodyA_raw, ghostA, ghostA_neg);
+        bodyID_t bodyB = cylPeriodicDecodeID(bodyB_raw, ghostB, ghostB_neg);
         switch (contactTypePrimitive[myID]) {
             case SPHERE_TRIANGLE_CONTACT: {
                 bodyID_t patchB = triPatchID[bodyB];
+                if (ghostB) {
+                    patchB = cylPeriodicEncodeGhostID(patchB, ghostB_neg);
+                }
+                bodyID_t sphA = ghostA ? cylPeriodicEncodeGhostID(bodyA, ghostA_neg) : bodyA;
                 // For sphere-triangle contact: triangle has patch ID, sphere does not but its geoID serves the same
                 // purpose. We ensure sphere is A.
                 contactPatchPairs[myID] =
-                    encodeType<patchIDPair_t, bodyID_t>(bodyA, patchB);  // Input bodyID_t, return patchIDPair_t
+                    encodeType<patchIDPair_t, bodyID_t>(sphA, patchB);  // Input bodyID_t, return patchIDPair_t
                 break;
             }
             case TRIANGLE_ANALYTICAL_CONTACT: {
                 bodyID_t patchA = triPatchID[bodyA];
+                if (ghostA) {
+                    patchA = cylPeriodicEncodeGhostID(patchA, ghostA_neg);
+                }
+                bodyID_t objB = ghostB ? cylPeriodicEncodeGhostID(bodyB, ghostB_neg) : bodyB;
                 // For mesh-analytical contact: mesh has patch ID, analytical object does not but its geoID serves the
                 // same purpose. We ensure triangle is A.
-                contactPatchPairs[myID] = encodeType<patchIDPair_t, bodyID_t>(patchA, bodyB);
+                contactPatchPairs[myID] = encodeType<patchIDPair_t, bodyID_t>(patchA, objB);
                 break;
             }
             case TRIANGLE_TRIANGLE_CONTACT: {
                 bodyID_t patchA = triPatchID[bodyA];
                 bodyID_t patchB = triPatchID[bodyB];
+                if (ghostA) {
+                    patchA = cylPeriodicEncodeGhostID(patchA, ghostA_neg);
+                }
+                if (ghostB) {
+                    patchB = cylPeriodicEncodeGhostID(patchB, ghostB_neg);
+                }
                 // For triangle-triangle contact: both triangles have patch IDs. Keeps original order.
                 contactPatchPairs[myID] = encodeType<patchIDPair_t, bodyID_t>(patchA, patchB);
                 break;
             }
             default:
                 // In other sph-sph and sph-anal, for now, we just use geoID as patchIDs. Keeps original order.
-                contactPatchPairs[myID] = encodeType<patchIDPair_t, bodyID_t>(bodyA, bodyB);
+                contactPatchPairs[myID] =
+                    encodeType<patchIDPair_t, bodyID_t>(ghostA ? cylPeriodicEncodeGhostID(bodyA, ghostA_neg) : bodyA,
+                                                        ghostB ? cylPeriodicEncodeGhostID(bodyB, ghostB_neg) : bodyB);
                 break;
         }
     }
@@ -170,6 +326,565 @@ __global__ void markNewPatchPairGroups(patchIDPair_t* sortedPatchPairs, contactP
     }
 }
 
+// Build geomToPatchMap by detecting boundaries of unique (patchPair, contactType) groups in a sorted array.
+// The array is expected to be sorted by contact type, then by patch pairs.
+__global__ void markNewPatchPairGroupsByType(const patchIDPair_t* sortedPatchPairs,
+                                             const contact_t* sortedContactTypes,
+                                             contactPairs_t* isNewGroup,
+                                             size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        if (myID == 0) {
+            isNewGroup[myID] = 0;
+        } else {
+            const bool new_pair = sortedPatchPairs[myID] != sortedPatchPairs[myID - 1];
+            const bool new_type = sortedContactTypes[myID] != sortedContactTypes[myID - 1];
+            isNewGroup[myID] = (new_pair || new_type) ? 1 : 0;
+        }
+    }
+}
+
+__global__ void buildCompositeKeys(const patchIDPair_t* patchPairs,
+                                   const contact_t* contactTypes,
+                                   ulonglong2* keys,
+                                   size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        keys[myID].x = static_cast<unsigned long long>(patchPairs[myID]);
+        keys[myID].y = static_cast<unsigned long long>(contactTypes[myID]);
+    }
+}
+
+__global__ void lineNumbers(contactPairs_t* arr, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        arr[myID] = myID;
+    }
+}
+
+__global__ void markNewCompositeGroups(const ulonglong2* keys, contactPairs_t* isNewGroup, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        if (myID == 0) {
+            isNewGroup[myID] = 0;
+        } else {
+            const ulonglong2 prev = keys[myID - 1];
+            const ulonglong2 curr = keys[myID];
+            isNewGroup[myID] = (prev.x != curr.x || prev.y != curr.y) ? 1 : 0;
+        }
+    }
+}
+
+__global__ void extractContactTypeFromCompositeKeys(const ulonglong2* keys, contact_t* types, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        types[myID] = static_cast<contact_t>(keys[myID].y);
+    }
+}
+
+__global__ void decodeCompositeKeysToPatchContacts(const ulonglong2* keys,
+                                                   bodyID_t* idPatchA,
+                                                   bodyID_t* idPatchB,
+                                                   contact_t* contactTypePatch,
+                                                   size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        patchIDPair_t patchPair = static_cast<patchIDPair_t>(keys[myID].x);
+        idPatchA[myID] = decodeTypeA<patchIDPair_t, bodyID_t>(patchPair);
+        idPatchB[myID] = decodeTypeB<patchIDPair_t, bodyID_t>(patchPair);
+        contactTypePatch[myID] = static_cast<contact_t>(keys[myID].y);
+    }
+}
+
+template <typename T>
+__global__ void gatherByIndex(const T* in, T* out, const contactPairs_t* idx, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        out[myID] = in[idx[myID]];
+    }
+}
+
+// Build packed (groupIndex, primitiveID) keys for unique counting.
+__global__ void buildGroupPrimitiveKeys(const contactPairs_t* groupIndex,
+                                        const bodyID_t* primitiveIDs,
+                                        uint64_t* keys,
+                                        size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const bodyID_t phys_id = primitiveIDs[myID] & deme::CYL_PERIODIC_SPHERE_ID_MASK;
+        keys[myID] = (static_cast<uint64_t>(groupIndex[myID]) << 32) | static_cast<uint64_t>(phys_id);
+    }
+}
+
+// Extract group indices from packed keys (high 32 bits).
+__global__ void extractGroupIndexFromKey(const uint64_t* keys, contactPairs_t* groupIndex, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        groupIndex[myID] = static_cast<contactPairs_t>(keys[myID] >> 32);
+    }
+}
+
+// Scatter run-length counts into dense per-group counters.
+__global__ void scatterGroupCounts(const contactPairs_t* groupIDs,
+                                   const contactPairs_t* counts,
+                                   contactPairs_t* groupCounts,
+                                   size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        groupCounts[groupIDs[myID]] = counts[myID];
+    }
+}
+
+// Determine winner side for each group.
+__global__ void computeGroupWinners(const contact_t* groupTypes,
+                                    const bodyID_t* groupPrimA,
+                                    const bodyID_t* groupPrimB,
+                                    const contactPairs_t* countA,
+                                    const contactPairs_t* countB,
+                                    const bodyID_t* ownerTriMesh,
+                                    const notStupidBool_t* ownerMeshConvex,
+                                    const notStupidBool_t* ownerMeshNeverWinner,
+                                    notStupidBool_t* winnerIsA,
+                                    notStupidBool_t* winnerIsTri,
+                                    notStupidBool_t* forceSingleIsland,
+                                    size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const contact_t ctype = groupTypes[myID];
+        const geoType_t typeA = decodeTypeA<contact_t, geoType_t>(ctype);
+        const geoType_t typeB = decodeTypeB<contact_t, geoType_t>(ctype);
+        const contactPairs_t nA = countA[myID];
+        const contactPairs_t nB = countB[myID];
+        const bool A_is_tri = (typeA == GEO_T_TRIANGLE);
+        const bool B_is_tri = (typeB == GEO_T_TRIANGLE);
+        bool A_convex = false;
+        bool B_convex = false;
+        bool A_never = false;
+        bool B_never = false;
+        if (A_is_tri) {
+            const bodyID_t triA = groupPrimA[myID] & deme::CYL_PERIODIC_SPHERE_ID_MASK;
+            const bodyID_t ownerA = ownerTriMesh[triA];
+            if (ownerA != NULL_BODYID) {
+                A_convex = (ownerMeshConvex[ownerA] != 0);
+                A_never = (ownerMeshNeverWinner[ownerA] != 0);
+            }
+        }
+        if (B_is_tri) {
+            const bodyID_t triB = groupPrimB[myID] & deme::CYL_PERIODIC_SPHERE_ID_MASK;
+            const bodyID_t ownerB = ownerTriMesh[triB];
+            if (ownerB != NULL_BODYID) {
+                B_convex = (ownerMeshConvex[ownerB] != 0);
+                B_never = (ownerMeshNeverWinner[ownerB] != 0);
+            }
+        }
+        const bool single_island = (A_is_tri && B_is_tri && A_convex && B_convex);
+        forceSingleIsland[myID] = single_island ? 1 : 0;
+
+        notStupidBool_t pickA = 0;
+        if (A_never && B_never) {
+            pickA = 0;  // deterministic: prefer B when both are never-winner
+        } else if (A_never && !B_never) {
+            pickA = 0;
+        } else if (B_never && !A_never) {
+            pickA = 1;
+        } else if (nA > nB) {
+            pickA = 1;
+        } else if (nA < nB) {
+            pickA = 0;
+        } else {
+            if (A_is_tri && B_is_tri) {
+                if (A_convex != B_convex) {
+                    pickA = A_convex ? 0 : 1;  // prefer concave if tied
+                } else {
+                    pickA = 0;  // deterministic tie-break: prefer B
+                }
+            } else if (A_is_tri && !B_is_tri) {
+                pickA = 1;
+            } else if (B_is_tri && !A_is_tri) {
+                pickA = 0;
+            } else {
+                pickA = 0;  // deterministic tie-break: prefer B
+            }
+        }
+        winnerIsA[myID] = pickA;
+        if (single_island) {
+            winnerIsTri[myID] = 0;
+        } else {
+            const geoType_t winnerType = (pickA ? typeA : typeB);
+            winnerIsTri[myID] = (winnerType == GEO_T_TRIANGLE) ? 1 : 0;
+        }
+    }
+}
+
+// Select winner primitive and flag if it is a triangle.
+__global__ void selectWinnerPrimitive(const contactPairs_t* groupIndex,
+                                      const bodyID_t* idA,
+                                      const bodyID_t* idB,
+                                      const notStupidBool_t* groupWinnerIsA,
+                                      const notStupidBool_t* groupWinnerIsTri,
+                                      const notStupidBool_t* groupForceSingleIsland,
+                                      bodyID_t* winnerID,
+                                      notStupidBool_t* winnerIsTri,
+                                      size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const contactPairs_t grp = groupIndex[myID];
+        if (groupForceSingleIsland[grp] != 0) {
+            winnerID[myID] = 0;
+            winnerIsTri[myID] = 0;
+            return;
+        }
+        const bool pickA = (groupWinnerIsA[grp] != 0);
+        const bodyID_t raw = pickA ? idA[myID] : idB[myID];
+        winnerID[myID] = raw & deme::CYL_PERIODIC_SPHERE_ID_MASK;
+        winnerIsTri[myID] = groupWinnerIsTri[grp];
+    }
+}
+
+// Build active triangle keys for compacting (groupIndex, triID).
+__global__ void buildActiveTriKeys(const contactPairs_t* groupIndex,
+                                   const bodyID_t* winnerID,
+                                   const notStupidBool_t* winnerIsTri,
+                                   uint64_t* keys,
+                                   notStupidBool_t* flags,
+                                   size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const notStupidBool_t is_tri = winnerIsTri[myID];
+        flags[myID] = is_tri;
+        if (is_tri) {
+            keys[myID] = (static_cast<uint64_t>(groupIndex[myID]) << 32) | static_cast<uint64_t>(winnerID[myID]);
+        } else {
+            keys[myID] = 0;
+        }
+    }
+}
+
+// Initialize labels from active triangle keys (label = triID).
+__global__ void initActiveTriLabels(const uint64_t* keys, bodyID_t* labels, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        labels[myID] = static_cast<bodyID_t>(keys[myID] & 0xffffffffull);
+    }
+}
+
+// Count active triangles per group (atomic add).
+__global__ void countActiveTriPerGroup(const uint64_t* keys, contactPairs_t* groupCounts, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const contactPairs_t grp = static_cast<contactPairs_t>(keys[myID] >> 32);
+        atomicAdd(&groupCounts[grp], (contactPairs_t)1);
+    }
+}
+
+// Sentinel for "not present" in the active-triangle key list.
+// NOTE: contactPairs_t is uint32_t.
+constexpr contactPairs_t DEME_INVALID_ACTIVE_TRI_POS = 0xffffffffu;
+
+// Precompute, for each active triangle (in keys[]), the positions of its 3 edge-neighbors in the same active list.
+// The output is an array of length 3*n, laid out as [nb0, nb1, nb2] per active triangle.
+// If a neighbor is not present (or boundary), the corresponding position is DEME_INVALID_ACTIVE_TRI_POS.
+__global__ void buildActiveTriNeighborPos(const uint64_t* keys,
+                                          const contactPairs_t* groupStart,
+                                          const contactPairs_t* groupCount,
+                                          const bodyID_t* triNeighborIndex,
+                                          const bodyID_t* triNeighbor1,
+                                          const bodyID_t* triNeighbor2,
+                                          const bodyID_t* triNeighbor3,
+                                          contactPairs_t* outNeighborPos,
+                                          size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const uint64_t key = keys[myID];
+        const contactPairs_t grp = static_cast<contactPairs_t>(key >> 32);
+        const bodyID_t triID = static_cast<bodyID_t>(key & 0xffffffffull);
+        const contactPairs_t start = groupStart[grp];
+        const contactPairs_t count = groupCount[grp];
+
+        // Default: no neighbors.
+        outNeighborPos[3 * myID + 0] = DEME_INVALID_ACTIVE_TRI_POS;
+        outNeighborPos[3 * myID + 1] = DEME_INVALID_ACTIVE_TRI_POS;
+        outNeighborPos[3 * myID + 2] = DEME_INVALID_ACTIVE_TRI_POS;
+
+        const bodyID_t nb_idx = triNeighborIndex[triID];
+        if (nb_idx == NULL_BODYID || count == 0) {
+            return;
+        }
+
+        const bodyID_t nbs[3] = {triNeighbor1[nb_idx], triNeighbor2[nb_idx], triNeighbor3[nb_idx]};
+        for (int e = 0; e < 3; ++e) {
+            const bodyID_t nb = nbs[e];
+            if (nb == NULL_BODYID) {
+                continue;
+            }
+            const uint64_t target = (static_cast<uint64_t>(grp) << 32) | static_cast<uint64_t>(nb);
+            contactPairs_t left = 0;
+            contactPairs_t right = count;
+            while (left < right) {
+                contactPairs_t mid = left + (right - left) / 2;
+                const uint64_t mid_key = keys[start + mid];
+                if (mid_key < target) {
+                    left = mid + 1;
+                } else {
+                    right = mid;
+                }
+            }
+            if (left < count && keys[start + left] == target) {
+                outNeighborPos[3 * myID + e] = start + left;
+            }
+        }
+    }
+}
+
+// Label propagation for active triangles within each group.
+__global__ void propagateActiveTriLabels(const uint64_t* keys,
+                                         const bodyID_t* labelsIn,
+                                         bodyID_t* labelsOut,
+                                         const contactPairs_t* groupStart,
+                                         const contactPairs_t* groupCount,
+                                         const bodyID_t* triNeighborIndex,
+                                         const bodyID_t* triNeighbor1,
+                                         const bodyID_t* triNeighbor2,
+                                         const bodyID_t* triNeighbor3,
+                                         size_t* changed,
+                                         size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const uint64_t key = keys[myID];
+        const contactPairs_t grp = static_cast<contactPairs_t>(key >> 32);
+        const bodyID_t triID = static_cast<bodyID_t>(key & 0xffffffffull);
+        const contactPairs_t start = groupStart[grp];
+        const contactPairs_t count = groupCount[grp];
+        bodyID_t label = labelsIn[myID];
+
+        const bodyID_t nb_idx = triNeighborIndex[triID];
+        if (nb_idx == NULL_BODYID) {
+            labelsOut[myID] = label;
+            return;
+        }
+        bodyID_t nbs[3] = {triNeighbor1[nb_idx], triNeighbor2[nb_idx], triNeighbor3[nb_idx]};
+        for (int e = 0; e < 3; ++e) {
+            const bodyID_t nb = nbs[e];
+            if (nb == NULL_BODYID || count == 0) {
+                continue;
+            }
+            const uint64_t target = (static_cast<uint64_t>(grp) << 32) | static_cast<uint64_t>(nb);
+            contactPairs_t left = 0;
+            contactPairs_t right = count;
+            while (left < right) {
+                contactPairs_t mid = left + (right - left) / 2;
+                const uint64_t mid_key = keys[start + mid];
+                if (mid_key < target) {
+                    left = mid + 1;
+                } else {
+                    right = mid;
+                }
+            }
+            if (left < count) {
+                const uint64_t found = keys[start + left];
+                if (found == target) {
+                    const bodyID_t nb_label = labelsIn[start + left];
+                    if (nb_label < label) {
+                        label = nb_label;
+                    }
+                }
+            }
+        }
+        labelsOut[myID] = label;
+        if (label != labelsIn[myID]) {
+            *changed = 1;
+        }
+    }
+}
+
+// Label propagation using precomputed neighbor positions (avoids per-iteration binary searches).
+// If changedFlag is non-null, it will be set to 1 if any label changes in this iteration.
+__global__ void propagateActiveTriLabelsFromNeighborPos(const bodyID_t* labelsIn,
+                                                        bodyID_t* labelsOut,
+                                                        const contactPairs_t* neighborPos,
+                                                        contactPairs_t* changedFlag,
+                                                        size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // Block-local change flag to reduce global atomics.
+    __shared__ int blockChanged;
+    if (threadIdx.x == 0) {
+        blockChanged = 0;
+    }
+    __syncthreads();
+
+    if (myID < n) {
+        const bodyID_t oldLabel = labelsIn[myID];
+        bodyID_t label = oldLabel;
+        const contactPairs_t p0 = neighborPos[3 * myID + 0];
+        const contactPairs_t p1 = neighborPos[3 * myID + 1];
+        const contactPairs_t p2 = neighborPos[3 * myID + 2];
+
+        if (p0 != DEME_INVALID_ACTIVE_TRI_POS) {
+            const bodyID_t nb_label = labelsIn[p0];
+            if (nb_label < label) {
+                label = nb_label;
+            }
+        }
+        if (p1 != DEME_INVALID_ACTIVE_TRI_POS) {
+            const bodyID_t nb_label = labelsIn[p1];
+            if (nb_label < label) {
+                label = nb_label;
+            }
+        }
+        if (p2 != DEME_INVALID_ACTIVE_TRI_POS) {
+            const bodyID_t nb_label = labelsIn[p2];
+            if (nb_label < label) {
+                label = nb_label;
+            }
+        }
+
+        labelsOut[myID] = label;
+        if (changedFlag != nullptr && label != oldLabel) {
+            atomicExch(&blockChanged, 1);
+        }
+    }
+
+    __syncthreads();
+    if (changedFlag != nullptr && threadIdx.x == 0 && blockChanged) {
+        atomicExch(changedFlag, (contactPairs_t)1);
+    }
+}
+
+// Assign per-contact island labels using winner primitive and active triangle labels.
+__global__ void assignContactIslandLabel(const contactPairs_t* groupIndex,
+                                         const bodyID_t* winnerID,
+                                         const notStupidBool_t* winnerIsTri,
+                                         const uint64_t* activeKeys,
+                                         const bodyID_t* activeLabels,
+                                         const contactPairs_t* groupStart,
+                                         const contactPairs_t* groupCount,
+                                         bodyID_t* outLabels,
+                                         size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const bodyID_t prim = winnerID[myID];
+        if (winnerIsTri[myID] == 0) {
+            outLabels[myID] = prim;
+            return;
+        }
+        const contactPairs_t grp = groupIndex[myID];
+        const contactPairs_t start = groupStart[grp];
+        const contactPairs_t count = groupCount[grp];
+        if (count == 0) {
+            outLabels[myID] = prim;
+            return;
+        }
+        const uint64_t target = (static_cast<uint64_t>(grp) << 32) | static_cast<uint64_t>(prim);
+        contactPairs_t left = 0;
+        contactPairs_t right = count;
+        while (left < right) {
+            contactPairs_t mid = left + (right - left) / 2;
+            const uint64_t mid_key = activeKeys[start + mid];
+            if (mid_key < target) {
+                left = mid + 1;
+            } else {
+                right = mid;
+            }
+        }
+        if (left < count && activeKeys[start + left] == target) {
+            outLabels[myID] = activeLabels[start + left];
+        } else {
+            outLabels[myID] = prim;
+        }
+    }
+}
+
+// Simple copy kernel for bodyID arrays.
+__global__ void copyBodyIDArray(const bodyID_t* in, bodyID_t* out, size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        out[myID] = in[myID];
+    }
+}
+
+// Build composite key parts (contactType + patchA, patchB + label) for island grouping.
+__global__ void buildIslandCompositeKeyParts(const patchIDPair_t* patchPairs,
+                                             const contact_t* contactTypes,
+                                             const bodyID_t* labels,
+                                             uint64_t* key_hi,
+                                             uint64_t* key_lo,
+                                             size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const patchIDPair_t pair = patchPairs[myID];
+        const uint64_t hi = static_cast<uint64_t>(pair >> 32);
+        const uint64_t lo = static_cast<uint64_t>(pair & 0xffffffffull);
+        // key_hi: contactType + patchA (primary key)
+        key_hi[myID] = (static_cast<uint64_t>(contactTypes[myID]) << 32) | hi;
+        // key_lo: patchB + island label (secondary key)
+        key_lo[myID] = (lo << 32) | static_cast<uint64_t>(labels[myID]);
+    }
+}
+
+// Mark new composite groups for sorted (key_hi, key_lo) arrays.
+__global__ void markNewCompositeGroups64(const uint64_t* key_hi,
+                                         const uint64_t* key_lo,
+                                         contactPairs_t* isNewGroup,
+                                         size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        if (myID == 0) {
+            isNewGroup[myID] = 0;
+        } else {
+            const bool new_hi = key_hi[myID] != key_hi[myID - 1];
+            const bool new_lo = key_lo[myID] != key_lo[myID - 1];
+            isNewGroup[myID] = (new_hi || new_lo) ? 1 : 0;
+        }
+    }
+}
+
+// Build a sortable 64-bit key from (idB, contactType, persistency_preference).
+// - High 32 bits: idB (so contacts with the same idB group together)
+// - Low bits: contactType then persistency (so within a duplicate group, the preferred contact comes first)
+//
+// If prefer_persistent is true, persistent contacts (CONTACT_IS_PERSISTENT) sort before non-persistent ones.
+__global__ void buildKeyBTypePersist(const bodyID_t* idB,
+                                     const contact_t* contactType,
+                                     const notStupidBool_t* persistency,
+                                     unsigned long long* keys,
+                                     size_t n,
+                                     bool prefer_persistent) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const unsigned long long high = (static_cast<unsigned long long>(idB[myID]) << 32);
+        const unsigned long long type_part = (static_cast<unsigned long long>(contactType[myID]) << 1);
+        const unsigned long long persist_part =
+            prefer_persistent ? static_cast<unsigned long long>(persistency[myID] == CONTACT_NOT_PERSISTENT) : 0ull;
+        keys[myID] = high | type_part | persist_part;
+    }
+}
+
+// Mark (idA, idB, contactType) duplicates in a lexicographically sorted contact list.
+// retain_flags[i] is set to 1 if this row should be kept, 0 if it's a duplicate of the previous row.
+__global__ void markUniqueTriples(const bodyID_t* idA,
+                                  const bodyID_t* idB,
+                                  const contact_t* contactType,
+                                  notStupidBool_t* retain_flags,
+                                  size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        if (myID == 0) {
+            retain_flags[myID] = (notStupidBool_t)1;
+            return;
+        }
+        const bool is_dup = (idA[myID] == idA[myID - 1]) && (idB[myID] == idB[myID - 1]) &&
+                            (contactType[myID] == contactType[myID - 1]);
+        retain_flags[myID] = is_dup ? (notStupidBool_t)0 : (notStupidBool_t)1;
+    }
+}
+
+__global__ void setFirstFlagToOne(contactPairs_t* flags, size_t n) {
+    if (blockIdx.x == 0 && threadIdx.x == 0 && n > 0) {
+        flags[0] = 1;
+    }
+}
+
 // Set NULL_MAPPING_PARTNER for contacts of a specific type segment.
 // Used when current step has contacts of this type but previous step does not.
 //
@@ -201,8 +916,10 @@ __global__ void setNullMappingForType(contactPairs_t* contactMapping,
 //   prev_count: Number of contacts of this type in previous step
 __global__ void buildPatchContactMappingForType(bodyID_t* curr_idPatchA,
                                                 bodyID_t* curr_idPatchB,
+                                                bodyID_t* curr_patchIsland,
                                                 bodyID_t* prev_idPatchA,
                                                 bodyID_t* prev_idPatchB,
+                                                bodyID_t* prev_patchIsland,
                                                 contactPairs_t* contactMapping,
                                                 contactPairs_t curr_start,
                                                 contactPairs_t curr_count,
@@ -215,6 +932,7 @@ __global__ void buildPatchContactMappingForType(bodyID_t* curr_idPatchA,
 
         bodyID_t curr_A = curr_idPatchA[curr_idx];
         bodyID_t curr_B = curr_idPatchB[curr_idx];
+        bodyID_t curr_L = curr_patchIsland[curr_idx];
 
         // Default: no match found
         contactPairs_t my_partner = NULL_MAPPING_PARTNER;
@@ -229,8 +947,9 @@ __global__ void buildPatchContactMappingForType(bodyID_t* curr_idPatchA,
             bodyID_t prev_A = prev_idPatchA[prev_idx];
             bodyID_t prev_B = prev_idPatchB[prev_idx];
 
-            // Compare (A, B) pairs lexicographically
-            if (prev_A < curr_A || (prev_A == curr_A && prev_B < curr_B)) {
+            // Compare (A, B, label) lexicographically
+            if (prev_A < curr_A ||
+                (prev_A == curr_A && (prev_B < curr_B || (prev_B == curr_B && prev_patchIsland[prev_idx] < curr_L)))) {
                 left = mid + 1;
             } else {
                 right = mid;
@@ -242,7 +961,8 @@ __global__ void buildPatchContactMappingForType(bodyID_t* curr_idPatchA,
             contactPairs_t prev_idx = prev_start + left;
             bodyID_t prev_A = prev_idPatchA[prev_idx];
             bodyID_t prev_B = prev_idPatchB[prev_idx];
-            if (prev_A == curr_A && prev_B == curr_B) {
+            bodyID_t prev_L = prev_patchIsland[prev_idx];
+            if (prev_A == curr_A && prev_B == curr_B && prev_L == curr_L) {
                 my_partner = prev_idx;
             }
         }
@@ -256,9 +976,11 @@ __global__ void buildPatchContactMappingForType(bodyID_t* curr_idPatchA,
 // For each current contact, we use binary search to find the matching contact in the previous array.
 __global__ void buildPatchContactMapping(bodyID_t* curr_idPatchA,
                                          bodyID_t* curr_idPatchB,
+                                         bodyID_t* curr_patchIsland,
                                          contact_t* curr_contactTypePatch,
                                          bodyID_t* prev_idPatchA,
                                          bodyID_t* prev_idPatchB,
+                                         bodyID_t* prev_patchIsland,
                                          contact_t* previous_contactTypePatch,
                                          contactPairs_t* contactMapping,
                                          size_t numCurrContacts,
@@ -267,6 +989,7 @@ __global__ void buildPatchContactMapping(bodyID_t* curr_idPatchA,
     if (myID < numCurrContacts) {
         bodyID_t curr_A = curr_idPatchA[myID];
         bodyID_t curr_B = curr_idPatchB[myID];
+        bodyID_t curr_L = curr_patchIsland[myID];
         contact_t curr_type = curr_contactTypePatch[myID];
 
         // Default: no match found
@@ -302,19 +1025,19 @@ __global__ void buildPatchContactMapping(bodyID_t* curr_idPatchA,
         }
         size_t type_end = left;
 
-        // Within this type segment, use binary search to find the matching A/B pair
-        // The segment is sorted by the combined patch ID pair (A in high bits, B in low bits)
-        // The encoding ensures that (smaller_A, larger_B) pattern creates a sortable value
+        // Within this type segment, use binary search to find the matching A/B/label triple
+        // The segment is sorted by patch pair then island label.
         left = type_start;
         right = type_end;
         while (left < right) {
             size_t mid = left + (right - left) / 2;
             bodyID_t prev_A = prev_idPatchA[mid];
             bodyID_t prev_B = prev_idPatchB[mid];
+            bodyID_t prev_L = prev_patchIsland[mid];
 
             // Compare (A, B) pairs lexicographically
             // Since they're sorted by patch ID pair where smaller ID is in high bits
-            if (prev_A < curr_A || (prev_A == curr_A && prev_B < curr_B)) {
+            if (prev_A < curr_A || (prev_A == curr_A && (prev_B < curr_B || (prev_B == curr_B && prev_L < curr_L)))) {
                 left = mid + 1;
             } else {
                 right = mid;
@@ -325,12 +1048,29 @@ __global__ void buildPatchContactMapping(bodyID_t* curr_idPatchA,
         if (left < type_end) {
             bodyID_t prev_A = prev_idPatchA[left];
             bodyID_t prev_B = prev_idPatchB[left];
-            if (prev_A == curr_A && prev_B == curr_B) {
+            bodyID_t prev_L = prev_patchIsland[left];
+            if (prev_A == curr_A && prev_B == curr_B && prev_L == curr_L) {
                 my_partner = left;
             }
         }
 
         contactMapping[myID] = my_partner;
+    }
+}
+
+// If both sides are cylindrical-periodic ghosts, drop history.
+// Single-sided ghost contacts can legitimately persist across steps and should keep history.
+__global__ void resetMappingForGhostContacts(contactPairs_t* contactMapping,
+                                             const bodyID_t* idPatchA,
+                                             const bodyID_t* idPatchB,
+                                             size_t n) {
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const bool ghostA = (idPatchA[myID] & CYL_PERIODIC_GHOST_FLAG) != 0;
+        const bool ghostB = (idPatchB[myID] & CYL_PERIODIC_GHOST_FLAG) != 0;
+        if (ghostA && ghostB) {
+            contactMapping[myID] = NULL_MAPPING_PARTNER;
+        }
     }
 }
 

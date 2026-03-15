@@ -15,10 +15,210 @@
 #include <thread>
 #include <chrono>
 #include <cstring>
+#include <cmath>
 #include <limits>
 #include <algorithm>
+#include <filesystem>
+#include <cctype>
+#include <unordered_set>
 
 namespace deme {
+
+namespace {
+
+inline double overlapDuration(double a0, double a1, double b0, double b1) {
+    const double lo = std::max(a0, b0);
+    const double hi = std::min(a1, b1);
+    return (hi > lo) ? (hi - lo) : 0.0;
+}
+
+inline bool hasPendingWear(const std::vector<float>& pending_depth) {
+    for (float d : pending_depth) {
+        if (d > 0.f && std::isfinite(d)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+inline bool computeClumpUnionMassPropsApprox(const DEMClumpTemplate& clump,
+                                             double& volume,
+                                             float3& center,
+                                             float3& inertia) {
+    volume = 0.0;
+    center = make_float3(0, 0, 0);
+    inertia = make_float3(0, 0, 0);
+    if (clump.nComp == 0 || clump.radii.size() != clump.nComp || clump.relPos.size() != clump.nComp) {
+        return false;
+    }
+
+    float3 bb_min = make_float3(std::numeric_limits<float>::infinity());
+    float3 bb_max = make_float3(-std::numeric_limits<float>::infinity());
+    for (size_t i = 0; i < clump.nComp; i++) {
+        const float r = clump.radii[i];
+        if (!(r > DEME_TINY_FLOAT) || !std::isfinite(r)) {
+            continue;
+        }
+        const float3 c = clump.relPos[i];
+        bb_min.x = std::min(bb_min.x, c.x - r);
+        bb_min.y = std::min(bb_min.y, c.y - r);
+        bb_min.z = std::min(bb_min.z, c.z - r);
+        bb_max.x = std::max(bb_max.x, c.x + r);
+        bb_max.y = std::max(bb_max.y, c.y + r);
+        bb_max.z = std::max(bb_max.z, c.z + r);
+    }
+
+    const double lx = static_cast<double>(bb_max.x) - bb_min.x;
+    const double ly = static_cast<double>(bb_max.y) - bb_min.y;
+    const double lz = static_cast<double>(bb_max.z) - bb_min.z;
+    if (!(lx > 0.0) || !(ly > 0.0) || !(lz > 0.0) || !std::isfinite(lx) || !std::isfinite(ly) || !std::isfinite(lz)) {
+        return false;
+    }
+
+    const double bbox_vol = lx * ly * lz;
+
+    auto radical_inverse = [](uint64_t n, uint32_t base) {
+        double inv_base = 1.0 / static_cast<double>(base);
+        double inv_bi = inv_base;
+        double val = 0.0;
+        while (n) {
+            const uint32_t d = static_cast<uint32_t>(n % base);
+            val += static_cast<double>(d) * inv_bi;
+            n /= base;
+            inv_bi *= inv_base;
+        }
+        return val;
+    };
+
+    struct RunningStat {
+        double mean = 0.0;
+        double m2 = 0.0;
+        size_t n = 0;
+        void add(double x) {
+            n++;
+            const double d = x - mean;
+            mean += d / static_cast<double>(n);
+            const double d2 = x - mean;
+            m2 += d * d2;
+        }
+        double var() const { return (n > 1) ? (m2 / static_cast<double>(n - 1)) : 0.0; }
+    };
+
+    // E[I], E[I x], E[I y], E[I z], E[I xx], E[I yy], E[I zz], E[I xy], E[I yz], E[I zx]
+    std::array<RunningStat, 10> stats;
+    constexpr double z99 = 2.576;            // 99% confidence interval factor
+    constexpr double target_rel_err = 0.01;  // 1% target relative error
+    constexpr size_t min_samples = 100000;
+    constexpr size_t max_samples = 4000000;
+    constexpr size_t check_stride = 10000;
+
+    bool converged = false;
+    size_t n_total = 0;
+    for (size_t i = 0; i < max_samples; i++) {
+        const uint64_t idx = static_cast<uint64_t>(i + 1);
+        const double u = radical_inverse(idx, 2);
+        const double v = radical_inverse(idx, 3);
+        const double w = radical_inverse(idx, 5);
+        const double x = static_cast<double>(bb_min.x) + u * lx;
+        const double y = static_cast<double>(bb_min.y) + v * ly;
+        const double z = static_cast<double>(bb_min.z) + w * lz;
+
+        bool inside = false;
+        for (size_t s = 0; s < clump.nComp; s++) {
+            const double dx = x - clump.relPos[s].x;
+            const double dy = y - clump.relPos[s].y;
+            const double dz = z - clump.relPos[s].z;
+            const double rr = static_cast<double>(clump.radii[s]) * clump.radii[s];
+            if (dx * dx + dy * dy + dz * dz <= rr) {
+                inside = true;
+                break;
+            }
+        }
+
+        const double I = inside ? 1.0 : 0.0;
+        stats[0].add(I);
+        stats[1].add(I * x);
+        stats[2].add(I * y);
+        stats[3].add(I * z);
+        stats[4].add(I * x * x);
+        stats[5].add(I * y * y);
+        stats[6].add(I * z * z);
+        stats[7].add(I * x * y);
+        stats[8].add(I * y * z);
+        stats[9].add(I * z * x);
+        n_total++;
+
+        if (n_total < min_samples || (n_total % check_stride) != 0) {
+            continue;
+        }
+        const double mean_I = stats[0].mean;
+        if (!(mean_I > 1e-14)) {
+            continue;
+        }
+        const double stderr_I = std::sqrt(std::max(0.0, stats[0].var()) / static_cast<double>(n_total));
+        const double rel_err_I = z99 * stderr_I / mean_I;
+
+        const double m2_sum = stats[4].mean + stats[5].mean + stats[6].mean;
+        double rel_err_m2 = 0.0;
+        if (m2_sum > 1e-14) {
+            const double var_sum =
+                std::max(0.0, stats[4].var()) + std::max(0.0, stats[5].var()) + std::max(0.0, stats[6].var());
+            const double stderr_sum = std::sqrt(var_sum / static_cast<double>(n_total));
+            rel_err_m2 = z99 * stderr_sum / m2_sum;
+        }
+
+        if (rel_err_I <= target_rel_err && rel_err_m2 <= target_rel_err) {
+            converged = true;
+            break;
+        }
+    }
+
+    const double inside_frac = stats[0].mean;
+    if (!(inside_frac > 0.0) || !std::isfinite(inside_frac)) {
+        return false;
+    }
+    volume = bbox_vol * inside_frac;
+    if (!(volume > 0.0) || !std::isfinite(volume)) {
+        return false;
+    }
+
+    const double cx = stats[1].mean / inside_frac;
+    const double cy = stats[2].mean / inside_frac;
+    const double cz = stats[3].mean / inside_frac;
+    center = make_float3(static_cast<float>(cx), static_cast<float>(cy), static_cast<float>(cz));
+
+    const double int_xx = bbox_vol * stats[4].mean;
+    const double int_yy = bbox_vol * stats[5].mean;
+    const double int_zz = bbox_vol * stats[6].mean;
+    const double int_xy = bbox_vol * stats[7].mean;
+    const double int_yz = bbox_vol * stats[8].mean;
+    const double int_zx = bbox_vol * stats[9].mean;
+
+    double Ixx = int_yy + int_zz;
+    double Iyy = int_xx + int_zz;
+    double Izz = int_xx + int_yy;
+    double Ixy = -int_xy;
+    double Iyz = -int_yz;
+    double Izx = -int_zx;
+
+    Ixx -= volume * (cy * cy + cz * cz);
+    Iyy -= volume * (cx * cx + cz * cz);
+    Izz -= volume * (cx * cx + cy * cy);
+    Ixy += volume * cx * cy;
+    Iyz += volume * cy * cz;
+    Izx += volume * cz * cx;
+
+    inertia = make_float3(static_cast<float>(Ixx), static_cast<float>(Iyy), static_cast<float>(Izz));
+    if (!converged) {
+        DEME_WARNING(
+            "Clump union mass/MOI estimator hit sample cap (%zu) before 99%%-confidence 1%%-error target; using best "
+            "estimate.",
+            n_total);
+    }
+    return std::isfinite(Ixx) && std::isfinite(Iyy) && std::isfinite(Izz) && Ixx > 0.0 && Iyy > 0.0 && Izz > 0.0;
+}
+
+}  // namespace
 
 DEMSolver::DEMSolver(unsigned int nGPUs) {
     dTkT_InteractionManager = new ThreadManager();
@@ -54,6 +254,7 @@ DEMSolver::DEMSolver(unsigned int nGPUs) {
 }
 
 DEMSolver::~DEMSolver() {
+    WaitForPendingOutput();
     if (sys_initialized)
         DoDynamicsThenSync(0.0);
     delete kT;
@@ -158,9 +359,19 @@ void DEMSolver::SetMeshOutputFormat(const std::string& format) {
         case ("OBJ"_):
             m_mesh_out_format = MESH_FORMAT::OBJ;
             break;
+        case ("STL"_):
+            m_mesh_out_format = MESH_FORMAT::STL;
+            break;
+        case ("PLY"_):
+            m_mesh_out_format = MESH_FORMAT::PLY;
+            break;
         default:
             DEME_ERROR("Instruction %s is unknown in SetMeshOutputFormat call.", format.c_str());
     }
+}
+
+void DEMSolver::EnableMeshPatchColorOutput(bool enable) {
+    m_mesh_out_ply_patch_colors = enable;
 }
 
 void DEMSolver::SetOutputContent(const std::vector<std::string>& content) {
@@ -317,8 +528,8 @@ std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
 
     std::vector<bodyID_t> clumps_in_cnt;
     for (size_t i = 0; i < dT->getNumContacts(); i++) {
-        auto idA = dT->idPatchA[i];
-        auto idB = dT->idPatchB[i];
+        auto idA = dT->idPatchA[i] & CYL_PERIODIC_SPHERE_ID_MASK;
+        auto idB = dT->idPatchB[i] & CYL_PERIODIC_SPHERE_ID_MASK;
         auto cnt_type = dT->contactTypePatch[i];
         // Using decode to get the A and B type
         auto typeA = decodeTypeA(cnt_type);
@@ -483,6 +694,9 @@ std::shared_ptr<ContactInfoContainer> DEMSolver::GetContactDetailedInfo(float fo
 std::vector<float3> DEMSolver::GetOwnerPosition(bodyID_t ownerID, bodyID_t n) const {
     return dT->getOwnerPos(ownerID, n);
 }
+std::vector<float3> DEMSolver::GetClumpPositionsHandover() const {
+    return dT->getOwnerPos(0, nOwnerClumps);
+}
 std::vector<float3> DEMSolver::GetOwnerAngVel(bodyID_t ownerID, bodyID_t n) const {
     return dT->getOwnerAngVel(ownerID, n);
 }
@@ -500,6 +714,270 @@ std::vector<float3> DEMSolver::GetOwnerAngAcc(bodyID_t ownerID, bodyID_t n) cons
 }
 std::vector<unsigned int> DEMSolver::GetOwnerFamily(bodyID_t ownerID, bodyID_t n) const {
     return dT->getOwnerFamily(ownerID, n);
+}
+
+std::vector<int> DEMSolver::GetOwnerCylWrapK(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerCylWrapK(ownerID, n);
+}
+
+std::vector<int> DEMSolver::GetOwnerCylWrapOffset(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerCylWrapOffset(ownerID, n);
+}
+
+std::vector<float> DEMSolver::GetOwnerBoundRadius(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerBoundRadius(ownerID, n);
+}
+
+std::vector<unsigned int> DEMSolver::GetOwnerCylGhostActive(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerCylGhostActive(ownerID, n);
+}
+
+std::vector<unsigned int> DEMSolver::GetOwnerCylSkipCount(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerCylSkipCount(ownerID, n);
+}
+
+std::vector<unsigned int> DEMSolver::GetOwnerCylSkipPotentialCount(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerCylSkipPotentialCount(ownerID, n);
+}
+
+void DEMSolver::GetOwnerContactGhostCounts(std::vector<int>& real_cnt,
+                                           std::vector<int>& ghost_pos_cnt,
+                                           std::vector<int>& ghost_neg_cnt) const {
+    dT->getOwnerContactGhostCounts(real_cnt, ghost_pos_cnt, ghost_neg_cnt);
+}
+
+void DEMSolver::RequestContactUpdate() {
+    assertSysInit("RequestContactUpdate");
+    dT->announceCritical();
+}
+
+void DEMSolver::SetTrianglePVTrackingOwners(const std::vector<bodyID_t>& mesh_owner_ids) {
+    assertSysInit("SetTrianglePVTrackingOwners");
+    m_user_tri_pv_tracking_owners = mesh_owner_ids;
+    refreshTrianglePVTrackingOwners();
+}
+
+void DEMSolver::DisableTrianglePVTracking() {
+    assertSysInit("DisableTrianglePVTracking");
+    m_user_tri_pv_tracking_owners.clear();
+    refreshTrianglePVTrackingOwners();
+}
+
+bool DEMSolver::GetTrackedOwnerTrianglePV(bodyID_t ownerID,
+                                          std::vector<float>& avgP,
+                                          std::vector<float>& avgV,
+                                          std::vector<float>& avgPV,
+                                          bool reset_window) {
+    assertSysInit("GetTrackedOwnerTrianglePV");
+    const bool ok = dT->getTrackedOwnerTrianglePV(ownerID, avgP, avgV, avgPV, reset_window);
+    if (!ok) {
+        return false;
+    }
+    // Wear consumes and resets the tracking window inside DoDynamics; serve the last cached window for display queries.
+    if (!reset_window && dT->triPVWindowSteps == 0) {
+        auto it = m_last_tri_pv_snapshot.find(ownerID);
+        if (it != m_last_tri_pv_snapshot.end()) {
+            avgP = it->second.avgP;
+            avgV = it->second.avgV;
+            avgPV = it->second.avgPV;
+        }
+    }
+    return true;
+}
+
+void DEMSolver::EnableMeshWearModel(bodyID_t ownerID,
+                                    double wear_rate,
+                                    double update_interval,
+                                    double start_time,
+                                    double end_time,
+                                    float normal_sign) {
+    assertSysInit("EnableMeshWearModel");
+    if (ownerID >= nOwnerBodies) {
+        DEME_ERROR("Owner ID %zu is out of range [0, %zu).", (size_t)ownerID, (size_t)nOwnerBodies);
+    }
+    if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
+        DEME_ERROR("Owner ID %zu is not a mesh owner. Wear model supports mesh owners only.", (size_t)ownerID);
+    }
+    if (!(std::isfinite(wear_rate) && wear_rate >= 0.0)) {
+        DEME_ERROR("Wear rate must be finite and non-negative (got %.9g).", wear_rate);
+    }
+    if (!(std::isfinite(update_interval) && update_interval > 0.0)) {
+        DEME_ERROR("Wear update interval must be finite and > 0 (got %.9g).", update_interval);
+    }
+    const double min_interval = static_cast<double>(dT->simParams->dyn.h);
+    if (update_interval + 1e-15 < min_interval) {
+        DEME_ERROR("Wear update interval %.9g is smaller than current solver step %.9g.", update_interval,
+                   min_interval);
+    }
+    if (!(std::isfinite(start_time) && start_time >= 0.0)) {
+        DEME_ERROR("Wear start time must be finite and >= 0 (got %.9g).", start_time);
+    }
+    if (std::isfinite(end_time) && end_time >= 0.0 && !(end_time > start_time)) {
+        DEME_ERROR("Wear end time %.9g must be > start time %.9g.", end_time, start_time);
+    }
+    if (!std::isfinite(normal_sign) || std::abs(normal_sign) <= DEME_TINY_FLOAT) {
+        DEME_ERROR("Wear normal_sign must be finite and non-zero (got %.9g).", (double)normal_sign);
+    }
+
+    size_t tri_start = 0;
+    size_t tri_count = 0;
+    if (!findOwnerTriangleRange(ownerID, tri_start, tri_count)) {
+        DEME_ERROR("Cannot determine triangle range for mesh owner %zu.", (size_t)ownerID);
+    }
+    auto mesh_it = m_owner_mesh_map.find(ownerID);
+    if (mesh_it == m_owner_mesh_map.end()) {
+        DEME_ERROR("Owner ID %zu is not a mesh owner.", (size_t)ownerID);
+    }
+    auto& mesh = m_meshes.at(mesh_it->second);
+    const auto& faces = mesh->GetIndicesVertexes();
+    if (faces.size() != tri_count) {
+        DEME_ERROR("Wear model triangle count mismatch for owner %zu (range=%zu, mesh=%zu).", (size_t)ownerID,
+                   tri_count, faces.size());
+    }
+    const auto& vertices = mesh->GetCoordsVertices();
+    if (vertices.empty()) {
+        DEME_ERROR("Mesh owner %zu has no vertices; wear model cannot be enabled.", (size_t)ownerID);
+    }
+
+    MeshWearModelState state;
+    state.wear_rate = wear_rate;
+    state.update_interval = update_interval;
+    state.start_time = start_time;
+    state.end_time = end_time;
+    state.normal_sign = (normal_sign >= 0.f) ? 1.f : -1.f;
+    state.tri_start = tri_start;
+    state.tri_count = tri_count;
+    state.pending_time = 0.0;
+    state.pending_depth.assign(tri_count, 0.f);
+    {
+        const double eps = computeVertexQuantEps(vertices);
+        state.vertex_to_canon = buildCanonicalVertexMap(vertices, eps);
+        if (state.vertex_to_canon.size() != vertices.size()) {
+            DEME_ERROR("Failed to build canonical vertex map for wear model owner %zu.", (size_t)ownerID);
+        }
+        size_t max_group = 0;
+        for (size_t g : state.vertex_to_canon) {
+            max_group = std::max(max_group, g);
+        }
+        state.n_canon_vertices = max_group + 1;
+    }
+    {
+        constexpr double kWearCapFractionOfMedianEdge = 2.0;
+        state.max_depth_fraction_of_median_edge = static_cast<float>(kWearCapFractionOfMedianEdge);
+        state.ref_tri_normals.assign(tri_count, make_float3(0.f));
+        auto cross3 = [](const float3& a, const float3& b) {
+            return make_float3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+        };
+        std::vector<float> edge_lengths;
+        edge_lengths.reserve(tri_count * 3);
+        double sum_edge_len = 0.0;
+        size_t n_edges = 0;
+        for (size_t tri = 0; tri < tri_count; tri++) {
+            const int3& f = faces[tri];
+            if (f.x < 0 || f.y < 0 || f.z < 0) {
+                continue;
+            }
+            const size_t i0 = static_cast<size_t>(f.x);
+            const size_t i1 = static_cast<size_t>(f.y);
+            const size_t i2 = static_cast<size_t>(f.z);
+            if (i0 >= vertices.size() || i1 >= vertices.size() || i2 >= vertices.size()) {
+                continue;
+            }
+            const float3 v0 = vertices[i0];
+            const float3 v1 = vertices[i1];
+            const float3 v2 = vertices[i2];
+            const float3 n_raw = cross3(v1 - v0, v2 - v0);
+            const float n_len = length(n_raw);
+            if (n_len > DEME_TINY_FLOAT && std::isfinite(n_len)) {
+                state.ref_tri_normals[tri] = n_raw / n_len;
+            }
+            const float e01 = length(v1 - v0);
+            const float e12 = length(v2 - v1);
+            const float e20 = length(v0 - v2);
+            if (e01 > DEME_TINY_FLOAT && std::isfinite(e01)) {
+                edge_lengths.push_back(e01);
+            }
+            if (e12 > DEME_TINY_FLOAT && std::isfinite(e12)) {
+                edge_lengths.push_back(e12);
+            }
+            if (e20 > DEME_TINY_FLOAT && std::isfinite(e20)) {
+                edge_lengths.push_back(e20);
+            }
+            sum_edge_len += static_cast<double>(e01 + e12 + e20);
+            n_edges += 3;
+        }
+        double median_edge = 0.0;
+        if (!edge_lengths.empty()) {
+            const size_t n = edge_lengths.size();
+            const size_t mid = n / 2;
+            auto mid_it = edge_lengths.begin() + mid;
+            std::nth_element(edge_lengths.begin(), mid_it, edge_lengths.end());
+            median_edge = static_cast<double>(*mid_it);
+            if (n % 2 == 0) {
+                const auto max_lower_it = std::max_element(edge_lengths.begin(), mid_it);
+                if (max_lower_it != mid_it) {
+                    median_edge = 0.5 * (median_edge + static_cast<double>(*max_lower_it));
+                }
+            }
+        }
+        if (!(median_edge > 0.0) || !std::isfinite(median_edge)) {
+            median_edge = (n_edges > 0) ? (sum_edge_len / static_cast<double>(n_edges)) : 0.0;
+        }
+        state.median_edge_length = static_cast<float>(std::max(0.0, median_edge));
+        const double clamp_from_mesh = median_edge * kWearCapFractionOfMedianEdge;
+        // Safety clamp against catastrophic one-step mesh collapse when local P*V spikes.
+        state.max_depth_per_update = static_cast<float>(std::max(1e-8, clamp_from_mesh));
+    }
+
+    m_mesh_wear_models[ownerID] = std::move(state);
+    refreshTrianglePVTrackingOwners();
+}
+
+void DEMSolver::DisableMeshWearModel(bodyID_t ownerID) {
+    assertSysInit("DisableMeshWearModel");
+    auto it = m_mesh_wear_models.find(ownerID);
+    if (it == m_mesh_wear_models.end()) {
+        return;
+    }
+    m_mesh_wear_models.erase(it);
+    refreshTrianglePVTrackingOwners();
+}
+
+void DEMSolver::DisableAllMeshWearModels() {
+    assertSysInit("DisableAllMeshWearModels");
+    if (m_mesh_wear_models.empty()) {
+        return;
+    }
+    m_mesh_wear_models.clear();
+    refreshTrianglePVTrackingOwners();
+}
+
+void DEMSolver::FlushMeshWearModels() {
+    assertSysInit("FlushMeshWearModels");
+    if (m_mesh_wear_models.empty()) {
+        return;
+    }
+
+    std::vector<bodyID_t> owners_to_apply;
+    owners_to_apply.reserve(m_mesh_wear_models.size());
+    for (const auto& kv : m_mesh_wear_models) {
+        if (hasPendingWear(kv.second.pending_depth)) {
+            owners_to_apply.push_back(kv.first);
+        }
+    }
+    if (owners_to_apply.empty()) {
+        return;
+    }
+
+    WaitForPendingOutput();
+    for (bodyID_t owner : owners_to_apply) {
+        auto it = m_mesh_wear_models.find(owner);
+        if (it == m_mesh_wear_models.end()) {
+            continue;
+        }
+        applyMeshWearModel(owner, it->second);
+        it->second.pending_time = 0.0;
+    }
 }
 
 std::vector<float> DEMSolver::GetOwnerWildcardValue(bodyID_t ownerID, const std::string& name, bodyID_t n) {
@@ -717,6 +1195,53 @@ std::vector<float3> DEMSolver::GetMeshNodesGlobal(bodyID_t ownerID) {
     return nodes;
 }
 
+bool DEMSolver::GetMeshTriangleGeoRange(bodyID_t ownerID, bodyID_t& geoID_begin, size_t& n_triangles) {
+    assertSysInit("GetMeshTriangleGeoRange");
+    if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
+        return false;
+    }
+
+    geoID_begin = 0;
+    n_triangles = 0;
+    for (const auto& mesh : m_meshes) {
+        if (mesh->owner == ownerID) {
+            // Geometry wildcards for meshes are patch-based in this branch.
+            n_triangles = mesh->GetNumPatches();
+            return true;
+        }
+        geoID_begin += mesh->GetNumPatches();
+    }
+    return false;
+}
+
+bool DEMSolver::GetMeshTrianglePVHandover(bodyID_t ownerID,
+                                          std::vector<float>& triP,
+                                          std::vector<float>& triV,
+                                          std::vector<float>& triPxV,
+                                          const std::string& nameP,
+                                          const std::string& nameV,
+                                          const std::string& namePxV) {
+    assertSysInit("GetMeshTrianglePVHandover");
+
+    bodyID_t geo_begin = 0;
+    size_t n_tri = 0;
+    if (!GetMeshTriangleGeoRange(ownerID, geo_begin, n_tri)) {
+        return false;
+    }
+    if (m_geo_wc_num.find(nameP) == m_geo_wc_num.end() || m_geo_wc_num.find(nameV) == m_geo_wc_num.end() ||
+        m_geo_wc_num.find(namePxV) == m_geo_wc_num.end()) {
+        return false;
+    }
+
+    triP.clear();
+    triV.clear();
+    triPxV.clear();
+    dT->getPatchWildcardValue(triP, geo_begin, m_geo_wc_num.at(nameP), n_tri);
+    dT->getPatchWildcardValue(triV, geo_begin, m_geo_wc_num.at(nameV), n_tri);
+    dT->getPatchWildcardValue(triPxV, geo_begin, m_geo_wc_num.at(namePxV), n_tri);
+    return triP.size() == n_tri && triV.size() == n_tri && triPxV.size() == n_tri;
+}
+
 double DEMSolver::GetSimTime() const {
     return dT->getSimTime();
 }
@@ -747,17 +1272,21 @@ void DEMSolver::SetIntegrator(const std::string& intg) {
 }
 
 void DEMSolver::SetAdaptiveTimeStepType(const std::string& type) {
-    DEME_WARNING(std::string(
-        "SetAdaptiveTimeStepType is currently not implemented and has no effect, time step size is still fixed."));
+    DEME_WARNING(
+        std::string("SetAdaptiveTimeStepType is a beta feature, currently hertz_const calculates a fixed timestep "
+                    "based on particle size, mass and contact E-modulus."));
     switch (hash_charr(type.c_str())) {
         case ("none"_):
             adapt_ts_type = ADAPT_TS_TYPE::NONE;
             break;
+        case ("hertz_const"_):
+            adapt_ts_type = ADAPT_TS_TYPE::HERTZ_CONST;
+            break;
         case ("max_vel"_):
-            adapt_ts_type = ADAPT_TS_TYPE::MAX_VEL;
+            adapt_ts_type = ADAPT_TS_TYPE::MAX_VEL;  // Not implemented yet
             break;
         case ("int_diff"_):
-            adapt_ts_type = ADAPT_TS_TYPE::INT_DIFF;
+            adapt_ts_type = ADAPT_TS_TYPE::INT_DIFF;  // Not implemented yet
             break;
         default:
             DEME_ERROR("Adaptive time step type %s is unknown. Please select another via SetAdaptiveTimeStepType.",
@@ -800,6 +1329,12 @@ void DEMSolver::SetExpandSafetyType(const std::string& insp_type) {
     } else {
         DEME_ERROR("Unknown string input \"%s\" for SetExpandSafetyType.", insp_type.c_str());
     }
+}
+
+void DEMSolver::SetUseAngularVelocityMargin(bool use) {
+    assertSysNotInit("SetUseAngularVelocityMargin");
+    m_use_angvel_margin = use;
+    m_use_angvel_margin_user_set = true;
 }
 
 void DEMSolver::InstructBoxDomainDimension(float x, float y, float z, const std::string& dir_exact) {
@@ -860,6 +1395,165 @@ void DEMSolver::InstructBoxDomainDimension(const std::pair<float, float>& x,
         m_box_dir_length_is_exact = SPATIAL_DIR::NONE;
     } else {
         DEME_ERROR("Unknown '%s' parameter in InstructBoxDomainDimension call.", dir_exact.c_str());
+    }
+}
+
+void DEMSolver::SetCylindricalPeriodicity(SPATIAL_DIR axis, float start_angle, float end_angle, float min_radius) {
+    if (min_radius < 0.f) {
+        DEME_ERROR("Cylindrical periodic min_radius %.7g is invalid (must be >= 0).", min_radius);
+    }
+    if (min_radius < DEME_TINY_FLOAT) {
+        min_radius = DEME_TINY_FLOAT;
+    }
+    if (axis == SPATIAL_DIR::NONE) {
+        m_use_cyl_periodic = false;
+        m_cyl_periodic_axis = SPATIAL_DIR::NONE;
+        m_cyl_periodic_span = 0.f;
+    } else {
+        if (axis != SPATIAL_DIR::X && axis != SPATIAL_DIR::Y && axis != SPATIAL_DIR::Z) {
+            DEME_ERROR("Unknown axis in SetCylindricalPeriodicity.");
+        }
+        if (!std::isfinite(start_angle) || !std::isfinite(end_angle)) {
+            DEME_ERROR("Cylindrical periodic start/end angle must be finite (degrees).");
+        }
+        // Angles are provided in degrees; convert to radians using double precision.
+        const double two_pi = 2.0 * (double)PI;
+
+        double start = std::fmod(start_angle, two_pi);
+        if (start < 0.0) {
+            start += two_pi;
+        }
+        double end = std::fmod(end_angle, two_pi);
+        if (end < 0.0) {
+            end += two_pi;
+        }
+        double span = end - start;
+        if (span <= 0.0) {
+            span += two_pi;
+        }
+        if (span <= (double)DEME_TINY_FLOAT || span >= two_pi - (double)DEME_TINY_FLOAT) {
+            DEME_ERROR("Cylindrical periodic span must be in (0, 2*pi).");
+        }
+
+        float3 axis_vec = make_float3(0.f, 0.f, 0.f);
+        float3 u = make_float3(0.f, 0.f, 0.f);
+        float3 v = make_float3(0.f, 0.f, 0.f);
+        switch (axis) {
+            case SPATIAL_DIR::X:
+                axis_vec = make_float3(1.f, 0.f, 0.f);
+                u = make_float3(0.f, 1.f, 0.f);
+                v = make_float3(0.f, 0.f, 1.f);
+                break;
+            case SPATIAL_DIR::Y:
+                axis_vec = make_float3(0.f, 1.f, 0.f);
+                u = make_float3(0.f, 0.f, 1.f);
+                v = make_float3(1.f, 0.f, 0.f);
+                break;
+            case SPATIAL_DIR::Z:
+                axis_vec = make_float3(0.f, 0.f, 1.f);
+                u = make_float3(1.f, 0.f, 0.f);
+                v = make_float3(0.f, 1.f, 0.f);
+                break;
+            default:
+                DEME_ERROR("Unknown axis in SetCylindricalPeriodicity.");
+        }
+
+        const double cs0 = std::cos(start);
+        const double sn0 = std::sin(start);
+        const double cs1 = std::cos(start + span);
+        const double sn1 = std::sin(start + span);
+        const float3 r0 =
+            make_float3((float)(u.x * cs0 + v.x * sn0), (float)(u.y * cs0 + v.y * sn0), (float)(u.z * cs0 + v.z * sn0));
+        const float3 r1 =
+            make_float3((float)(u.x * cs1 + v.x * sn1), (float)(u.y * cs1 + v.y * sn1), (float)(u.z * cs1 + v.z * sn1));
+        auto cross3 = [](const float3& a, const float3& b) {
+            return make_float3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+        };
+        const float3 n0 = cross3(axis_vec, r0);
+        const float3 n1 = cross3(axis_vec, r1);
+
+        m_use_cyl_periodic = true;
+        m_cyl_periodic_axis = axis;
+        m_cyl_periodic_start = (float)start;
+        m_cyl_periodic_span = (float)span;
+        m_cyl_periodic_min_radius = min_radius;
+        m_cyl_periodic_axis_vec = axis_vec;
+        m_cyl_periodic_u = u;
+        m_cyl_periodic_v = v;
+        m_cyl_periodic_start_normal = n0;
+        m_cyl_periodic_end_normal = n1;
+        m_cyl_periodic_cos_span = (float)std::cos(span);
+        m_cyl_periodic_sin_span = (float)std::sin(span);
+        const double half_span = 0.5 * span;
+        m_cyl_periodic_cos_half_span = (float)std::cos(half_span);
+        m_cyl_periodic_sin_half_span = (float)std::sin(half_span);
+    }
+
+    if (sys_initialized) {
+        auto apply = [&](DualStruct<DEMSimParams>& params) {
+            params->useCylPeriodic = m_use_cyl_periodic ? 1 : 0;
+            params->useCylPeriodicDiagCounters = m_cyl_periodic_diag ? 1 : 0;
+            params->cylPeriodicAxis = static_cast<unsigned char>(m_cyl_periodic_axis);
+            params->cylPeriodicStart = m_cyl_periodic_start;
+            params->cylPeriodicSpan = m_cyl_periodic_span;
+            params->cylPeriodicMinRadius = m_cyl_periodic_min_radius;
+            params->cylPeriodicCosSpan = m_cyl_periodic_cos_span;
+            params->cylPeriodicSinSpan = m_cyl_periodic_sin_span;
+            params->cylPeriodicCosHalfSpan = m_cyl_periodic_cos_half_span;
+            params->cylPeriodicSinHalfSpan = m_cyl_periodic_sin_half_span;
+            params->cylPeriodicAxisVec = m_cyl_periodic_axis_vec;
+            params->cylPeriodicU = m_cyl_periodic_u;
+            params->cylPeriodicV = m_cyl_periodic_v;
+            params->cylPeriodicStartNormal = m_cyl_periodic_start_normal;
+            params->cylPeriodicEndNormal = m_cyl_periodic_end_normal;
+            params->cylPeriodicOrigin = make_float3(-params->LBFX, -params->LBFY, -params->LBFZ);
+            params->maxSphereRadius = m_largest_radius;
+            params->maxTriRadius = m_largest_tri_radius;
+            params->maxFamilyExtraMargin = m_max_family_extra_margin;
+        };
+        apply(dT->simParams);
+        apply(kT->simParams);
+        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+        dT->simParams.toDeviceAsync(dT->streamInfo.stream);
+        DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
+        kT->simParams.toDeviceAsync(kT->streamInfo.stream);
+    }
+}
+
+void DEMSolver::SetCylPeriodicDiagnosticCounters(bool enable) {
+    m_cyl_periodic_diag = enable;
+    if (sys_initialized) {
+        auto apply = [&](DualStruct<DEMSimParams>& params) {
+            params->useCylPeriodicDiagCounters = m_cyl_periodic_diag ? 1 : 0;
+        };
+        apply(dT->simParams);
+        apply(kT->simParams);
+        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+        dT->simParams.toDeviceAsync(dT->streamInfo.stream);
+        DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
+        kT->simParams.toDeviceAsync(kT->streamInfo.stream);
+    }
+}
+
+void DEMSolver::SetCylindricalPeriodicity(const std::string& axis,
+                                          float start_angle,
+                                          float end_angle,
+                                          float min_radius) {
+    if (axis.empty()) {
+        DEME_ERROR("SetCylindricalPeriodicity axis string is empty.");
+    }
+    std::string axis_up = axis;
+    std::transform(axis_up.begin(), axis_up.end(), axis_up.begin(), [](unsigned char c) { return std::toupper(c); });
+    if (axis_up == "X") {
+        SetCylindricalPeriodicity(SPATIAL_DIR::X, start_angle, end_angle, min_radius);
+    } else if (axis_up == "Y") {
+        SetCylindricalPeriodicity(SPATIAL_DIR::Y, start_angle, end_angle, min_radius);
+    } else if (axis_up == "Z") {
+        SetCylindricalPeriodicity(SPATIAL_DIR::Z, start_angle, end_angle, min_radius);
+    } else if (axis_up == "NONE") {
+        SetCylindricalPeriodicity(SPATIAL_DIR::NONE, start_angle, end_angle, min_radius);
+    } else {
+        DEME_ERROR("Unknown axis '%s' in SetCylindricalPeriodicity (use X, Y, Z, or NONE).", axis.c_str());
     }
 }
 
@@ -1327,6 +2021,8 @@ void DEMSolver::ShowMemStats() const {
     DEME_PRINTF("kT device memory usage: %s\n", pretty_format_bytes(GetDeviceMemUsageKinematic()).c_str());
     DEME_PRINTF("dT host memory usage: %s\n", pretty_format_bytes(GetHostMemUsageDynamic()).c_str());
     DEME_PRINTF("dT device memory usage: %s\n", pretty_format_bytes(GetDeviceMemUsageDynamic()).c_str());
+    DEME_PRINTF("Reported contacts: %zu\n", GetNumContacts());
+    DEME_PRINTF("Avg contacts per primitive: %.7g\n", GetAvgPrimitiveContacts());
 }
 
 void DEMSolver::AddFamilyPrescribedAcc(unsigned int ID,
@@ -1696,6 +2392,29 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clu
             "agree with nComp.",
             clump.nComp, clump.radii.size(), clump.relPos.size(), clump.materials.size());
     }
+    const bool mass_missing = !clump.mass_specified && clump.mass < 1e-15;
+    const bool moi_missing = !clump.moi_specified && length(clump.MOI) < 1e-15;
+    if (mass_missing || moi_missing || clump.volume <= 0.f) {
+        double union_volume = 0.0;
+        float3 union_center = make_float3(0, 0, 0);
+        float3 union_inertia = make_float3(0, 0, 0);
+        if (computeClumpUnionMassPropsApprox(clump, union_volume, union_center, union_inertia)) {
+            if (clump.volume <= 0.f) {
+                clump.volume = static_cast<float>(union_volume);
+            }
+            if (mass_missing) {
+                clump.mass = static_cast<float>(union_volume);
+            }
+            if (moi_missing) {
+                const float mass_scale = (union_volume > 1e-20) ? static_cast<float>(clump.mass / union_volume) : 1.f;
+                clump.MOI = union_inertia * mass_scale;
+            }
+        } else if (mass_missing || moi_missing) {
+            DEME_WARNING(
+                "Clump type requested auto mass/MOI, but union-of-spheres mass properties could not be estimated.");
+        }
+    }
+
     if (clump.mass < 1e-15 || length(clump.MOI) < 1e-15) {
         DEME_WARNING(
             "A type of clump is instructed to have near-zero (or negative) mass or moment of inertia (mass: %.9g, MOI "
@@ -1725,8 +2444,8 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(float mass,
                                                            const std::string filename,
                                                            const std::shared_ptr<DEMMaterial>& sp_material) {
     DEMClumpTemplate clump;
-    clump.mass = mass;
-    clump.MOI = moi;
+    clump.SetMass(mass);
+    clump.SetMOI(moi);
     clump.ReadComponentFromFile(filename);
     std::vector<std::shared_ptr<DEMMaterial>> sp_materials(clump.nComp, sp_material);
     clump.materials = sp_materials;
@@ -1739,8 +2458,8 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(
     const std::string filename,
     const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
     DEMClumpTemplate clump;
-    clump.mass = mass;
-    clump.MOI = moi;
+    clump.SetMass(mass);
+    clump.SetMOI(moi);
     clump.ReadComponentFromFile(filename);
     clump.materials = sp_materials;
     return LoadClumpType(clump);
@@ -1753,8 +2472,8 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(
     const std::vector<float3>& sp_locations_xyz,
     const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
     DEMClumpTemplate clump;
-    clump.mass = mass;
-    clump.MOI = moi;
+    clump.SetMass(mass);
+    clump.SetMOI(moi);
     clump.radii = sp_radii;
     clump.relPos = sp_locations_xyz;
     clump.materials = sp_materials;
@@ -1851,6 +2570,17 @@ void DEMSolver::SetFamilyExtraMargin(unsigned int N, float extra_size) {
     }
     kT->familyExtraMarginSize.setVal(extra_size, N);
     dT->familyExtraMarginSize.setVal(extra_size, N);
+    if (extra_size > m_max_family_extra_margin) {
+        m_max_family_extra_margin = extra_size;
+    }
+    if (sys_initialized) {
+        dT->simParams->maxFamilyExtraMargin = m_max_family_extra_margin;
+        kT->simParams->maxFamilyExtraMargin = m_max_family_extra_margin;
+        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+        dT->simParams.toDeviceAsync(dT->streamInfo.stream);
+        DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
+        kT->simParams.toDeviceAsync(kT->streamInfo.stream);
+    }
 }
 
 void DEMSolver::ClearCache() {
@@ -1909,6 +2639,38 @@ std::shared_ptr<DEMMesh> DEMSolver::AddMesh(DEMMesh& mesh) {
     if (mesh.GetNumTriangles() == 0) {
         DEME_WARNING(std::string("It seems that a mesh contains 0 triangle facet at the time it is loaded."));
     }
+    if (!mesh.mass_specified || !mesh.moi_specified) {
+        double volume = 0.0;
+        float3 center = make_float3(0, 0, 0);
+        float3 unit_inertia = make_float3(0, 0, 0);
+        mesh.ComputeMassProperties(volume, center, unit_inertia);
+        if (volume > 1e-20 && std::isfinite(volume) && length(unit_inertia) > 1e-20 &&
+            std::isfinite(length(unit_inertia))) {
+            if (!mesh.mass_specified) {
+                mesh.mass = static_cast<float>(volume);
+            }
+            if (!mesh.moi_specified) {
+                const float scale = static_cast<float>(mesh.mass / volume);
+                mesh.MOI = unit_inertia * scale;
+            }
+        } else if (!mesh.mass_specified || !mesh.moi_specified) {
+            DEME_WARNING(
+                "Mesh %s requested auto mass/MOI, but geometric mass properties could not be computed (volume: %.9g, "
+                "unit MOI magnitude: %.9g).",
+                mesh.filename.empty() ? "<in-memory mesh>" : mesh.filename.c_str(), volume, length(unit_inertia));
+        }
+    }
+    if (!mesh.IsShell()) {
+        size_t boundary_edges = 0;
+        size_t nonmanifold_edges = 0;
+        if (!mesh.IsWatertight(&boundary_edges, &nonmanifold_edges)) {
+            const char* mesh_name = mesh.filename.empty() ? "<in-memory mesh>" : mesh.filename.c_str();
+            DEME_WARNING(
+                "Mesh %s is not watertight (boundary edges: %zu, non-manifold edges: %zu). Volume/MOI may be "
+                "inaccurate.",
+                mesh_name, boundary_edges, nonmanifold_edges);
+        }
+    }
     // load_order should be its position in the cache array, not nTriObjLoad
     mesh.load_order = cached_mesh_objs.size();
 
@@ -1919,12 +2681,34 @@ std::shared_ptr<DEMMesh> DEMSolver::AddMesh(DEMMesh& mesh) {
     return cached_mesh_objs.back();
 }
 
+std::shared_ptr<DEMMesh> DEMSolver::AddShellMesh(DEMMesh& mesh, float shell_thickness) {
+    mesh.SetShellThickness(shell_thickness);
+    return AddMesh(mesh);
+}
+
+namespace {
+
+bool loadMeshByExtension(DEMMesh& mesh, const std::string& filename, bool load_normals, bool load_uv) {
+    std::string ext = std::filesystem::path(filename).extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return std::tolower(c); });
+    if (ext == ".stl") {
+        return mesh.LoadSTLMesh(filename, load_normals);
+    }
+    if (ext == ".ply") {
+        return mesh.LoadPLYMesh(filename, load_normals);
+    }
+    // Default to OBJ/Wavefront path
+    return mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
+}
+
+}  // namespace
+
 std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
                                                            const std::shared_ptr<DEMMaterial>& mat,
                                                            bool load_normals,
                                                            bool load_uv) {
     DEMMesh mesh;
-    bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
+    bool flag = loadMeshByExtension(mesh, filename, load_normals, load_uv);
     if (!flag) {
         DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
     }
@@ -1932,15 +2716,43 @@ std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontMeshObject(const std::string& fi
     return AddWavefrontMeshObject(mesh);
 }
 
+std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontShellObject(const std::string& filename,
+                                                            const std::shared_ptr<DEMMaterial>& mat,
+                                                            float shell_thickness,
+                                                            bool load_normals,
+                                                            bool load_uv) {
+    DEMMesh mesh;
+    mesh.SetShellThickness(shell_thickness);
+    bool flag = loadMeshByExtension(mesh, filename, load_normals, load_uv);
+    if (!flag) {
+        DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
+    }
+    mesh.SetMaterial(mat);
+    return AddMesh(mesh);
+}
+
 std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
                                                            bool load_normals,
                                                            bool load_uv) {
     DEMMesh mesh;
-    bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
+    bool flag = loadMeshByExtension(mesh, filename, load_normals, load_uv);
     if (!flag) {
         DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
     }
     return AddWavefrontMeshObject(mesh);
+}
+
+std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontShellObject(const std::string& filename,
+                                                            float shell_thickness,
+                                                            bool load_normals,
+                                                            bool load_uv) {
+    DEMMesh mesh;
+    mesh.SetShellThickness(shell_thickness);
+    bool flag = loadMeshByExtension(mesh, filename, load_normals, load_uv);
+    if (!flag) {
+        DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
+    }
+    return AddMesh(mesh);
 }
 
 std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(DEMMesh& mesh) {
@@ -1960,7 +2772,7 @@ std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(const std::string& filename,
                                                  bool load_normals,
                                                  bool load_uv) {
     DEMMesh mesh;
-    bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
+    bool flag = loadMeshByExtension(mesh, filename, load_normals, load_uv);
     if (!flag) {
         DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
     }
@@ -1970,7 +2782,7 @@ std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(const std::string& filename,
 
 std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(const std::string& filename, bool load_normals, bool load_uv) {
     DEMMesh mesh;
-    bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
+    bool flag = loadMeshByExtension(mesh, filename, load_normals, load_uv);
     if (!flag) {
         DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
     }
@@ -2000,28 +2812,45 @@ std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quan
 }
 
 void DEMSolver::WriteSphereFile(const std::string& outfilename) const {
+    WaitForPendingOutput();
     switch (m_out_format) {
 #ifdef DEME_USE_CHPF
         case (OUTPUT_FORMAT::CHPF): {
-            std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
-            dT->writeSpheresAsChpf(ptFile);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateClumpHighOrderInfoToHost();
+            m_output_thread = std::thread([this, outfilename]() {
+                std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
+                dT->writeSpheresAsChpfFromHost(ptFile);
+            });
             break;
         }
 #endif
         case (OUTPUT_FORMAT::CSV): {
-            std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeSpheresAsCsv(ptFile);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateClumpHighOrderInfoToHost();
+            dT->migrateOwnerWildcardToHost();
+            dT->migrateSphGeoWildcardToHost();
+            m_output_thread = std::thread([this, outfilename]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeSpheresAsCsvFromHost(ptFile);
+            });
             break;
         }
         case (OUTPUT_FORMAT::BINARY): {
             // std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
             //// TODO: Implement it
-            std::ofstream ptFile(outfilename, std::ios::out);
             DEME_WARNING(std::string("Binary sphere output is not implemented yet, using CSV..."));
-            dT->writeSpheresAsCsv(ptFile);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateClumpHighOrderInfoToHost();
+            dT->migrateOwnerWildcardToHost();
+            dT->migrateSphGeoWildcardToHost();
+            m_output_thread = std::thread([this, outfilename]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeSpheresAsCsvFromHost(ptFile);
+            });
             break;
         }
         default:
@@ -2030,28 +2859,43 @@ void DEMSolver::WriteSphereFile(const std::string& outfilename) const {
 }
 
 void DEMSolver::WriteClumpFile(const std::string& outfilename, unsigned int accuracy) const {
+    WaitForPendingOutput();
     switch (m_out_format) {
 #ifdef DEME_USE_CHPF
         case (OUTPUT_FORMAT::CHPF): {
-            std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
-            dT->writeClumpsAsChpf(ptFile, accuracy);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateClumpHighOrderInfoToHost();
+            m_output_thread = std::thread([this, outfilename, accuracy]() {
+                std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
+                dT->writeClumpsAsChpfFromHost(ptFile, accuracy);
+            });
             break;
         }
 #endif
         case (OUTPUT_FORMAT::CSV): {
-            std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeClumpsAsCsv(ptFile, accuracy);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateClumpHighOrderInfoToHost();
+            dT->migrateOwnerWildcardToHost();
+            m_output_thread = std::thread([this, outfilename, accuracy]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeClumpsAsCsvFromHost(ptFile, accuracy);
+            });
             break;
         }
         case (OUTPUT_FORMAT::BINARY): {
             // std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
             //// TODO: Implement it
-            std::ofstream ptFile(outfilename, std::ios::out);
             DEME_WARNING(std::string("Binary clump output is not implemented yet, using CSV..."));
-            dT->writeClumpsAsCsv(ptFile, accuracy);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateClumpHighOrderInfoToHost();
+            dT->migrateOwnerWildcardToHost();
+            m_output_thread = std::thread([this, outfilename, accuracy]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeClumpsAsCsvFromHost(ptFile, accuracy);
+            });
             break;
         }
         default:
@@ -2060,6 +2904,7 @@ void DEMSolver::WriteClumpFile(const std::string& outfilename, unsigned int accu
 }
 
 void DEMSolver::WriteContactFile(const std::string& outfilename, float force_thres) const {
+    WaitForPendingOutput();
     if (no_recording_contact_forces) {
         DEME_WARNING(std::string(
             "The solver is instructed to not record contact force info, so no work is done in a WriteContactFile "
@@ -2068,18 +2913,26 @@ void DEMSolver::WriteContactFile(const std::string& outfilename, float force_thr
     }
     switch (m_cnt_out_format) {
         case (OUTPUT_FORMAT::CSV): {
-            std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeContactsAsCsv(ptFile, force_thres);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateContactInfoToHost();
+            m_output_thread = std::thread([this, outfilename, force_thres]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeContactsAsCsvFromHost(ptFile, force_thres);
+            });
             break;
         }
         case (OUTPUT_FORMAT::BINARY): {
             // std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
             //// TODO: Implement it
             DEME_WARNING(std::string("Binary contact pair output is not implemented yet, using CSV..."));
-            std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeContactsAsCsv(ptFile, force_thres);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateContactInfoToHost();
+            m_output_thread = std::thread([this, outfilename, force_thres]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeContactsAsCsvFromHost(ptFile, force_thres);
+            });
             break;
         }
         default:
@@ -2090,16 +2943,44 @@ void DEMSolver::WriteContactFile(const std::string& outfilename, float force_thr
 }
 
 void DEMSolver::WriteMeshFile(const std::string& outfilename) const {
+    WaitForPendingOutput();
     switch (m_mesh_out_format) {
         case (MESH_FORMAT::VTK): {
-            std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeMeshesAsVtk(ptFile);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            m_output_thread = std::thread([this, outfilename]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeMeshesAsVtkFromHost(ptFile);
+            });
+            break;
+        }
+        case (MESH_FORMAT::STL): {
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            m_output_thread = std::thread([this, outfilename]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeMeshesAsStlFromHost(ptFile);
+            });
+            break;
+        }
+        case (MESH_FORMAT::PLY): {
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            m_output_thread = std::thread([this, outfilename]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeMeshesAsPlyFromHost(ptFile, m_mesh_out_ply_patch_colors);
+            });
             break;
         }
         default:
             DEME_ERROR(std::string(
                 "Mesh output file format is unknown or not implemented. Please re-set it via SetMeshOutputFormat."));
+    }
+}
+
+void DEMSolver::WaitForPendingOutput() const {
+    if (m_output_thread.joinable()) {
+        m_output_thread.join();
     }
 }
 
@@ -2190,11 +3071,11 @@ void DEMSolver::Initialize(bool dry_run) {
     migrateSimParamsToDevice();
     migrateArrayDataToDevice();
 
+    // Notify the user how about the setup parameters
+    reportInitStats();
+
     // Compile some of the kernels
     jitifyKernels();
-
-    // Notify the user how jitification goes
-    reportInitStats();
 
     // Release the memory for those flattened arrays, as they are only used for transfers between workers and
     // jitification
@@ -2219,6 +3100,13 @@ void DEMSolver::Initialize(bool dry_run) {
 }
 
 void DEMSolver::ShowTimingStats() {
+    // If accumulation is deferred, flush any pending GPU timer spans before reading values.
+    if (m_gpu_timers_enabled) {
+        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+        dT->timers.FlushGpuTimers();
+        DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
+        kT->timers.FlushGpuTimers();
+    }
     std::vector<std::string> kT_timer_names, dT_timer_names;
     std::vector<double> kT_timer_vals, dT_timer_vals;
     double kT_total_time, dT_total_time;
@@ -2245,6 +3133,24 @@ void DEMSolver::ShowTimingStats() {
     DEME_PRINTF("--------------------------\n");
 }
 
+void DEMSolver::SetGPUTimersEnabled(bool enabled) {
+    m_gpu_timers_enabled = enabled;
+
+    // Note: SolverTimers uses cudaEventCreate/Destroy, which are device-scoped. Ensure we operate on the correct
+    // device.
+    if (enabled) {
+        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+        dT->timers.EnableGpuTimers();
+        DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
+        kT->timers.EnableGpuTimers();
+    } else {
+        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+        dT->timers.DestroyGpuEvents();
+        DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
+        kT->timers.DestroyGpuEvents();
+    }
+}
+
 void DEMSolver::ClearTimingStats() {
     kT->resetTimers();
     dT->resetTimers();
@@ -2262,6 +3168,8 @@ void DEMSolver::ReleaseFlattenedArrays() {
     deallocate_array(m_input_mesh_obj_xyz);
     deallocate_array(m_input_mesh_obj_rot);
     deallocate_array(m_input_mesh_obj_family);
+    deallocate_array(m_input_mesh_obj_convex);
+    deallocate_array(m_input_mesh_obj_never_winner);
 
     deallocate_array(m_unique_family_prescription);
     deallocate_array(m_input_clump_family);
@@ -2277,6 +3185,9 @@ void DEMSolver::ReleaseFlattenedArrays() {
 
     deallocate_array(m_mesh_facet_owner);
     deallocate_array(m_mesh_facet_patch);
+    deallocate_array(m_mesh_facet_neighbor1);
+    deallocate_array(m_mesh_facet_neighbor2);
+    deallocate_array(m_mesh_facet_neighbor3);
     deallocate_array(m_mesh_facets);
     deallocate_array(m_mesh_patch_owner);
     deallocate_array(m_mesh_patch_materials);
@@ -2347,12 +3258,377 @@ void DEMSolver::UpdateSimParams() {
 void DEMSolver::UpdateStepSize(double ts) {
     m_ts_size = ts;
     // We for now store ts as float on devices...
-    dT->simParams->h = ts;
-    kT->simParams->h = ts;
-    // dT->simParams.syncMemberToDevice<float>(offsetof(DEMSimParams, h));
-    // kT->simParams.syncMemberToDevice<float>(offsetof(DEMSimParams, h));
-    dT->simParams.toDevice();
-    kT->simParams.toDevice();
+    dT->simParams->dyn.h = ts;
+    kT->simParams->dyn.h = ts;
+    DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+    dT->simParams.syncMemberToDeviceAsync<float>(offsetof(DEMSimParams, dyn) + offsetof(DEMSimParamsDynamic, h),
+                                                 dT->streamInfo.stream);
+    DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
+    kT->simParams.syncMemberToDeviceAsync<float>(offsetof(DEMSimParams, dyn) + offsetof(DEMSimParamsDynamic, h),
+                                                 kT->streamInfo.stream);
+}
+
+bool DEMSolver::findOwnerTriangleRange(bodyID_t ownerID, size_t& tri_start, size_t& tri_count) {
+    tri_start = 0;
+    tri_count = 0;
+    dT->ownerTriMesh.toHost();
+
+    bool found = false;
+    size_t last_tri = 0;
+    bool contiguous = true;
+    for (size_t tri = 0; tri < dT->ownerTriMesh.size(); tri++) {
+        if (dT->ownerTriMesh[tri] != ownerID) {
+            continue;
+        }
+        if (!found) {
+            found = true;
+            tri_start = tri;
+            last_tri = tri;
+        } else {
+            if (tri != last_tri + 1) {
+                contiguous = false;
+            }
+            last_tri = tri;
+        }
+        tri_count++;
+    }
+
+    if (!found) {
+        return false;
+    }
+    if (!contiguous) {
+        DEME_ERROR("Mesh owner %zu has non-contiguous triangle IDs; mesh deformation update expects contiguous layout.",
+                   (size_t)ownerID);
+    }
+    return true;
+}
+
+void DEMSolver::refreshTrianglePVTrackingOwners() {
+    std::vector<bodyID_t> merged;
+    merged.reserve(m_user_tri_pv_tracking_owners.size() + m_mesh_wear_models.size());
+    std::unordered_set<bodyID_t> seen;
+    seen.reserve(merged.capacity() + 1);
+
+    for (bodyID_t owner : m_user_tri_pv_tracking_owners) {
+        if (seen.insert(owner).second) {
+            merged.push_back(owner);
+        }
+    }
+    for (const auto& kv : m_mesh_wear_models) {
+        if (seen.insert(kv.first).second) {
+            merged.push_back(kv.first);
+        }
+    }
+
+    if (merged.empty()) {
+        dT->disableTrianglePVTracking();
+    } else {
+        dT->configureTrianglePVTracking(merged);
+    }
+    m_last_tri_pv_snapshot.clear();
+}
+
+void DEMSolver::cacheTrackedTrianglePVWindow() {
+    m_last_tri_pv_snapshot.clear();
+    if (!dT->triPVTrackingEnabled) {
+        return;
+    }
+
+    if (dT->triPVWindowSteps > 0) {
+        dT->triPVAccumP.toHost();
+        dT->triPVAccumPV.toHost();
+    }
+    const float inv_steps = (dT->triPVWindowSteps > 0) ? (1.f / static_cast<float>(dT->triPVWindowSteps)) : 0.f;
+
+    for (const auto& kv : dT->triPVOwnerToSlot) {
+        const bodyID_t owner = kv.first;
+        const size_t slot = kv.second;
+        if (slot >= dT->triPVOwnerOffsets.size() || slot >= dT->triPVOwnerCounts.size()) {
+            continue;
+        }
+        const size_t offset = dT->triPVOwnerOffsets[slot];
+        const size_t count = dT->triPVOwnerCounts[slot];
+        TrianglePVSnapshot snap;
+        snap.avgP.assign(count, 0.f);
+        snap.avgV.assign(count, 0.f);
+        snap.avgPV.assign(count, 0.f);
+        if (count > 0 && dT->triPVWindowSteps > 0) {
+            for (size_t i = 0; i < count; i++) {
+                float p = dT->triPVAccumP[offset + i] * inv_steps;
+                float pv = dT->triPVAccumPV[offset + i] * inv_steps;
+                if (!std::isfinite(p) || p < 0.f) {
+                    p = 0.f;
+                }
+                if (!std::isfinite(pv) || pv < 0.f) {
+                    pv = 0.f;
+                }
+                float v = (p > DEME_TINY_FLOAT) ? (pv / p) : 0.f;
+                if (!std::isfinite(v) || v < 0.f) {
+                    v = 0.f;
+                }
+                snap.avgP[i] = p;
+                snap.avgV[i] = v;
+                snap.avgPV[i] = pv;
+            }
+        }
+        m_last_tri_pv_snapshot.emplace(owner, std::move(snap));
+    }
+}
+
+bool DEMSolver::applyMeshWearModel(bodyID_t ownerID, MeshWearModelState& model) {
+    auto mesh_it = m_owner_mesh_map.find(ownerID);
+    if (mesh_it == m_owner_mesh_map.end()) {
+        DEME_ERROR("Wear model owner %zu is not a mesh owner.", (size_t)ownerID);
+    }
+    auto& mesh = m_meshes.at(mesh_it->second);
+    const auto& faces = mesh->GetIndicesVertexes();
+    const size_t n_tri = faces.size();
+    if (n_tri != model.tri_count) {
+        DEME_ERROR("Wear model triangle count mismatch for owner %zu (expected %zu, got %zu).", (size_t)ownerID,
+                   model.tri_count, n_tri);
+    }
+    if (model.pending_depth.size() != n_tri) {
+        DEME_ERROR("Wear depth buffer size mismatch for owner %zu (expected %zu, got %zu).", (size_t)ownerID, n_tri,
+                   model.pending_depth.size());
+    }
+
+    auto& vertices = mesh->GetCoordsVertices();
+    const bool use_canon_groups = (model.vertex_to_canon.size() == vertices.size()) && (model.n_canon_vertices > 0);
+    const size_t n_vertex_groups = use_canon_groups ? model.n_canon_vertices : vertices.size();
+    const float depth_cap = (model.max_depth_per_update > 0.f && std::isfinite(model.max_depth_per_update))
+                                ? model.max_depth_per_update
+                                : std::numeric_limits<float>::infinity();
+    std::vector<float3> weighted_disp(n_vertex_groups, make_float3(0.f));
+    std::vector<float> weighted_sum(n_vertex_groups, 0.f);
+    std::vector<float3> node_updates(vertices.size(), make_float3(0.f));
+
+    auto cross3 = [](const float3& a, const float3& b) {
+        return make_float3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+    };
+    auto group_of_vertex = [&](size_t vid) -> size_t {
+        if (use_canon_groups) {
+            return model.vertex_to_canon[vid];
+        }
+        return vid;
+    };
+
+    size_t n_cap_clipped = 0;
+    float max_requested_depth = 0.f;
+    float max_discarded_depth = 0.f;
+    bool has_any_wear = false;
+    for (size_t tri = 0; tri < n_tri; tri++) {
+        const float pending_depth = model.pending_depth[tri];
+        if (!(pending_depth > 0.f) || !std::isfinite(pending_depth)) {
+            continue;
+        }
+        max_requested_depth = std::max(max_requested_depth, pending_depth);
+        const float depth_chunk = std::min(pending_depth, depth_cap);
+        if (!(depth_chunk > 0.f) || !std::isfinite(depth_chunk)) {
+            continue;
+        }
+        if (depth_chunk + DEME_TINY_FLOAT < pending_depth) {
+            n_cap_clipped++;
+            max_discarded_depth = std::max(max_discarded_depth, pending_depth - depth_chunk);
+        }
+
+        const int3& f = faces[tri];
+        if (f.x < 0 || f.y < 0 || f.z < 0) {
+            continue;
+        }
+        const size_t i0 = static_cast<size_t>(f.x);
+        const size_t i1 = static_cast<size_t>(f.y);
+        const size_t i2 = static_cast<size_t>(f.z);
+        if (i0 >= vertices.size() || i1 >= vertices.size() || i2 >= vertices.size()) {
+            continue;
+        }
+
+        const float3 v0 = vertices[i0];
+        const float3 v1 = vertices[i1];
+        const float3 v2 = vertices[i2];
+        const float3 e1 = v1 - v0;
+        const float3 e2 = v2 - v0;
+        const float3 n_raw = cross3(e1, e2);
+        const float n_len = length(n_raw);
+        if (!(n_len > DEME_TINY_FLOAT) || !std::isfinite(n_len)) {
+            continue;
+        }
+        float3 n_unit = n_raw / n_len;
+        if (model.ref_tri_normals.size() == n_tri) {
+            const float3 n_ref = model.ref_tri_normals[tri];
+            const float n_ref_len = length(n_ref);
+            if (n_ref_len > DEME_TINY_FLOAT && std::isfinite(n_ref_len)) {
+                n_unit = n_ref / n_ref_len;
+            }
+        }
+        const float signed_depth = depth_chunk * model.normal_sign;
+        const float3 disp = n_unit * signed_depth;
+        const float tri_area = 0.5f * n_len;
+        const size_t g0 = group_of_vertex(i0);
+        const size_t g1 = group_of_vertex(i1);
+        const size_t g2 = group_of_vertex(i2);
+        if (g0 >= n_vertex_groups || g1 >= n_vertex_groups || g2 >= n_vertex_groups) {
+            DEME_ERROR("Wear canonical-vertex map out of range for owner %zu.", (size_t)ownerID);
+        }
+
+        weighted_disp[g0] += disp * tri_area;
+        weighted_disp[g1] += disp * tri_area;
+        weighted_disp[g2] += disp * tri_area;
+        weighted_sum[g0] += tri_area;
+        weighted_sum[g1] += tri_area;
+        weighted_sum[g2] += tri_area;
+        has_any_wear = true;
+    }
+
+    if (n_cap_clipped > 0) {
+        model.cap_warning_count++;
+        DEME_WARNING(
+            "Mesh-wear cap reached for owner %zu: %zu triangle(s) exceeded the per-update cap in this geometry "
+            "update. Excess wear depth is discarded (no carry-over). Geometric wear may therefore be "
+            "under-represented at this mesh resolution, even though the wear input (P*V*wear_rate) is still "
+            "evaluated as usual. Current cap: %.6g (%.6g * median edge %.6g). "
+            "Max requested depth this update: %.6g; max discarded depth this update: %.6g. "
+            "To keep the same mesh resolution, use a smaller update_interval and/or a lower wear_rate "
+            "if physically acceptable.",
+            (size_t)ownerID, n_cap_clipped, (double)model.max_depth_per_update,
+            (double)model.max_depth_fraction_of_median_edge, (double)model.median_edge_length,
+            (double)max_requested_depth, (double)max_discarded_depth);
+    }
+
+    auto clear_pending_depth = [&]() { std::fill(model.pending_depth.begin(), model.pending_depth.end(), 0.f); };
+    if (!has_any_wear) {
+        clear_pending_depth();
+        return false;
+    }
+
+    bool has_any_node_update = false;
+    for (size_t i = 0; i < vertices.size(); i++) {
+        const size_t g = group_of_vertex(i);
+        if (g >= n_vertex_groups || !(weighted_sum[g] > DEME_TINY_FLOAT)) {
+            continue;
+        }
+        node_updates[i] = weighted_disp[g] / weighted_sum[g];
+        if (length(node_updates[i]) > DEME_TINY_FLOAT) {
+            has_any_node_update = true;
+        }
+    }
+
+    if (!has_any_node_update) {
+        clear_pending_depth();
+        return false;
+    }
+    UpdateTriNodeRelPos(ownerID, model.tri_start, node_updates);
+    clear_pending_depth();
+    return true;
+}
+
+void DEMSolver::updateMeshWearModels(double call_start_time, double call_end_time) {
+    if (m_mesh_wear_models.empty()) {
+        return;
+    }
+    if (!(call_end_time > call_start_time)) {
+        return;
+    }
+    if (!dT->triPVTrackingEnabled || dT->triPVWindowSteps == 0) {
+        return;
+    }
+
+    struct WearEval {
+        bodyID_t owner = NULL_BODYID;
+        MeshWearModelState* model = nullptr;
+        size_t offset = 0;
+        size_t count = 0;
+        double active_dt = 0.0;
+        bool ended_this_call = false;
+    };
+    std::vector<WearEval> evals;
+    evals.reserve(m_mesh_wear_models.size());
+    bool has_active_wear = false;
+
+    for (auto& kv : m_mesh_wear_models) {
+        const bodyID_t owner = kv.first;
+        MeshWearModelState& model = kv.second;
+        auto it_slot = dT->triPVOwnerToSlot.find(owner);
+        if (it_slot == dT->triPVOwnerToSlot.end()) {
+            continue;
+        }
+        const size_t slot = it_slot->second;
+        const size_t offset = dT->triPVOwnerOffsets[slot];
+        const size_t count = dT->triPVOwnerCounts[slot];
+        if (count != model.tri_count) {
+            DEME_ERROR("Wear model tracked-triangle mismatch for owner %zu (expected %zu, got %zu).", (size_t)owner,
+                       model.tri_count, count);
+        }
+
+        double active_dt = 0.0;
+        bool ended_this_call = false;
+        if (model.end_time >= 0.0) {
+            active_dt = overlapDuration(call_start_time, call_end_time, model.start_time, model.end_time);
+            ended_this_call = (call_start_time < model.end_time && call_end_time >= model.end_time);
+        } else if (call_end_time > model.start_time) {
+            active_dt = call_end_time - std::max(call_start_time, model.start_time);
+        }
+        if (active_dt > 0.0) {
+            has_active_wear = true;
+        }
+
+        evals.push_back(WearEval{owner, &model, offset, count, active_dt, ended_this_call});
+    }
+
+    if (evals.empty()) {
+        cacheTrackedTrianglePVWindow();
+        dT->resetTrackedTrianglePVWindow();
+        return;
+    }
+    if (!has_active_wear) {
+        cacheTrackedTrianglePVWindow();
+        dT->resetTrackedTrianglePVWindow();
+        return;
+    }
+    dT->triPVAccumPV.toHost();
+    const float inv_steps = 1.f / static_cast<float>(dT->triPVWindowSteps);
+    std::vector<bodyID_t> owners_to_apply;
+    owners_to_apply.reserve(evals.size());
+
+    for (const auto& ev : evals) {
+        MeshWearModelState& model = *ev.model;
+        if (ev.active_dt > 0.0) {
+            const float depth_scale = static_cast<float>(model.wear_rate * ev.active_dt) * inv_steps;
+            for (size_t i = 0; i < ev.count; i++) {
+                const float avg_pv = dT->triPVAccumPV[ev.offset + i];
+                const float depth_inc = avg_pv * depth_scale;
+                if (depth_inc > 0.f && std::isfinite(depth_inc)) {
+                    model.pending_depth[i] += depth_inc;
+                }
+            }
+            model.pending_time += ev.active_dt;
+        }
+
+        const bool due = (model.pending_time + 1e-15 >= model.update_interval);
+        if (due || ev.ended_this_call) {
+            if (hasPendingWear(model.pending_depth)) {
+                owners_to_apply.push_back(ev.owner);
+            } else {
+                model.pending_time = 0.0;
+            }
+        }
+    }
+
+    cacheTrackedTrianglePVWindow();
+    dT->resetTrackedTrianglePVWindow();
+
+    if (owners_to_apply.empty()) {
+        return;
+    }
+
+    WaitForPendingOutput();
+    for (bodyID_t owner : owners_to_apply) {
+        auto it = m_mesh_wear_models.find(owner);
+        if (it == m_mesh_wear_models.end()) {
+            continue;
+        }
+        applyMeshWearModel(owner, it->second);
+        it->second.pending_time = 0.0;
+    }
 }
 
 void DEMSolver::Update() {
@@ -2390,6 +3666,7 @@ void DEMSolver::Update() {
     size_t nSpheres_old = nSpheresGM;
     size_t nTriMesh_old = nTriMeshes;
     size_t nFacets_old = nTriGM;
+    size_t nTriNeighbors_old = nTriNeighbors;
     size_t nPatch_old = nMeshPatches;
     unsigned int nAnalGM_old = nAnalGM;
     unsigned int nExtObj_old = nExtObj;
@@ -2400,8 +3677,8 @@ void DEMSolver::Update() {
     updateTotalEntityNum();
     allocateGPUArrays();
     // `Update' method needs to know the number of existing clumps and spheres (before this addition)
-    updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old, nPatch_old, nExtObj_old,
-                          nAnalGM_old);
+    updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old, nTriNeighbors_old,
+                          nPatch_old, nExtObj_old, nAnalGM_old);
     packDataPointers();
 
     // Now that all params prepared, and all data pointers packed on host side, we need to migrate that imformation to
@@ -2441,6 +3718,22 @@ void DEMSolver::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::ve
     // This method requires kT and dT are sync-ed
     // resetWorkerThreads();
 
+    float max_factor = 0.f;
+    for (float factor : factors) {
+        if (factor > max_factor) {
+            max_factor = factor;
+        }
+    }
+    if (max_factor > 1.f && m_largest_radius > 0.f) {
+        m_largest_radius *= max_factor;
+        dT->simParams->maxSphereRadius = m_largest_radius;
+        kT->simParams->maxSphereRadius = m_largest_radius;
+        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+        dT->simParams.toDeviceAsync(dT->streamInfo.stream);
+        DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
+        kT->simParams.toDeviceAsync(kT->streamInfo.stream);
+    }
+
     std::thread dThread = std::move(std::thread([this, IDs, factors]() { this->dT->changeOwnerSizes(IDs, factors); }));
     std::thread kThread = std::move(std::thread([this, IDs, factors]() { this->kT->changeOwnerSizes(IDs, factors); }));
     dThread.join();
@@ -2460,6 +3753,7 @@ void DEMSolver::DoDynamics(double thisCallDuration) {
     if (!sys_initialized) {
         Initialize();
     }
+    const double sim_time_start = dT->getSimTime();
 
     // Tell dT how long this call is
     dT->setCycleDuration(thisCallDuration);
@@ -2477,6 +3771,9 @@ void DEMSolver::DoDynamics(double thisCallDuration) {
         // since that's only used when kT and dT sync.
         dTMain_InteractionManager->userCallDone = false;
     }
+
+    const double sim_time_end = dT->getSimTime();
+    updateMeshWearModels(sim_time_start, sim_time_end);
 }
 
 void DEMSolver::DoDynamicsThenSync(double thisCallDuration) {
@@ -2540,7 +3837,7 @@ void DEMSolver::ClearThreadCollaborationStats() {
     dT->nTotalSteps = 0;
 }
 
-float DEMSolver::dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
+float DEMSolver::dTInspectReduce(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                                  const std::string& kernel_name,
                                  INSPECT_ENTITY_TYPE thing_to_insp,
                                  CUB_REDUCE_FLAVOR reduce_flavor,
@@ -2554,7 +3851,7 @@ float DEMSolver::dTInspectReduce(const std::shared_ptr<jitify::Program>& inspect
     return (float)(*pRes);
 }
 
-float* DEMSolver::dTInspectNoReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
+float* DEMSolver::dTInspectNoReduce(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                                     const std::string& kernel_name,
                                     INSPECT_ENTITY_TYPE thing_to_insp,
                                     CUB_REDUCE_FLAVOR reduce_flavor,
@@ -2568,7 +3865,7 @@ float* DEMSolver::dTInspectNoReduce(const std::shared_ptr<jitify::Program>& insp
     return pRes;
 }
 
-float DEMSolver::dTInspectReduceDevice(const std::shared_ptr<jitify::Program>& inspection_kernel,
+float DEMSolver::dTInspectReduceDevice(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                                        const std::string& kernel_name,
                                        INSPECT_ENTITY_TYPE thing_to_insp,
                                        CUB_REDUCE_FLAVOR reduce_flavor,
@@ -2582,7 +3879,7 @@ float DEMSolver::dTInspectReduceDevice(const std::shared_ptr<jitify::Program>& i
     return (float)(*pRes);
 }
 
-float* DEMSolver::dTInspectNoReduceDevice(const std::shared_ptr<jitify::Program>& inspection_kernel,
+float* DEMSolver::dTInspectNoReduceDevice(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                                           const std::string& kernel_name,
                                           INSPECT_ENTITY_TYPE thing_to_insp,
                                           CUB_REDUCE_FLAVOR reduce_flavor,

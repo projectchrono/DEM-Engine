@@ -15,17 +15,14 @@
 #include "../core/utils/CudaAllocator.hpp"
 #include "../core/utils/ThreadManager.h"
 #include "../core/utils/GpuManager.h"
+#include "../core/utils/JitHelper.h"
 #include "../core/utils/DataMigrationHelper.hpp"
 #include "../core/utils/Timer.hpp"
+#include "../kernel/DEMHelperKernels.cuh"
 
 #include "BdrsAndObjs.h"
 #include "Defines.h"
 #include "Structs.h"
-
-// Forward declare jitify::Program to avoid downstream dependency
-namespace jitify {
-class Program;
-}
 
 namespace deme {
 
@@ -54,6 +51,10 @@ class DEMKinematicThread {
 
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
+    // Reusable event for stream barriers
+    cudaEvent_t streamSyncEvent = nullptr;
+    // Signals that kT finished writing the kT->dT transfer buffers (same-device fast path).
+    cudaEvent_t kT_to_dT_BufferReadyEvent = nullptr;
 
     // Memory usage recorder
     size_t m_approxDeviceBytesUsed = 0;
@@ -95,6 +96,8 @@ class DEMKinematicThread {
     DeviceArray<float> absVel_buffer = DeviceArray<float>(&m_approxDeviceBytesUsed);
     // Angular velocity magnitude of entities
     DeviceArray<float> absAngVel_buffer = DeviceArray<float>(&m_approxDeviceBytesUsed);
+    // Per-owner dT feedback flags for cylindrical periodic branch selection.
+    DeviceArray<unsigned int> ownerCylGhostActive_buffer = DeviceArray<unsigned int>(&m_approxDeviceBytesUsed);
 
     // kT's copy of family map
     // std::unordered_map<unsigned int, family_t> familyUserImplMap;
@@ -150,6 +153,8 @@ class DEMKinematicThread {
     DualArray<oriQ_t> oriQx = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<oriQ_t> oriQy = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<oriQ_t> oriQz = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<unsigned int> ownerCylGhostActive =
+        DualArray<unsigned int>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // marginSizes include both the velocity-induced margin and family-prescribed margin.
     DeviceArray<float> marginSizeSphere = DeviceArray<float>(&m_approxDeviceBytesUsed);
@@ -194,10 +199,20 @@ class DEMKinematicThread {
     DualArray<bodyID_t> ownerClumpBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> ownerTriMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> ownerAnalBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // Mesh owner flags (indexed by owner body ID)
+    DualArray<notStupidBool_t> ownerMeshConvex =
+        DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<notStupidBool_t> ownerMeshNeverWinner =
+        DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Mesh patch information: each facet belongs to a patch
     // Patch ID for each triangle facet (maps facet to patch)
     DualArray<bodyID_t> triPatchID = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // Triangle edge neighbors (compact; index via triNeighborIndex)
+    DualArray<bodyID_t> triNeighborIndex = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> triNeighbor1 = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> triNeighbor2 = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> triNeighbor3 = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The ID that maps this sphere component's geometry-defining parameters, when this component is jitified
     DualArray<clumpComponentOffset_t> clumpComponentOffset =
@@ -223,6 +238,10 @@ class DEMKinematicThread {
     DualArray<contact_t> contactTypePatch = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<contact_t> previous_contactTypePatch =
         DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // Island label per patch contact (winner-side primitive label)
+    DualArray<bodyID_t> contactPatchIsland = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> previous_contactPatchIsland =
+        DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Mapping array: maps from primitive-based pair index to patch-based pair index
     // Same length as primitive pair arrays (idPrimitiveA/B). For each primitive pair,
@@ -255,7 +274,12 @@ class DEMKinematicThread {
         // This is because in smaller problems, the array data transfer portion (which needs the stream) could even be
         // reached before the stream is created in the child thread. So we have to create the stream here before
         // spawning the child thread.
+
         DEME_GPU_CALL(cudaStreamCreate(&streamInfo.stream));
+
+        DEME_GPU_CALL(cudaEventCreateWithFlags(&streamSyncEvent, cudaEventDisableTiming));
+        DEME_GPU_CALL(cudaEventCreateWithFlags(&kT_to_dT_BufferReadyEvent, cudaEventDisableTiming));
+        timers.InitGpuEvents();
 
         // Launch a worker thread bound to this instance
         th = std::move(std::thread([this]() { this->workerThread(); }));
@@ -272,6 +296,15 @@ class DEMKinematicThread {
         startThread();
         th.join();
 
+        timers.DestroyGpuEvents();
+        if (streamSyncEvent) {
+            cudaEventDestroy(streamSyncEvent);
+            streamSyncEvent = nullptr;
+        }
+        if (kT_to_dT_BufferReadyEvent) {
+            cudaEventDestroy(kT_to_dT_BufferReadyEvent);
+            kT_to_dT_BufferReadyEvent = nullptr;
+        }
         cudaStreamDestroy(streamInfo.stream);
 
         // deallocateEverything();
@@ -298,6 +331,13 @@ class DEMKinematicThread {
     size_t estimateDeviceMemUsage() const;
     size_t estimateHostMemUsage() const;
 
+    // Record and sync a reusable event on the main stream
+    void recordAndSyncEvent();
+    // Record only; sync later
+    void recordEventOnly();
+    // Sync the previously recorded event
+    void syncRecordedEvent();
+
     /// Resize arrays
     void allocateGPUArrays(size_t nOwnerBodies,
                            size_t nOwnerClumps,
@@ -305,6 +345,7 @@ class DEMKinematicThread {
                            size_t nTriMeshes,
                            size_t nSpheresGM,
                            size_t nTriGM,
+                           size_t nTriNeighbors,
                            unsigned int nAnalGM,
                            size_t nExtraContacts,
                            unsigned int nMassProperties,
@@ -318,22 +359,33 @@ class DEMKinematicThread {
     void populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                               const std::vector<unsigned int>& input_ext_obj_family,
                               const std::vector<unsigned int>& input_mesh_obj_family,
+                              const std::vector<notStupidBool_t>& input_mesh_obj_convex,
+                              const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
                               const std::vector<unsigned int>& input_mesh_facet_owner,
                               const std::vector<bodyID_t>& input_mesh_facet_patch,
+                              const std::vector<bodyID_t>& input_mesh_facet_neighbor1,
+                              const std::vector<bodyID_t>& input_mesh_facet_neighbor2,
+                              const std::vector<bodyID_t>& input_mesh_facet_neighbor3,
                               const std::vector<DEMTriangle>& input_mesh_facets,
                               const ClumpTemplateFlatten& clump_templates,
                               const std::vector<unsigned int>& ext_obj_comp_num,
                               size_t nExistOwners,
                               size_t nExistSpheres,
                               size_t nExistingFacets,
-                              size_t nExistingMeshPatches);
+                              size_t nExistingMeshPatches,
+                              size_t nExistingTriNeighbors);
 
     /// Initialize arrays
     void initGPUArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                        const std::vector<unsigned int>& input_ext_obj_family,
                        const std::vector<unsigned int>& input_mesh_obj_family,
+                       const std::vector<notStupidBool_t>& input_mesh_obj_convex,
+                       const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
                        const std::vector<unsigned int>& input_mesh_facet_owner,
                        const std::vector<bodyID_t>& input_mesh_facet_patch,
+                       const std::vector<bodyID_t>& input_mesh_facet_neighbor1,
+                       const std::vector<bodyID_t>& input_mesh_facet_neighbor2,
+                       const std::vector<bodyID_t>& input_mesh_facet_neighbor3,
                        const std::vector<DEMTriangle>& input_mesh_facets,
                        const std::vector<unsigned int>& ext_obj_comp_num,
                        const std::vector<notStupidBool_t>& family_mask_matrix,
@@ -344,8 +396,13 @@ class DEMKinematicThread {
     void updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                const std::vector<unsigned int>& input_ext_obj_family,
                                const std::vector<unsigned int>& input_mesh_obj_family,
+                               const std::vector<notStupidBool_t>& input_mesh_obj_convex,
+                               const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
                                const std::vector<unsigned int>& input_mesh_facet_owner,
                                const std::vector<bodyID_t>& input_mesh_facet_patch,
+                               const std::vector<bodyID_t>& input_mesh_facet_neighbor1,
+                               const std::vector<bodyID_t>& input_mesh_facet_neighbor2,
+                               const std::vector<bodyID_t>& input_mesh_facet_neighbor3,
                                const std::vector<DEMTriangle>& input_mesh_facets,
                                const std::vector<unsigned int>& ext_obj_comp_num,
                                const std::vector<notStupidBool_t>& family_mask_matrix,
@@ -355,6 +412,7 @@ class DEMKinematicThread {
                                size_t nExistingSpheres,
                                size_t nExistingTriMesh,
                                size_t nExistingFacets,
+                               size_t nExistingTriNeighbors,
                                size_t nExistingPatches,
                                unsigned int nExistingObj,
                                unsigned int nExistingAnalGM);
@@ -379,6 +437,7 @@ class DEMKinematicThread {
                       double max_tritri_penetration,
                       float expand_safety_param,
                       float expand_safety_adder,
+                      bool use_angvel_margin,
                       const std::set<std::string>& contact_wildcards,
                       const std::set<std::string>& owner_wildcards,
                       const std::set<std::string>& geo_wildcards);
@@ -443,9 +502,9 @@ class DEMKinematicThread {
     // Send produced data to dT-owned biffers
     void sendToTheirBuffer();
     // Resize dT's buffer arrays based on the number of contact pairs
-    inline void transferPrimitivesArraysResize(size_t nContactPairs);
+    inline void transferPrimitivesArraysResize(int buffer_idx, size_t nContactPairs);
     // Resize mesh patch pair array
-    inline void transferPatchArrayResize(size_t nContactPairs);
+    inline void transferPatchArrayResize(int buffer_idx, size_t nContactPairs);
     // Automatic adjustments to sim params
     void calibrateParams();
     // The kT-side allocations that can be done at initialization time
@@ -454,12 +513,13 @@ class DEMKinematicThread {
     void deallocateEverything();
 
     // Just-in-time compiled kernels
-    // jitify::Program bin_sphere_kernels = JitHelper::buildProgram("bin_sphere_kernels", " ");
-    std::shared_ptr<jitify::Program> bin_sphere_kernels;
-    std::shared_ptr<jitify::Program> bin_triangle_kernels;
-    std::shared_ptr<jitify::Program> sphTri_contact_kernels;
-    std::shared_ptr<jitify::Program> sphere_contact_kernels;
-    std::shared_ptr<jitify::Program> misc_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> bin_sphere_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> bin_triangle_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> sphTri_contact_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> sphere_contact_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> history_kernels;
+    std::shared_ptr<JitHelper::CachedProgram> misc_kernels;
+    void prewarmKernels();
 
     // Adjuster for bin size
     class AccumTimer {

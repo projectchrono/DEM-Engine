@@ -4,9 +4,14 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 #include <cstring>
+#include <cstdlib>
 #include <iostream>
 #include <thread>
+#include <chrono>
 #include <algorithm>
+#include <cmath>
+#include <limits>
+#include <unordered_map>
 
 #ifdef DEME_USE_CHPF
     #include <chpf.hpp>
@@ -21,6 +26,25 @@
 #include <algorithms/DEMStaticDeviceSubroutines.h>
 #include <kernel/DEMHelperKernels.cuh>
 
+#ifdef DEME_ENABLE_NVTX
+    #include <nvtx3/nvtx3.hpp>
+    #include <nvtx3/nvToolsExtCudaRt.h>
+    #define DEME_NVTX_CONCAT_IMPL(x, y) x##y
+    #define DEME_NVTX_CONCAT(x, y) DEME_NVTX_CONCAT_IMPL(x, y)
+    #define DEME_NVTX_RANGE(name)                                                   \
+        auto DEME_NVTX_CONCAT(__deme_nvtx_range_, __LINE__) = nvtx3::scoped_range { \
+            name                                                                    \
+        }
+    #define DEME_NVTX_NAME_STREAM(stream, label) nvtxNameCudaStreamA((stream), (label))
+#else
+    #define DEME_NVTX_RANGE(name) \
+        do {                      \
+        } while (0)
+    #define DEME_NVTX_NAME_STREAM(stream, label) \
+        do {                                     \
+        } while (0)
+#endif
+
 namespace deme {
 
 // Put sim data array pointers in place
@@ -29,6 +53,13 @@ void DEMDynamicThread::packDataPointers() {
     familyID.bindDevicePointer(&(granData->familyID));
     voxelID.bindDevicePointer(&(granData->voxelID));
     ownerTypes.bindDevicePointer(&(granData->ownerTypes));
+    ownerBoundRadius.bindDevicePointer(&(granData->ownerBoundRadius));
+    ownerCylWrapK.bindDevicePointer(&(granData->ownerCylWrapK));
+    ownerCylWrapOffset.bindDevicePointer(&(granData->ownerCylWrapOffset));
+    ownerCylGhostActive.bindDevicePointer(&(granData->ownerCylGhostActive));
+    ownerCylSkipCount.bindDevicePointer(&(granData->ownerCylSkipCount));
+    ownerCylSkipPotentialCount.bindDevicePointer(&(granData->ownerCylSkipPotentialCount));
+    granData->ownerCylSkipPotentialTotal = ownerCylSkipPotentialTotal.getDevicePointer();
     locX.bindDevicePointer(&(granData->locX));
     locY.bindDevicePointer(&(granData->locY));
     locZ.bindDevicePointer(&(granData->locZ));
@@ -59,6 +90,7 @@ void DEMDynamicThread::packDataPointers() {
     idPatchA.bindDevicePointer(&(granData->idPatchA));
     idPatchB.bindDevicePointer(&(granData->idPatchB));
     contactTypePatch.bindDevicePointer(&(granData->contactTypePatch));
+    contactPatchIsland.bindDevicePointer(&(granData->contactPatchIsland));
 
     familyMaskMatrix.bindDevicePointer(&(granData->familyMasks));
     familyExtraMarginSize.bindDevicePointer(&(granData->familyExtraMarginSize));
@@ -68,7 +100,6 @@ void DEMDynamicThread::packDataPointers() {
     contactNormals.bindDevicePointer(&(granData->contactNormals));
     contactPointGeometryA.bindDevicePointer(&(granData->contactPointGeometryA));
     contactPointGeometryB.bindDevicePointer(&(granData->contactPointGeometryB));
-    contactPatchDirectionRespected.bindDevicePointer(&(granData->contactPatchDirectionRespected));
     // granData->contactHistory = contactHistory.data();
     // granData->contactDuration = contactDuration.data();
 
@@ -93,8 +124,15 @@ void DEMDynamicThread::packDataPointers() {
 
     // Mesh and analytical-related
     ownerTriMesh.bindDevicePointer(&(granData->ownerTriMesh));
+    ownerMeshConvex.bindDevicePointer(&(granData->ownerMeshConvex));
+    ownerMeshNeverWinner.bindDevicePointer(&(granData->ownerMeshNeverWinner));
+    ownerMeshShellHalfThickness.bindDevicePointer(&(granData->ownerMeshShellHalfThickness));
     ownerPatchMesh.bindDevicePointer(&(granData->ownerPatchMesh));
     triPatchID.bindDevicePointer(&(granData->triPatchID));
+    triNeighborIndex.bindDevicePointer(&(granData->triNeighborIndex));
+    triNeighbor1.bindDevicePointer(&(granData->triNeighbor1));
+    triNeighbor2.bindDevicePointer(&(granData->triNeighbor2));
+    triNeighbor3.bindDevicePointer(&(granData->triNeighbor3));
     ownerAnalBody.bindDevicePointer(&(granData->ownerAnalBody));
     relPosNode1.bindDevicePointer(&(granData->relPosNode1));
     relPosNode2.bindDevicePointer(&(granData->relPosNode2));
@@ -113,11 +151,91 @@ void DEMDynamicThread::packDataPointers() {
     mmiZZ.bindDevicePointer(&(granData->mmiZZ));
 }
 
+void DEMDynamicThread::recordAndSyncEvent() {
+    DEME_GPU_CALL(cudaEventRecord(streamSyncEvent, streamInfo.stream));
+    DEME_GPU_CALL(cudaEventSynchronize(streamSyncEvent));
+}
+
+void DEMDynamicThread::recordEventOnly() {
+    DEME_GPU_CALL(cudaEventRecord(streamSyncEvent, streamInfo.stream));
+}
+
+void DEMDynamicThread::recordProgressEvent(int64_t stamp) {
+    drainProgressEvents();
+    if (progressEventCount == kProgressEventDepth) {
+        // Fall back to a single sync when we are completely back-pressured.
+        const int idx = progressEventHead;
+        DEME_GPU_CALL(cudaEventSynchronize(progressEvents[idx]));
+        pSchedSupport->completedStampOfDynamic.store(progressEventStamps[idx], std::memory_order_release);
+        progressEventHead = (progressEventHead + 1) % kProgressEventDepth;
+        progressEventCount--;
+    }
+    const int idx = (progressEventHead + progressEventCount) % kProgressEventDepth;
+    progressEventStamps[idx] = stamp;
+    DEME_GPU_CALL(cudaEventRecord(progressEvents[idx], streamInfo.stream));
+    progressEventCount++;
+}
+
+void DEMDynamicThread::drainProgressEvents() {
+    while (progressEventCount > 0) {
+        const int idx = progressEventHead;
+        cudaError_t err = cudaEventQuery(progressEvents[idx]);
+        if (err == cudaSuccess) {
+            pSchedSupport->completedStampOfDynamic.store(progressEventStamps[idx], std::memory_order_release);
+            progressEventHead = (progressEventHead + 1) % kProgressEventDepth;
+            progressEventCount--;
+            continue;
+        }
+        if (err != cudaErrorNotReady) {
+            DEME_GPU_CALL(err);
+        }
+        break;
+    }
+}
+
+void DEMDynamicThread::throttleInFlightProgress() {
+    drainProgressEvents();
+    while (progressEventCount >= kMaxInFlightProgress) {
+        const int idx = progressEventHead;
+        DEME_GPU_CALL(cudaEventSynchronize(progressEvents[idx]));
+        pSchedSupport->completedStampOfDynamic.store(progressEventStamps[idx], std::memory_order_release);
+        progressEventHead = (progressEventHead + 1) % kProgressEventDepth;
+        progressEventCount--;
+        drainProgressEvents();
+    }
+}
+
+void DEMDynamicThread::syncRecordedEvent() {
+    // Wait on the most recently recorded barrier event (typically recorded after integration).
+    DEME_GPU_CALL(cudaEventSynchronize(streamSyncEvent));
+}
+
+void DEMDynamicThread::startCycleStopwatch() {
+    if (!cycle_stopwatch_started) {
+        cycle_stopwatch_start = std::chrono::steady_clock::now();
+        cycle_stopwatch_started = true;
+    }
+}
+
+double DEMDynamicThread::getCycleElapsedSeconds() const {
+    if (!cycle_stopwatch_started) {
+        return 0.0;
+    }
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - cycle_stopwatch_start).count();
+}
+
 void DEMDynamicThread::migrateDataToDevice() {
     inertiaPropOffsets.toDeviceAsync(streamInfo.stream);
     familyID.toDeviceAsync(streamInfo.stream);
     voxelID.toDeviceAsync(streamInfo.stream);
     ownerTypes.toDeviceAsync(streamInfo.stream);
+    ownerBoundRadius.toDeviceAsync(streamInfo.stream);
+    ownerCylWrapK.toDeviceAsync(streamInfo.stream);
+    ownerCylWrapOffset.toDeviceAsync(streamInfo.stream);
+    ownerCylGhostActive.toDeviceAsync(streamInfo.stream);
+    ownerCylSkipCount.toDeviceAsync(streamInfo.stream);
+    ownerCylSkipPotentialCount.toDeviceAsync(streamInfo.stream);
+    ownerCylSkipPotentialTotal.toDeviceAsync(streamInfo.stream);
     locX.toDeviceAsync(streamInfo.stream);
     locY.toDeviceAsync(streamInfo.stream);
     locZ.toDeviceAsync(streamInfo.stream);
@@ -150,6 +268,7 @@ void DEMDynamicThread::migrateDataToDevice() {
     contactTypePatch.toDeviceAsync(streamInfo.stream);
     idPatchA.toDeviceAsync(streamInfo.stream);
     idPatchB.toDeviceAsync(streamInfo.stream);
+    contactPatchIsland.toDeviceAsync(streamInfo.stream);
 
     familyMaskMatrix.toDeviceAsync(streamInfo.stream);
     familyExtraMarginSize.toDeviceAsync(streamInfo.stream);
@@ -179,8 +298,15 @@ void DEMDynamicThread::migrateDataToDevice() {
     volumeOwnerBody.toDeviceAsync(streamInfo.stream);
 
     ownerTriMesh.toDeviceAsync(streamInfo.stream);
+    ownerMeshConvex.toDeviceAsync(streamInfo.stream);
+    ownerMeshNeverWinner.toDeviceAsync(streamInfo.stream);
+    ownerMeshShellHalfThickness.toDeviceAsync(streamInfo.stream);
     ownerPatchMesh.toDeviceAsync(streamInfo.stream);
     triPatchID.toDeviceAsync(streamInfo.stream);
+    triNeighborIndex.toDeviceAsync(streamInfo.stream);
+    triNeighbor1.toDeviceAsync(streamInfo.stream);
+    triNeighbor2.toDeviceAsync(streamInfo.stream);
+    triNeighbor3.toDeviceAsync(streamInfo.stream);
     ownerAnalBody.toDeviceAsync(streamInfo.stream);
     relPosNode1.toDeviceAsync(streamInfo.stream);
     relPosNode2.toDeviceAsync(streamInfo.stream);
@@ -196,6 +322,12 @@ void DEMDynamicThread::migrateDataToDevice() {
     mmiXX.toDeviceAsync(streamInfo.stream);
     mmiYY.toDeviceAsync(streamInfo.stream);
     mmiZZ.toDeviceAsync(streamInfo.stream);
+
+    triPVGlobalTriToLocal.toDeviceAsync(streamInfo.stream);
+    triPVStepP.toDeviceAsync(streamInfo.stream);
+    triPVStepPV.toDeviceAsync(streamInfo.stream);
+    triPVAccumP.toDeviceAsync(streamInfo.stream);
+    triPVAccumPV.toDeviceAsync(streamInfo.stream);
 
     // Might not be necessary... but it's a big call anyway, let's sync
     syncMemoryTransfer();
@@ -249,6 +381,7 @@ void DEMDynamicThread::migrateContactInfoToHost() {
     contactTypePatch.toHost();
     idPatchA.toHost();
     idPatchB.toHost();
+    contactPatchIsland.toHost();
 
     // Contact results
     contactForces.toHost();
@@ -289,27 +422,29 @@ void DEMDynamicThread::migrateAnalGeoWildcardToHost() {
 }
 
 bodyID_t DEMDynamicThread::getGeoOwnerID(const bodyID_t& geo, const geoType_t& type) const {
+    const bodyID_t geo_id = geo & CYL_PERIODIC_SPHERE_ID_MASK;
     // These arrays can't change on device
     switch (type) {
         case (GEO_T_SPHERE):
-            return ownerClumpBody[geo];
+            return ownerClumpBody[geo_id];
         case (GEO_T_TRIANGLE):
-            return ownerTriMesh[geo];
+            return ownerTriMesh[geo_id];
         case (GEO_T_ANALYTICAL):
-            return ownerAnalBody[geo];
+            return ownerAnalBody[geo_id];
         default:
             return NULL_BODYID;
     }
 }
 
 bodyID_t DEMDynamicThread::getPatchOwnerID(const bodyID_t& patchID, const geoType_t& type) const {
+    const bodyID_t patch_id = patchID & CYL_PERIODIC_SPHERE_ID_MASK;
     switch (type) {
         case (GEO_T_TRIANGLE):
-            return ownerPatchMesh[patchID];
+            return ownerPatchMesh[patch_id];
         case (GEO_T_SPHERE):
-            return ownerClumpBody[patchID];
+            return ownerClumpBody[patch_id];
         case (GEO_T_ANALYTICAL):
-            return ownerAnalBody[patchID];
+            return ownerAnalBody[patch_id];
         default:
             return NULL_BODYID;
     }
@@ -328,6 +463,7 @@ void DEMDynamicThread::packTransferPointers(DEMKinematicThread*& kT) {
     granData->pKTOwnedBuffer_oriQ1 = kT->oriQ1_buffer.data();
     granData->pKTOwnedBuffer_oriQ2 = kT->oriQ2_buffer.data();
     granData->pKTOwnedBuffer_oriQ3 = kT->oriQ3_buffer.data();
+    granData->pKTOwnedBuffer_ownerCylGhostActive = kT->ownerCylGhostActive_buffer.data();
     granData->pKTOwnedBuffer_familyID = kT->familyID_buffer.data();
     granData->pKTOwnedBuffer_relPosNode1 = kT->relPosNode1_buffer.data();
     granData->pKTOwnedBuffer_relPosNode2 = kT->relPosNode2_buffer.data();
@@ -369,6 +505,7 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                     double max_tritri_penetration,
                                     float expand_safety_param,
                                     float expand_safety_adder,
+                                    bool use_angvel_margin,
                                     const std::set<std::string>& contact_wildcards,
                                     const std::set<std::string>& owner_wildcards,
                                     const std::set<std::string>& geo_wildcards) {
@@ -377,24 +514,27 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->nvZp2 = nvZp2;
     simParams->l = l;
     simParams->voxelSize = voxelSize;
-    simParams->binSize = binSize;
     simParams->LBFX = LBFPoint.x;
     simParams->LBFY = LBFPoint.y;
     simParams->LBFZ = LBFPoint.z;
     simParams->Gx = G.x;
     simParams->Gy = G.y;
     simParams->Gz = G.z;
-    simParams->h = ts_size;
-    simParams->beta = expand_factor;  // If beta is auto-adapting, this assignment has no effect
-    simParams->approxMaxVel = approx_max_vel;
-    simParams->expSafetyMulti = expand_safety_param;
-    simParams->expSafetyAdder = expand_safety_adder;
-    simParams->capTriTriPenetration = max_tritri_penetration;
     simParams->nbX = nbX;
     simParams->nbY = nbY;
     simParams->nbZ = nbZ;
     simParams->userBoxMin = user_box_min;
     simParams->userBoxMax = user_box_max;
+
+    simParams->dyn.binSize = binSize;
+    simParams->dyn.inv_binSize = 1. / binSize;
+    simParams->dyn.h = ts_size;
+    simParams->dyn.beta = expand_factor;  // If beta is auto-adapting, this assignment has no effect
+    simParams->dyn.approxMaxVel = approx_max_vel;
+    simParams->dyn.expSafetyMulti = expand_safety_param;
+    simParams->dyn.expSafetyAdder = expand_safety_adder;
+    simParams->capTriTriPenetration = max_tritri_penetration;
+    simParams->useAngVelMargin = use_angvel_margin ? 1 : 0;
 
     simParams->nContactWildcards = contact_wildcards.size();
     simParams->nOwnerWildcards = owner_wildcards.size();
@@ -403,6 +543,56 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     m_contact_wildcard_names = contact_wildcards;
     m_owner_wildcard_names = owner_wildcards;
     m_geo_wildcard_names = geo_wildcards;
+
+    // Build cylindrical-periodic wildcard triplets (x,y,z vectors) for wrap-rotation.
+    // We detect names ending with _x/_y/_z and group by base name.
+    {
+        std::unordered_map<std::string, int> name_to_idx;
+        name_to_idx.reserve(m_contact_wildcard_names.size());
+        int idx = 0;
+        for (const auto& name : m_contact_wildcard_names) {
+            name_to_idx[name] = idx++;
+        }
+
+        struct TripletIdx {
+            int x = -1;
+            int y = -1;
+            int z = -1;
+        };
+        std::unordered_map<std::string, TripletIdx> base_to_triplet;
+        base_to_triplet.reserve(m_contact_wildcard_names.size());
+        auto suffix_match = [](const std::string& name, const char* suffix) {
+            const size_t n = name.size();
+            const size_t s = std::strlen(suffix);
+            return (n > s) && (name.compare(n - s, s, suffix) == 0);
+        };
+        for (const auto& [name, i] : name_to_idx) {
+            if (suffix_match(name, "_x")) {
+                base_to_triplet[name.substr(0, name.size() - 2)].x = i;
+            } else if (suffix_match(name, "_y")) {
+                base_to_triplet[name.substr(0, name.size() - 2)].y = i;
+            } else if (suffix_match(name, "_z")) {
+                base_to_triplet[name.substr(0, name.size() - 2)].z = i;
+            }
+        }
+
+        std::vector<int3> triplets;
+        triplets.reserve(base_to_triplet.size());
+        for (const auto& [base, t] : base_to_triplet) {
+            if (t.x >= 0 && t.y >= 0 && t.z >= 0) {
+                triplets.push_back(make_int3(t.x, t.y, t.z));
+            }
+        }
+
+        cylPeriodicWCTriplets.resize(triplets.size());
+        auto& host_triplets = cylPeriodicWCTriplets.getHostVector();
+        for (size_t i = 0; i < triplets.size(); ++i) {
+            host_triplets[i] = triplets[i];
+        }
+        cylPeriodicWCTriplets.toDevice();
+        simParams->nCylPeriodicWCTriplets = static_cast<unsigned int>(triplets.size());
+        simParams->cylPeriodicWCTriplets = (triplets.empty()) ? nullptr : cylPeriodicWCTriplets.data();
+    }
 }
 
 void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {
@@ -452,6 +642,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
                                          size_t nTriMeshes,
                                          size_t nSpheresGM,
                                          size_t nTriGM,
+                                         size_t nTriNeighbors,
                                          size_t nMeshPatches,
                                          unsigned int nAnalGM,
                                          size_t nExtraContacts,
@@ -478,6 +669,20 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     simParams->nDistinctClumpComponents = nClumpComponents;
     simParams->nMatTuples = nMatTuples;
 
+    // Reconfiguration invalidates previous per-triangle tracking maps.
+    triPVTrackingEnabled = false;
+    triPVNumTrackedTriangles = 0;
+    triPVWindowSteps = 0;
+    triPVOwnerOrder.clear();
+    triPVOwnerOffsets.clear();
+    triPVOwnerCounts.clear();
+    triPVOwnerToSlot.clear();
+    DEME_DUAL_ARRAY_RESIZE(triPVGlobalTriToLocal, nTriGM, -1);
+    DEME_DUAL_ARRAY_RESIZE(triPVStepP, 1, 0.f);
+    DEME_DUAL_ARRAY_RESIZE(triPVStepPV, 1, 0.f);
+    DEME_DUAL_ARRAY_RESIZE(triPVAccumP, 1, 0.f);
+    DEME_DUAL_ARRAY_RESIZE(triPVAccumPV, 1, 0.f);
+
     // Resize to the number of clumps
     DEME_DUAL_ARRAY_RESIZE(familyID, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(voxelID, nOwnerBodies, 0);
@@ -502,6 +707,9 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(alphaZ, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(accSpecified, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(angAccSpecified, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerMeshConvex, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerMeshNeverWinner, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerMeshShellHalfThickness, nOwnerBodies, 0);
 
     // Resize the family mask `matrix' (in fact it is flattened)
     DEME_DUAL_ARRAY_RESIZE(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
@@ -533,6 +741,10 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(relPosNode2, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(relPosNode3, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(triPatchID, nTriGM, 0);
+    DEME_DUAL_ARRAY_RESIZE(triNeighborIndex, nTriGM, NULL_BODYID);
+    DEME_DUAL_ARRAY_RESIZE(triNeighbor1, nTriNeighbors, NULL_BODYID);
+    DEME_DUAL_ARRAY_RESIZE(triNeighbor2, nTriNeighbors, NULL_BODYID);
+    DEME_DUAL_ARRAY_RESIZE(triNeighbor3, nTriNeighbors, NULL_BODYID);
 
     // Resize to the number of mesh patches
     DEME_DUAL_ARRAY_RESIZE(ownerPatchMesh, nMeshPatches, 0);
@@ -548,6 +760,12 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
 
     // Resize to number of owners
     DEME_DUAL_ARRAY_RESIZE(ownerTypes, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerBoundRadius, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerCylWrapK, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerCylWrapOffset, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerCylGhostActive, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerCylSkipCount, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerCylSkipPotentialCount, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(inertiaPropOffsets, nOwnerBodies, 0);
     // If we jitify mass properties, then
     if (solverFlags.useMassJitify) {
@@ -579,11 +797,11 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
         DEME_DUAL_ARRAY_RESIZE(idPrimitiveB, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(contactTypePrimitive, cnt_arr_size, NOT_A_CONTACT);
         DEME_DUAL_ARRAY_RESIZE(geomToPatchMap, cnt_arr_size, 0);
-        DEME_DUAL_ARRAY_RESIZE(contactPatchDirectionRespected, cnt_arr_size, 0);
 
         DEME_DUAL_ARRAY_RESIZE(idPatchA, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(idPatchB, cnt_arr_size, 0);
         DEME_DUAL_ARRAY_RESIZE(contactTypePatch, cnt_arr_size, NOT_A_CONTACT);
+        DEME_DUAL_ARRAY_RESIZE(contactPatchIsland, cnt_arr_size, NULL_BODYID);
 
         // If there are meshes, then sph--mesh case always use force storage, no getting around; if no mesh, then if no
         // need to store forces, we can choose to not resize these arrays.
@@ -703,8 +921,13 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                                             const std::vector<float3>& input_mesh_obj_xyz,
                                             const std::vector<float4>& input_mesh_obj_rot,
                                             const std::vector<unsigned int>& input_mesh_obj_family,
+                                            const std::vector<notStupidBool_t>& input_mesh_obj_convex,
+                                            const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
                                             const std::vector<unsigned int>& mesh_facet_owner,
                                             const std::vector<bodyID_t>& mesh_facet_patch,
+                                            const std::vector<bodyID_t>& mesh_facet_neighbor1,
+                                            const std::vector<bodyID_t>& mesh_facet_neighbor2,
+                                            const std::vector<bodyID_t>& mesh_facet_neighbor3,
                                             const std::vector<DEMTriangle>& mesh_facets,
                                             const std::vector<bodyID_t>& mesh_patch_owner,
                                             const std::vector<materialsOffset_t>& mesh_patch_materials,
@@ -714,10 +937,12 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                                             const std::vector<unsigned int>& ext_obj_comp_num,
                                             const std::vector<float>& mesh_obj_mass_types,
                                             const std::vector<float3>& mesh_obj_moi_types,
+                                            const std::vector<inertiaOffset_t>& mesh_obj_mass_offsets,
                                             size_t nExistOwners,
                                             size_t nExistSpheres,
                                             size_t nExistingFacets,
-                                            size_t nExistingMeshPatches) {
+                                            size_t nExistingMeshPatches,
+                                            size_t nExistingTriNeighbors) {
     // Load in clump components info (but only if instructed to use jitified clump templates). This step will be
     // repeated even if we are just adding some more clumps to system, not a complete re-initialization.
     size_t k = 0;
@@ -749,6 +974,8 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
     LBF.x = simParams->LBFX;
     LBF.y = simParams->LBFY;
     LBF.z = simParams->LBFZ;
+    float max_owner_bound_radius =
+        pSchedSupport ? pSchedSupport->maxOwnerBoundRadius.load(std::memory_order_relaxed) : 0.f;
     k = 0;
 
     size_t nTotalClumpsThisCall = 0;
@@ -810,6 +1037,22 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                 auto this_clump_no_sp_radii = clump_templates.spRadii.at(type_of_this_clump);
                 auto this_clump_no_sp_relPos = clump_templates.spRelPos.at(type_of_this_clump);
                 auto this_clump_no_sp_mat_ids = clump_templates.matIDs.at(type_of_this_clump);
+
+                // Per-owner circumscribed radius (used by cylindrical periodicity wrap decisions).
+                // For a clump, this is the maximum of |relPos| + radius over all its sphere components.
+                float this_owner_bound_radius = 0.f;
+                for (size_t jj = 0; jj < this_clump_no_sp_radii.size(); jj++) {
+                    const float3 relPos = this_clump_no_sp_relPos.at(jj);
+                    const float r = this_clump_no_sp_radii.at(jj);
+                    const float dist = length(relPos) + r;
+                    if (dist > this_owner_bound_radius) {
+                        this_owner_bound_radius = dist;
+                    }
+                }
+                ownerBoundRadius[nExistOwners + i] = this_owner_bound_radius;
+                if (this_owner_bound_radius > max_owner_bound_radius) {
+                    max_owner_bound_radius = this_owner_bound_radius;
+                }
 
                 for (size_t jj = 0; jj < this_clump_no_sp_radii.size(); jj++) {
                     sphereMaterialOffset[nExistSpheres + k] = this_clump_no_sp_mat_ids.at(jj);
@@ -1007,11 +1250,31 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
     unsigned int offset_for_mesh_obj_mass_template = offset_for_ext_obj_mass_template + input_ext_obj_xyz.size();
     // k for indexing the triangle facets
     k = 0;
+    size_t neighbor_write = nExistingTriNeighbors;
     // p for indexing patches (flattened across all meshes)
     size_t p = 0;
     for (size_t i = 0; i < input_mesh_objs.size(); i++) {
         // If got here, it is a mesh
         ownerTypes[i + owner_offset_for_mesh_obj] = OWNER_T_MESH;
+
+        const float shell_half_thickness = fmaxf(input_mesh_objs.at(i)->GetShellHalfThickness(), 0.f);
+
+        // Per-owner circumscribed radius (used by cylindrical periodicity wrap decisions).
+        // For a mesh, use the maximum distance of any vertex to the mesh local origin plus shell half-thickness.
+        // Note: DEME assumes the mesh is defined in its CoM (or reference) frame; if not, this bound will
+        // be conservative, which is still safe.
+        float this_owner_bound_radius = 0.f;
+        for (const auto& v : input_mesh_objs.at(i)->m_vertices) {
+            const float dist = length(v);
+            if (dist > this_owner_bound_radius) {
+                this_owner_bound_radius = dist;
+            }
+        }
+        this_owner_bound_radius += shell_half_thickness;
+        ownerBoundRadius[i + owner_offset_for_mesh_obj] = this_owner_bound_radius;
+        if (this_owner_bound_radius > max_owner_bound_radius) {
+            max_owner_bound_radius = this_owner_bound_radius;
+        }
 
         // Store inherent geo wildcards
         {
@@ -1038,7 +1301,8 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         input_mesh_objs.at(i)->cache_offset = m_meshes.size();
         m_meshes.push_back(input_mesh_objs.at(i));
 
-        inertiaPropOffsets[i + owner_offset_for_mesh_obj] = i + offset_for_mesh_obj_mass_template;
+        inertiaPropOffsets[i + owner_offset_for_mesh_obj] =
+            offset_for_mesh_obj_mass_template + mesh_obj_mass_offsets.at(i);
         if (!solverFlags.useMassJitify) {
             massOwnerBody[i + owner_offset_for_mesh_obj] = mesh_obj_mass_types.at(i);
             const float3 this_moi = mesh_obj_moi_types.at(i);
@@ -1089,27 +1353,46 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         // Per-facet info
         //// TODO: This flatten-then-init approach is historical and too ugly.
         size_t this_facet_owner = mesh_facet_owner.at(k);
+        const bool mesh_needs_neighbors =
+            !(input_mesh_obj_convex.at(this_facet_owner) != 0 && input_mesh_obj_never_winner.at(this_facet_owner) != 0);
         for (; k < mesh_facet_owner.size(); k++) {
             // mesh_facet_owner run length is the num of facets in this mesh entity
             if (mesh_facet_owner.at(k) != this_facet_owner)
                 break;
-            ownerTriMesh[nExistingFacets + k] = owner_offset_for_mesh_obj + this_facet_owner;
+            const size_t global_tri = nExistingFacets + k;
+            ownerTriMesh[global_tri] = owner_offset_for_mesh_obj + this_facet_owner;
             // Tri's patch belonging needs to take into account those patches that are previously added
-            triPatchID[nExistingFacets + k] = nExistingMeshPatches + mesh_facet_patch.at(k);
+            triPatchID[global_tri] = nExistingMeshPatches + mesh_facet_patch.at(k);
+            if (mesh_needs_neighbors) {
+                triNeighborIndex[global_tri] = neighbor_write;
+                triNeighbor1[neighbor_write] = mesh_facet_neighbor1.at(k);
+                triNeighbor2[neighbor_write] = mesh_facet_neighbor2.at(k);
+                triNeighbor3[neighbor_write] = mesh_facet_neighbor3.at(k);
+                neighbor_write++;
+            } else {
+                triNeighborIndex[global_tri] = NULL_BODYID;
+            }
             DEMTriangle this_tri = mesh_facets.at(k);
-            relPosNode1[nExistingFacets + k] = this_tri.p1;
-            relPosNode2[nExistingFacets + k] = this_tri.p2;
-            relPosNode3[nExistingFacets + k] = this_tri.p3;
+            relPosNode1[global_tri] = this_tri.p1;
+            relPosNode2[global_tri] = this_tri.p2;
+            relPosNode3[global_tri] = this_tri.p3;
         }
 
+        const bodyID_t owner_id = owner_offset_for_mesh_obj + i;
         family_t this_family_num = input_mesh_obj_family.at(i);
-        familyID[i + owner_offset_for_mesh_obj] = this_family_num;
+        familyID[owner_id] = this_family_num;
+        ownerMeshConvex[owner_id] = input_mesh_obj_convex.at(i);
+        ownerMeshNeverWinner[owner_id] = input_mesh_obj_never_winner.at(i);
+        ownerMeshShellHalfThickness[owner_id] = shell_half_thickness;
 
         // Cached initial values for wildcards of this mesh is not needed anymore
         m_meshes.back()->ClearWildcards();
 
         // DEME_DEBUG_PRINTF("dT just loaded a mesh in family %u", +(this_family_num));
         // DEME_DEBUG_PRINTF("This mesh is owner %zu", (i + owner_offset_for_mesh_obj));
+    }
+    if (pSchedSupport) {
+        pSchedSupport->maxOwnerBoundRadius.store(max_owner_bound_radius, std::memory_order_relaxed);
     }
     DEME_DEBUG_PRINTF("Number of meshes loaded this time: %zu", input_mesh_objs.size());
     DEME_DEBUG_PRINTF("Number of mesh patches loaded this time: %zu", p);
@@ -1193,8 +1476,13 @@ void DEMDynamicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpB
                                      const std::vector<float3>& input_mesh_obj_xyz,
                                      const std::vector<float4>& input_mesh_obj_rot,
                                      const std::vector<unsigned int>& input_mesh_obj_family,
+                                     const std::vector<notStupidBool_t>& input_mesh_obj_convex,
+                                     const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
                                      const std::vector<unsigned int>& mesh_facet_owner,
                                      const std::vector<bodyID_t>& mesh_facet_patch,
+                                     const std::vector<bodyID_t>& mesh_facet_neighbor1,
+                                     const std::vector<bodyID_t>& mesh_facet_neighbor2,
+                                     const std::vector<bodyID_t>& mesh_facet_neighbor3,
                                      const std::vector<DEMTriangle>& mesh_facets,
                                      const std::vector<bodyID_t>& mesh_patch_owner,
                                      const std::vector<materialsOffset_t>& mesh_patch_materials,
@@ -1205,6 +1493,9 @@ void DEMDynamicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpB
                                      const std::vector<unsigned int>& ext_obj_comp_num,
                                      const std::vector<float>& mesh_obj_mass_types,
                                      const std::vector<float3>& mesh_obj_moi_types,
+                                     const std::vector<float>& mesh_obj_mass_jit_types,
+                                     const std::vector<float3>& mesh_obj_moi_jit_types,
+                                     const std::vector<inertiaOffset_t>& mesh_obj_mass_offsets,
                                      const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
                                      const std::vector<notStupidBool_t>& family_mask_matrix,
                                      const std::set<unsigned int>& no_output_families,
@@ -1213,14 +1504,17 @@ void DEMDynamicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpB
     // initialization anyway.
 
     registerPolicies(template_number_name_map, clump_templates, ext_obj_mass_types, ext_obj_moi_types,
-                     mesh_obj_mass_types, mesh_obj_moi_types, loaded_materials, family_mask_matrix, no_output_families);
+                     mesh_obj_mass_jit_types, mesh_obj_moi_jit_types, loaded_materials, family_mask_matrix,
+                     no_output_families);
 
     // For initialization, owner array offset is 0
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_rot, input_ext_obj_family,
                          input_mesh_objs, input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family,
-                         mesh_facet_owner, mesh_facet_patch, mesh_facets, mesh_patch_owner, mesh_patch_materials,
-                         clump_templates, ext_obj_mass_types, ext_obj_moi_types, ext_obj_comp_num, mesh_obj_mass_types,
-                         mesh_obj_moi_types, 0, 0, 0, 0);
+                         input_mesh_obj_convex, input_mesh_obj_never_winner, mesh_facet_owner, mesh_facet_patch,
+                         mesh_facet_neighbor1, mesh_facet_neighbor2, mesh_facet_neighbor3, mesh_facets,
+                         mesh_patch_owner, mesh_patch_materials, clump_templates, ext_obj_mass_types, ext_obj_moi_types,
+                         ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, mesh_obj_mass_offsets, 0, 0, 0, 0,
+                         0);
 
     buildTrackedObjs(input_clump_batches, ext_obj_comp_num, input_mesh_objs, tracked_objs, 0, 0, 0, 0);
 }
@@ -1233,8 +1527,13 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                                              const std::vector<float3>& input_mesh_obj_xyz,
                                              const std::vector<float4>& input_mesh_obj_rot,
                                              const std::vector<unsigned int>& input_mesh_obj_family,
+                                             const std::vector<notStupidBool_t>& input_mesh_obj_convex,
+                                             const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
                                              const std::vector<unsigned int>& mesh_facet_owner,
                                              const std::vector<bodyID_t>& mesh_facet_patch,
+                                             const std::vector<bodyID_t>& mesh_facet_neighbor1,
+                                             const std::vector<bodyID_t>& mesh_facet_neighbor2,
+                                             const std::vector<bodyID_t>& mesh_facet_neighbor3,
                                              const std::vector<DEMTriangle>& mesh_facets,
                                              const std::vector<bodyID_t>& mesh_patch_owner,
                                              const std::vector<materialsOffset_t>& mesh_patch_materials,
@@ -1244,6 +1543,9 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                                              const std::vector<unsigned int>& ext_obj_comp_num,
                                              const std::vector<float>& mesh_obj_mass_types,
                                              const std::vector<float3>& mesh_obj_moi_types,
+                                             const std::vector<float>& mesh_obj_mass_jit_types,
+                                             const std::vector<float3>& mesh_obj_moi_jit_types,
+                                             const std::vector<inertiaOffset_t>& mesh_obj_mass_offsets,
                                              const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
                                              const std::vector<notStupidBool_t>& family_mask_matrix,
                                              const std::set<unsigned int>& no_output_families,
@@ -1253,17 +1555,22 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                                              size_t nExistingSpheres,
                                              size_t nExistingTriMesh,
                                              size_t nExistingFacets,
+                                             size_t nExistingTriNeighbors,
                                              size_t nExistingPatches,
                                              unsigned int nExistingObj,
                                              unsigned int nExistingAnalGM) {
     // No policy changes here
+    (void)mesh_obj_mass_jit_types;
+    (void)mesh_obj_moi_jit_types;
 
     // Analytical objects-related arrays should be empty
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_rot, input_ext_obj_family,
                          input_mesh_objs, input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family,
-                         mesh_facet_owner, mesh_facet_patch, mesh_facets, mesh_patch_owner, mesh_patch_materials,
-                         clump_templates, ext_obj_mass_types, ext_obj_moi_types, ext_obj_comp_num, mesh_obj_mass_types,
-                         mesh_obj_moi_types, nExistingOwners, nExistingSpheres, nExistingFacets, nExistingPatches);
+                         input_mesh_obj_convex, input_mesh_obj_never_winner, mesh_facet_owner, mesh_facet_patch,
+                         mesh_facet_neighbor1, mesh_facet_neighbor2, mesh_facet_neighbor3, mesh_facets,
+                         mesh_patch_owner, mesh_patch_materials, clump_templates, ext_obj_mass_types, ext_obj_moi_types,
+                         ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, mesh_obj_mass_offsets,
+                         nExistingOwners, nExistingSpheres, nExistingFacets, nExistingPatches, nExistingTriNeighbors);
 
     // Make changes to tracked objects (potentially add more)
     buildTrackedObjs(input_clump_batches, ext_obj_comp_num, input_mesh_objs, tracked_objs, nExistingOwners,
@@ -1272,11 +1579,15 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
 
 #ifdef DEME_USE_CHPF
 void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) {
-    chpf::Writer pw;
-    // pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, mass);
     migrateFamilyToHost();
     migrateClumpPosInfoToHost();
     migrateClumpHighOrderInfoToHost();
+    writeSpheresAsChpfFromHost(ptFile);
+}
+
+void DEMDynamicThread::writeSpheresAsChpfFromHost(std::ofstream& ptFile) {
+    chpf::Writer pw;
+    // pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, mass);
 
     // simParams host version should not be different from device version, so no need to update
     std::vector<float> posX(simParams->nSpheresGM);
@@ -1352,13 +1663,16 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) {
 #endif
 
 void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) {
-    std::ostringstream outstrstream;
-
     migrateFamilyToHost();
     migrateClumpPosInfoToHost();
     migrateClumpHighOrderInfoToHost();
     migrateOwnerWildcardToHost();
     migrateSphGeoWildcardToHost();
+    writeSpheresAsCsvFromHost(ptFile);
+}
+
+void DEMDynamicThread::writeSpheresAsCsvFromHost(std::ofstream& ptFile) {
+    std::ostringstream outstrstream;
 
     outstrstream << OUTPUT_FILE_X_COL_NAME + "," + OUTPUT_FILE_Y_COL_NAME + "," + OUTPUT_FILE_Z_COL_NAME + "," +
                         OUTPUT_FILE_R_COL_NAME;
@@ -1505,11 +1819,15 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) {
 
 #ifdef DEME_USE_CHPF
 void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy) {
-    //// TODO: Note using accuracy
-    chpf::Writer pw;
     migrateFamilyToHost();
     migrateClumpPosInfoToHost();
     migrateClumpHighOrderInfoToHost();
+    writeClumpsAsChpfFromHost(ptFile, accuracy);
+}
+
+void DEMDynamicThread::writeClumpsAsChpfFromHost(std::ofstream& ptFile, unsigned int accuracy) {
+    //// TODO: Note using accuracy
+    chpf::Writer pw;
 
     // simParams host version should not be different from device version, so no need to update
     std::vector<float> posX(simParams->nOwnerBodies);
@@ -1589,13 +1907,16 @@ void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile, unsigned int acc
 #endif
 
 void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accuracy) {
-    std::ostringstream outstrstream;
-    outstrstream.precision(accuracy);
-
     migrateFamilyToHost();
     migrateClumpPosInfoToHost();
     migrateClumpHighOrderInfoToHost();
     migrateOwnerWildcardToHost();
+    writeClumpsAsCsvFromHost(ptFile, accuracy);
+}
+
+void DEMDynamicThread::writeClumpsAsCsvFromHost(std::ofstream& ptFile, unsigned int accuracy) {
+    std::ostringstream outstrstream;
+    outstrstream.precision(accuracy);
 
     // xyz and quaternion are always there
     outstrstream << OUTPUT_FILE_X_COL_NAME + "," + OUTPUT_FILE_Y_COL_NAME + "," + OUTPUT_FILE_Z_COL_NAME +
@@ -1717,11 +2038,13 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
 }
 
 std::shared_ptr<ContactInfoContainer> DEMDynamicThread::generateContactInfo(float force_thres) {
-    // Migrate contact info to host
     migrateFamilyToHost();
     migrateClumpPosInfoToHost();
     migrateContactInfoToHost();
+    return generateContactInfoFromHost(force_thres);
+}
 
+std::shared_ptr<ContactInfoContainer> DEMDynamicThread::generateContactInfoFromHost(float force_thres) {
     size_t total_contacts = *(solverScratchSpace.numContacts);
     // Wildcards supports only floats now
     std::vector<std::pair<std::string, std::string>> existing_wildcards(m_contact_wildcard_names.size());
@@ -1735,8 +2058,12 @@ std::shared_ptr<ContactInfoContainer> DEMDynamicThread::generateContactInfo(floa
     size_t useful_cnt = 0;
     for (size_t i = 0; i < total_contacts; i++) {
         // Geos that are involved in this contact
-        auto geoA = idPatchA[i];
-        auto geoB = idPatchB[i];
+        bool ghostA = false;
+        bool ghostB = false;
+        bool ghostA_neg = false;
+        bool ghostB_neg = false;
+        auto geoA = cylPeriodicDecodeID(idPatchA[i], ghostA, ghostA_neg);
+        auto geoB = cylPeriodicDecodeID(idPatchB[i], ghostB, ghostB_neg);
         auto type = contactTypePatch[i];
         // We don't output fake contacts; but right now, no contact will be marked fake by kT, so no need to check that
         // if (type == NOT_A_CONTACT)
@@ -1744,6 +2071,19 @@ std::shared_ptr<ContactInfoContainer> DEMDynamicThread::generateContactInfo(floa
 
         float3 forcexyz = contactForces[i];
         float3 torque = contactTorque_convToForce[i];
+        // Contact quantities are reported in the "wrapped" frame used for periodic contact resolution.
+        // If either side is a cylindrical periodic ghost, rotate vectors back by -span so that
+        // the reported values are in the primary wedge frame.
+        if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f && (ghostA || ghostB)) {
+            const bool use_neg = ghostA ? ghostA_neg : ghostB_neg;
+            const float sin_span = use_neg ? simParams->cylPeriodicSinSpan : -simParams->cylPeriodicSinSpan;
+            forcexyz = cylPeriodicRotate(forcexyz, make_float3(0.f, 0.f, 0.f), simParams->cylPeriodicAxisVec,
+                                         simParams->cylPeriodicU, simParams->cylPeriodicV,
+                                         simParams->cylPeriodicCosSpan, sin_span);
+            torque = cylPeriodicRotate(torque, make_float3(0.f, 0.f, 0.f), simParams->cylPeriodicAxisVec,
+                                       simParams->cylPeriodicU, simParams->cylPeriodicV, simParams->cylPeriodicCosSpan,
+                                       sin_span);
+        }
         // If this force+torque is too small, then it's not an active contact
         if (length(forcexyz + torque) < force_thres) {
             continue;
@@ -1936,9 +2276,121 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
     ptFile << outstrstream.str();
 }
 
+void DEMDynamicThread::writeContactsAsCsvFromHost(std::ofstream& ptFile, float force_thres) {
+    std::ostringstream outstrstream;
+
+    std::shared_ptr<ContactInfoContainer> contactInfo = generateContactInfoFromHost(force_thres);
+
+    outstrstream << OUTPUT_FILE_CNT_TYPE_NAME;
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::OWNER) {
+        outstrstream << "," + OUTPUT_FILE_OWNER_1_NAME + "," + OUTPUT_FILE_OWNER_2_NAME;
+    }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::GEO_ID) {
+        outstrstream << "," + OUTPUT_FILE_GEO_ID_1_NAME + "," + OUTPUT_FILE_GEO_ID_2_NAME;
+    }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::FORCE) {
+        outstrstream << "," + OUTPUT_FILE_FORCE_X_NAME + "," + OUTPUT_FILE_FORCE_Y_NAME + "," +
+                            OUTPUT_FILE_FORCE_Z_NAME;
+    }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_POINT) {
+        outstrstream << "," + OUTPUT_FILE_X_COL_NAME + "," + OUTPUT_FILE_Y_COL_NAME + "," + OUTPUT_FILE_Z_COL_NAME;
+    }
+    // if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::COMPONENT) {
+    //     outstrstream << ","+OUTPUT_FILE_COMP_1_NAME+","+OUTPUT_FILE_COMP_2_NAME;
+    // }
+    // if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NICKNAME) {
+    //     outstrstream << ","+OUTPUT_FILE_OWNER_NICKNAME_1_NAME+","+OUTPUT_FILE_OWNER_NICKNAME_2_NAME;
+    // }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NORMAL) {
+        outstrstream << "," + OUTPUT_FILE_NORMAL_X_NAME + "," + OUTPUT_FILE_NORMAL_Y_NAME + "," +
+                            OUTPUT_FILE_NORMAL_Z_NAME;
+    }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE) {
+        outstrstream << "," + OUTPUT_FILE_TORQUE_X_NAME + "," + OUTPUT_FILE_TORQUE_Y_NAME + "," +
+                            OUTPUT_FILE_TORQUE_Z_NAME;
+    }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_WILDCARD) {
+        // Write all wildcard names as header
+        for (const auto& w_name : m_contact_wildcard_names) {
+            outstrstream << "," + w_name;
+        }
+    }
+    outstrstream << "\n";
+
+    for (size_t i = 0; i < contactInfo->Size(); i++) {
+        outstrstream << contactInfo->Get<std::string>("ContactType")[i];
+
+        // (Internal) ownerID and/or geometry ID
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::OWNER) {
+            outstrstream << "," << contactInfo->Get<bodyID_t>("AOwner")[i] << ","
+                         << contactInfo->Get<bodyID_t>("BOwner")[i];
+        }
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::GEO_ID) {
+            outstrstream << "," << contactInfo->Get<bodyID_t>("AGeo")[i] << ","
+                         << contactInfo->Get<bodyID_t>("BGeo")[i];
+        }
+
+        // Force is already in global...
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::FORCE) {
+            outstrstream << "," << contactInfo->Get<float3>("Force")[i].x << ","
+                         << contactInfo->Get<float3>("Force")[i].y << "," << contactInfo->Get<float3>("Force")[i].z;
+        }
+
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_POINT) {
+            // oriQ is updated already... whereas the contact point is effectively last step's... That's unfortunate.
+            // Should we do somthing ahout it?
+            outstrstream << "," << contactInfo->Get<float3>("Point")[i].x << ","
+                         << contactInfo->Get<float3>("Point")[i].y << "," << contactInfo->Get<float3>("Point")[i].z;
+        }
+
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NORMAL) {
+            outstrstream << "," << contactInfo->Get<float3>("Normal")[i].x << ","
+                         << contactInfo->Get<float3>("Normal")[i].y << "," << contactInfo->Get<float3>("Normal")[i].z;
+        }
+
+        // Torque is in global already...
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE) {
+            outstrstream << "," << contactInfo->Get<float3>("Torque")[i].x << ","
+                         << contactInfo->Get<float3>("Torque")[i].y << "," << contactInfo->Get<float3>("Torque")[i].z;
+        }
+
+        // Contact wildcards
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_WILDCARD) {
+            // The order shouldn't be an issue... the same set is being processed here and in equip_contact_wildcards,
+            // see Model.h
+            for (const auto& name : m_contact_wildcard_names) {
+                outstrstream << "," << contactInfo->Get<float>(name)[i];
+            }
+        }
+
+        outstrstream << "\n";
+    }
+
+    ptFile << outstrstream.str();
+}
+
 void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
-    std::ostringstream ostream;
     migrateFamilyToHost();
+    migrateClumpPosInfoToHost();
+    writeMeshesAsVtkFromHost(ptFile);
+}
+
+void DEMDynamicThread::writeMeshesAsVtkFromHost(std::ofstream& ptFile) {
+    std::ostringstream ostream;
+
+    auto ownerPosFromHost = [this](bodyID_t owner) {
+        double X, Y, Z;
+        voxelID_t voxel = voxelID[owner];
+        subVoxelPos_t subVoxX = locX[owner];
+        subVoxelPos_t subVoxY = locY[owner];
+        subVoxelPos_t subVoxZ = locZ[owner];
+        voxelIDToPosition<double, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ, simParams->nvXp2,
+                                                            simParams->nvYp2, simParams->voxelSize, simParams->l);
+        return make_float3(X + simParams->LBFX, Y + simParams->LBFY, Z + simParams->LBFZ);
+    };
+    auto ownerOriQFromHost = [this](bodyID_t owner) {
+        return make_float4(oriQx[owner], oriQy[owner], oriQz[owner], oriQw[owner]);
+    };
 
     std::vector<size_t> vertexOffset(m_meshes.size() + 1, 0);
     size_t total_f = 0;
@@ -1983,8 +2435,8 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     for (const auto& mmesh : m_meshes) {
         if (!thisMeshSkip[mesh_num]) {
             bodyID_t mowner = mmesh->owner;
-            float3 ownerPos = this->getOwnerPos(mowner)[0];
-            float4 ownerOriQ = this->getOwnerOriQ(mowner)[0];
+            float3 ownerPos = ownerPosFromHost(mowner);
+            float4 ownerOriQ = ownerOriQFromHost(mowner);
             for (const auto& v : mmesh->GetCoordsVertices()) {
                 float3 point = v;
                 applyFrameTransformLocalToGlobal(point, ownerPos, ownerOriQ);
@@ -2024,6 +2476,191 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     ptFile << ostream.str();
 }
 
+void DEMDynamicThread::writeMeshesAsStl(std::ofstream& ptFile) {
+    migrateFamilyToHost();
+    migrateClumpPosInfoToHost();
+    writeMeshesAsStlFromHost(ptFile);
+}
+
+void DEMDynamicThread::writeMeshesAsStlFromHost(std::ofstream& ptFile) {
+    std::ostringstream ostream;
+
+    auto ownerPosFromHost = [this](bodyID_t owner) {
+        double X, Y, Z;
+        voxelID_t voxel = voxelID[owner];
+        subVoxelPos_t subVoxX = locX[owner];
+        subVoxelPos_t subVoxY = locY[owner];
+        subVoxelPos_t subVoxZ = locZ[owner];
+        voxelIDToPosition<double, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ, simParams->nvXp2,
+                                                            simParams->nvYp2, simParams->voxelSize, simParams->l);
+        return make_float3(X + simParams->LBFX, Y + simParams->LBFY, Z + simParams->LBFZ);
+    };
+    auto ownerOriQFromHost = [this](bodyID_t owner) {
+        return make_float4(oriQx[owner], oriQy[owner], oriQz[owner], oriQw[owner]);
+    };
+
+    std::vector<notStupidBool_t> thisMeshSkip(m_meshes.size(), 0);
+    unsigned int mesh_num = 0;
+    for (const auto& mmesh : m_meshes) {
+        bodyID_t mowner = mmesh->owner;
+        family_t this_family = familyID[mowner];
+        if (familiesNoOutput.find(this_family) != familiesNoOutput.end()) {
+            thisMeshSkip[mesh_num] = 1;
+        }
+        mesh_num++;
+    }
+
+    ostream << "solid DEMSimulation" << std::endl;
+    mesh_num = 0;
+    for (const auto& mmesh : m_meshes) {
+        if (!thisMeshSkip[mesh_num]) {
+            bodyID_t mowner = mmesh->owner;
+            float3 ownerPos = ownerPosFromHost(mowner);
+            float4 ownerOriQ = ownerOriQFromHost(mowner);
+            const auto& vertices = mmesh->GetCoordsVertices();
+            const auto& faces = mmesh->GetIndicesVertexes();
+
+            for (const auto& f : faces) {
+                float3 v0 = vertices[f.x];
+                float3 v1 = vertices[f.y];
+                float3 v2 = vertices[f.z];
+
+                applyFrameTransformLocalToGlobal(v0, ownerPos, ownerOriQ);
+                applyFrameTransformLocalToGlobal(v1, ownerPos, ownerOriQ);
+                applyFrameTransformLocalToGlobal(v2, ownerPos, ownerOriQ);
+
+                float3 normal = face_normal(v0, v1, v2);
+                ostream << "  facet normal " << normal.x << " " << normal.y << " " << normal.z << std::endl;
+                ostream << "    outer loop" << std::endl;
+                ostream << "      vertex " << v0.x << " " << v0.y << " " << v0.z << std::endl;
+                ostream << "      vertex " << v1.x << " " << v1.y << " " << v1.z << std::endl;
+                ostream << "      vertex " << v2.x << " " << v2.y << " " << v2.z << std::endl;
+                ostream << "    endloop" << std::endl;
+                ostream << "  endfacet" << std::endl;
+            }
+        }
+        mesh_num++;
+    }
+    ostream << "endsolid DEMSimulation" << std::endl;
+    ptFile << ostream.str();
+}
+
+void DEMDynamicThread::writeMeshesAsPly(std::ofstream& ptFile, bool patch_colors) {
+    migrateFamilyToHost();
+    migrateClumpPosInfoToHost();
+    writeMeshesAsPlyFromHost(ptFile, patch_colors);
+}
+
+void DEMDynamicThread::writeMeshesAsPlyFromHost(std::ofstream& ptFile, bool patch_colors) {
+    std::ostringstream ostream;
+
+    auto ownerPosFromHost = [this](bodyID_t owner) {
+        double X, Y, Z;
+        voxelID_t voxel = voxelID[owner];
+        subVoxelPos_t subVoxX = locX[owner];
+        subVoxelPos_t subVoxY = locY[owner];
+        subVoxelPos_t subVoxZ = locZ[owner];
+        voxelIDToPosition<double, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ, simParams->nvXp2,
+                                                            simParams->nvYp2, simParams->voxelSize, simParams->l);
+        return make_float3(X + simParams->LBFX, Y + simParams->LBFY, Z + simParams->LBFZ);
+    };
+    auto ownerOriQFromHost = [this](bodyID_t owner) {
+        return make_float4(oriQx[owner], oriQy[owner], oriQz[owner], oriQw[owner]);
+    };
+
+    std::vector<size_t> vertexOffset(m_meshes.size() + 1, 0);
+    size_t total_f = 0;
+    size_t total_v = 0;
+    unsigned int mesh_num = 0;
+
+    std::vector<notStupidBool_t> thisMeshSkip(m_meshes.size(), 0);
+    for (const auto& mmesh : m_meshes) {
+        bodyID_t mowner = mmesh->owner;
+        family_t this_family = familyID[mowner];
+        if (familiesNoOutput.find(this_family) != familiesNoOutput.end()) {
+            thisMeshSkip[mesh_num] = 1;
+        } else {
+            vertexOffset[mesh_num + 1] = mmesh->GetCoordsVertices().size();
+            total_v += mmesh->GetCoordsVertices().size();
+            total_f += mmesh->GetIndicesVertexes().size();
+        }
+        mesh_num++;
+    }
+
+    for (unsigned int i = 1; i < m_meshes.size(); i++) {
+        vertexOffset[i] = vertexOffset[i] + vertexOffset[i - 1];
+    }
+
+    ostream << "ply" << std::endl;
+    ostream << "format ascii 1.0" << std::endl;
+    ostream << "comment DEM simulation mesh export" << std::endl;
+    ostream << "element vertex " << total_v << std::endl;
+    ostream << "property float x" << std::endl;
+    ostream << "property float y" << std::endl;
+    ostream << "property float z" << std::endl;
+    ostream << "element face " << total_f << std::endl;
+    ostream << "property list uchar int vertex_indices" << std::endl;
+    if (patch_colors) {
+        ostream << "property uchar red" << std::endl;
+        ostream << "property uchar green" << std::endl;
+        ostream << "property uchar blue" << std::endl;
+    }
+    ostream << "end_header" << std::endl;
+
+    mesh_num = 0;
+    for (const auto& mmesh : m_meshes) {
+        if (!thisMeshSkip[mesh_num]) {
+            bodyID_t mowner = mmesh->owner;
+            float3 ownerPos = ownerPosFromHost(mowner);
+            float4 ownerOriQ = ownerOriQFromHost(mowner);
+            for (const auto& v : mmesh->GetCoordsVertices()) {
+                float3 point = v;
+                applyFrameTransformLocalToGlobal(point, ownerPos, ownerOriQ);
+                ostream << point.x << " " << point.y << " " << point.z << std::endl;
+            }
+        }
+        mesh_num++;
+    }
+
+    ostream << std::endl;
+    auto hash32 = [](uint32_t x) {
+        x ^= x >> 16;
+        x *= 0x7feb352d;
+        x ^= x >> 15;
+        x *= 0x846ca68b;
+        x ^= x >> 16;
+        return x;
+    };
+
+    mesh_num = 0;
+    for (const auto& mmesh : m_meshes) {
+        if (!thisMeshSkip[mesh_num]) {
+            const auto& faces = mmesh->GetIndicesVertexes();
+            const auto& patch_ids = mmesh->GetPatchIDs();
+            bool has_patch_ids = (patch_ids.size() == faces.size());
+
+            for (size_t fi = 0; fi < faces.size(); ++fi) {
+                const auto& f = faces[fi];
+                ostream << "3 " << (size_t)f.x + vertexOffset[mesh_num] << " " << (size_t)f.y + vertexOffset[mesh_num]
+                        << " " << (size_t)f.z + vertexOffset[mesh_num];
+                if (patch_colors) {
+                    uint32_t patch_id = has_patch_ids ? static_cast<uint32_t>(patch_ids[fi]) : 0u;
+                    uint32_t key = patch_id + 0x9e3779b9u * (mesh_num + 1u);
+                    uint32_t h = hash32(key);
+                    unsigned int r = (h >> 16) & 0xFFu;
+                    unsigned int g = (h >> 8) & 0xFFu;
+                    unsigned int b = h & 0xFFu;
+                    ostream << " " << r << " " << g << " " << b;
+                }
+                ostream << std::endl;
+            }
+        }
+        mesh_num++;
+    }
+
+    ptFile << ostream.str();
+}
+
 inline void DEMDynamicThread::contactPrimitivesArraysResize(size_t nContactPairs) {
     DEME_DUAL_ARRAY_RESIZE(idPrimitiveA, nContactPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(idPrimitiveB, nContactPairs, 0);
@@ -2042,8 +2679,6 @@ inline void DEMDynamicThread::contactPrimitivesArraysResize(size_t nContactPairs
         if (simParams->storeNormal) {
             DEME_DUAL_ARRAY_RESIZE(contactNormals, nContactPairs, make_float3(0));
         }
-        // NEW: Resize SAT satisfaction array for tracking tri-tri physical contact
-        DEME_DUAL_ARRAY_RESIZE(contactPatchDirectionRespected, nContactPairs, 0);
     }
 
     // Re-packing pointers now is automatic
@@ -2058,19 +2693,37 @@ inline void DEMDynamicThread::contactPatchArrayResize(size_t nPatchPairs) {
     DEME_DUAL_ARRAY_RESIZE(idPatchA, nPatchPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(idPatchB, nPatchPairs, 0);
     DEME_DUAL_ARRAY_RESIZE(contactTypePatch, nPatchPairs, NOT_A_CONTACT);
+    DEME_DUAL_ARRAY_RESIZE(contactPatchIsland, nPatchPairs, NULL_BODYID);
 
     // Re-packing pointers to device now is automatic
     // Sync pointers to device can be delayed... we'll only need to do that before kernel calls
 }
 
 inline void DEMDynamicThread::unpackMyBuffer() {
+    DEME_NVTX_RANGE("dT::unpack");
+    if (kT) {
+        const bool same_dev = (streamInfo.device == kT->streamInfo.device);
+        // If sharing a device, ensure kT finished populating the kT->dT transfer buffers before we consume them.
+        if (same_dev && kT->kT_to_dT_BufferReadyEvent) {
+            DEME_GPU_CALL(cudaStreamWaitEvent(streamInfo.stream, kT->kT_to_dT_BufferReadyEvent, 0));
+        }
+    }
+
     // Make a note on the contact number of the previous time step
     *solverScratchSpace.numPrevContacts = *solverScratchSpace.numContacts;
     *solverScratchSpace.numPrevPrimitiveContacts = *solverScratchSpace.numPrimitiveContacts;
     // kT's batch of produce is made with this max drift in mind
     pSchedSupport->dynamicMaxFutureDrift = (pSchedSupport->kinematicMaxFutureDrift).load();
     // DEME_DEBUG_PRINTF("dynamicMaxFutureDrift is %u", (pSchedSupport->dynamicMaxFutureDrift).load());
+    if (pSchedSupport) {
+        const float ghost_margin = pSchedSupport->kinematicGhostMargin.load(std::memory_order_relaxed);
+        if (ghost_margin > 0.f && fabsf(simParams->dyn.beta - ghost_margin) > 1e-8f) {
+            simParams->dyn.beta = ghost_margin;
+            simParams.toDeviceAsync(streamInfo.stream);
+        }
+    }
 
+    contactMappingUsesBuffer = false;
     DEME_GPU_CALL(cudaMemcpy(&(solverScratchSpace.numPrimitiveContacts), &nPrimitiveContactPairs_buffer, sizeof(size_t),
                              cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(&(solverScratchSpace.numContacts), &nPatchContactPairs_buffer, sizeof(size_t),
@@ -2085,98 +2738,210 @@ inline void DEMDynamicThread::unpackMyBuffer() {
         contactPatchArrayResize(*solverScratchSpace.numContacts);
     }
 
-    DEME_GPU_CALL(cudaMemcpy(granData->idPrimitiveA, idPrimitiveA_buffer.data(),
-                             *solverScratchSpace.numPrimitiveContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->idPrimitiveB, idPrimitiveB_buffer.data(),
-                             *solverScratchSpace.numPrimitiveContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->contactTypePrimitive, contactTypePrimitive_buffer.data(),
-                             *solverScratchSpace.numPrimitiveContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->geomToPatchMap, geomToPatchMap_buffer.data(),
-                             *solverScratchSpace.numPrimitiveContacts * sizeof(contactPairs_t),
-                             cudaMemcpyDeviceToDevice));
+    const size_t nPrimitive = *solverScratchSpace.numPrimitiveContacts;
+    const size_t nPatch = *solverScratchSpace.numContacts;
+    const int read_idx = kt_write_buf;
+    const int dev = streamInfo.device;
+    static const bool allow_swap = []() {
+        const char* env = std::getenv("DEME_DT_UNPACK_SWAP");
+        if (!env || !*env) {
+            return true;
+        }
+        return !(env[0] == '0' && env[1] == '\0');
+    }();
+    static const bool allow_direct_mapping = []() {
+        const char* env = std::getenv("DEME_DT_UNPACK_DIRECT_MAPPING");
+        if (!env || !*env) {
+            return true;
+        }
+        return !(env[0] == '0' && env[1] == '\0');
+    }();
+    bool swapped = false;
+#ifndef DEME_USE_MANAGED_ARRAYS
+    if (kT && allow_swap && streamInfo.device == kT->streamInfo.device) {
+        swapped = swap_device_buffer(idPrimitiveA, idPrimitiveA_buffer[read_idx]);
+        swapped = swap_device_buffer(idPrimitiveB, idPrimitiveB_buffer[read_idx]) && swapped;
+        swapped = swap_device_buffer(contactTypePrimitive, contactTypePrimitive_buffer[read_idx]) && swapped;
+        swapped = swap_device_buffer(geomToPatchMap, geomToPatchMap_buffer[read_idx]) && swapped;
+        swapped = swap_device_buffer(idPatchA, idPatchA_buffer[read_idx]) && swapped;
+        swapped = swap_device_buffer(idPatchB, idPatchB_buffer[read_idx]) && swapped;
+        swapped = swap_device_buffer(contactTypePatch, contactTypePatch_buffer[read_idx]) && swapped;
+        swapped = swap_device_buffer(contactPatchIsland, contactPatchIsland_buffer[read_idx]) && swapped;
+    }
+#endif
+    xfer::XferList xu;
+    if (!swapped) {
+        xu.add(granData->idPrimitiveA, idPrimitiveA_buffer[read_idx].data(), nPrimitive * sizeof(bodyID_t));
+        xu.add(granData->idPrimitiveB, idPrimitiveB_buffer[read_idx].data(), nPrimitive * sizeof(bodyID_t));
+        xu.add(granData->contactTypePrimitive, contactTypePrimitive_buffer[read_idx].data(),
+               nPrimitive * sizeof(contact_t));
+        xu.add(granData->geomToPatchMap, geomToPatchMap_buffer[read_idx].data(), nPrimitive * sizeof(contactPairs_t));
 
-    // Unpack separate patch ID arrays
-    DEME_GPU_CALL(cudaMemcpy(granData->idPatchA, idPatchA_buffer.data(),
-                             *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->idPatchB, idPatchB_buffer.data(),
-                             *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->contactTypePatch, contactTypePatch_buffer.data(),
-                             *solverScratchSpace.numContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
+        // Unpack separate patch ID arrays
+        xu.add(granData->idPatchA, idPatchA_buffer[read_idx].data(), nPatch * sizeof(bodyID_t));
+        xu.add(granData->idPatchB, idPatchB_buffer[read_idx].data(), nPatch * sizeof(bodyID_t));
+        xu.add(granData->contactTypePatch, contactTypePatch_buffer[read_idx].data(), nPatch * sizeof(contact_t));
+        xu.add(granData->contactPatchIsland, contactPatchIsland_buffer[read_idx].data(), nPatch * sizeof(bodyID_t));
+    }
 
     if (!solverFlags.isHistoryless) {
-        // Note we don't have to use dedicated memory space for unpacking contactMapping_buffer contents, because we
-        // only use it once per kT update, at the time of unpacking. So let us just use a temp vector to store it.
-        size_t mapping_bytes = (*solverScratchSpace.numContacts) * sizeof(contactPairs_t);
-        granData->contactMapping =
-            (contactPairs_t*)solverScratchSpace.allocateTempVector("contactMapping", mapping_bytes);
-        DEME_GPU_CALL(cudaMemcpy(granData->contactMapping, contactMapping_buffer.data(), mapping_bytes,
-                                 cudaMemcpyDeviceToDevice));
-        // std::cout << "Unpacked contactMapping: " << std::endl;
-        // displayDeviceArray<contactPairs_t>(granData->contactMapping, *solverScratchSpace.numContacts);
+        if (kT && allow_direct_mapping && streamInfo.device == kT->streamInfo.device) {
+            granData->contactMapping = contactMapping_buffer[read_idx].data();
+            contactMappingUsesBuffer = true;
+        } else {
+            size_t mapping_bytes = nPatch * sizeof(contactPairs_t);
+            granData->contactMapping =
+                (contactPairs_t*)solverScratchSpace.allocateTempVector("contactMapping", mapping_bytes);
+            xu.add(granData->contactMapping, contactMapping_buffer[read_idx].data(), mapping_bytes);
+            contactMappingUsesBuffer = false;
+        }
+    } else {
+        granData->contactMapping = nullptr;
+        contactMappingUsesBuffer = false;
+    }
+    xu.run(dev, dev, streamInfo.stream);
+    if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f && granData->ownerCylWrapOffset) {
+        const size_t nOwners = simParams->nOwnerBodies;
+        if (nOwners > 0) {
+            DEME_GPU_CALL(cudaMemsetAsync(granData->ownerCylWrapOffset, 0, nOwners * sizeof(int), streamInfo.stream));
+        }
+    }
+    // Cylindrical periodic feedback flags should accumulate between two kT updates (which can span multiple dT
+    // steps). Reset them only when a fresh kT produce is unpacked.
+    if (simParams->useCylPeriodic && simParams->useCylPeriodicDiagCounters && simParams->cylPeriodicSpan > 0.f &&
+        granData->ownerCylGhostActive) {
+        const size_t nOwners = simParams->nOwnerBodies;
+        if (nOwners > 0) {
+            DEME_GPU_CALL(
+                cudaMemsetAsync(granData->ownerCylGhostActive, 0, nOwners * sizeof(unsigned int), streamInfo.stream));
+        }
+    }
+    if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f && granData->ownerCylSkipPotentialTotal) {
+        DEME_GPU_CALL(
+            cudaMemsetAsync(granData->ownerCylSkipPotentialTotal, 0, sizeof(unsigned int), streamInfo.stream));
+    }
+    // Flip buffer for next kT production
+    kt_write_buf = 1 - read_idx;
+    if (kT) {
+        kT->granData->pDTOwnedBuffer_idPrimitiveA = idPrimitiveA_buffer[kt_write_buf].data();
+        kT->granData->pDTOwnedBuffer_idPrimitiveB = idPrimitiveB_buffer[kt_write_buf].data();
+        kT->granData->pDTOwnedBuffer_contactType = contactTypePrimitive_buffer[kt_write_buf].data();
+        kT->granData->pDTOwnedBuffer_geomToPatchMap = geomToPatchMap_buffer[kt_write_buf].data();
+        kT->granData->pDTOwnedBuffer_idPatchA = idPatchA_buffer[kt_write_buf].data();
+        kT->granData->pDTOwnedBuffer_idPatchB = idPatchB_buffer[kt_write_buf].data();
+        kT->granData->pDTOwnedBuffer_contactTypePatch = contactTypePatch_buffer[kt_write_buf].data();
+        kT->granData->pDTOwnedBuffer_contactPatchIsland = contactPatchIsland_buffer[kt_write_buf].data();
+        if (!solverFlags.isHistoryless) {
+            kT->granData->pDTOwnedBuffer_contactMapping = contactMapping_buffer[kt_write_buf].data();
+        }
     }
     // Prepare for kernel calls immediately after
-    granData.toDevice();
+    granData.toDeviceAsync(streamInfo.stream);
+}
+
+bool DEMDynamicThread::tryConsumeKinematicProduce(bool allow_blocking, bool mark_receive, bool use_logical_stamp) {
+    (void)allow_blocking;
+    if (!kT) {
+        return false;
+    }
+    if (!pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh.load(std::memory_order_acquire)) {
+        return false;
+    }
+    const int64_t logical_recv = use_logical_stamp
+                                     ? (pSchedSupport->currentStampOfDynamic.load(std::memory_order_relaxed) + 1)
+                                     : pSchedSupport->currentStampOfDynamic.load(std::memory_order_relaxed);
+    if (use_logical_stamp) {
+        recv_stamp_override = logical_recv;
+    }
+    timers.GetTimer("Unpack updates from kT").start();
+    unpack_impl();
+    timers.GetTimer("Unpack updates from kT").stop();
+    recv_stamp_override = -1;
+    if (mark_receive) {
+        auto& reg = futureDriftRegulator;
+        reg.receive_pending = true;
+        drainProgressEvents();
+        reg.pending_recv_stamp = static_cast<uint64_t>(logical_recv);
+    }
+    return true;
 }
 
 inline void DEMDynamicThread::sendToTheirBuffer() {
-    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_voxelID, granData->voxelID,
-                             simParams->nOwnerBodies * sizeof(voxelID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_locX, granData->locX,
-                             simParams->nOwnerBodies * sizeof(subVoxelPos_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_locY, granData->locY,
-                             simParams->nOwnerBodies * sizeof(subVoxelPos_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_locZ, granData->locZ,
-                             simParams->nOwnerBodies * sizeof(subVoxelPos_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ0, granData->oriQw, simParams->nOwnerBodies * sizeof(oriQ_t),
-                             cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ1, granData->oriQx, simParams->nOwnerBodies * sizeof(oriQ_t),
-                             cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ2, granData->oriQy, simParams->nOwnerBodies * sizeof(oriQ_t),
-                             cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ3, granData->oriQz, simParams->nOwnerBodies * sizeof(oriQ_t),
-                             cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_absVel, pCycleVel, simParams->nOwnerBodies * sizeof(float),
-                             cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_absAngVel, pCycleAngVel, simParams->nOwnerBodies * sizeof(float),
-                             cudaMemcpyDeviceToDevice));
+    const int srcDev = streamInfo.device;      // dT GPU
+    const int dstDev = kT->streamInfo.device;  // kT GPU
+    const size_t nOwners = (size_t)simParams->nOwnerBodies;
+    const bool same_dev = (srcDev == dstDev);
+    const cudaStream_t xfer_stream = same_dev ? streamInfo.stream : 0;
+
+    xfer::XferList xt;
+    xt.add(granData->pKTOwnedBuffer_voxelID, granData->voxelID, nOwners * sizeof(voxelID_t));
+    xt.add(granData->pKTOwnedBuffer_locX, granData->locX, nOwners * sizeof(subVoxelPos_t));
+    xt.add(granData->pKTOwnedBuffer_locY, granData->locY, nOwners * sizeof(subVoxelPos_t));
+    xt.add(granData->pKTOwnedBuffer_locZ, granData->locZ, nOwners * sizeof(subVoxelPos_t));
+    xt.add(granData->pKTOwnedBuffer_oriQ0, granData->oriQw, nOwners * sizeof(oriQ_t));
+    xt.add(granData->pKTOwnedBuffer_oriQ1, granData->oriQx, nOwners * sizeof(oriQ_t));
+    xt.add(granData->pKTOwnedBuffer_oriQ2, granData->oriQy, nOwners * sizeof(oriQ_t));
+    xt.add(granData->pKTOwnedBuffer_oriQ3, granData->oriQz, nOwners * sizeof(oriQ_t));
+    if (simParams->useCylPeriodicDiagCounters && granData->pKTOwnedBuffer_ownerCylGhostActive &&
+        granData->ownerCylGhostActive) {
+        xt.add(granData->pKTOwnedBuffer_ownerCylGhostActive, granData->ownerCylGhostActive,
+               nOwners * sizeof(unsigned int));
+    }
+    xt.add(granData->pKTOwnedBuffer_absVel, pCycleVel, nOwners * sizeof(float));
+    xt.add(granData->pKTOwnedBuffer_absAngVel, pCycleAngVel, nOwners * sizeof(float));
+    xt.run(dstDev, srcDev, xfer_stream);
+
+    // Optionals
+    xfer::XferList xk;
+    if (solverFlags.canFamilyChangeOnDevice) {
+        xk.add(granData->pKTOwnedBuffer_familyID, granData->familyID,
+               (size_t)simParams->nOwnerBodies * sizeof(family_t));
+    }
+    if (solverFlags.willMeshDeform) {
+        xk.add(granData->pKTOwnedBuffer_relPosNode1, granData->relPosNode1, (size_t)simParams->nTriGM * sizeof(float3));
+        xk.add(granData->pKTOwnedBuffer_relPosNode2, granData->relPosNode2, (size_t)simParams->nTriGM * sizeof(float3));
+        xk.add(granData->pKTOwnedBuffer_relPosNode3, granData->relPosNode3, (size_t)simParams->nTriGM * sizeof(float3));
+    }
+    xk.run(dstDev, srcDev, xfer_stream);
 
     // Send simulation metrics for kT's reference.
-    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_ts, &(simParams->h), sizeof(float), cudaMemcpyHostToDevice));
+    if (same_dev) {
+        DEME_GPU_CALL(cudaMemcpyAsync(granData->pKTOwnedBuffer_ts, &(simParams->dyn.h), sizeof(float),
+                                      cudaMemcpyHostToDevice, streamInfo.stream));
+    } else {
+        DEME_GPU_CALL(
+            cudaMemcpy(granData->pKTOwnedBuffer_ts, &(simParams->dyn.h), sizeof(float), cudaMemcpyHostToDevice));
+    }
     // Note that perhapsIdealFutureDrift is non-negative, and it will be used to determine the margin size; however, if
     // scheduleHelper is instructed to have negative future drift then perhapsIdealFutureDrift no longer affects them.
-    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxDrift, perhapsIdealFutureDrift.getHostPointer(),
-                             sizeof(unsigned int), cudaMemcpyHostToDevice));
-
-    // Send max tri-tri penetration value for kT's margin computation (device-to-device)
-    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxTriTriPenetration, maxTriTriPenetration.getDevicePointer(),
-                             sizeof(double), cudaMemcpyDeviceToDevice));
-
-    // Family number is a typical changable quantity on-the-fly. If this flag is on, dT is responsible for sending this
-    // info to kT.
-    if (solverFlags.canFamilyChangeOnDevice) {
-        DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_familyID, granData->familyID,
-                                 simParams->nOwnerBodies * sizeof(family_t), cudaMemcpyDeviceToDevice));
+    if (same_dev) {
+        DEME_GPU_CALL(cudaMemcpyAsync(granData->pKTOwnedBuffer_maxDrift, perhapsIdealFutureDrift.getHostPointer(),
+                                      sizeof(unsigned int), cudaMemcpyHostToDevice, streamInfo.stream));
+    } else {
+        DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxDrift, perhapsIdealFutureDrift.getHostPointer(),
+                                 sizeof(unsigned int), cudaMemcpyHostToDevice));
     }
 
-    // May need to send updated mesh
+    xfer::XferList xm;
+    xm.add(granData->pKTOwnedBuffer_maxTriTriPenetration, maxTriTriPenetration.getDevicePointer(), sizeof(double));
+    xm.run(dstDev, srcDev, xfer_stream);
+
     if (solverFlags.willMeshDeform) {
-        DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_relPosNode1, granData->relPosNode1,
-                                 simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
-        DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_relPosNode2, granData->relPosNode2,
-                                 simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
-        DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_relPosNode3, granData->relPosNode3,
-                                 simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
         solverFlags.willMeshDeform = false;
-        // kT can't be loading buffer when dT is sending, so it is safe
         kT->solverFlags.willMeshDeform = true;
     }
-
-    // This subroutine also includes recording the time stamp of this batch ingredient dT sent to kT
+    // This subroutine also includes recording the time stamp of this batch ingredient dT sent to kT.
+    // Use the logical step stamp (not the completion stamp) so scheduling is not biased by progress-event drainage.
     pSchedSupport->kinematicIngredProdDateStamp = (pSchedSupport->currentStampOfDynamic).load();
+
+    // Signal kT that dT->kT buffers are populated (same-device path); kT waits on this event before unpacking.
+    if (same_dev && dT_to_kT_BufferReadyEvent) {
+        DEME_GPU_CALL(cudaEventRecord(dT_to_kT_BufferReadyEvent, streamInfo.stream));
+    }
 }
 
 inline void DEMDynamicThread::migrateEnduringContacts() {
-    // Use granData->contactMapping's information (stored in temp device vector) to map old and new contacts
+    // Use granData->contactMapping's information (now directly the transfer buffer) to map old and new contacts
 
     // All contact wildcards are the same type, so we can just allocate one temp array for all of them
     float* newWildcards[DEME_MAX_WILDCARD_NUM];
@@ -2195,7 +2960,6 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
     // A sentry array is here to see if there exist a contact that dT thinks it's alive but kT doesn't map it to the new
     // history array. This is just a quick and rough check: we only look at the last contact wildcard to see if it is
     // non-0, whatever it represents.
-    size_t blocks_needed_for_rearrange;
     if (DEME_GET_VERBOSITY() >= VERBOSITY_METRIC) {
         if (*solverScratchSpace.numPrevContacts > 0) {
             markAliveContacts(granData->contactWildcards[simParams->nContactWildcards - 1], contactSentry,
@@ -2223,7 +2987,7 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
                     "ALIVE_CONTACT_NOT_DETECTED",
                     "%zu contacts were active at time %.9g on dT, but they are not detected on kT, therefore being "
                     "removed unexpectedly!",
-                    *lostContact, simParams->timeElapsed);
+                    *lostContact, simParams->dyn.timeElapsed);
                 DEME_DEBUG_PRINTF("New number of contacts: %zu", *solverScratchSpace.numContacts);
                 DEME_DEBUG_PRINTF("Old number of contacts: %zu", *solverScratchSpace.numPrevContacts);
                 DEME_DEBUG_PRINTF("New contact A:");
@@ -2252,30 +3016,44 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
         }
     }
     for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
-        DEME_GPU_CALL(cudaMemcpy(granData->contactWildcards[i], newWildcards[i],
-                                 (*solverScratchSpace.numContacts) * sizeof(float), cudaMemcpyDeviceToDevice));
+        DEME_GPU_CALL(cudaMemcpyAsync(granData->contactWildcards[i], newWildcards[i],
+                                      (*solverScratchSpace.numContacts) * sizeof(float), cudaMemcpyDeviceToDevice,
+                                      streamInfo.stream));
     }
 
     solverScratchSpace.finishUsingTempVector("newWildcards");
     solverScratchSpace.finishUsingTempVector("contactSentry");
 
     // granData may have changed in some of the earlier steps
-    granData.toDevice();
+    granData.toDeviceAsync(streamInfo.stream);
 }
 
 // The argument is two maps: contact type -> (start offset, count), contact type -> list of [(program bundle name,
 // kernel name)]
 inline void DEMDynamicThread::dispatchPrimitiveForceKernels(
     const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountMap,
-    const ContactTypeMap<std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>& typeKernelMap) {
+    const ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>>&
+        typeKernelMap) {
     // For each contact type that exists, call its corresponding kernel(s)
     for (size_t i = 0; i < m_numExistingTypes; i++) {
         contact_t contact_type = existingContactTypes[i];
-        const auto& start_count = typeStartCountMap.at(contact_type);
+        if (!isSupportedContactType(contact_type)) {
+            continue;
+        }
+        const auto seg_it = typeStartCountMap.find(contact_type);
+        if (seg_it == typeStartCountMap.end()) {
+            continue;
+        }
+        const auto& start_count = seg_it->second;
         // Offset and count being contactPairs_t is very important, as CUDA kernel arguments cannot safely implicitly
         // convert type (from size_t to unsigned int, for example)
         contactPairs_t startOffset = start_count.first;
         contactPairs_t count = start_count.second;
+        // Run-length encode may include NOT_A_CONTACT segments from padded/non-active slots.
+        // They have no force kernel and should be ignored.
+        if (contact_type == NOT_A_CONTACT || count == 0) {
+            continue;
+        }
 
         // For this contact type, get its list of (program bundle name, kernel name)
         if (typeKernelMap.count(contact_type) == 0) {
@@ -2285,7 +3063,7 @@ inline void DEMDynamicThread::dispatchPrimitiveForceKernels(
             // for (size_t j = 0; j < m_numExistingTypes; j++) {
             //     DEME_PRINTF("existingContactTypes[%zu] = %d\n", j, existingContactTypes[j]);
             // }
-            DEME_ERROR("Contact type %d has no associated force kernel in to execute!", contact_type);
+            DEME_ERROR("Contact type %d has no associated force kernel to execute.", contact_type);
         }
         const auto& kernelList = typeKernelMap.at(contact_type);
         for (const auto& [progName, kernelName] : kernelList) {
@@ -2298,13 +3076,13 @@ inline void DEMDynamicThread::dispatchPrimitiveForceKernels(
             }
         }
     }
-    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
 inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
     const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPrimitiveMap,
     const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
-    const ContactTypeMap<std::vector<std::pair<std::shared_ptr<jitify::Program>, std::string>>>& typeKernelMap) {
+    const ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>>&
+        typeKernelMap) {
     // Reset max tri-tri penetration for this timestep on device (kT may need this info)
     DEME_GPU_CALL(cudaMemset(maxTriTriPenetration.getDevicePointer(), 0, sizeof(double)));
 
@@ -2313,8 +3091,13 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
         contact_t contact_type = existingContactTypes[i];
         if (contact_type == SPHERE_TRIANGLE_CONTACT || contact_type == TRIANGLE_TRIANGLE_CONTACT ||
             contact_type == TRIANGLE_ANALYTICAL_CONTACT) {
-            const auto& start_count_primitive = typeStartCountPrimitiveMap.at(contact_type);
-            const auto& start_count_patch = typeStartCountPatchMap.at(contact_type);
+            const auto prim_it = typeStartCountPrimitiveMap.find(contact_type);
+            const auto patch_it = typeStartCountPatchMap.find(contact_type);
+            if (prim_it == typeStartCountPrimitiveMap.end() || patch_it == typeStartCountPatchMap.end()) {
+                continue;
+            }
+            const auto& start_count_primitive = prim_it->second;
+            const auto& start_count_patch = patch_it->second;
             contactPairs_t startOffsetPrimitive = start_count_primitive.first;
             contactPairs_t countPrimitive = start_count_primitive.second;
             contactPairs_t startOffsetPatch = start_count_patch.first;
@@ -2324,127 +3107,77 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
             // This reduce-by-key operation reduces primitive-recorded force pairs into patch/convex part-based
             // force pairs. All elements that share the same geomToPatchMap value vote together.
             if (countPrimitive > 0) {
-                // Allocate temporary arrays for the voting process
-                float3* weightedNormals =
-                    (float3*)solverScratchSpace.allocateTempVector("weightedNormals", countPrimitive * sizeof(float3));
-                double* areas =
-                    (double*)solverScratchSpace.allocateTempVector("areas", countPrimitive * sizeof(double));
-                // Keys extracted from geomToPatchMap - these map primitives to patch pairs
-                contactPairs_t* keys = (contactPairs_t*)solverScratchSpace.allocateTempVector(
-                    "votingKeys", countPrimitive * sizeof(contactPairs_t));
+                // Keys are already available on device: geomToPatchMap maps each primitive contact to its patch pair.
+                // This avoids materializing an extra temporary key buffer.
+                contactPairs_t* keys = granData->geomToPatchMap + startOffsetPrimitive;
 
                 // Allocate arrays for reduce-by-key results (uniqueKeys uses contactPairs_t, not patchIDPair_t)
                 contactPairs_t* uniqueKeys = (contactPairs_t*)solverScratchSpace.allocateTempVector(
                     "uniqueKeys", countPrimitive * sizeof(contactPairs_t));
-                float3* votedWeightedNormals = (float3*)solverScratchSpace.allocateTempVector(
-                    "votedWeightedNormals", countPrimitive * sizeof(float3));
                 solverScratchSpace.allocateDualStruct("numUniqueKeys");
                 size_t* numUniqueKeys = solverScratchSpace.getDualStructDevice("numUniqueKeys");
 
-                // Step 1: Prepare weighted normals, areas, and keys
-                // The kernel extracts keys from geomToPatchMap, computes weighted normals, and stores areas
-                prepareWeightedNormalsForVoting(&granData, weightedNormals, areas, keys, startOffsetPrimitive,
-                                                countPrimitive, contact_type, streamInfo.stream);
+                // Step 1: Prepare weighted normals for voting.
+                // Note: the validated legacy semantics uses area weighting.
+                float3* weightedNormals =
+                    (float3*)solverScratchSpace.allocateTempVector("weightedNormals", countPrimitive * sizeof(float3));
+                prepareWeightedNormalsForVoting(&granData, weightedNormals, startOffsetPrimitive, countPrimitive,
+                                                streamInfo.stream);
 
                 // Step 2: Reduce-by-key for weighted normals (sum)
-                // The keys are geomToPatchMap values (contactPairs_t), which group primitives by patch pair
+                // The number of patch pairs (unique keys) is expected to be countPatch.
+                // Using countPatch here saves scratch memory without changing semantics.
+                float3* votedWeightedNormals =
+                    (float3*)solverScratchSpace.allocateTempVector("votedWeightedNormals", countPatch * sizeof(float3));
                 cubSumReduceByKey<contactPairs_t, float3>(keys, uniqueKeys, weightedNormals, votedWeightedNormals,
                                                           numUniqueKeys, countPrimitive, streamInfo.stream,
                                                           solverScratchSpace);
                 solverScratchSpace.finishUsingTempVector("weightedNormals");
-                // For extra safety
-                solverScratchSpace.syncDualStructDeviceToHost("numUniqueKeys");
-                size_t numUniqueKeysHost = *(solverScratchSpace.getDualStructHost("numUniqueKeys"));
-                // std::cout << "Keys:" << std::endl;
-                // displayDeviceArray<contactPairs_t>(keys, countPrimitive);
-                // std::cout << "Unique Keys:" << std::endl;
-                // displayDeviceArray<contactPairs_t>(uniqueKeys, numUniqueKeysHost);
-                if (numUniqueKeysHost != countPatch) {
-                    DEME_ERROR(
-                        "Patch-based contact voting produced %zu unique patch pairs, but expected %zu pairs for "
-                        "contact type %d!",
-                        numUniqueKeysHost, countPatch, contact_type);
-                }
 
-                // Step 3: Normalize the voted normals by total area and scatter back to a temp array.
+                // Optional debug-only safety check (removed from release path for full GPU orientation).
+                DEME_DEBUG_EXEC({
+                    solverScratchSpace.syncDualStructDeviceToHost("numUniqueKeys");
+                    size_t numUniqueKeysHost = *(solverScratchSpace.getDualStructHost("numUniqueKeys"));
+                    if (numUniqueKeysHost != countPatch) {
+                        DEME_ERROR(
+                            "Patch-based contact voting produced %zu unique patch pairs, but expected %zu pairs for "
+                            "contact type %d!",
+                            numUniqueKeysHost, countPatch, contact_type);
+                    }
+                });
+
+                // Step 3: Normalize voted normals.
                 float3* votedNormals =
                     (float3*)solverScratchSpace.allocateTempVector("votedNormals", countPatch * sizeof(float3));
                 normalizeAndScatterVotedNormals(votedWeightedNormals, votedNormals, countPatch, streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
-                // displayDeviceFloat3(votedNormals, countPatch);
 
-                // Step 4: Compute projected penetration and area for each primitive contact
-                // Both the penetration and area are projected onto the voted normal
-                // If the projected penetration becomes negative, both are set to 0
-                // Reuse keys array for the reduce-by-key operation
-                double* projectedPenetrations = (double*)solverScratchSpace.allocateTempVector(
-                    "projectedPenetrations", countPrimitive * sizeof(double));
-                double* projectedAreas =
-                    (double*)solverScratchSpace.allocateTempVector("projectedAreas", countPrimitive * sizeof(double));
-                computeWeightedUsefulPenetration(&granData, votedNormals, keys, areas, projectedPenetrations,
-                                                 projectedAreas, startOffsetPrimitive, startOffsetPatch, countPrimitive,
-                                                 streamInfo.stream);
-                solverScratchSpace.finishUsingTempVector("areas");
+                // Step 4: Compute per-primitive patch accumulators (projected area, max projected penetration,
+                // and weighted contact-point sums) in one pass.
+                PatchContactAccum* primitivePatchAccumulators =
+                    (PatchContactAccum*)solverScratchSpace.allocateTempVector(
+                        "primitivePatchAccumulators", countPrimitive * sizeof(PatchContactAccum));
+                computePatchContactAccumulators(&granData, votedNormals, keys, primitivePatchAccumulators,
+                                                startOffsetPrimitive, startOffsetPatch, countPrimitive,
+                                                streamInfo.stream);
 
-                // Step 5: Reduce-by-key to get total projected area per patch pair (sum)
-                double* totalProjectedAreas =
-                    (double*)solverScratchSpace.allocateTempVector("totalProjectedAreas", countPatch * sizeof(double));
-                cubSumReduceByKey<contactPairs_t, double>(keys, uniqueKeys, projectedAreas, totalProjectedAreas,
-                                                          numUniqueKeys, countPrimitive, streamInfo.stream,
-                                                          solverScratchSpace);
+                // Step 5: Reduce-by-key accumulators to patch level (sum + max).
+                PatchContactAccum* patchContactAccumulators = (PatchContactAccum*)solverScratchSpace.allocateTempVector(
+                    "patchContactAccumulators", countPatch * sizeof(PatchContactAccum));
+                cubSumReduceByKey<contactPairs_t, PatchContactAccum>(
+                    keys, uniqueKeys, primitivePatchAccumulators, patchContactAccumulators, numUniqueKeys,
+                    countPrimitive, streamInfo.stream, solverScratchSpace);
 
-                // Step 6: Reduce-by-key to get max projected penetration per patch pair (max).
-                // This result, maxProjectedPenetrations, is the max of projected penetration, aka the max pen in the
-                // physical overlap case, and it's not the same as maxPenetrations in step 9 which is a fallback
-                // primitive-derived penetration.
-                double* maxProjectedPenetrations = (double*)solverScratchSpace.allocateTempVector(
-                    "maxProjectedPenetrations", countPatch * sizeof(double));
-                cubMaxReduceByKey<contactPairs_t, double>(keys, uniqueKeys, projectedPenetrations,
-                                                          maxProjectedPenetrations, numUniqueKeys, countPrimitive,
-                                                          streamInfo.stream, solverScratchSpace);
-
-                // Step 7: Compute weighted contact points for each primitive (normal case)
-                // The weight is: projected_penetration * projected_area
-                // Reuse keys, uniqueKeys, and numUniqueKeys that are still allocated
-                double3* weightedContactPoints = (double3*)solverScratchSpace.allocateTempVector(
-                    "weightedContactPoints", countPrimitive * sizeof(double3));
-                double* contactWeights =
-                    (double*)solverScratchSpace.allocateTempVector("contactWeights", countPrimitive * sizeof(double));
-                computeWeightedContactPoints(&granData, weightedContactPoints, contactWeights, projectedPenetrations,
-                                             projectedAreas, startOffsetPrimitive, countPrimitive, streamInfo.stream);
-                solverScratchSpace.finishUsingTempVector("projectedPenetrations");
-                solverScratchSpace.finishUsingTempVector("projectedAreas");
-                // Reduce-by-key to get total weighted contact points per patch pair
-                double3* totalWeightedContactPoints = (double3*)solverScratchSpace.allocateTempVector(
-                    "totalWeightedContactPoints", countPatch * sizeof(double3));
-                double* totalContactWeights =
-                    (double*)solverScratchSpace.allocateTempVector("totalContactWeights", countPatch * sizeof(double));
-                cubSumReduceByKey<contactPairs_t, double3>(keys, uniqueKeys, weightedContactPoints,
-                                                           totalWeightedContactPoints, numUniqueKeys, countPrimitive,
-                                                           streamInfo.stream, solverScratchSpace);
-                cubSumReduceByKey<contactPairs_t, double>(keys, uniqueKeys, contactWeights, totalContactWeights,
-                                                          numUniqueKeys, countPrimitive, streamInfo.stream,
-                                                          solverScratchSpace);
-                solverScratchSpace.finishUsingTempVector("weightedContactPoints");
-                solverScratchSpace.finishUsingTempVector("contactWeights");
-                // Compute voted contact points per patch pair by dividing by total weight
-                double3* votedContactPoints =
-                    (double3*)solverScratchSpace.allocateTempVector("votedContactPoints", countPatch * sizeof(double3));
-                computeFinalContactPointsPerPatch(totalWeightedContactPoints, totalContactWeights, votedContactPoints,
-                                                  countPatch, streamInfo.stream);
-                solverScratchSpace.finishUsingTempVector("totalWeightedContactPoints");
-                solverScratchSpace.finishUsingTempVector("totalContactWeights");
-
-                // Step 8: Handle zero-area patches (all primitive areas are 0)
+                // Step 6: Handle zero-area patches (all primitive areas are 0)
                 // For these patches, we need to find the max penetration primitive and use its normal/penetration
 
-                // 8a: Extract primitive penetrations for max-reduce
+                // 6a: Extract primitive penetrations for max-reduce
                 double* primitivePenetrations = (double*)solverScratchSpace.allocateTempVector(
                     "primitivePenetrations", countPrimitive * sizeof(double));
                 extractPrimitivePenetrations(&granData, primitivePenetrations, startOffsetPrimitive, countPrimitive,
                                              streamInfo.stream);
 
-                // 8b: Max-negative-reduce-by-key to get max negative penetration per patch
+                // 6b: Max-negative-reduce-by-key to get max negative penetration per patch
                 // This finds the largest negative value (smallest absolute value among negatives)
                 // Positive values are treated as very negative to indicate invalid/non-physical state
                 double* maxPenetrations =
@@ -2454,7 +3187,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                                                   streamInfo.stream, solverScratchSpace);
                 solverScratchSpace.finishUsingTempVector("primitivePenetrations");
 
-                // 8c: Find max-penetration primitives for zero-area patches and extract their normals, penetrations,
+                // 6c: Find max-penetration primitives for zero-area patches and extract their normals, penetrations,
                 // and contact points
                 float3* zeroAreaNormals =
                     (float3*)solverScratchSpace.allocateTempVector("zeroAreaNormals", countPatch * sizeof(float3));
@@ -2467,12 +3200,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     startOffsetPrimitive, startOffsetPatch, countPrimitive, streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("maxPenetrations");
 
-                // Clean up keys arrays now that we're done with reductions
-                solverScratchSpace.finishUsingTempVector("votingKeys");
-                solverScratchSpace.finishUsingTempVector("uniqueKeys");
-                solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
-
-                // Step 9: Finalize patch results by combining voting with zero-area handling.
+                // Step 7: Finalize patch results by combining voting with zero-area handling.
                 // If patch-based projected area is 0 (or this patch pair consists of no SAT pair), meaning no physical
                 // contact, we use the fallback estimations (zeroArea*) of CP, penetration and areas.
                 double* finalAreas =
@@ -2486,17 +3214,20 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
 
                 double3* finalContactPoints =
                     (double3*)solverScratchSpace.allocateTempVector("finalContactPoints", countPatch * sizeof(double3));
-                finalizePatchResults(totalProjectedAreas, votedNormals, maxProjectedPenetrations, votedContactPoints,
-                                     zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, finalAreas,
-                                     finalNormals, finalPenetrations.data(), finalContactPoints, countPatch,
-                                     streamInfo.stream);
-                solverScratchSpace.finishUsingTempVector("totalProjectedAreas");
+                finalizePatchResultsFromAccumulators(patchContactAccumulators, votedNormals, zeroAreaNormals,
+                                                     zeroAreaPenetrations, zeroAreaContactPoints, finalAreas,
+                                                     finalNormals, finalPenetrations.data(), finalContactPoints,
+                                                     countPatch, streamInfo.stream);
+
+                // Clean up temporaries no longer needed past this point.
                 solverScratchSpace.finishUsingTempVector("votedNormals");
-                solverScratchSpace.finishUsingTempVector("maxProjectedPenetrations");
                 solverScratchSpace.finishUsingTempVector("zeroAreaNormals");
                 solverScratchSpace.finishUsingTempVector("zeroAreaPenetrations");
-                solverScratchSpace.finishUsingTempVector("votedContactPoints");
                 solverScratchSpace.finishUsingTempVector("zeroAreaContactPoints");
+
+                // Clean up CUB bookkeeping buffers.
+                solverScratchSpace.finishUsingTempVector("uniqueKeys");
+                solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
 
                 // Now we have:
                 // - finalAreas: final contact area per patch pair (countPatch elements)
@@ -2526,7 +3257,24 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                         }
                     }
                 }
-                DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+                if (triPVTrackingEnabled && triPVNumTrackedTriangles > 0) {
+                    float* patchNormalForce =
+                        (float*)solverScratchSpace.allocateTempVector("patchNormalForce", countPatch * sizeof(float));
+                    float* patchSlipSpeed =
+                        (float*)solverScratchSpace.allocateTempVector("patchSlipSpeed", countPatch * sizeof(float));
+                    computePatchPVScalars(&simParams, &granData, finalNormals, finalContactPoints, startOffsetPatch,
+                                          countPatch, patchNormalForce, patchSlipSpeed, streamInfo.stream);
+                    accumulateTrianglePVFromPatchContacts(
+                        &simParams, &granData, keys, primitivePatchAccumulators, patchContactAccumulators,
+                        patchNormalForce, patchSlipSpeed, startOffsetPrimitive, startOffsetPatch, countPrimitive,
+                        triPVGlobalTriToLocal.device(), triPVAccumP.device(), triPVAccumPV.device(), streamInfo.stream);
+                    solverScratchSpace.finishUsingTempVector("patchNormalForce");
+                    solverScratchSpace.finishUsingTempVector("patchSlipSpeed");
+                }
+
+                solverScratchSpace.finishUsingTempVector("primitivePatchAccumulators");
+                solverScratchSpace.finishUsingTempVector("patchContactAccumulators");
 
                 // If this is a tri-tri contact, compute max penetration for kT
                 // The max value stays on device until sendToTheirBuffer transfers it
@@ -2552,13 +3300,21 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
     // std::cout << "===========================" << std::endl;
 }
 
+void DEMDynamicThread::finalizeTrianglePVWindowStep() {
+    if (!triPVTrackingEnabled || triPVNumTrackedTriangles == 0) {
+        return;
+    }
+    triPVWindowSteps++;
+}
+
 void DEMDynamicThread::calculateForces() {
+    DEME_NVTX_RANGE("dT::calculateForces");
     // Reset force (acceleration) arrays for this time step
     size_t nContactPairs = *solverScratchSpace.numContacts;
-    size_t nPrimitiveContactPairs = *solverScratchSpace.numPrimitiveContacts;
 
-    timers.GetTimer("Clear force array").start();
+    timers.StartGpuTimer("Clear force array", streamInfo.stream);
     {
+        DEME_NVTX_RANGE("dT::prepareAccArrays");
         prepareAccArrays(&simParams, &granData, simParams->nOwnerBodies, streamInfo.stream);
 
         // prepareForceArrays is no longer needed
@@ -2568,12 +3324,13 @@ void DEMDynamicThread::calculateForces() {
         //     prepareForceArrays(&simParams, &granData, nPrimitiveContactPairs, streamInfo.stream);
         // }
     }
-    timers.GetTimer("Clear force array").stop();
+    timers.StopGpuTimer("Clear force array", streamInfo.stream);
 
     // If no contact then we don't have to calculate forces. Note there might still be forces, coming from prescription
     // or other sources.
     if (nContactPairs > 0) {
-        timers.GetTimer("Calculate contact forces").start();
+        timers.StartGpuTimer("Calculate contact forces", streamInfo.stream);
+        DEME_NVTX_RANGE("dT::contactForces");
 
         // Call specialized kernels for each contact type that exists
         dispatchPrimitiveForceKernels(typeStartCountPrimitiveMap, contactTypePrimitiveKernelMap);
@@ -2589,10 +3346,11 @@ void DEMDynamicThread::calculateForces() {
         // displayDeviceArray<bodyID_t>(granData->idPatchA, nContactPairs);
         // displayDeviceArray<bodyID_t>(granData->idPatchB, nContactPairs);
         // std::cout << "===========================" << std::endl;
-        timers.GetTimer("Calculate contact forces").stop();
+        timers.StopGpuTimer("Calculate contact forces", streamInfo.stream);
 
         if (!solverFlags.useForceCollectInPlace) {
-            timers.GetTimer("Optional force reduction").start();
+            DEME_NVTX_RANGE("dT::collectForces");
+            timers.StartGpuTimer("Optional force reduction", streamInfo.stream);
             // Reflect those body-wise forces on their owner clumps
             size_t blocks_needed_for_contacts =
                 (nContactPairs + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
@@ -2600,27 +3358,40 @@ void DEMDynamicThread::calculateForces() {
             collect_force_kernels->kernel("forceToAcc")
                 .instantiate()
                 .configure(dim3(blocks_needed_for_contacts), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-                .launch(&granData, nContactPairs);
-            DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+                .launch(&simParams, &granData, nContactPairs);
             // displayDeviceArray<float>(granData->aZ, simParams->nOwnerBodies);
             // displayDeviceFloat3(granData->contactForces, nContactPairs);
             // std::cout << nContactPairs << std::endl;
-            timers.GetTimer("Optional force reduction").stop();
+            timers.StopGpuTimer("Optional force reduction", streamInfo.stream);
         }
     }
+
+    finalizeTrianglePVWindowStep();
 }
 
 inline void DEMDynamicThread::integrateOwnerMotions() {
+    DEME_NVTX_RANGE("dT::integrateOwners");
+    timers.StartGpuTimer("Integration", streamInfo.stream);
     size_t blocks_needed_for_clumps =
         (simParams->nOwnerBodies + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
     integrator_kernels->kernel("integrateOwners")
         .instantiate()
         .configure(dim3(blocks_needed_for_clumps), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(&simParams, &granData);
-    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        .launch(&simParams, &granData, (double)simParams->dyn.timeElapsed);
+
+    // Cylindrical-periodic wildcard rotation is intentionally disabled here.
+    // Contact-history vectors are already transformed in the force kernels (base <-> active image).
+    // Running an additional per-wrap rotation here can over-rotate history and inject energy.
+
+    timers.StopGpuTimer("Integration", streamInfo.stream);
+    // Integration results must be visible before subsequent host-side coordination.
+    recordEventOnly();
+    const int64_t stamp = pSchedSupport->currentStampOfDynamic.load(std::memory_order_relaxed) + 1;
+    recordProgressEvent(stamp);
 }
 
 inline void DEMDynamicThread::routineChecks() {
+    DEME_NVTX_RANGE("dT::applyFamilyChanges");
     if (solverFlags.canFamilyChangeOnDevice) {
         size_t blocks_needed_for_clumps =
             (simParams->nOwnerBodies + DEME_NUM_MODERATORS_PER_BLOCK - 1) / DEME_NUM_MODERATORS_PER_BLOCK;
@@ -2628,152 +3399,387 @@ inline void DEMDynamicThread::routineChecks() {
             .instantiate()
             .configure(dim3(blocks_needed_for_clumps), dim3(DEME_NUM_MODERATORS_PER_BLOCK), 0, streamInfo.stream)
             .launch(&simParams, &granData, simParams->nOwnerBodies);
-        DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 }
 
 inline void DEMDynamicThread::determineSysVel() {
     // Get linear velocity
-    pCycleVel = approxVelFunc->dT_GetDeviceValue();
+    pCycleVel = approxVelFunc->dT_GetDeviceValues();
     // Get angular velocity magnitude
-    pCycleAngVel = approxAngVelFunc->dT_GetDeviceValue();
+    pCycleAngVel = approxAngVelFunc->dT_GetDeviceValues();
 }
 
 inline void DEMDynamicThread::unpack_impl() {
-    {
-        // Acquire lock and use the content of the dynamic-owned transfer buffer
-        std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
-        unpackMyBuffer();
-        // Leave myself a mental note that I just obtained new produce from kT
-        contactPairArr_isFresh = true;
-        // pSchedSupport->schedulingStats.nDynamicReceives++;
-    }
+    drainProgressEvents();
+    // Single-producer/single-consumer: kT fills the buffer, dT unpacks it once the fresh flag flips.
+    unpackMyBuffer();
+    contactPairArr_isFresh = true;
+    // pSchedSupport->schedulingStats.nDynamicReceives++;
+
     // dT got the produce, now mark its buffer to be no longer fresh.
-    pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
-    // Used for inspecting on average how stale kT's produce is.
-    pSchedSupport->schedulingStats.accumKinematicLagSteps +=
-        (pSchedSupport->currentStampOfDynamic).load() - (pSchedSupport->stampLastDynamicUpdateProdDate).load();
+    pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh.store(false, std::memory_order_release);
+    // Used for inspecting on average how stale kT's produce is (in dT steps).
+    // Reference to the stamp of the ingredient batch that produced this update (exclude the 1-step pipeline).
+    const int64_t recv_stamp =
+        (recv_stamp_override >= 0) ? recv_stamp_override : (pSchedSupport->completedStampOfDynamic).load();
+    const int64_t send_stamp = (pSchedSupport->kinematicIngredProdDateStamp).load();
+    int64_t lag_steps = recv_stamp - send_stamp;
+    if (lag_steps > 0) {
+        lag_steps -= 1;
+    }
+    if (lag_steps < 0) {
+        lag_steps = 0;
+    }
+    pSchedSupport->schedulingStats.accumKinematicLagSteps += static_cast<uint64_t>(lag_steps);
     // dT needs to know how fresh the contact pair info is, and that is determined by when kT received this batch of
     // ingredients.
-    pSchedSupport->stampLastDynamicUpdateProdDate = (pSchedSupport->kinematicIngredProdDateStamp).load();
+    pSchedSupport->stampLastDynamicUpdateProdDate = send_stamp;
 
     // If this is a history-based run, then when contacts are received, we need to migrate the contact
     // history info, to match the structure of the new contact array
     if (!solverFlags.isHistoryless) {
         migrateEnduringContacts();
+        if (!contactMappingUsesBuffer) {
+            solverScratchSpace.finishUsingTempVector("contactMapping");
+        }
     }
 
-    // With unpacking finished, contactMapping temp array is no longer needed
-    solverScratchSpace.finishUsingTempVector("contactMapping");
-
-    // On dT side, we also calculate how many (the offsets in contact arrays) contacts they are for each type.
-    // But note here we are working on primitive-based contact types, not patch-based contact types yet.
+    // On dT side, we also calculate type segments (<start,count>) for primitive and patch contact arrays.
+    // Use dynamic output buffers sized to current contact counts to avoid any run-length output overflow.
     solverScratchSpace.allocateDualStruct("numExistingTypes");
-    contactPairs_t* typeCounts = (contactPairs_t*)solverScratchSpace.allocateTempVector(
-        "typeCounts", (NUM_SUPPORTED_CONTACT_TYPES + 1) * sizeof(contactPairs_t));
-    // Recall existingContactTypes is pre-allocated for maximum possible types
-    cubRunLengthEncode<contact_t, contactPairs_t>(
-        granData->contactTypePrimitive, existingContactTypes.device(), typeCounts,
-        solverScratchSpace.getDualStructDevice("numExistingTypes"), *solverScratchSpace.numPrimitiveContacts,
-        streamInfo.stream, solverScratchSpace);
-    solverScratchSpace.syncDualStructDeviceToHost("numExistingTypes");
-    m_numExistingTypes = *solverScratchSpace.getDualStructHost("numExistingTypes");
-    cubPrefixScan<contactPairs_t, contactPairs_t>(typeCounts, typeStartOffsetsPrimitive.device(), m_numExistingTypes,
-                                                  streamInfo.stream, solverScratchSpace);
-    existingContactTypes.toHost();
-    typeStartOffsetsPrimitive.toHost();
+
+    // Primitive-contact type segments
     typeStartCountPrimitiveMap.SetAll({0, 0});
-    for (size_t i = 0; i < m_numExistingTypes; i++) {
-        DEME_DEBUG_PRINTF("Contact type %d starts at offset %u", existingContactTypes[i], typeStartOffsetsPrimitive[i]);
-        typeStartCountPrimitiveMap[existingContactTypes[i]] =
-            std::make_pair(typeStartOffsetsPrimitive[i],
-                           (i + 1 < m_numExistingTypes ? typeStartOffsetsPrimitive[i + 1]
-                                                       : (contactPairs_t)*solverScratchSpace.numPrimitiveContacts) -
-                               typeStartOffsetsPrimitive[i]);
-    }
-    // Debug output of the map
-    // for (const auto& entry : typeStartCountPrimitiveMap) {
-    //     printf("Contact type %d starts at offset %u and has count %u\n", entry.first, entry.second.first,
-    //     entry.second.second);
-    // }
+    m_numExistingTypes = 0;
+    const size_t nPrimitiveContacts = *solverScratchSpace.numPrimitiveContacts;
+    if (nPrimitiveContacts > 0) {
+        const size_t prim_type_buf_len = DEME_MAX((size_t)1, nPrimitiveContacts);
+        if (prim_type_buf_len > existingContactTypes.size()) {
+            DEME_DUAL_ARRAY_RESIZE(existingContactTypes, prim_type_buf_len, NOT_A_CONTACT);
+        }
+        if (prim_type_buf_len > typeStartOffsetsPrimitive.size()) {
+            DEME_DUAL_ARRAY_RESIZE(typeStartOffsetsPrimitive, prim_type_buf_len, 0);
+        }
 
-    // Now for patch-based contacts, we do the same thing. Note the unique types herein will be the same as thosein.
-    cubRunLengthEncode<contact_t, contactPairs_t>(granData->contactTypePatch, existingContactTypes.device(), typeCounts,
-                                                  solverScratchSpace.getDualStructDevice("numExistingTypes"),
-                                                  *solverScratchSpace.numContacts, streamInfo.stream,
-                                                  solverScratchSpace);
-    cubPrefixScan<contactPairs_t, contactPairs_t>(typeCounts, typeStartOffsetsPatch.device(), m_numExistingTypes,
-                                                  streamInfo.stream, solverScratchSpace);
-    typeStartOffsetsPatch.toHost();
+        contactPairs_t* typeCountsPrimitive = (contactPairs_t*)solverScratchSpace.allocateTempVector(
+            "typeCountsPrimitive", prim_type_buf_len * sizeof(contactPairs_t));
+        cubRunLengthEncode<contact_t, contactPairs_t>(granData->contactTypePrimitive, existingContactTypes.device(),
+                                                      typeCountsPrimitive,
+                                                      solverScratchSpace.getDualStructDevice("numExistingTypes"),
+                                                      nPrimitiveContacts, streamInfo.stream, solverScratchSpace);
+        solverScratchSpace.syncDualStructDeviceToHost("numExistingTypes");
+        m_numExistingTypes = *solverScratchSpace.getDualStructHost("numExistingTypes");
+        if (m_numExistingTypes > prim_type_buf_len) {
+            DEME_ERROR("Primitive contact run-length output (%zu) exceeds allocated buffer (%zu).", m_numExistingTypes,
+                       prim_type_buf_len);
+        }
+        if (m_numExistingTypes > 0) {
+            cubPrefixScan<contactPairs_t, contactPairs_t>(typeCountsPrimitive, typeStartOffsetsPrimitive.device(),
+                                                          m_numExistingTypes, streamInfo.stream, solverScratchSpace);
+        }
+
+        existingContactTypes.toHost();
+        typeStartOffsetsPrimitive.toHost();
+        for (size_t i = 0; i < m_numExistingTypes; i++) {
+            const contact_t type = existingContactTypes[i];
+            const contactPairs_t start = typeStartOffsetsPrimitive[i];
+            const contactPairs_t count =
+                (i + 1 < m_numExistingTypes ? typeStartOffsetsPrimitive[i + 1] : (contactPairs_t)nPrimitiveContacts) -
+                start;
+            DEME_DEBUG_PRINTF("Contact type %d starts at offset %u", type, start);
+            if (isSupportedContactType(type) && count > 0) {
+                typeStartCountPrimitiveMap[type] = std::make_pair(start, count);
+            }
+        }
+        solverScratchSpace.finishUsingTempVector("typeCountsPrimitive");
+    }
+
+    // Patch-contact type segments
     typeStartCountPatchMap.SetAll({0, 0});
-    for (size_t i = 0; i < m_numExistingTypes; i++) {
-        typeStartCountPatchMap[existingContactTypes[i]] = std::make_pair(
-            typeStartOffsetsPatch[i], (i + 1 < m_numExistingTypes ? typeStartOffsetsPatch[i + 1]
-                                                                  : (contactPairs_t)*solverScratchSpace.numContacts) -
-                                          typeStartOffsetsPatch[i]);
+    const size_t nPatchContacts = *solverScratchSpace.numContacts;
+    if (nPatchContacts > 0) {
+        const size_t patch_type_buf_len = DEME_MAX((size_t)1, nPatchContacts);
+        if (patch_type_buf_len > typeStartOffsetsPatch.size()) {
+            DEME_DUAL_ARRAY_RESIZE(typeStartOffsetsPatch, patch_type_buf_len, 0);
+        }
+
+        contact_t* patchTypesDevice = (contact_t*)solverScratchSpace.allocateTempVector(
+            "patchContactTypes", patch_type_buf_len * sizeof(contact_t));
+        contactPairs_t* typeCountsPatch = (contactPairs_t*)solverScratchSpace.allocateTempVector(
+            "typeCountsPatch", patch_type_buf_len * sizeof(contactPairs_t));
+
+        cubRunLengthEncode<contact_t, contactPairs_t>(granData->contactTypePatch, patchTypesDevice, typeCountsPatch,
+                                                      solverScratchSpace.getDualStructDevice("numExistingTypes"),
+                                                      nPatchContacts, streamInfo.stream, solverScratchSpace);
+        solverScratchSpace.syncDualStructDeviceToHost("numExistingTypes");
+        size_t numPatchTypes = *solverScratchSpace.getDualStructHost("numExistingTypes");
+        if (numPatchTypes > patch_type_buf_len) {
+            DEME_ERROR("Patch contact run-length output (%zu) exceeds allocated buffer (%zu).", numPatchTypes,
+                       patch_type_buf_len);
+        }
+        if (numPatchTypes > 0) {
+            cubPrefixScan<contactPairs_t, contactPairs_t>(typeCountsPatch, typeStartOffsetsPatch.device(),
+                                                          numPatchTypes, streamInfo.stream, solverScratchSpace);
+        }
+        typeStartOffsetsPatch.toHost();
+
+        std::vector<contact_t> patchTypesHost(numPatchTypes);
+        if (numPatchTypes > 0) {
+            DEME_GPU_CALL(cudaMemcpy(patchTypesHost.data(), patchTypesDevice, numPatchTypes * sizeof(contact_t),
+                                     cudaMemcpyDeviceToHost));
+        }
+        for (size_t i = 0; i < numPatchTypes; i++) {
+            const contact_t type = patchTypesHost[i];
+            const contactPairs_t start = typeStartOffsetsPatch[i];
+            const contactPairs_t count =
+                (i + 1 < numPatchTypes ? typeStartOffsetsPatch[i + 1] : (contactPairs_t)nPatchContacts) - start;
+            if (isSupportedContactType(type) && count > 0) {
+                typeStartCountPatchMap[type] = std::make_pair(start, count);
+            }
+        }
+        solverScratchSpace.finishUsingTempVector("typeCountsPatch");
+        solverScratchSpace.finishUsingTempVector("patchContactTypes");
     }
 
-    solverScratchSpace.finishUsingTempVector("typeCounts");
     solverScratchSpace.finishUsingDualStruct("numExistingTypes");
 }
 
-inline void DEMDynamicThread::ifProduceFreshThenUseIt() {
-    if (pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
-        unpack_impl();
-    }
+inline void DEMDynamicThread::ifProduceFreshThenUseIt(bool allow_blocking) {
+    tryConsumeKinematicProduce(allow_blocking, false, true);
 }
 
 inline void DEMDynamicThread::calibrateParams() {
-    // Unpacking is done; now we can use temp arrays again to derive max velocity and send to kT
-    determineSysVel();  // This will set pCycleVel and pCycleAngVel
-
-    if (solverFlags.autoUpdateFreq) {
-        unsigned int comfortable_drift;
-        if (accumStepUpdater.Query(comfortable_drift)) {
-            // If perhapsIdealFutureDrift needs to increase, then the following value much = perhapsIdealFutureDrift.
-            comfortable_drift =
-                (float)comfortable_drift * solverFlags.targetDriftMultipleOfAvg + solverFlags.targetDriftMoreThanAvg;
-            if (*perhapsIdealFutureDrift > comfortable_drift) {
-                *perhapsIdealFutureDrift -= FUTURE_DRIFT_TWEAK_STEP_SIZE;
-            } else if (*perhapsIdealFutureDrift < comfortable_drift) {
-                *perhapsIdealFutureDrift += FUTURE_DRIFT_TWEAK_STEP_SIZE;
+    auto& r = futureDriftRegulator;
+    const unsigned MAX = solverFlags.upperBoundFutureDrift;
+    if (!r.receive_pending)
+        return;
+    const bool aut = solverFlags.autoUpdateFreq;
+    const double ur = std::clamp((double)solverFlags.futureDriftSendUpperBoundRatio, 0.0, 1.0);
+    const double lr = std::clamp((double)solverFlags.futureDriftSendLowerBoundRatio, 0.0, 1.0);
+    const uint64_t recv = r.pending_recv_stamp;
+    double tnow = r.pending_total_time;
+    r.receive_pending = false;
+    if (tnow <= 0.0)
+        tnow = getCycleElapsedSeconds();
+    int64_t send_i = pSchedSupport->stampLastDynamicUpdateProdDate.load();
+    if (send_i < 0)
+        send_i = (int64_t)recv;
+    const uint64_t send = (uint64_t)send_i;
+    const unsigned lag_steps = (recv > send + 1) ? (unsigned)(recv - send - 1) : 0u;
+    r.last_observed_kinematic_lag_steps = lag_steps;
+    if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
+        // Cylindrical periodicity is sensitive to schedule jitter. Use a fixed, low total drift target
+        // to keep contact maps fresh and reduce run-to-run variance from time-based auto tuning.
+        constexpr unsigned kCylPeriodicTargetTotalDrift = 2u;
+        const unsigned lag_u = std::min(lag_steps, MAX);
+        const unsigned target_total = clamp_drift_u(kCylPeriodicTargetTotalDrift, MAX);
+        const unsigned wait = (target_total > lag_u) ? (target_total - lag_u) : 0u;
+        const unsigned total = clamp_drift_u(wait + lag_u, MAX);
+        const double safety = (double)solverFlags.futureDriftEffDriftSafetyFactor;
+        *perhapsIdealFutureDrift = clamp_drift_u((unsigned)std::ceil((double)total * safety), MAX);
+        r.last_wait_cmd = wait;
+        r.last_proposed = total;
+        r.next_send_step = recv + (uint64_t)wait;
+        r.next_send_wait = wait;
+        r.pending_send = true;
+        r.has_last_step_sample = true;
+        r.last_step_sample = recv;
+        r.last_total_time = tnow;
+        r.last_debug_cum_time = r.debug_cum_time;
+        return;
+    }
+    uint64_t prev = r.has_last_step_sample ? r.last_step_sample : recv;
+    if (prev > recv)
+        prev = recv;
+    const uint64_t steps = recv - prev;
+    double dt = 0.0;
+    if (r.has_last_step_sample) {
+        const double dbg = std::max(0.0, r.debug_cum_time - r.last_debug_cum_time);
+        dt = tnow - r.last_total_time - dbg;
+        if (dt < 0.0)
+            dt = 0.0;
+    }
+    r.has_last_step_sample = true;
+    r.last_step_sample = recv;
+    r.last_total_time = tnow;
+    r.last_debug_cum_time = r.debug_cum_time;
+    const unsigned drift_total = (steps > 0) ? (unsigned)std::min<uint64_t>(steps - 1, MAX) : 0u;
+    if (r.lag_ema_initialized || lag_steps > 0) {
+        ema_asym(r.lag_ema, r.lag_ema_initialized, (double)lag_steps, 0.35, 0.10, 0.0);
+    }
+    const double lag_pred = std::max(r.lag_ema, (double)lag_steps);
+    int lag_i = (int)std::floor(lag_pred + 0.5);
+    if (lag_i < 0)
+        lag_i = 0;
+    if ((unsigned)lag_i > MAX)
+        lag_i = (int)MAX;
+    const unsigned lag_u = (unsigned)lag_i;
+    const bool meas = (aut && steps > 0 && dt > 0.0 && drift_total > 0u);
+    const double cost = meas ? dt / (double)steps : 0.0;
+    const unsigned dmin = std::max(1u, lag_u);
+    const double drift_floor = std::max(5.0, (double)dmin);
+    double drift_ref = drift_floor;
+    if (meas) {
+        const unsigned obs = clamp_drift_u(drift_total, MAX);
+        const double c_now = std::max(1e-9, cost);
+        const double c_ref = r.cost_scale_initialized ? r.cost_scale_ema : c_now;
+        const bool outlier = r.cost_scale_initialized && (c_now > c_ref * 10.0);
+        const double c_for_scale = r.cost_scale_initialized ? std::min(c_now, c_ref * 5.0) : c_now;
+        ema_asym(r.cost_scale_ema, r.cost_scale_initialized, c_for_scale, 0.10, 0.02, 1e-9);
+        ema_asym(r.drift_scale_ema, r.drift_scale_initialized, (double)obs, 0.15, 0.15, 1.0);
+        ring_push(r, cost, obs);
+        drift_ref = drift_ref_quantile(r, drift_floor);
+        if (!outlier) {
+            r.drift_rls.update(obs, drift_ref, cost);
+            const double scale = r.cost_scale_ema;
+            if (rls_is_bad(r.drift_rls, obs, drift_ref, scale)) {
+                r.drift_rls.reset();
+                r.drift_rls_samples = 0;
+                r.window_size = 0;
+                r.window_pos = 0;
+                r.drift_scale_initialized = true;
+                r.drift_scale_ema = std::max(1.0, (double)dmin);
+                drift_ref = drift_ref_quantile(r, drift_floor);
+            } else {
+                r.drift_rls_samples++;
             }
-            *perhapsIdealFutureDrift = clampBetween<unsigned int, unsigned int>(*perhapsIdealFutureDrift, 0,
-                                                                                solverFlags.upperBoundFutureDrift);
-
-            DEME_DEBUG_PRINTF("Comfortable future drift is %u", comfortable_drift);
-            DEME_DEBUG_PRINTF("Current future drift is %u", *perhapsIdealFutureDrift);
+        }
+    } else {
+        drift_ref = drift_ref_quantile(r, drift_floor);
+    }
+    const uint64_t n = r.drift_rls_samples;
+    const unsigned cmd_cur = clamp_drift_u(std::max(1u, *perhapsIdealFutureDrift), MAX);
+    const double safety = (double)solverFlags.futureDriftEffDriftSafetyFactor;
+    const unsigned true_cmd = clamp_drift_u((unsigned)std::max(1.0, std::floor(((double)cmd_cur / safety) + 0.5)), MAX);
+    unsigned dcur = (r.last_proposed > 0) ? clamp_drift_u(r.last_proposed, MAX) : true_cmd;
+    if (dcur < dmin)
+        dcur = dmin;
+    constexpr uint64_t PROBE_N = 24, ACT_N = 40;
+    constexpr double MOVE_FR = 0.1, ANC_FR = 0.05, IMP_FR = 0.01, CAP_R = 1.5, LAG_M = 2.0;
+    constexpr unsigned STEP = 2;
+    unsigned dtgt = dcur;
+    if (!aut)
+        dtgt = std::max(true_cmd, dmin);
+    else if (r.drift_rls.initialized && n > 0) {
+        const unsigned pstep = std::max(1u, std::min(STEP, dcur / 10u));
+        const unsigned dup = clamp_drift_u(std::min(MAX, dcur + pstep), MAX);
+        const unsigned ddn = clamp_drift_u(std::max(dmin, (dcur > pstep) ? (dcur - pstep) : dmin), MAX);
+        if (n < PROBE_N) {
+            const unsigned phase = (unsigned)(n % 3u);
+            const int dir = (((n / 3u) % 2u) == 0u) ? +1 : -1;
+            if (phase == 1u)
+                dtgt = (dir > 0) ? dup : ddn;
+            else if (phase == 2u)
+                dtgt = (dir > 0) ? ddn : dup;
+        } else if (n >= ACT_N) {
+            unsigned lo = (dcur > STEP) ? (dcur - STEP) : 1u;
+            if (lo < dmin)
+                lo = dmin;
+            unsigned hi = std::min(MAX, dcur + STEP);
+            const double pen_ref = std::max(drift_floor, lag_pred * LAG_M);
+            const unsigned cap_hi = std::max(dmin, (unsigned)std::ceil(std::min(drift_ref, pen_ref) * CAP_R));
+            if (hi > cap_hi)
+                hi = cap_hi;
+            if (hi < lo)
+                lo = hi;
+            const double scale = r.cost_scale_initialized ? r.cost_scale_ema : std::max(1e-9, cost);
+            const double mp = MOVE_FR * scale, ap = ANC_FR * scale;
+            const double sigma = std::sqrt(std::max(0.0, r.drift_rls.sigma2_ema));
+            const double improve0 = std::max(IMP_FR * scale, 2.5 * sigma);
+            const double rr = ((double)dcur - pen_ref) / pen_ref;
+            const double bs = std::min(1.0, std::abs(rr));
+            const double upb = (rr > 0.0) ? (1.0 + bs) : 1.0;
+            const double dnb = (rr < 0.0) ? (1.0 + bs) : 1.0;
+            double best = std::numeric_limits<double>::infinity();
+            unsigned best_tot = dcur;
+            const double inv = 1.0 / (double)std::max(1u, dcur);
+            for (unsigned d = lo; d <= hi; ++d) {
+                const unsigned w = apply_wait_policy_u(clamp_wait_i((int)d - lag_i, MAX), lag_pred, ur, lr, MAX);
+                const unsigned tot = clamp_drift_u(w + lag_u, MAX);
+                const double y = r.drift_rls.predict(tot, drift_ref);
+                const double rel = (double)((int)tot - (int)dcur) * inv;
+                const double score = y + mp * std::abs(rel) + ap * (rel * rel);
+                if (score < best) {
+                    best = score;
+                    best_tot = tot;
+                }
+            }
+            const double ycur = r.drift_rls.predict(dcur, drift_ref);
+            double need = improve0;
+            if (best_tot > dcur)
+                need *= upb;
+            else if (best_tot < dcur)
+                need *= dnb;
+            if (best <= ycur - need)
+                dtgt = best_tot;
         }
     }
-    // Actually, perhapsIdealFutureDrift seems to have no need to be on device... but I made it a DualStruct anyway
+    if (aut) {
+        const double cap_ref = std::max(drift_floor, lag_pred * LAG_M);
+        const unsigned cap1 = std::max(dmin, (unsigned)std::ceil(drift_ref * CAP_R));
+        const unsigned cap2 = std::max(dmin, (unsigned)std::ceil(cap_ref * CAP_R));
+        const unsigned cap = std::min(cap1, cap2);
+        if (dtgt > cap)
+            dtgt = cap;
+        const unsigned slo = (dcur > STEP) ? (dcur - STEP) : 1u;
+        const unsigned shi = dcur + STEP;
+        dtgt = std::clamp(dtgt, slo, shi);
+    }
+    dtgt = clamp_drift_u(std::max(dtgt, dmin), MAX);
+    const unsigned wait = apply_wait_policy_u(clamp_wait_i((int)dtgt - lag_i, MAX), lag_pred, ur, lr, MAX);
+    const unsigned total = clamp_drift_u(wait + lag_u, MAX);
+    r.last_wait_cmd = wait;
+    r.last_proposed = total;
+    if (aut) {
+        const unsigned cmd_out = clamp_drift_u((unsigned)std::ceil((double)total * safety), MAX);
+        *perhapsIdealFutureDrift = cmd_out;
+    }
+    r.next_send_step = recv + (uint64_t)wait;
+    r.next_send_wait = wait;
+    r.pending_send = true;
+
+    DEME_DEBUG_PRINTF(
+        "[calibrateParams] recv=%llu send=%llu steps=%llu dt=%.6g cost=%.6g drift_total=%u lag=%u lag_ema=%.3g "
+        "dcur=%u dtgt=%u wait=%u next_send=%llu drift_ref=%.3g\n",
+        (unsigned long long)recv, (unsigned long long)send, (unsigned long long)steps, dt, cost, drift_total, lag_steps,
+        r.lag_ema, dcur, dtgt, wait, (unsigned long long)r.next_send_step, drift_ref);
 }
 
 inline void DEMDynamicThread::ifProduceFreshThenUseItAndSendNewOrder() {
-    if (pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
-        timers.GetTimer("Unpack updates from kT").start();
-        unpack_impl();
-        timers.GetTimer("Unpack updates from kT").stop();
+    auto& reg = futureDriftRegulator;
+    const bool allow_blocking = (streamInfo.device != kT->streamInfo.device);
+    if (!reg.pending_send) {
+        // Consume fresh produce before force evaluation when possible (same-device path).
+        tryConsumeKinematicProduce(allow_blocking, true, true);
+    }
+    // Refresh the regulator and schedule the next work order for kT (no-op unless receive_pending is set).
+    reg.pending_total_time = getCycleElapsedSeconds();
+    calibrateParams();
 
+    // If a kT work order is scheduled (possibly due to kT being very fast), only send it when due.
+    drainProgressEvents();
+    const uint64_t now_stamp = static_cast<uint64_t>(pSchedSupport->currentStampOfDynamic.load());
+    if (reg.pending_send && now_stamp >= reg.next_send_step &&
+        !pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh.load(std::memory_order_acquire)) {
         timers.GetTimer("Send to kT buffer").start();
-        // Acquire lock and refresh the work order for the kinematic
-        {
-            calibrateParams();
-            std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
-            sendToTheirBuffer();
-        }
-        pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
+        determineSysVel();
+        // Record the max drift value used for this work order, so the tuner can attribute the next observation.
+        reg.last_sent_proposed = *perhapsIdealFutureDrift;
+        reg.last_sent_true = reg.last_proposed;
+        reg.last_sent_wait = reg.next_send_wait;
+        sendToTheirBuffer();
+        pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh.store(true, std::memory_order_release);
         pSchedSupport->schedulingStats.nKinematicUpdates++;
-        accumStepUpdater.AddUpdate();
-
         timers.GetTimer("Send to kT buffer").stop();
-        // Signal the kinematic that it has data for a new work order
         pSchedSupport->cv_KinematicCanProceed.notify_all();
+        reg.pending_send = false;
     }
 }
 
 void DEMDynamicThread::workerThread() {
     // Set the gpu for this thread
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
+    DEME_NVTX_NAME_STREAM(streamInfo.stream, "dT_stream");
 
     // Allocate arrays whose length does not depend on user inputs
     initAllocation();
@@ -2800,7 +3806,7 @@ void DEMDynamicThread::workerThread() {
         // making critical changes to the system to ensure safety.
         if (pSchedSupport->stampLastDynamicUpdateProdDate < 0 || pendingCriticalUpdate) {
             // This is possible: If it is after a user-manual sync
-            ifProduceFreshThenUseIt();
+            ifProduceFreshThenUseIt(true);
 
             // If the user loaded contact manually, there is an extra thing we need to do: update kT prev_contact
             // arrays. Note the user can add anything only from a sync-ed stance anyway, so this check needs to be done
@@ -2821,20 +3827,43 @@ void DEMDynamicThread::workerThread() {
             // In this `new-boot' case, we send kT a work order, b/c dT needs results from CD to proceed. After this one
             // instance, kT and dT may work in an async fashion.
             {
-                determineSysVel();  // This will set pCycleVel and pCycleAngVel
-                std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
+                // Seed drift attribution for the first received kT update.
+                auto& reg = futureDriftRegulator;
+                const unsigned int MAX_DRIFT = solverFlags.upperBoundFutureDrift;
+                auto clamp_drift = [&](unsigned int v) { return std::min(std::max(1u, v), MAX_DRIFT); };
+                // Cylindrical periodic runs are sensitive to large startup margins. Clamp the very first
+                // work order drift to the same low target used by the cyl-periodic regulator.
+                if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
+                    constexpr unsigned int kCylPeriodicTargetTotalDrift = 2u;
+                    const double safety = static_cast<double>(solverFlags.futureDriftEffDriftSafetyFactor);
+                    const unsigned int cmd_boot = clamp_drift(static_cast<unsigned int>(
+                        std::ceil(static_cast<double>(kCylPeriodicTargetTotalDrift) * safety)));
+                    *perhapsIdealFutureDrift = cmd_boot;
+                }
+                const unsigned int cmd = std::max(1u, *perhapsIdealFutureDrift);
+                reg.last_sent_proposed = cmd;
+                const double de =
+                    static_cast<double>(cmd) / static_cast<double>(solverFlags.futureDriftEffDriftSafetyFactor);
+                const unsigned int true_target =
+                    clamp_drift(static_cast<unsigned int>(std::max(1.0, std::floor(de + 0.5))));
+                reg.last_sent_true = true_target;
+                reg.last_sent_wait = 0;
+                if (reg.last_proposed == 0) {
+                    reg.last_proposed = true_target;
+                }
+
+                determineSysVel();
                 sendToTheirBuffer();
             }
-            pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
+            pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh.store(true, std::memory_order_release);
             contactPairArr_isFresh = true;
             pSchedSupport->schedulingStats.nKinematicUpdates++;
-            accumStepUpdater.AddUpdate();
             // Signal the kinematic that it has data for a new work order.
             pSchedSupport->cv_KinematicCanProceed.notify_all();
             // Then dT will wait for kT to finish one initial run
             {
                 std::unique_lock<std::mutex> lock(pSchedSupport->dynamicCanProceed);
-                while (!pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
+                while (!pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh.load(std::memory_order_acquire)) {
                     // loop to avoid spurious wakeups
                     pSchedSupport->cv_DynamicCanProceed.wait(lock);
                 }
@@ -2844,11 +3873,13 @@ void DEMDynamicThread::workerThread() {
             // doing simulation; it also happens at system initialization. We do this so the kT-supplied contact info is
             // registered on dT.
             if (cycleDuration <= 0.0) {
-                ifProduceFreshThenUseIt();
+                ifProduceFreshThenUseIt(true);
             }
         }
-
-        for (double cycle = 0.0; cycle < cycleDuration; cycle += (double)(simParams->h)) {
+        startCycleStopwatch();
+        for (double cycle = 0.0; cycle < cycleDuration; cycle += (double)(simParams->dyn.h)) {
+            DEME_NVTX_RANGE("dT::cycle");
+            throttleInFlightProgress();
             // If the produce is fresh, use it, and then send kT a new work order.
             // We used to send work order to kT whenever kT unpacks its buffer. This can lead to a situation where dT
             // sends a new work order and then immediately bails out (user asks it to do something else). A bit later
@@ -2857,40 +3888,72 @@ void DEMDynamicThread::workerThread() {
             // off (across 2 kT updates)! So, dT only send new work orders after kT finishes the old order and it
             // unpacks it.
             ifProduceFreshThenUseItAndSendNewOrder();
-
+            // Cylindrical periodic contacts are particularly sensitive to stale kT contact maps.
+            // Keep correctness protection always on, but avoid blocking every time by using
+            // a soft/hard stale policy:
+            // - soft stale: proactively request a kT update (non-blocking)
+            // - hard stale: block until fresh kT produce arrives
+            if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
+                const int64_t cur_stamp = pSchedSupport->currentStampOfDynamic.load(std::memory_order_relaxed);
+                const int64_t prod_stamp =
+                    pSchedSupport->stampLastDynamicUpdateProdDate.load(std::memory_order_relaxed);
+                const int64_t stale_lag = (prod_stamp >= 0) ? (cur_stamp - prod_stamp) : 0;
+                const bool stale_soft = (prod_stamp >= 0) && (stale_lag > 1);
+                const bool stale_hard = (prod_stamp >= 0) && (stale_lag > 2);
+                unsigned int skip_potential_total = 0u;
+                if (stale_soft && granData->ownerCylSkipPotentialTotal) {
+                    DEME_GPU_CALL(cudaMemcpy(&skip_potential_total, granData->ownerCylSkipPotentialTotal,
+                                             sizeof(unsigned int), cudaMemcpyDeviceToHost));
+                }
+                // If enough force-relevant periodic candidates were skipped while stale, force immediate resync.
+                // A small nonzero count can be benign under asynchrony; use a threshold to avoid over-reacting.
+                constexpr unsigned int kSkipPotentialHardResyncThreshold = 32u;
+                const bool stale_with_skips = stale_soft && (skip_potential_total > kSkipPotentialHardResyncThreshold);
+                if ((stale_soft || stale_with_skips) &&
+                    !pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh.load(std::memory_order_acquire)) {
+                    if (!pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh.load(std::memory_order_acquire)) {
+                        auto& reg = futureDriftRegulator;
+                        timers.GetTimer("Send to kT buffer").start();
+                        determineSysVel();
+                        reg.last_sent_proposed = *perhapsIdealFutureDrift;
+                        reg.last_sent_true = reg.last_proposed;
+                        reg.last_sent_wait = 0;
+                        sendToTheirBuffer();
+                        pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh.store(true, std::memory_order_release);
+                        pSchedSupport->schedulingStats.nKinematicUpdates++;
+                        timers.GetTimer("Send to kT buffer").stop();
+                        pSchedSupport->cv_KinematicCanProceed.notify_all();
+                        reg.pending_send = false;
+                    }
+                    if (stale_hard || stale_with_skips) {
+                        std::unique_lock<std::mutex> lock(pSchedSupport->dynamicCanProceed);
+                        while (!pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh.load(std::memory_order_acquire)) {
+                            pSchedSupport->cv_DynamicCanProceed.wait(lock);
+                        }
+                        tryConsumeKinematicProduce(true, true, true);
+                    }
+                }
+            }
             // Check if we need to wait; i.e., if dynamic drifted too much into future, then we must wait a bit before
             // the next cycle begins
-            if (pSchedSupport->dynamicShouldWait()) {
-                timers.GetTimer("Wait for kT update").start();
-                // Wait for a signal from kT to indicate that kT has caught up
-                std::unique_lock<std::mutex> lock(pSchedSupport->dynamicCanProceed);
-                while (!pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
-                    // Loop to avoid spurious wakeups
-                    pSchedSupport->cv_DynamicCanProceed.wait(lock);
-                }
-                pSchedSupport->schedulingStats.nTimesDynamicHeldBack++;
-                // If dT waits, it is penalized, since waiting means double-wait, very bad.
-                if (solverFlags.autoUpdateFreq)
-                    *perhapsIdealFutureDrift += FUTURE_DRIFT_TWEAK_STEP_SIZE;
-                timers.GetTimer("Wait for kT update").stop();
-            }
-            // NOTE: This ShouldWait check should follow the ifProduceFreshThenUseItAndSendNewOrder call. Because we
-            // need to avoid a scenario where dT is waiting here, and kT is also chilling waiting for an update. But
-            // with this ShouldWait check being here, if dynamicOwned_Prod2ConsBuffer_isFresh is true so
-            // ifProduceFreshThenUseItAndSendNewOrder is executed, then kT is is working for us, no worry; if
-            // dynamicOwned_Prod2ConsBuffer_isFresh is false so ifProduceFreshThenUseItAndSendNewOrder didn't run, then
-            // kT has to be in the process of doing a CD, we still will not be locked here.
+
+            // WAIT is removed for now...
 
             // If using variable ts size, only when a step is accepted can we move on
             bool step_accepted = false;
             do {
+                // Pre-force catch-up: if kT finished during the previous step, unpack before using contacts.
+                tryConsumeKinematicProduce(false, true, true);
                 calculateForces();
 
                 routineChecks();
 
-                timers.GetTimer("Integration").start();
                 integrateOwnerMotions();
-                timers.GetTimer("Integration").stop();
+
+                timers.AccumulateGpuTimer("Clear force array");
+                timers.AccumulateGpuTimer("Calculate contact forces");
+                timers.AccumulateGpuTimer("Optional force reduction");
+                timers.AccumulateGpuTimer("Integration");
 
                 step_accepted = true;
             } while ((!solverFlags.isStepConst) || (!step_accepted));
@@ -2898,6 +3961,9 @@ void DEMDynamicThread::workerThread() {
             // CalculateForces is done, set contactPairArr_isFresh to false
             // This will be set to true next time it receives an update from kT
             contactPairArr_isFresh = false;
+
+            // Late-cycle catch-up: if kT finished during this cycle, unpack now to avoid an extra-cycle delay.
+            tryConsumeKinematicProduce(false, true, false);
 
             /*
             if (cycle == (cycleDuration - 1))
@@ -2907,15 +3973,12 @@ void DEMDynamicThread::workerThread() {
             // Dynamic wrapped up one cycle, record this fact into schedule support
             pSchedSupport->currentStampOfDynamic++;
             nTotalSteps++;
-            accumStepUpdater.AddStep();
 
             //// TODO: make changes for variable time step size cases
-            simParams->timeElapsed += (double)simParams->h;
-            // timeElapsed needs to be updated to the device each time step
-            // simParams.syncMemberToDevice<double>(offsetof(DEMSimParams, timeElapsed));
-            simParams.toDevice();
-
-            DEME_DEBUG_PRINTF("Completed step %zu, time %.9g", nTotalSteps, simParams->timeElapsed);
+            simParams->dyn.timeElapsed += (double)simParams->dyn.h;
+            simParams.syncMemberToDeviceAsync<double>(
+                offsetof(DEMSimParams, dyn) + offsetof(DEMSimParamsDynamic, timeElapsed), streamInfo.stream);
+            DEME_DEBUG_PRINTF("Completed step %zu, time %.9g", nTotalSteps, simParams->dyn.timeElapsed);
         }
 
         // Unless the user did something critical, must we wait for a kT update before next step
@@ -2947,10 +4010,16 @@ void DEMDynamicThread::resetUserCallStat() {
     // Reset last kT-side data receiving cycle time stamp.
     pSchedSupport->stampLastDynamicUpdateProdDate = -1;
     pSchedSupport->currentStampOfDynamic = 0;
+    pSchedSupport->completedStampOfDynamic = 0;
+    progressEventHead = 0;
+    progressEventCount = 0;
     // Reset dT stats variables, making ready for next user call
     pSchedSupport->dynamicDone = false;
     contactPairArr_isFresh = true;
-    accumStepUpdater.Clear();
+    futureDriftRegulator.Clear();
+    kT_numContacts_copy_pending = false;
+    last_kT_produce_stamp = pSchedSupport->schedulingStats.nDynamicUpdates.load(std::memory_order_acquire);
+    recv_stamp_override = -1;
 
     // Do not let user artificially set dynamicOwned_Prod2ConsBuffer_isFresh false. B/c only dT has the say on that. It
     // could be that kT has a new produce ready, but dT idled for long and do not want to use it and want a new produce.
@@ -2971,29 +4040,29 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
                                      const std::vector<std::string>& JitifyOptions) {
     // Force calculation kernels
     {
-        cal_force_kernels = std::make_shared<jitify::Program>(std::move(
+        cal_force_kernels = std::make_shared<JitHelper::CachedProgram>(std::move(
             JitHelper::buildProgram("DEMCalcForceKernels_Primitive",
                                     JitHelper::KERNEL_DIR / "DEMCalcForceKernels_Primitive.cu", Subs, JitifyOptions)));
     }
     // Then patch-based force calculation kernels
     {
-        cal_patch_force_kernels = std::make_shared<jitify::Program>(std::move(
+        cal_patch_force_kernels = std::make_shared<JitHelper::CachedProgram>(std::move(
             JitHelper::buildProgram("DEMCalcForceKernels_PatchBased",
                                     JitHelper::KERNEL_DIR / "DEMCalcForceKernels_PatchBased.cu", Subs, JitifyOptions)));
     }
     // Then force accumulation kernels
     {
-        collect_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+        collect_force_kernels = std::make_shared<JitHelper::CachedProgram>(std::move(JitHelper::buildProgram(
             "DEMCollectForceKernels", JitHelper::KERNEL_DIR / "DEMCollectForceKernels.cu", Subs, JitifyOptions)));
     }
     // Then integration kernels
     {
-        integrator_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu", Subs, JitifyOptions)));
+        integrator_kernels = std::make_shared<JitHelper::CachedProgram>(JitHelper::buildProgram(
+            "DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu", Subs, JitifyOptions));
     }
     // Then kernels that make on-the-fly changes to solver data
-    {
-        mod_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+    if (solverFlags.canFamilyChangeOnDevice) {
+        mod_kernels = std::make_shared<JitHelper::CachedProgram>(std::move(JitHelper::buildProgram(
             "DEMModeratorKernels", JitHelper::KERNEL_DIR / "DEMModeratorKernels.cu", Subs, JitifyOptions)));
     }
 
@@ -3016,9 +4085,10 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
         {cal_patch_force_kernels, "calculatePatchContactForces_TriTri"}};
     contactTypePatchKernelMap[TRIANGLE_ANALYTICAL_CONTACT] = {
         {cal_patch_force_kernels, "calculatePatchContactForces_TriAnal"}};
+    prewarmKernels();
 }
 
-float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
+float* DEMDynamicThread::inspectCall(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                                      const std::string& kernel_name,
                                      INSPECT_ENTITY_TYPE thing_to_insp,
                                      CUB_REDUCE_FLAVOR reduce_flavor,
@@ -3065,7 +4135,6 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
         .instantiate()
         .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
         .launch(&granData, &simParams, resArr, boolArrExclude, n, owner_type);
-    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     if (all_domain) {
         switch (reduce_flavor) {
@@ -3143,6 +4212,17 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     }
 }
 
+float* DEMDynamicThread::inspectCallDeviceNoReduce(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
+                                                   const std::string& kernel_name,
+                                                   INSPECT_ENTITY_TYPE thing_to_insp,
+                                                   CUB_REDUCE_FLAVOR reduce_flavor,
+                                                   bool all_domain,
+                                                   DualArray<scratch_t>& reduceResArr,
+                                                   DualArray<scratch_t>& reduceRes) {
+    return inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, reduceResArr,
+                       reduceRes, true);
+}
+
 void DEMDynamicThread::initAllocation() {
     DEME_DUAL_ARRAY_RESIZE(familyExtraMarginSize, NUM_AVAL_FAMILIES, 0);
 }
@@ -3170,13 +4250,13 @@ size_t DEMDynamicThread::getNumContacts() const {
 }
 
 double DEMDynamicThread::getSimTime() const {
-    return simParams->timeElapsed;
+    return simParams->dyn.timeElapsed;
 }
 
 void DEMDynamicThread::setSimTime(double time) {
-    simParams->timeElapsed = time;
-    // simParams.syncMemberToDevice<double>(offsetof(DEMSimParams, timeElapsed));
-    simParams.toDevice();
+    simParams->dyn.timeElapsed = time;
+    simParams.syncMemberToDeviceAsync<double>(offsetof(DEMSimParams, dyn) + offsetof(DEMSimParamsDynamic, timeElapsed),
+                                              streamInfo.stream);
 }
 
 float DEMDynamicThread::getUpdateFreq() const {
@@ -3552,6 +4632,299 @@ std::vector<unsigned int> DEMDynamicThread::getOwnerFamily(bodyID_t ownerID, bod
     return fam;
 }
 
+std::vector<int> DEMDynamicThread::getOwnerCylWrapK(bodyID_t ownerID, bodyID_t n) {
+    std::vector<int> wraps(n);
+    ownerCylWrapK.toHost();
+    auto vals = ownerCylWrapK.getVal(ownerID, n);
+    for (bodyID_t i = 0; i < n; i++) {
+        wraps[i] = vals[i];
+    }
+    return wraps;
+}
+
+std::vector<int> DEMDynamicThread::getOwnerCylWrapOffset(bodyID_t ownerID, bodyID_t n) {
+    std::vector<int> offsets(n);
+    ownerCylWrapOffset.toHost();
+    auto vals = ownerCylWrapOffset.getVal(ownerID, n);
+    for (bodyID_t i = 0; i < n; i++) {
+        offsets[i] = vals[i];
+    }
+    return offsets;
+}
+
+std::vector<float> DEMDynamicThread::getOwnerBoundRadius(bodyID_t ownerID, bodyID_t n) {
+    std::vector<float> radii(n);
+    ownerBoundRadius.toHost();
+    auto vals = ownerBoundRadius.getVal(ownerID, n);
+    for (bodyID_t i = 0; i < n; i++) {
+        radii[i] = vals[i];
+    }
+    return radii;
+}
+
+std::vector<unsigned int> DEMDynamicThread::getOwnerCylGhostActive(bodyID_t ownerID, bodyID_t n) {
+    std::vector<unsigned int> active(n);
+    ownerCylGhostActive.toHost();
+    auto vals = ownerCylGhostActive.getVal(ownerID, n);
+    for (bodyID_t i = 0; i < n; i++) {
+        active[i] = vals[i];
+    }
+    return active;
+}
+
+std::vector<unsigned int> DEMDynamicThread::getOwnerCylSkipCount(bodyID_t ownerID, bodyID_t n) {
+    std::vector<unsigned int> cnt(n);
+    ownerCylSkipCount.toHost();
+    auto vals = ownerCylSkipCount.getVal(ownerID, n);
+    for (bodyID_t i = 0; i < n; i++) {
+        cnt[i] = vals[i];
+    }
+    return cnt;
+}
+
+std::vector<unsigned int> DEMDynamicThread::getOwnerCylSkipPotentialCount(bodyID_t ownerID, bodyID_t n) {
+    std::vector<unsigned int> cnt(n);
+    ownerCylSkipPotentialCount.toHost();
+    auto vals = ownerCylSkipPotentialCount.getVal(ownerID, n);
+    for (bodyID_t i = 0; i < n; i++) {
+        cnt[i] = vals[i];
+    }
+    return cnt;
+}
+
+void DEMDynamicThread::getOwnerContactGhostCounts(std::vector<int>& real_cnt,
+                                                  std::vector<int>& ghost_pos_cnt,
+                                                  std::vector<int>& ghost_neg_cnt) {
+    solverScratchSpace.numContacts.toHost();
+    const size_t nContacts = *solverScratchSpace.numContacts;
+    const size_t nOwners = simParams->nOwnerBodies;
+    real_cnt.assign(nOwners, 0);
+    ghost_pos_cnt.assign(nOwners, 0);
+    ghost_neg_cnt.assign(nOwners, 0);
+    if (nContacts == 0) {
+        return;
+    }
+    migrateContactInfoToHost();
+    for (size_t i = 0; i < nContacts; i++) {
+        const contact_t type = contactTypePatch[i];
+        if (type == NOT_A_CONTACT) {
+            continue;
+        }
+        const geoType_t typeA = decodeTypeA(type);
+        const geoType_t typeB = decodeTypeB(type);
+        const bodyID_t idA_raw = idPatchA[i];
+        const bodyID_t idB_raw = idPatchB[i];
+        bool ghostA = false;
+        bool ghostA_neg = false;
+        bool ghostB = false;
+        bool ghostB_neg = false;
+        cylPeriodicDecodeID(idA_raw, ghostA, ghostA_neg);
+        cylPeriodicDecodeID(idB_raw, ghostB, ghostB_neg);
+        const bodyID_t ownerA = getPatchOwnerID(idA_raw, typeA);
+        const bodyID_t ownerB = getPatchOwnerID(idB_raw, typeB);
+        auto bump = [&](bodyID_t owner, bool ghost, bool neg) {
+            if (owner == NULL_BODYID) {
+                return;
+            }
+            if (!ghost) {
+                real_cnt[owner]++;
+            } else if (neg) {
+                ghost_neg_cnt[owner]++;
+            } else {
+                ghost_pos_cnt[owner]++;
+            }
+        };
+        bump(ownerA, ghostA, ghostA_neg);
+        bump(ownerB, ghostB, ghostB_neg);
+    }
+}
+
+void DEMDynamicThread::configureTrianglePVTracking(const std::vector<bodyID_t>& mesh_owner_ids) {
+    DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
+
+    if (mesh_owner_ids.empty()) {
+        disableTrianglePVTracking();
+        return;
+    }
+    if (solverFlags.useNoContactRecord) {
+        DEME_WARNING("%s",
+                     "Per-triangle P/V/PxV tracking is enabled while SetNoForceRecord() is active. "
+                     "Tracking will proceed; validate values for your scenario.");
+    }
+
+    std::vector<bodyID_t> owner_order;
+    std::unordered_map<bodyID_t, size_t> owner_to_slot;
+    owner_order.reserve(mesh_owner_ids.size());
+    owner_to_slot.reserve(mesh_owner_ids.size());
+    for (bodyID_t owner : mesh_owner_ids) {
+        if (owner >= simParams->nOwnerBodies) {
+            DEME_ERROR("Owner ID %zu is out of range [0, %zu).", (size_t)owner, (size_t)simParams->nOwnerBodies);
+        }
+        const ownerType_t type = ownerTypes[owner];
+        if ((type & OWNER_T_MESH) == 0) {
+            DEME_ERROR("Owner ID %zu is not a mesh owner. Per-triangle tracking supports mesh owners only.",
+                       (size_t)owner);
+        }
+        if (owner_to_slot.find(owner) == owner_to_slot.end()) {
+            owner_to_slot[owner] = owner_order.size();
+            owner_order.push_back(owner);
+        }
+    }
+
+    ownerTriMesh.toHost();
+    std::vector<size_t> counts(owner_order.size(), 0);
+    for (size_t tri = 0; tri < simParams->nTriGM; tri++) {
+        const bodyID_t owner = ownerTriMesh[tri];
+        auto it = owner_to_slot.find(owner);
+        if (it != owner_to_slot.end()) {
+            counts[it->second]++;
+        }
+    }
+
+    for (size_t i = 0; i < owner_order.size(); i++) {
+        if (counts[i] == 0) {
+            DEME_ERROR("Mesh owner %zu has no triangles in the current system.", (size_t)owner_order[i]);
+        }
+    }
+
+    std::vector<size_t> offsets(owner_order.size(), 0);
+    size_t n_tracked_triangles = 0;
+    for (size_t i = 0; i < owner_order.size(); i++) {
+        offsets[i] = n_tracked_triangles;
+        n_tracked_triangles += counts[i];
+    }
+    if (n_tracked_triangles == 0) {
+        DEME_ERROR("Per-triangle tracking received no triangles to track.");
+    }
+
+    std::vector<size_t> cursors(owner_order.size(), 0);
+    DEME_DUAL_ARRAY_RESIZE(triPVGlobalTriToLocal, simParams->nTriGM, -1);
+    for (size_t tri = 0; tri < simParams->nTriGM; tri++) {
+        const bodyID_t owner = ownerTriMesh[tri];
+        auto it = owner_to_slot.find(owner);
+        if (it != owner_to_slot.end()) {
+            const size_t slot = it->second;
+            const size_t local_idx = offsets[slot] + cursors[slot]++;
+            triPVGlobalTriToLocal[tri] = static_cast<int>(local_idx);
+        } else {
+            triPVGlobalTriToLocal[tri] = -1;
+        }
+    }
+
+    const size_t alloc_size = DEME_MAX((size_t)1, n_tracked_triangles);
+    DEME_DUAL_ARRAY_RESIZE(triPVStepP, alloc_size, 0.f);
+    DEME_DUAL_ARRAY_RESIZE(triPVStepPV, alloc_size, 0.f);
+    DEME_DUAL_ARRAY_RESIZE(triPVAccumP, alloc_size, 0.f);
+    DEME_DUAL_ARRAY_RESIZE(triPVAccumPV, alloc_size, 0.f);
+
+    triPVGlobalTriToLocal.toDeviceAsync(streamInfo.stream);
+    triPVStepP.toDeviceAsync(streamInfo.stream);
+    triPVStepPV.toDeviceAsync(streamInfo.stream);
+    triPVAccumP.toDeviceAsync(streamInfo.stream);
+    triPVAccumPV.toDeviceAsync(streamInfo.stream);
+    syncMemoryTransfer();
+
+    triPVOwnerOrder = std::move(owner_order);
+    triPVOwnerOffsets = std::move(offsets);
+    triPVOwnerCounts = std::move(counts);
+    triPVOwnerToSlot = std::move(owner_to_slot);
+    triPVTrackingEnabled = true;
+    triPVNumTrackedTriangles = n_tracked_triangles;
+    triPVWindowSteps = 0;
+}
+
+void DEMDynamicThread::disableTrianglePVTracking() {
+    DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
+    triPVTrackingEnabled = false;
+    triPVNumTrackedTriangles = 0;
+    triPVWindowSteps = 0;
+    triPVOwnerOrder.clear();
+    triPVOwnerOffsets.clear();
+    triPVOwnerCounts.clear();
+    triPVOwnerToSlot.clear();
+
+    if (triPVGlobalTriToLocal.size() > 0) {
+        for (size_t i = 0; i < triPVGlobalTriToLocal.size(); i++) {
+            triPVGlobalTriToLocal[i] = -1;
+        }
+        triPVGlobalTriToLocal.toDeviceAsync(streamInfo.stream);
+    }
+
+    if (triPVStepP.size() > 0) {
+        DEME_GPU_CALL(cudaMemsetAsync(triPVStepP.device(), 0, triPVStepP.size() * sizeof(float), streamInfo.stream));
+    }
+    if (triPVStepPV.size() > 0) {
+        DEME_GPU_CALL(cudaMemsetAsync(triPVStepPV.device(), 0, triPVStepPV.size() * sizeof(float), streamInfo.stream));
+    }
+    if (triPVAccumP.size() > 0) {
+        DEME_GPU_CALL(cudaMemsetAsync(triPVAccumP.device(), 0, triPVAccumP.size() * sizeof(float), streamInfo.stream));
+    }
+    if (triPVAccumPV.size() > 0) {
+        DEME_GPU_CALL(
+            cudaMemsetAsync(triPVAccumPV.device(), 0, triPVAccumPV.size() * sizeof(float), streamInfo.stream));
+    }
+    syncMemoryTransfer();
+}
+
+bool DEMDynamicThread::getTrackedOwnerTrianglePV(bodyID_t ownerID,
+                                                 std::vector<float>& avgP,
+                                                 std::vector<float>& avgV,
+                                                 std::vector<float>& avgPV,
+                                                 bool reset_window) {
+    if (!triPVTrackingEnabled) {
+        return false;
+    }
+    auto it = triPVOwnerToSlot.find(ownerID);
+    if (it == triPVOwnerToSlot.end()) {
+        return false;
+    }
+
+    const size_t slot = it->second;
+    const size_t offset = triPVOwnerOffsets[slot];
+    const size_t count = triPVOwnerCounts[slot];
+    avgP.assign(count, 0.f);
+    avgV.assign(count, 0.f);
+    avgPV.assign(count, 0.f);
+
+    if (count > 0 && triPVWindowSteps > 0) {
+        triPVAccumP.toHost();
+        triPVAccumPV.toHost();
+        const float inv_steps = 1.f / static_cast<float>(triPVWindowSteps);
+        for (size_t i = 0; i < count; i++) {
+            avgP[i] = triPVAccumP[offset + i] * inv_steps;
+            avgPV[i] = triPVAccumPV[offset + i] * inv_steps;
+            if (!std::isfinite(avgP[i]) || avgP[i] < 0.f) {
+                avgP[i] = 0.f;
+            }
+            if (!std::isfinite(avgPV[i]) || avgPV[i] < 0.f) {
+                avgPV[i] = 0.f;
+            }
+            avgV[i] = (avgP[i] > DEME_TINY_FLOAT) ? (avgPV[i] / avgP[i]) : 0.f;
+            if (!std::isfinite(avgV[i]) || avgV[i] < 0.f) {
+                avgV[i] = 0.f;
+            }
+        }
+    }
+
+    if (reset_window) {
+        resetTrackedTrianglePVWindow();
+    }
+
+    return true;
+}
+
+void DEMDynamicThread::resetTrackedTrianglePVWindow() {
+    triPVWindowSteps = 0;
+    if (triPVAccumP.size() > 0) {
+        DEME_GPU_CALL(cudaMemsetAsync(triPVAccumP.device(), 0, triPVAccumP.size() * sizeof(float), streamInfo.stream));
+    }
+    if (triPVAccumPV.size() > 0) {
+        DEME_GPU_CALL(
+            cudaMemsetAsync(triPVAccumPV.device(), 0, triPVAccumPV.size() * sizeof(float), streamInfo.stream));
+    }
+    syncMemoryTransfer();
+}
+
 void DEMDynamicThread::setOwnerAngVel(bodyID_t ownerID, const std::vector<float3>& angVel) {
     omgBarX.setVal(streamInfo.stream, RealTupleVectorToXComponentVector<float, float3>(angVel), ownerID);
     omgBarY.setVal(streamInfo.stream, RealTupleVectorToYComponentVector<float, float3>(angVel), ownerID);
@@ -3638,6 +5011,31 @@ void DEMDynamicThread::addOwnerNextStepAngAcc(bodyID_t ownerID, const std::vecto
     alphaY.setVal(streamInfo.stream, RealTupleVectorToYComponentVector<float, float3>(angAcc), ownerID);
     alphaZ.setVal(streamInfo.stream, RealTupleVectorToZComponentVector<float, float3>(angAcc), ownerID);
     syncMemoryTransfer();
+}
+
+void DEMDynamicThread::prewarmKernels() {
+    if (cal_force_kernels) {
+        cal_force_kernels->kernel("calculatePrimitiveContactForces_SphSph").instantiate();
+        cal_force_kernels->kernel("calculatePrimitiveContactForces_SphTri").instantiate();
+        cal_force_kernels->kernel("calculatePrimitiveContactForces_SphAnal").instantiate();
+        cal_force_kernels->kernel("calculatePrimitiveContactForces_TriTri").instantiate();
+        cal_force_kernels->kernel("calculatePrimitiveContactForces_TriAnal").instantiate();
+    }
+    if (cal_patch_force_kernels) {
+        cal_patch_force_kernels->kernel("calculatePatchContactForces_SphTri").instantiate();
+        cal_patch_force_kernels->kernel("calculatePatchContactForces_TriTri").instantiate();
+        cal_patch_force_kernels->kernel("calculatePatchContactForces_TriAnal").instantiate();
+    }
+    if (collect_force_kernels) {
+        collect_force_kernels->kernel("forceToAcc").instantiate();
+    }
+    if (integrator_kernels) {
+        integrator_kernels->kernel("integrateOwners").instantiate();
+        integrator_kernels->kernel("cylPeriodicRotateContactWildcards").instantiate();
+    }
+    if (mod_kernels && solverFlags.canFamilyChangeOnDevice) {
+        mod_kernels->kernel("applyFamilyChanges").instantiate();
+    }
 }
 
 }  // namespace deme

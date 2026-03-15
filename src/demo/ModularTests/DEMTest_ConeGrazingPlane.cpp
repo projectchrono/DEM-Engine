@@ -20,6 +20,7 @@
 #include <iostream>
 #include <vector>
 #include <filesystem>
+#include <system_error>
 
 using namespace std::filesystem;
 using namespace deme;
@@ -75,7 +76,7 @@ int main() {
     // Solver setup
     // =========================================================================
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity("INFO");
+    DEMSim.SetVerbosity("ERROR");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.InstructBoxDomainDimension(30, 30, 5);
     // No gravity: we are controlling the cone position/velocity explicitly
@@ -142,9 +143,13 @@ int main() {
     std::cout << "Running simulation for " << total_time << " s ..." << std::endl;
     std::cout << "----------------------------------------------------" << std::endl;
 
-    path out_dir = current_path();
-    out_dir /= "DEMTest_ConeGrazingPlane";
-    create_directory(out_dir);
+    path out_dir = current_path() / "modular_test_output" / "DEMTest_ConeGrazingPlane";
+    std::error_code dir_ec;
+    create_directories(out_dir, dir_ec);
+    if (dir_ec || !is_directory(out_dir)) {
+        std::cerr << "Failed to create output directory: " << out_dir << " (" << dir_ec.message() << ")" << std::endl;
+        return 1;
+    }
 
     std::vector<double> force_mags;
     std::vector<double> force_z_components;
@@ -171,10 +176,14 @@ int main() {
         float tip_x = pos.x;
         float tip_z = pos.z - centroid_above_tip;
 
+        // Also inspect how many contacts we have
+        auto cnt_info = DEMSim.GetContactDetailedInfo(0.0f);
+        int num_cnts = cnt_info->GetContactType().size();
+
         std::cout << "t=" << i * frame_time << "s"
                   << "  tip_x=" << tip_x << " m"
                   << "  tip_z=" << tip_z << " m"
-                  << "  |F_cnt|=" << force_mag << " N";
+                  << "  #MM_contacts=" << num_cnts << "  |F_cnt|=" << force_mag << " N";
 
         if (force_mag > 1e-3) {
             float inv_f = static_cast<float>(1.0 / force_mag);

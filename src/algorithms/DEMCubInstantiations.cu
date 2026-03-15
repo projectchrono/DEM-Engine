@@ -97,6 +97,15 @@ template void cubSumReduceByKey<contactPairs_t, double>(contactPairs_t* d_keys_i
                                                         size_t n,
                                                         cudaStream_t& this_stream,
                                                         DEMSolverScratchData& scratchPad);
+// Patch contact accumulators (sum + max) with contactPairs_t keys
+template void cubSumReduceByKey<contactPairs_t, PatchContactAccum>(contactPairs_t* d_keys_in,
+                                                                   contactPairs_t* d_unique_out,
+                                                                   PatchContactAccum* d_vals_in,
+                                                                   PatchContactAccum* d_aggregates_out,
+                                                                   size_t* d_num_out,
+                                                                   size_t n,
+                                                                   cudaStream_t& this_stream,
+                                                                   DEMSolverScratchData& scratchPad);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Reduce::Max
