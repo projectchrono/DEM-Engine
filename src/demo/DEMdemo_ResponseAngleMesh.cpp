@@ -158,8 +158,8 @@ int main() {
         drum_tracker = DEMSim.Track(drum);
     } else {
         auto drum = DEMSim.AddExternalObject();
-        drum->AddPlanarContactCylinder(make_float3(0, 0, drum_center_z), make_float3(0, 0, 1), drum_inner_radius,
-                                       mat_type_drum, ENTITY_NORMAL_INWARD);
+        drum->AddCylinder(make_float3(0, 0, drum_center_z), make_float3(0, 0, 1), drum_inner_radius, mat_type_drum,
+                          ENTITY_NORMAL_INWARD);
         const float IZZ = drum_mass * drum_inner_radius * drum_inner_radius / 2.0f;
         const float IYY =
             (drum_mass / 12.0f) * (3.0f * drum_inner_radius * drum_inner_radius + drum_height * drum_height);
