@@ -521,7 +521,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // If B is a sphere, then A can only be a sphere
         checkSpheresOverlap<double, float>(bodyAPos.x, bodyAPos.y, bodyAPos.z, ARadius, bodyBPos.x, bodyBPos.y,
                                            bodyBPos.z, BRadius, contactPnt.x, contactPnt.y, contactPnt.z, B2A.x, B2A.y,
-                                           B2A.z, overlapDepth);
+                                           B2A.z, overlapDepth, overlapArea);
         // If overlapDepth is negative then it might still be considered in contact, if the extra margins of A and B
         // combined is larger than abs(overlapDepth)
         if (overlapDepth <= -extraMarginSize) {
@@ -672,15 +672,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
                     atomicOr(granData->ownerCylGhostActive + ownerB, deme::CYL_GHOST_HINT_START);
                 } else if (desiredShiftB < 0 && ownerB != deme::NULL_BODYID) {
                     atomicOr(granData->ownerCylGhostActive + ownerB, deme::CYL_GHOST_HINT_END);
-                }
-            }
-
-            // Keep IDs consistent with the selected periodic representation (important when this primitive contact
-            // originated from an un-ghosted pair but dT selects a wrapped image).
-            if (ContactType != deme::NOT_A_CONTACT) {
-                if constexpr (AType == deme::GEO_T_SPHERE || AType == deme::GEO_T_TRIANGLE) {
-                }
-                if constexpr (BType == deme::GEO_T_SPHERE || BType == deme::GEO_T_TRIANGLE) {
                 }
             }
 
@@ -1006,7 +997,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             checkSphereEntityOverlap<double3, float, double>(bodyAPos, ARadius, objType[analyticalID], bodyBPos,
                                                              bodyBRot, objSize1[analyticalID], objSize2[analyticalID],
                                                              objSize3[analyticalID], objNormal[analyticalID], 0.0,
-                                                             contactPnt, B2A, overlapDepth);
+                                                             contactPnt, B2A, overlapDepth, overlapArea);
             // Fix ContactType if needed
             if (overlapDepth <= -extraMarginSize) {
                 ContactType = deme::NOT_A_CONTACT;

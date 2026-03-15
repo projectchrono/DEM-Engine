@@ -183,9 +183,6 @@ __host__ __device__ deme::contact_t checkTriEntityOverlap(const T1& A,
             }
             return deme::NOT_A_CONTACT;
         }
-        case (deme::ANAL_OBJ_TYPE_PLATE): {
-            return deme::NOT_A_CONTACT;
-        }
         case (deme::ANAL_OBJ_TYPE_CYL_INF): {
             for (const T1*& v : tri) {
                 // Radial distance vector is from cylinder axis to a point
@@ -198,22 +195,22 @@ __host__ __device__ deme::contact_t checkTriEntityOverlap(const T1& A,
             }
             return deme::NOT_A_CONTACT;
         }
-        case (deme::ANAL_OBJ_TYPE_PLANAR_CYL): {
-            T1 centroid = (A + B + C) / 3.0;
-            T1 plane_point;
-            float3 plane_normal;
-            if (!planar_cyl_plane_from_ref(centroid, entityLoc, entityDir, entitySize1, normal_sign, plane_point,
-                                           plane_normal)) {
-                return deme::NOT_A_CONTACT;
-            }
-            for (const T1*& v : tri) {
-                double d = planeSignedDistance<double>(*v, plane_point, plane_normal);
-                double overlapDepth = beta4Entity - d;
-                if (overlapDepth >= 0.0)
-                    return deme::TRIANGLE_ANALYTICAL_CONTACT;
-            }
-            return deme::NOT_A_CONTACT;
-        }
+        // case (deme::ANAL_OBJ_TYPE_PLANAR_CYL): {
+        //     T1 centroid = (A + B + C) / 3.0;
+        //     T1 plane_point;
+        //     float3 plane_normal;
+        //     if (!planar_cyl_plane_from_ref(centroid, entityLoc, entityDir, entitySize1, normal_sign, plane_point,
+        //                                    plane_normal)) {
+        //         return deme::NOT_A_CONTACT;
+        //     }
+        //     for (const T1*& v : tri) {
+        //         double d = planeSignedDistance<double>(*v, plane_point, plane_normal);
+        //         double overlapDepth = beta4Entity - d;
+        //         if (overlapDepth >= 0.0)
+        //             return deme::TRIANGLE_ANALYTICAL_CONTACT;
+        //     }
+        //     return deme::NOT_A_CONTACT;
+        // }
         default:
             return deme::NOT_A_CONTACT;
     }
@@ -243,9 +240,6 @@ __host__ __device__ deme::contact_t checkTriEntityOverlapFP32(const T1& A,
             }
             return deme::NOT_A_CONTACT;
         }
-        case (deme::ANAL_OBJ_TYPE_PLATE): {
-            return deme::NOT_A_CONTACT;
-        }
         case (deme::ANAL_OBJ_TYPE_CYL_INF): {
             for (const T1*& v : tri) {
                 float3 vec = cylRadialDistanceVec<float3>(*v, entityLoc, entityDir);
@@ -255,22 +249,22 @@ __host__ __device__ deme::contact_t checkTriEntityOverlapFP32(const T1& A,
             }
             return deme::NOT_A_CONTACT;
         }
-        case (deme::ANAL_OBJ_TYPE_PLANAR_CYL): {
-            T1 centroid = (A + B + C) / 3.0f;
-            T1 plane_point;
-            float3 plane_normal;
-            if (!planar_cyl_plane_from_ref(centroid, entityLoc, entityDir, entitySize1, normal_sign, plane_point,
-                                           plane_normal)) {
-                return deme::NOT_A_CONTACT;
-            }
-            for (const T1*& v : tri) {
-                const float d = planeSignedDistance<float>(*v, plane_point, plane_normal);
-                const float overlapDepth = beta4Entity - d;
-                if (overlapDepth >= 0.0f)
-                    return deme::TRIANGLE_ANALYTICAL_CONTACT;
-            }
-            return deme::NOT_A_CONTACT;
-        }
+        // case (deme::ANAL_OBJ_TYPE_PLANAR_CYL): {
+        //     T1 centroid = (A + B + C) / 3.0f;
+        //     T1 plane_point;
+        //     float3 plane_normal;
+        //     if (!planar_cyl_plane_from_ref(centroid, entityLoc, entityDir, entitySize1, normal_sign, plane_point,
+        //                                    plane_normal)) {
+        //         return deme::NOT_A_CONTACT;
+        //     }
+        //     for (const T1*& v : tri) {
+        //         const float d = planeSignedDistance<float>(*v, plane_point, plane_normal);
+        //         const float overlapDepth = beta4Entity - d;
+        //         if (overlapDepth >= 0.0f)
+        //             return deme::TRIANGLE_ANALYTICAL_CONTACT;
+        //     }
+        //     return deme::NOT_A_CONTACT;
+        // }
         default:
             return deme::NOT_A_CONTACT;
     }
@@ -309,19 +303,19 @@ bool __device__ calcTriEntityOverlap(const T1& A,
             in_contact = tri_cyl_penetration<T1, T2>(tri, entityLoc, entityDir, entitySize1, entitySize2, normal_sign,
                                                      contact_normal, overlapDepth, overlapArea, contactPnt);
             return in_contact;
-        case deme::ANAL_OBJ_TYPE_PLANAR_CYL: {
-            T1 centroid = (A + B + C) / 3.0;
-            T1 plane_point;
-            float3 plane_normal;
-            if (!planar_cyl_plane_from_ref(centroid, entityLoc, entityDir, entitySize1, normal_sign, plane_point,
-                                           plane_normal)) {
-                return false;
-            }
-            in_contact =
-                tri_plane_penetration<T1, T2>(tri, plane_point, plane_normal, overlapDepth, overlapArea, contactPnt);
-            contact_normal = plane_normal;
-            return in_contact;
-        }
+        // case deme::ANAL_OBJ_TYPE_PLANAR_CYL: {
+        //     T1 centroid = (A + B + C) / 3.0;
+        //     T1 plane_point;
+        //     float3 plane_normal;
+        //     if (!planar_cyl_plane_from_ref(centroid, entityLoc, entityDir, entitySize1, normal_sign, plane_point,
+        //                                    plane_normal)) {
+        //         return false;
+        //     }
+        //     in_contact =
+        //         tri_plane_penetration<T1, T2>(tri, plane_point, plane_normal, overlapDepth, overlapArea, contactPnt);
+        //     contact_normal = plane_normal;
+        //     return in_contact;
+        // }
         default:
             return false;
     }
