@@ -132,6 +132,7 @@ int main() {
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetCDUpdateFreq(1);
     DEMSim.SetExpandSafetyAdder(300.);
+    DEMSim.SetErrorOutAvgContacts(20000);
     DEMSim.Initialize();
 
     // Output directory
