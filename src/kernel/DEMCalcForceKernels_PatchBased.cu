@@ -738,14 +738,14 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
     ContactType = ContactType_forWrite;
 
     // Rotate history (base wedge -> active image) only if the contact is active this step.
-    if (activeForThisStep && cylHistShift != 0) {
-        const float sin_f = (cylHistShift < 0) ? -simParams->cylPeriodicSinSpan : simParams->cylPeriodicSinSpan;
-        float3 dt = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
-        dt = cylPeriodicRotateVec(dt, simParams, sin_f);
-        delta_tan_x = dt.x;
-        delta_tan_y = dt.y;
-        delta_tan_z = dt.z;
-    }
+    // if (activeForThisStep && cylHistShift != 0) {
+    //     const float sin_f = (cylHistShift < 0) ? -simParams->cylPeriodicSinSpan : simParams->cylPeriodicSinSpan;
+    //     float3 dt = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
+    //     dt = cylPeriodicRotateVec(dt, simParams, sin_f);
+    //     delta_tan_x = dt.x;
+    //     delta_tan_y = dt.y;
+    //     delta_tan_z = dt.z;
+    // }
 
     if (activeForThisStep) {
         // The force model is user-specifiable
@@ -774,14 +774,14 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
     }
 
     // Rotate history back to base wedge (active image -> base) before storing.
-    if (activeForThisStep && cylHistShift != 0) {
-        const float sin_b = (cylHistShift < 0) ? simParams->cylPeriodicSinSpan : -simParams->cylPeriodicSinSpan;
-        float3 dt = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
-        dt = cylPeriodicRotateVec(dt, simParams, sin_b);
-        delta_tan_x = dt.x;
-        delta_tan_y = dt.y;
-        delta_tan_z = dt.z;
-    }
+    // if (activeForThisStep && cylHistShift != 0) {
+    //     const float sin_b = (cylHistShift < 0) ? simParams->cylPeriodicSinSpan : -simParams->cylPeriodicSinSpan;
+    //     float3 dt = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
+    //     dt = cylPeriodicRotateVec(dt, simParams, sin_b);
+    //     delta_tan_x = dt.x;
+    //     delta_tan_y = dt.y;
+    //     delta_tan_z = dt.z;
+    // }
 
     // Note in DEME3, we do not clear force array anymore in each timestep, so always writing back force and contact
     // points, even for zero-force non-contacts, is needed (unless of course, the user instructed no force record). This

@@ -1107,15 +1107,12 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         const bool activeForThisStep = (ContactType_candidate != deme::NOT_A_CONTACT) && (!discardGhostGhost) &&
                                        (!cylPeriodicSkipPair) && (!ownerBoundReject);
 
-        // Rotate history (base-wedge -> active image) only when this contact is active.
-        if (activeForThisStep && cylHistShift != 0) {
-            const float sin_fwd = (cylHistShift < 0) ? -simParams->cylPeriodicSinSpan : simParams->cylPeriodicSinSpan;
-            float3 dt = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
-            dt = cylPeriodicRotateVec(dt, simParams, sin_fwd);
-            delta_tan_x = dt.x;
-            delta_tan_y = dt.y;
-            delta_tan_z = dt.z;
-        }
+        // // Rotate history (base-wedge -> active image) only when this contact is active.
+        // if (activeForThisStep && cylHistShift != 0) {
+        //     const float sin_fwd = (cylHistShift < 0) ? -simParams->cylPeriodicSinSpan :
+        //     simParams->cylPeriodicSinSpan; float3 dt = make_float3(delta_tan_x, delta_tan_y, delta_tan_z); dt =
+        //     cylPeriodicRotateVec(dt, simParams, sin_fwd); delta_tan_x = dt.x; delta_tan_y = dt.y; delta_tan_z = dt.z;
+        // }
 
         // Force model execution (or skip for inactive periodic candidate)
         if (activeForThisStep) {
@@ -1183,14 +1180,11 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // Updated contact wildcards need to be write back to global mem. It is here because contact wildcard may need
         // to be destroyed for non-contact, so it has to go last.
         // Rotate history back to base-wedge frame before writing to global memory.
-        if (activeForThisStep && cylHistShift != 0) {
-            const float sin_inv = (cylHistShift < 0) ? simParams->cylPeriodicSinSpan : -simParams->cylPeriodicSinSpan;
-            float3 dt = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
-            dt = cylPeriodicRotateVec(dt, simParams, sin_inv);
-            delta_tan_x = dt.x;
-            delta_tan_y = dt.y;
-            delta_tan_z = dt.z;
-        }
+        // if (activeForThisStep && cylHistShift != 0) {
+        //     const float sin_inv = (cylHistShift < 0) ? simParams->cylPeriodicSinSpan :
+        //     -simParams->cylPeriodicSinSpan; float3 dt = make_float3(delta_tan_x, delta_tan_y, delta_tan_z); dt =
+        //     cylPeriodicRotateVec(dt, simParams, sin_inv); delta_tan_x = dt.x; delta_tan_y = dt.y; delta_tan_z = dt.z;
+        // }
 
         _forceModelContactWildcardWrite_;
     } else {  // If this is the kernel for a mesh-related contact, another follow-up kernel is needed to compute force
