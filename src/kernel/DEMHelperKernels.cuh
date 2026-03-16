@@ -1020,34 +1020,6 @@ vectorAB(const T1& AX, const T1& AY, const T1& AZ, const T1& BX, const T1& BY, c
     return make_float3(AX - BX, AY - BY, AZ - BZ);
 }
 
-/**
- * Template arguments:
- *   - T1: the floating point accuracy level for the point coordinate and the frame O coordinate
- *
- * Basic idea: calculate a point's (typically contact point) local coordinate in a specific frame, then return as a
- * float3
- *
- */
-template <typename T1>
-__host__ __device__ float3 findLocalCoord(const T1& X,
-                                          const T1& Y,
-                                          const T1& Z,
-                                          const T1& Ox,
-                                          const T1& Oy,
-                                          const T1& Oz,
-                                          const deme::oriQ_t& oriQw,
-                                          const deme::oriQ_t& oriQx,
-                                          const deme::oriQ_t& oriQy,
-                                          const deme::oriQ_t& oriQz) {
-    float locX, locY, locZ;
-    locX = X - Ox;
-    locY = Y - Oy;
-    locZ = Z - Oz;
-    // To find the contact point in the local (body) frame, just apply inverse quaternion to OP vector in global frame
-    applyOriQToVector3<float, deme::oriQ_t>(locX, locY, locZ, oriQw, -oriQx, -oriQy, -oriQz);
-    return make_float3(locX, locY, locZ);
-}
-
 /// Calculate the contact params based on the 2 contact material types given
 template <typename T1>
 __host__ __device__ void matProxy2ContactParam(T1& E_eff,

@@ -101,7 +101,7 @@ if (overlapDepth > 0) {
 
     // Tangential force part
     if (mu_cnt > 0.f) {
-        const float kt = 8. * G_cnt * cnt_rad;
+        const float kt = 8.f * G_cnt * cnt_rad;
         const float gt = -2.f * sqrtf(5.f / 3.f) * beta * sqrtf(mass_eff * kt);
         float3 tangent_force = -kt * delta_tan - gt * vrel_tan;
         const float ft = length(tangent_force);
