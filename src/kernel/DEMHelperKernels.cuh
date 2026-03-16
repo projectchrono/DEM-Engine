@@ -731,12 +731,16 @@ inline __host__ __device__ void applyOriQToVector3(T1& v, const T2& Q) {
     auto oldX = v.x;
     auto oldY = v.y;
     auto oldZ = v.z;
-    v.x = (2.0f * (Q.w * Q.w + Q.x * Q.x) - 1.0f) * oldX + (2.0f * (Q.x * Q.y - Q.w * Q.z)) * oldY +
-          (2.0f * (Q.x * Q.z + Q.w * Q.y)) * oldZ;
-    v.y = (2.0f * (Q.x * Q.y + Q.w * Q.z)) * oldX + (2.0f * (Q.w * Q.w + Q.y * Q.y) - 1.0f) * oldY +
-          (2.0f * (Q.y * Q.z - Q.w * Q.x)) * oldZ;
-    v.z = (2.0f * (Q.x * Q.z - Q.w * Q.y)) * oldX + (2.0f * (Q.y * Q.z + Q.w * Q.x)) * oldY +
-          (2.0f * (Q.w * Q.w + Q.z * Q.z) - 1.0f) * oldZ;
+    const auto Qw = Q.w;
+    const auto Qx = Q.x;
+    const auto Qy = Q.y;
+    const auto Qz = Q.z;
+    v.x = (2 * (Qw * Qw + Qx * Qx) - 1) * oldX + (2 * (Qx * Qy - Qw * Qz)) * oldY +
+          (2 * (Qx * Qz + Qw * Qy)) * oldZ;
+    v.y = (2 * (Qx * Qy + Qw * Qz)) * oldX + (2 * (Qw * Qw + Qy * Qy) - 1) * oldY +
+          (2 * (Qy * Qz - Qw * Qx)) * oldZ;
+    v.z = (2 * (Qx * Qz - Qw * Qy)) * oldX + (2 * (Qy * Qz + Qw * Qx)) * oldY +
+          (2 * (Qw * Qw + Qz * Qz) - 1) * oldZ;
 }
 
 template <typename T1, typename T2, typename T3>
