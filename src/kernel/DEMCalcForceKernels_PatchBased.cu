@@ -661,8 +661,8 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
     float3 locCPA = to_float3(contactPnt - AOwnerPos);
     float3 locCPB = to_float3(contactPnt - BOwnerPos);
     // Map contact point location to bodies' local reference frames
-    applyOriQToVector3<float, deme::oriQ_t>(locCPA.x, locCPA.y, locCPA.z, AOriQ.w, -AOriQ.x, -AOriQ.y, -AOriQ.z);
-    applyOriQToVector3<float, deme::oriQ_t>(locCPB.x, locCPB.y, locCPB.z, BOriQ.w, -BOriQ.x, -BOriQ.y, -BOriQ.z);
+    applyOriQToVector3(locCPA, make_float4(-AOriQ.x, -AOriQ.y, -AOriQ.z, AOriQ.w));
+    applyOriQToVector3(locCPB, make_float4(-BOriQ.x, -BOriQ.y, -BOriQ.z, BOriQ.w));
     // {
     //     const float max_lever_A = maxOwnerLocalLever(simParams, granData, ownerA, extraMarginSize);
     //     const float max_lever_B = maxOwnerLocalLever(simParams, granData, ownerB, extraMarginSize);
@@ -803,8 +803,8 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
         BOriQ = BOriQ_orig;
         locCPA = to_float3(contactPntA - AOwnerPos);
         locCPB = to_float3(contactPntB - BOwnerPos);
-        applyOriQToVector3<float, deme::oriQ_t>(locCPA.x, locCPA.y, locCPA.z, AOriQ.w, -AOriQ.x, -AOriQ.y, -AOriQ.z);
-        applyOriQToVector3<float, deme::oriQ_t>(locCPB.x, locCPB.y, locCPB.z, BOriQ.w, -BOriQ.x, -BOriQ.y, -BOriQ.z);
+        applyOriQToVector3(locCPA, make_float4(-AOriQ.x, -AOriQ.y, -AOriQ.z, AOriQ.w));
+        applyOriQToVector3(locCPB, make_float4(-BOriQ.x, -BOriQ.y, -BOriQ.z, BOriQ.w));
         // {
         //     const float max_lever_A = maxOwnerLocalLever(simParams, granData, ownerA, extraMarginSize);
         //     const float max_lever_B = maxOwnerLocalLever(simParams, granData, ownerB, extraMarginSize);

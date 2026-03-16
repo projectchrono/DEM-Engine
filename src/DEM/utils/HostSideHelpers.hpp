@@ -700,7 +700,11 @@ inline void applyFrameTransformGlobalToLocal(T1& pos, const T2& vec, const T3& r
     pos.x -= vec.x;
     pos.y -= vec.y;
     pos.z -= vec.z;
-    applyOriQToVector3(pos.x, pos.y, pos.z, rot_Q.w, -rot_Q.x, -rot_Q.y, -rot_Q.z);
+    auto conjQ = rot_Q;
+    conjQ.x = -conjQ.x;
+    conjQ.y = -conjQ.y;
+    conjQ.z = -conjQ.z;
+    applyOriQToVector3(pos, conjQ);
 }
 /// Translating the inverse of the provided vec then applying a local inverse rotation of the provided rot_Q, then
 /// return the result.

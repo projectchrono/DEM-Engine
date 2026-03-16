@@ -36,7 +36,7 @@ DEME_KERNEL void inspectSphereProperty(deme::DEMDataDT* granData,
         oriQx = granData->oriQx[myOwner];
         oriQy = granData->oriQy[myOwner];
         oriQz = granData->oriQz[myOwner];
-        applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, oriQw, oriQx, oriQy, oriQz);
+        applyOriQToVector3(myRelPos, make_float4(oriQx, oriQy, oriQz, oriQw));
 
         // Use sphereXYZ to determine if this sphere is in the region that should be counted
         // And don't forget adding LBF as an offset

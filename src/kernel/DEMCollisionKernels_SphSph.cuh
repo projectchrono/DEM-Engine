@@ -26,7 +26,7 @@ inline __device__ void equipOwnerPosRot(deme::DEMSimParams* simParams,
     oriQ.x = granData->oriQx[myOwner];
     oriQ.y = granData->oriQy[myOwner];
     oriQ.z = granData->oriQz[myOwner];
-    applyOriQToVector3(relPos.x, relPos.y, relPos.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+    applyOriQToVector3(relPos, oriQ);
     bodyPos.x = ownerPos.x + (double)relPos.x;
     bodyPos.y = ownerPos.y + (double)relPos.y;
     bodyPos.z = ownerPos.z + (double)relPos.z;

@@ -43,8 +43,7 @@ DEME_KERNEL void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                 const float myOriQx = granData->oriQx[myOwnerID];
                 const float myOriQy = granData->oriQy[myOwnerID];
                 const float myOriQz = granData->oriQz[myOwnerID];
-                applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, myOriQw, myOriQx, myOriQy,
-                                                        myOriQz);
+                applyOriQToVector3(myRelPos, make_float4(myOriQx, myOriQy, myOriQz, myOriQw));
                 myPosXYZ = ownerXYZ + to_double3(myRelPos);
             }
 
@@ -157,17 +156,12 @@ DEME_KERNEL void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
             const float ownerOriQx = granData->oriQx[objBOwner];
             const float ownerOriQy = granData->oriQy[objBOwner];
             const float ownerOriQz = granData->oriQz[objBOwner];
-            float objBRelPosX = objRelPosX[objB];
-            float objBRelPosY = objRelPosY[objB];
-            float objBRelPosZ = objRelPosZ[objB];
-            float objBRotX = objRotX[objB];
-            float objBRotY = objRotY[objB];
-            float objBRotZ = objRotZ[objB];
-            applyOriQToVector3<float, deme::oriQ_t>(objBRelPosX, objBRelPosY, objBRelPosZ, ownerOriQw, ownerOriQx,
-                                                    ownerOriQy, ownerOriQz);
-            applyOriQToVector3<float, deme::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx, ownerOriQy,
-                                                    ownerOriQz);
-            double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
+            const float4 ownerOriQ = make_float4(ownerOriQx, ownerOriQy, ownerOriQz, ownerOriQw);
+            float3 objBRelPos = make_float3(objRelPosX[objB], objRelPosY[objB], objRelPosZ[objB]);
+            float3 objBRot = make_float3(objRotX[objB], objRotY[objB], objRotZ[objB]);
+            applyOriQToVector3(objBRelPos, ownerOriQ);
+            applyOriQToVector3(objBRot, ownerOriQ);
+            double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPos.x, objBRelPos.y, objBRelPos.z);
 
             double overlapDepth, overlapArea;  // overlapArea matters not here
             deme::contact_t contact_type;
@@ -175,7 +169,7 @@ DEME_KERNEL void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                 double3 cntPnt;  // cntPnt here is a placeholder
                 float3 cntNorm;  // cntNorm is placeholder too
                 contact_type = checkSphereEntityOverlap<double3, float, double>(
-                    myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                    myPosXYZ, myRadius, objType[objB], objBPosXYZ, objBRot,
                     objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
                     granData->marginSizeAnalytical[objB], cntPnt, cntNorm, overlapDepth, overlapArea);
             }
@@ -236,8 +230,7 @@ DEME_KERNEL void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                 const float myOriQx = granData->oriQx[myOwnerID];
                 const float myOriQy = granData->oriQy[myOwnerID];
                 const float myOriQz = granData->oriQz[myOwnerID];
-                applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, myOriQw, myOriQx, myOriQy,
-                                                        myOriQz);
+                applyOriQToVector3(myRelPos, make_float4(myOriQx, myOriQy, myOriQz, myOriQw));
                 myPosXYZ = ownerXYZ + to_double3(myRelPos);
             }
             // The bin number that I live in (with fractions)?
@@ -382,17 +375,12 @@ DEME_KERNEL void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                 const float ownerOriQx = granData->oriQx[objBOwner];
                 const float ownerOriQy = granData->oriQy[objBOwner];
                 const float ownerOriQz = granData->oriQz[objBOwner];
-                float objBRelPosX = objRelPosX[objB];
-                float objBRelPosY = objRelPosY[objB];
-                float objBRelPosZ = objRelPosZ[objB];
-                float objBRotX = objRotX[objB];
-                float objBRotY = objRotY[objB];
-                float objBRotZ = objRotZ[objB];
-                applyOriQToVector3<float, deme::oriQ_t>(objBRelPosX, objBRelPosY, objBRelPosZ, ownerOriQw, ownerOriQx,
-                                                        ownerOriQy, ownerOriQz);
-                applyOriQToVector3<float, deme::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx,
-                                                        ownerOriQy, ownerOriQz);
-                double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
+                const float4 ownerOriQ = make_float4(ownerOriQx, ownerOriQy, ownerOriQz, ownerOriQw);
+                float3 objBRelPos = make_float3(objRelPosX[objB], objRelPosY[objB], objRelPosZ[objB]);
+                float3 objBRot = make_float3(objRotX[objB], objRotY[objB], objRotZ[objB]);
+                applyOriQToVector3(objBRelPos, ownerOriQ);
+                applyOriQToVector3(objBRot, ownerOriQ);
+                double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPos.x, objBRelPos.y, objBRelPos.z);
 
                 double overlapDepth, overlapArea;  // overlapArea matters not here
                 deme::contact_t contact_type;
@@ -400,7 +388,7 @@ DEME_KERNEL void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                     double3 cntPnt;  // cntPnt here is a placeholder
                     float3 cntNorm;  // cntNorm is placeholder too
                     contact_type = checkSphereEntityOverlap<double3, float, double>(
-                        myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                        myPosXYZ, myRadius, objType[objB], objBPosXYZ, objBRot,
                         objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
                         granData->marginSizeAnalytical[objB], cntPnt, cntNorm, overlapDepth, overlapArea);
                 }

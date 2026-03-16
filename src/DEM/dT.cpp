@@ -1621,18 +1621,13 @@ void DEMDynamicThread::writeSpheresAsChpfFromHost(std::ofstream& ptFile) {
         CoM.z = Z + simParams->LBFZ;
 
         size_t compOffset = (solverFlags.useClumpJitify) ? clumpComponentOffsetExt[i] : i;
-        float this_sp_deviation_x = relPosSphereX[compOffset];
-        float this_sp_deviation_y = relPosSphereY[compOffset];
-        float this_sp_deviation_z = relPosSphereZ[compOffset];
-        float this_sp_rot_0 = oriQw[this_owner];
-        float this_sp_rot_1 = oriQx[this_owner];
-        float this_sp_rot_2 = oriQy[this_owner];
-        float this_sp_rot_3 = oriQz[this_owner];
-        applyOriQToVector3<float, float>(this_sp_deviation_x, this_sp_deviation_y, this_sp_deviation_z, this_sp_rot_0,
-                                         this_sp_rot_1, this_sp_rot_2, this_sp_rot_3);
-        posX.at(num_output_spheres) = CoM.x + this_sp_deviation_x;
-        posY.at(num_output_spheres) = CoM.y + this_sp_deviation_y;
-        posZ.at(num_output_spheres) = CoM.z + this_sp_deviation_z;
+        float3 this_sp_deviation = make_float3(relPosSphereX[compOffset], relPosSphereY[compOffset],
+                                               relPosSphereZ[compOffset]);
+        float4 this_sp_rot = make_float4(oriQx[this_owner], oriQy[this_owner], oriQz[this_owner], oriQw[this_owner]);
+        applyOriQToVector3(this_sp_deviation, this_sp_rot);
+        posX.at(num_output_spheres) = CoM.x + this_sp_deviation.x;
+        posY.at(num_output_spheres) = CoM.y + this_sp_deviation.y;
+        posZ.at(num_output_spheres) = CoM.z + this_sp_deviation.z;
         // std::cout << "Sphere Pos: " << posX.at(i) << ", " << posY.at(i) << ", " << posZ.at(i) << std::endl;
 
         spRadii.at(num_output_spheres) = radiiSphere[compOffset];
@@ -1740,16 +1735,10 @@ void DEMDynamicThread::writeSpheresAsCsvFromHost(std::ofstream& ptFile) {
         CoM.z = Z + simParams->LBFZ;
 
         size_t compOffset = (solverFlags.useClumpJitify) ? clumpComponentOffsetExt[i] : i;
-        float3 this_sp_deviation;
-        this_sp_deviation.x = relPosSphereX[compOffset];
-        this_sp_deviation.y = relPosSphereY[compOffset];
-        this_sp_deviation.z = relPosSphereZ[compOffset];
-        float this_sp_rot_0 = oriQw[this_owner];
-        float this_sp_rot_1 = oriQx[this_owner];
-        float this_sp_rot_2 = oriQy[this_owner];
-        float this_sp_rot_3 = oriQz[this_owner];
-        applyOriQToVector3<float, float>(this_sp_deviation.x, this_sp_deviation.y, this_sp_deviation.z, this_sp_rot_0,
-                                         this_sp_rot_1, this_sp_rot_2, this_sp_rot_3);
+        float3 this_sp_deviation = make_float3(relPosSphereX[compOffset], relPosSphereY[compOffset],
+                                               relPosSphereZ[compOffset]);
+        float4 this_sp_rot = make_float4(oriQx[this_owner], oriQy[this_owner], oriQz[this_owner], oriQw[this_owner]);
+        applyOriQToVector3(this_sp_deviation, this_sp_rot);
         pos = CoM + this_sp_deviation;
         outstrstream << pos.x << "," << pos.y << "," << pos.z;
 
@@ -2139,7 +2128,7 @@ std::shared_ptr<ContactInfoContainer> DEMDynamicThread::generateContactInfoFromH
             CoM.z += simParams->LBFZ;
             cntPntA = contactPointGeometryA[i];
             cntPntALocal = cntPntA;
-            applyOriQToVector3(cntPntA.x, cntPntA.y, cntPntA.z, oriQA.w, oriQA.x, oriQA.y, oriQA.z);
+            applyOriQToVector3(cntPntA, oriQA);
             cntPntA += CoM;
         }
         if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_POINT) {
@@ -2158,11 +2147,11 @@ std::shared_ptr<ContactInfoContainer> DEMDynamicThread::generateContactInfoFromH
         if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE) {
             // Must derive torque in local...
             {
-                applyOriQToVector3(torque.x, torque.y, torque.z, oriQA.w, -oriQA.x, -oriQA.y, -oriQA.z);
+                applyOriQToVector3(torque, make_float4(-oriQA.x, -oriQA.y, -oriQA.z, oriQA.w));
                 // Force times point...
                 torque = cross(cntPntALocal, torque);
                 // back to global
-                applyOriQToVector3(torque.x, torque.y, torque.z, oriQA.w, oriQA.x, oriQA.y, oriQA.z);
+                applyOriQToVector3(torque, oriQA);
             }
             contactInfo.Get<float3>("Torque")[useful_cnt] = torque;
         }

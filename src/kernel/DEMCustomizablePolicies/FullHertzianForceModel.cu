@@ -23,8 +23,8 @@ if (overlapDepth > 0) {
     // This is local rotational velocity (the portion of linear vel contributed by rotation)
     float3 rotVelCPA = cross(ARotVel, locCPA);
     float3 rotVelCPB = cross(BRotVel, locCPB);
-    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x, AOriQ.y, AOriQ.z);
-    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
+    applyOriQToVector3(rotVelCPA, AOriQ);
+    applyOriQToVector3(rotVelCPB, BOriQ);
 
     // A few re-usables
     float mass_eff, beta, cnt_rad;

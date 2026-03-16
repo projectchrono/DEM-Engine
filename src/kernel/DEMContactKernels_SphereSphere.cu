@@ -58,7 +58,7 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
     float myOriQx = granData->oriQx[ownerID];
     float myOriQy = granData->oriQy[ownerID];
     float myOriQz = granData->oriQz[ownerID];
-    applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, myOriQw, myOriQx, myOriQy, myOriQz);
+    applyOriQToVector3(myRelPos, make_float4(myOriQx, myOriQy, myOriQz, myOriQw));
     bodyX[myThreadID] = ownerX + (double)myRelPos.x;
     bodyY[myThreadID] = ownerY + (double)myRelPos.y;
     bodyZ[myThreadID] = ownerZ + (double)myRelPos.z;

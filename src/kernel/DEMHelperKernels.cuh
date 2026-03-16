@@ -727,22 +727,21 @@ __host__ __device__ void positionToVoxelID(T1& ID,
 }
 
 template <typename T1, typename T2>
-__host__ __device__ void
-applyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Qw, const T2& Qx, const T2& Qy, const T2& Qz) {
-    T1 oldX = X;
-    T1 oldY = Y;
-    T1 oldZ = Z;
-    X = ((T2)2.0 * (Qw * Qw + Qx * Qx) - (T2)1.0) * oldX + ((T2)2.0 * (Qx * Qy - Qw * Qz)) * oldY +
-        ((T2)2.0 * (Qx * Qz + Qw * Qy)) * oldZ;
-    Y = ((T2)2.0 * (Qx * Qy + Qw * Qz)) * oldX + ((T2)2.0 * (Qw * Qw + Qy * Qy) - (T2)1.0) * oldY +
-        ((T2)2.0 * (Qy * Qz - Qw * Qx)) * oldZ;
-    Z = ((T2)2.0 * (Qx * Qz - Qw * Qy)) * oldX + ((T2)2.0 * (Qy * Qz + Qw * Qx)) * oldY +
-        ((T2)2.0 * (Qw * Qw + Qz * Qz) - (T2)1.0) * oldZ;
+inline __host__ __device__ void applyOriQToVector3(T1& v, const T2& Q) {
+    auto oldX = v.x;
+    auto oldY = v.y;
+    auto oldZ = v.z;
+    v.x = (2.0f * (Q.w * Q.w + Q.x * Q.x) - 1.0f) * oldX + (2.0f * (Q.x * Q.y - Q.w * Q.z)) * oldY +
+          (2.0f * (Q.x * Q.z + Q.w * Q.y)) * oldZ;
+    v.y = (2.0f * (Q.x * Q.y + Q.w * Q.z)) * oldX + (2.0f * (Q.w * Q.w + Q.y * Q.y) - 1.0f) * oldY +
+          (2.0f * (Q.y * Q.z - Q.w * Q.x)) * oldZ;
+    v.z = (2.0f * (Q.x * Q.z - Q.w * Q.y)) * oldX + (2.0f * (Q.y * Q.z + Q.w * Q.x)) * oldY +
+          (2.0f * (Q.w * Q.w + Q.z * Q.z) - 1.0f) * oldZ;
 }
 
 template <typename T1, typename T2, typename T3>
 __host__ __device__ void applyFrameTransformLocalToGlobal(T1& pos, const T2& vec, const T3& rot_Q) {
-    applyOriQToVector3(pos.x, pos.y, pos.z, rot_Q.w, rot_Q.x, rot_Q.y, rot_Q.z);
+    applyOriQToVector3(pos, rot_Q);
     pos.x += vec.x;
     pos.y += vec.y;
     pos.z += vec.z;
