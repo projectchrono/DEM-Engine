@@ -502,7 +502,7 @@ class DEMMesh : public DEMInitializer {
             applyFrameTransformGlobalToLocal(node, center, prin_Q);
         }
         for (auto& normal : m_normals) {
-            applyOriQToVector3(normal.x, normal.y, normal.z, prin_Q.w, -prin_Q.x, -prin_Q.y, -prin_Q.z);
+            applyOriQToVector3(normal, make_float4(-prin_Q.x, -prin_Q.y, -prin_Q.z, prin_Q.w));
             const float n_len = length(normal);
             if (n_len > DEME_TINY_FLOAT) {
                 normal /= n_len;
@@ -524,7 +524,7 @@ class DEMMesh : public DEMInitializer {
             applyFrameTransformLocalToGlobal(node, vec, rot_Q);
         }
         for (auto& normal : m_normals) {
-            applyOriQToVector3(normal.x, normal.y, normal.z, rot_Q.w, rot_Q.x, rot_Q.y, rot_Q.z);
+            applyOriQToVector3(normal, rot_Q);
             const float n_len = length(normal);
             if (n_len > DEME_TINY_FLOAT) {
                 normal /= n_len;

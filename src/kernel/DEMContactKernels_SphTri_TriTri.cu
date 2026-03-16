@@ -135,11 +135,12 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
     voxelIDToPosition<float, deme::voxelID_t, deme::subVoxelPos_t>(
         ownerX, ownerY, ownerZ, granData->voxelID[ownerID], granData->locX[ownerID], granData->locY[ownerID],
         granData->locZ[ownerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-    float myOriQw = granData->oriQw[ownerID];
-    float myOriQx = granData->oriQx[ownerID];
-    float myOriQy = granData->oriQy[ownerID];
-    float myOriQz = granData->oriQz[ownerID];
-    applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, myOriQw, myOriQx, myOriQy, myOriQz);
+    float4 myOriQ;
+    myOriQ.w = granData->oriQw[ownerID];
+    myOriQ.x = granData->oriQx[ownerID];
+    myOriQ.y = granData->oriQy[ownerID];
+    myOriQ.z = granData->oriQz[ownerID];
+    applyOriQToVector3(myRelPos, myOriQ);
     bodyX[myThreadID] = ownerX + myRelPos.x;
     bodyY[myThreadID] = ownerY + myRelPos.y;
     bodyZ[myThreadID] = ownerZ + myRelPos.z;

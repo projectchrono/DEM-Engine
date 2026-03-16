@@ -44,8 +44,7 @@ const std::string INSP_CODE_SPHERE_HIGH_ABSV = R"V0G0N(
         // main reason for querying max absv for us. So, it should be fine.
         float3 pRotVel = cross(rotVel, relPos);
         // Map rotational contribution back to global
-        applyOriQToVector3<float, deme::oriQ_t>(pRotVel.x, pRotVel.y, pRotVel.z, 
-                                                oriQw, oriQx, oriQy, oriQz);
+        applyOriQToVector3(pRotVel, oriQ);
         vel = length(pRotVel + linVel);
     }
     quantity[sphereID] = vel;
@@ -409,7 +408,7 @@ float3 DEMTracker::AngVelGlobal(size_t offset) {
     assertOwnerOffsetValid(offset, "AngVelGlobal");
     float3 ang_v = sys->GetOwnerAngVel(obj->ownerID + offset)[0];
     float4 oriQ = sys->GetOwnerOriQ(obj->ownerID + offset)[0];
-    applyOriQToVector3(ang_v.x, ang_v.y, ang_v.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+    applyOriQToVector3(ang_v, oriQ);
     return ang_v;
 }
 std::vector<float> DEMTracker::GetAngVelGlobal(size_t offset) {
@@ -420,7 +419,7 @@ std::vector<float3> DEMTracker::AngularVelocitiesGlobal() {
     std::vector<float3> ang_v = sys->GetOwnerAngVel(obj->ownerID, obj->nSpanOwners);
     std::vector<float4> oriQ = sys->GetOwnerOriQ(obj->ownerID, obj->nSpanOwners);
     for (size_t i = 0; i < ang_v.size(); i++) {
-        applyOriQToVector3(ang_v[i].x, ang_v[i].y, ang_v[i].z, oriQ[i].w, oriQ[i].x, oriQ[i].y, oriQ[i].z);
+        applyOriQToVector3(ang_v[i], oriQ[i]);
     }
     return ang_v;
 }
@@ -540,7 +539,7 @@ float3 DEMTracker::ContactAngAccGlobal(size_t offset) {
     assertOwnerOffsetValid(offset, "ContactAngAccGlobal");
     float3 ang_acc = sys->GetOwnerAngAcc(obj->ownerID + offset)[0];
     float4 oriQ = sys->GetOwnerOriQ(obj->ownerID + offset)[0];
-    applyOriQToVector3(ang_acc.x, ang_acc.y, ang_acc.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+    applyOriQToVector3(ang_acc, oriQ);
     return ang_acc;
 }
 std::vector<float> DEMTracker::GetContactAngAccGlobal(size_t offset) {
@@ -551,7 +550,7 @@ std::vector<float3> DEMTracker::ContactAngularAccelerationsGlobal() {
     std::vector<float3> ang_a = sys->GetOwnerAngAcc(obj->ownerID, obj->nSpanOwners);
     std::vector<float4> oriQ = sys->GetOwnerOriQ(obj->ownerID, obj->nSpanOwners);
     for (size_t i = 0; i < ang_a.size(); i++) {
-        applyOriQToVector3(ang_a[i].x, ang_a[i].y, ang_a[i].z, oriQ[i].w, oriQ[i].x, oriQ[i].y, oriQ[i].z);
+        applyOriQToVector3(ang_a[i], oriQ[i]);
     }
     return ang_a;
 }

@@ -160,7 +160,7 @@ DEME_KERNEL void forceToAcc(deme::DEMSimParams* simParams, deme::DEMDataDT* gran
                 // only, not linear velocity
                 float3 myF = (forceA + torqueA);
                 // F is in global frame, but it needs to be in local to coordinate with moi and cntPnt
-                applyOriQToVector3<float, deme::oriQ_t>(myF.x, myF.y, myF.z, myOriQw, -myOriQx, -myOriQy, -myOriQz);
+                applyOriQToVector3(myF, make_float4(-myOriQx, -myOriQy, -myOriQz, myOriQw));
                 const float3 angAcc = cross(myCntPnt, myF) / myMOI;
                 atomicAdd(granData->alphaX + myOwner, angAcc.x);
                 atomicAdd(granData->alphaY + myOwner, angAcc.y);
@@ -208,7 +208,7 @@ DEME_KERNEL void forceToAcc(deme::DEMSimParams* simParams, deme::DEMDataDT* gran
                 // only, not linear velocity
                 float3 myF = (forceB + torqueB);
                 // F is in global frame, but it needs to be in local to coordinate with moi and cntPnt
-                applyOriQToVector3<float, deme::oriQ_t>(myF.x, myF.y, myF.z, myOriQw, -myOriQx, -myOriQy, -myOriQz);
+                applyOriQToVector3(myF, make_float4(-myOriQx, -myOriQy, -myOriQz, myOriQw));
                 const float3 angAcc = cross(myCntPnt, myF) / myMOI;
                 atomicAdd(granData->alphaX + myOwner, angAcc.x);
                 atomicAdd(granData->alphaY + myOwner, angAcc.y);

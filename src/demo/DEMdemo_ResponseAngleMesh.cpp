@@ -171,7 +171,7 @@ int main() {
     }
     const std::string drum_ang_pre = "float3 omg_g = make_float3(0.f, 0.f, " + to_string_with_precision(drum_ang_vel) +
                                      ");"
-                                     "applyOriQToVector3(omg_g.x, omg_g.y, omg_g.z, oriQw, -oriQx, -oriQy, -oriQz);";
+                                     "applyOriQToVector3(omg_g, make_float4(-oriQx, -oriQy, -oriQz, oriQw));";
     DEMSim.SetFamilyPrescribedAngVel(drum_family, "omg_g.x", "omg_g.y", "omg_g.z", true, drum_ang_pre);
 
     // Add top and bottom planes. They rotate with the drum family.

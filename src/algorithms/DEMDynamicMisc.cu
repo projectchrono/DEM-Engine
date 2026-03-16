@@ -177,8 +177,7 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
             float3 cntPnt_local = cntPnt;
             if (!cntPnt_is_local) {
                 cntPnt_local = make_float3(cntPnt.x - (float)CoM.x, cntPnt.y - (float)CoM.y, cntPnt.z - (float)CoM.z);
-                applyOriQToVector3<float, oriQ_t>(cntPnt_local.x, cntPnt_local.y, cntPnt_local.z, oriQ.w, -oriQ.x,
-                                                  -oriQ.y, -oriQ.z);
+                applyOriQToVector3(cntPnt_local, make_float4(-oriQ.x, -oriQ.y, -oriQ.z, oriQ.w));
             }
             // Final guard: reject implausibly large local lever arms for this owner.
             float max_lever = 1.0f;
@@ -191,10 +190,10 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
                 d_torques[writeIndex] = make_float3(0.f, 0.f, 0.f);
             } else {
                 float3 myF = force + torque_only_force;
-                applyOriQToVector3<float, oriQ_t>(myF.x, myF.y, myF.z, oriQ.w, -oriQ.x, -oriQ.y, -oriQ.z);
+                applyOriQToVector3(myF, make_float4(-oriQ.x, -oriQ.y, -oriQ.z, oriQ.w));
                 float3 torque = cross(cntPnt_local, myF);
                 if (!torque_in_local) {
-                    applyOriQToVector3<float, oriQ_t>(torque.x, torque.y, torque.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+                    applyOriQToVector3(torque, oriQ);
                 }
                 d_torques[writeIndex] = torque;
             }
@@ -843,8 +842,7 @@ __global__ void computePatchPVScalars_impl(const DEMSimParams* simParams,
         if (isfinite(linVelA.x) && isfinite(linVelA.y) && isfinite(linVelA.z) && isfinite(angVelA_local.x) &&
             isfinite(angVelA_local.y) && isfinite(angVelA_local.z)) {
             float3 angVelA_global = angVelA_local;
-            applyOriQToVector3<float, oriQ_t>(angVelA_global.x, angVelA_global.y, angVelA_global.z, oriA.w, oriA.x,
-                                              oriA.y, oriA.z);
+            applyOriQToVector3(angVelA_global, oriA);
 
             double3 comA;
             voxelIDToPosition<double, voxelID_t, subVoxelPos_t>(
@@ -881,8 +879,7 @@ __global__ void computePatchPVScalars_impl(const DEMSimParams* simParams,
         if (isfinite(linVelB.x) && isfinite(linVelB.y) && isfinite(linVelB.z) && isfinite(angVelB_local.x) &&
             isfinite(angVelB_local.y) && isfinite(angVelB_local.z)) {
             float3 angVelB_global = angVelB_local;
-            applyOriQToVector3<float, oriQ_t>(angVelB_global.x, angVelB_global.y, angVelB_global.z, oriB.w, oriB.x,
-                                              oriB.y, oriB.z);
+            applyOriQToVector3(angVelB_global, oriB);
 
             double3 comB;
             voxelIDToPosition<double, voxelID_t, subVoxelPos_t>(

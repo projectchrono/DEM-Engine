@@ -15,8 +15,8 @@ if (overlapDepth > 0) {
     float3 rotVelCPA = cross(ARotVel, locCPA);
     float3 rotVelCPB = cross(BRotVel, locCPB);
     // This is mapping from local rotational velocity to global
-    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x, AOriQ.y, AOriQ.z);
-    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
+    applyOriQToVector3(rotVelCPA, AOriQ);
+    applyOriQToVector3(rotVelCPB, BOriQ);
 
     // The (total) relative linear velocity of A relative to B
     const float3 velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);

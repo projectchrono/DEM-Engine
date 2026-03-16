@@ -46,7 +46,7 @@ if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
         // only, not linear velocity
         float3 myF = (forceA + torqueA);
         // F is in global frame, but it needs to be in local to coordinate with moi and cntPnt
-        applyOriQToVector3<float, deme::oriQ_t>(myF.x, myF.y, myF.z, AOriQ.w, -AOriQ.x, -AOriQ.y, -AOriQ.z);
+        applyOriQToVector3(myF, make_float4(-AOriQ.x, -AOriQ.y, -AOriQ.z, AOriQ.w));
         const float3 angAcc = cross(locCPA, myF) / AOwnerMOI;
         atomicAdd(granData->alphaX + AOwner, angAcc.x);
         atomicAdd(granData->alphaY + AOwner, angAcc.y);
@@ -78,7 +78,7 @@ if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
         // only, not linear velocity
         float3 myF = (forceB + torqueB);
         // F is in global frame, but it needs to be in local to coordinate with moi and cntPnt
-        applyOriQToVector3<float, deme::oriQ_t>(myF.x, myF.y, myF.z, BOriQ.w, -BOriQ.x, -BOriQ.y, -BOriQ.z);
+        applyOriQToVector3(myF, make_float4(-BOriQ.x, -BOriQ.y, -BOriQ.z, BOriQ.w));
         const float3 angAcc = cross(locCPB, myF) / BOwnerMOI;
         atomicAdd(granData->alphaX + BOwner, angAcc.x);
         atomicAdd(granData->alphaY + BOwner, angAcc.y);

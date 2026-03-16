@@ -292,9 +292,9 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         equipOwnerPosRot(simParams, granData, myOwner, triANode1, AOwnerPos, bodyAPos, AOriQ);
         triANode1 = bodyAPos;
         // Do this to node 2 and 3 as well
-        applyOriQToVector3(triANode2.x, triANode2.y, triANode2.z, AOriQ.w, AOriQ.x, AOriQ.y, AOriQ.z);
+        applyOriQToVector3(triANode2, AOriQ);
         triANode2 += AOwnerPos;
-        applyOriQToVector3(triANode3.x, triANode3.y, triANode3.z, AOriQ.w, AOriQ.x, AOriQ.y, AOriQ.z);
+        applyOriQToVector3(triANode3, AOriQ);
         triANode3 += AOwnerPos;
         // Assign the correct bodyAPos
         bodyAPos = triangleCentroid<double3>(triANode1, triANode2, triANode3);
@@ -567,9 +567,9 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         equipOwnerPosRot(simParams, granData, myOwner, triBNode1, BOwnerPos, bodyBPos, BOriQ);
         triBNode1 = bodyBPos;
         // Do this to node 2 and 3 as well
-        applyOriQToVector3(triBNode2.x, triBNode2.y, triBNode2.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
+        applyOriQToVector3(triBNode2, BOriQ);
         triBNode2 += BOwnerPos;
-        applyOriQToVector3(triBNode3.x, triBNode3.y, triBNode3.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
+        applyOriQToVector3(triBNode3, BOriQ);
         triBNode3 += BOwnerPos;
         // Assign the correct bodyBPos
         bodyBPos = triangleCentroid<double3>(triBNode1, triBNode2, triBNode3);
@@ -989,7 +989,7 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         bodyBRot.x = objRotX[analyticalID];
         bodyBRot.y = objRotY[analyticalID];
         bodyBRot.z = objRotZ[analyticalID];
-        applyOriQToVector3<float, deme::oriQ_t>(bodyBRot.x, bodyBRot.y, bodyBRot.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
+        applyOriQToVector3(bodyBRot, BOriQ);
 
         // If B is an analytical entity, then A can be a sphere or a triangle.
         if constexpr (AType == deme::GEO_T_SPHERE) {
@@ -1033,8 +1033,8 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         float3 locCPA = to_float3(contactPnt - AOwnerPos);
         float3 locCPB = to_float3(contactPnt - BOwnerPos);
         // Now map this contact point location to bodies' local ref
-        applyOriQToVector3<float, deme::oriQ_t>(locCPA.x, locCPA.y, locCPA.z, AOriQ.w, -AOriQ.x, -AOriQ.y, -AOriQ.z);
-        applyOriQToVector3<float, deme::oriQ_t>(locCPB.x, locCPB.y, locCPB.z, BOriQ.w, -BOriQ.x, -BOriQ.y, -BOriQ.z);
+        applyOriQToVector3(locCPA, make_float4(-AOriQ.x, -AOriQ.y, -AOriQ.z, AOriQ.w));
+        applyOriQToVector3(locCPB, make_float4(-BOriQ.x, -BOriQ.y, -BOriQ.z, BOriQ.w));
 
         // Decide whether this candidate contact is active for this dT step.
         // We may have multiple periodic image candidates for the same owner pair; if this one is not the current
@@ -1166,10 +1166,8 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             BOriQ = BOriQ_orig;
             locCPA = to_float3(contactPntA - AOwnerPos);
             locCPB = to_float3(contactPntB - BOwnerPos);
-            applyOriQToVector3<float, deme::oriQ_t>(locCPA.x, locCPA.y, locCPA.z, AOriQ.w, -AOriQ.x, -AOriQ.y,
-                                                    -AOriQ.z);
-            applyOriQToVector3<float, deme::oriQ_t>(locCPB.x, locCPB.y, locCPB.z, BOriQ.w, -BOriQ.x, -BOriQ.y,
-                                                    -BOriQ.z);
+            applyOriQToVector3(locCPA, make_float4(-AOriQ.x, -AOriQ.y, -AOriQ.z, AOriQ.w));
+            applyOriQToVector3(locCPB, make_float4(-BOriQ.x, -BOriQ.y, -BOriQ.z, BOriQ.w));
         }
 
         if (ContactType == deme::NOT_A_CONTACT) {

@@ -740,9 +740,23 @@ applyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Qw, const T2& Qx, const T2& Qy
         ((T2)2.0 * (Qw * Qw + Qz * Qz) - (T2)1.0) * oldZ;
 }
 
+template <typename T1, typename T2>
+inline __host__ __device__ void applyOriQToVector3(T1& v, const T2& Q) {
+    auto oldX = v.x;
+    auto oldY = v.y;
+    auto oldZ = v.z;
+    const auto Qw = Q.w;
+    const auto Qx = Q.x;
+    const auto Qy = Q.y;
+    const auto Qz = Q.z;
+    v.x = (2 * (Qw * Qw + Qx * Qx) - 1) * oldX + (2 * (Qx * Qy - Qw * Qz)) * oldY + (2 * (Qx * Qz + Qw * Qy)) * oldZ;
+    v.y = (2 * (Qx * Qy + Qw * Qz)) * oldX + (2 * (Qw * Qw + Qy * Qy) - 1) * oldY + (2 * (Qy * Qz - Qw * Qx)) * oldZ;
+    v.z = (2 * (Qx * Qz - Qw * Qy)) * oldX + (2 * (Qy * Qz + Qw * Qx)) * oldY + (2 * (Qw * Qw + Qz * Qz) - 1) * oldZ;
+}
+
 template <typename T1, typename T2, typename T3>
 __host__ __device__ void applyFrameTransformLocalToGlobal(T1& pos, const T2& vec, const T3& rot_Q) {
-    applyOriQToVector3(pos.x, pos.y, pos.z, rot_Q.w, rot_Q.x, rot_Q.y, rot_Q.z);
+    applyOriQToVector3(pos, rot_Q);
     pos.x += vec.x;
     pos.y += vec.y;
     pos.z += vec.z;
