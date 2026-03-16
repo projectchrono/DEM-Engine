@@ -64,7 +64,7 @@ int main() {
     DEMSolver DEMSim;
     DEMSim.SetVerbosity("ERROR");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.InstructBoxDomainDimension(2.0, 2.0, 2.0);
+    DEMSim.InstructBoxDomainDimension(20, 20, 20);
     DEMSim.SetGravitationalAcceleration(make_float3(0.f, 0.f, 0.f));
     // Mesh-mesh contacts must be enabled for two mesh spheres
     DEMSim.SetMeshUniversalContact(true);
@@ -131,6 +131,7 @@ int main() {
     // =========================================================================
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetCDUpdateFreq(1);
+    DEMSim.SetExpandSafetyAdder(300.);
     DEMSim.Initialize();
 
     // Output directory

@@ -64,9 +64,10 @@ int main() {
     DEMSim.SetVerbosity("ERROR");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     // Box large enough to contain the sphere at all test positions
-    DEMSim.InstructBoxDomainDimension(2.0, 2.0, 2.0);
+    DEMSim.InstructBoxDomainDimension(20, 20, 20);
     DEMSim.SetGravitationalAcceleration(make_float3(0.f, 0.f, 0.f));
-    // No mesh-mesh contact needed here (sphere mesh vs analytical plane)
+    // Mesh-related contacts must be enabled
+    DEMSim.SetMeshUniversalContact(true);
 
     auto mat = DEMSim.LoadMaterial({{"E", E}, {"nu", nu}, {"CoR", CoR}, {"mu", mu}, {"Crr", 0.f}});
 
