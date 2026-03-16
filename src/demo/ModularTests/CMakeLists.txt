@@ -18,6 +18,8 @@ SET(MODULAR_TESTS
 		DEMTest_MeshTemplate
 		DEMTest_PatchLocations
 		DEMTest_MeshPatch	
+		DEMTest_SpherePlanePeneArea
+		DEMTest_SphereSphereArea
 )
 
 # ------------------------------------------------------------------------------
