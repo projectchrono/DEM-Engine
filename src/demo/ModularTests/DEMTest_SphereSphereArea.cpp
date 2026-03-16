@@ -100,7 +100,7 @@ int main() {
     // Sphere B: initially set for the first test depth, family 2
     // =========================================================================
     const float sphere_mass = 2600.f * (4.f / 3.f) * PI * R * R * R;
-    const float sphere_moi  = 2.f / 5.f * sphere_mass * R * R;
+    const float sphere_moi = 2.f / 5.f * sphere_mass * R * R;
 
     const float d0 = depths[0];
 
@@ -142,14 +142,9 @@ int main() {
     // Loop over all penetration depths
     // =========================================================================
     std::cout << std::endl;
-    std::cout << std::setw(12) << "depth_d(m)"
-              << std::setw(18) << "pen_solver(m)"
-              << std::setw(18) << "pen_analyt(m)"
-              << std::setw(14) << "pen_err(%)"
-              << std::setw(18) << "area_solver(m2)"
-              << std::setw(18) << "area_analyt(m2)"
-              << std::setw(14) << "area_err(%)"
-              << std::endl;
+    std::cout << std::setw(12) << "depth_d(m)" << std::setw(18) << "pen_solver(m)" << std::setw(18) << "pen_analyt(m)"
+              << std::setw(14) << "pen_err(%)" << std::setw(18) << "area_solver(m2)" << std::setw(18)
+              << "area_analyt(m2)" << std::setw(14) << "area_err(%)" << std::endl;
     std::cout << std::string(112, '-') << std::endl;
 
     for (float d : depths) {
@@ -161,28 +156,25 @@ int main() {
         DEMSim.DoDynamicsThenSync(step_size);
 
         // Read back owner wildcards: sphere A is family 1, sphere B is family 2
-        std::vector<float> penA_vec  = DEMSim.GetFamilyOwnerWildcardValue(1, "penetration");
+        std::vector<float> penA_vec = DEMSim.GetFamilyOwnerWildcardValue(1, "penetration");
         std::vector<float> areaA_vec = DEMSim.GetFamilyOwnerWildcardValue(1, "area");
 
         // Use sphere A's values (both spheres receive the same patch values)
-        const float pen_solver  = penA_vec.empty()  ? 0.f : penA_vec[0];
+        const float pen_solver = penA_vec.empty() ? 0.f : penA_vec[0];
         const float area_solver = areaA_vec.empty() ? 0.f : areaA_vec[0];
 
         // Analytical values for two equal spheres of radius R with penetration d
-        const float pen_analyt  = d;
+        const float pen_analyt = d;
         const float area_analyt = PI * (R * d - d * d / 4.f);
 
-        const float pen_err  = (pen_analyt  > 1e-12f) ? 100.f * std::abs(pen_solver  - pen_analyt)  / pen_analyt  : 0.f;
+        const float pen_err = (pen_analyt > 1e-12f) ? 100.f * std::abs(pen_solver - pen_analyt) / pen_analyt : 0.f;
         const float area_err = (area_analyt > 1e-12f) ? 100.f * std::abs(area_solver - area_analyt) / area_analyt : 0.f;
 
-        std::cout << std::setw(12) << std::fixed << std::setprecision(5) << d
-                  << std::setw(18) << std::setprecision(6) << pen_solver
-                  << std::setw(18) << std::setprecision(6) << pen_analyt
-                  << std::setw(14) << std::setprecision(2) << pen_err
-                  << std::setw(18) << std::setprecision(6) << area_solver
-                  << std::setw(18) << std::setprecision(6) << area_analyt
-                  << std::setw(14) << std::setprecision(2) << area_err
-                  << std::endl;
+        std::cout << std::setw(12) << std::fixed << std::setprecision(5) << d << std::setw(18) << std::setprecision(6)
+                  << pen_solver << std::setw(18) << std::setprecision(6) << pen_analyt << std::setw(14)
+                  << std::setprecision(2) << pen_err << std::setw(18) << std::setprecision(6) << area_solver
+                  << std::setw(18) << std::setprecision(6) << area_analyt << std::setw(14) << std::setprecision(2)
+                  << area_err << std::endl;
     }
 
     std::cout << std::string(112, '-') << std::endl;

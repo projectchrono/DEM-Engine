@@ -131,14 +131,9 @@ int main() {
     // Loop over all penetration depths
     // =========================================================================
     std::cout << std::endl;
-    std::cout << std::setw(12) << "depth_d(m)"
-              << std::setw(18) << "pen_solver(m)"
-              << std::setw(18) << "pen_analyt(m)"
-              << std::setw(14) << "pen_err(%)"
-              << std::setw(18) << "area_solver(m2)"
-              << std::setw(18) << "area_analyt(m2)"
-              << std::setw(14) << "area_err(%)"
-              << std::endl;
+    std::cout << std::setw(12) << "depth_d(m)" << std::setw(18) << "pen_solver(m)" << std::setw(18) << "pen_analyt(m)"
+              << std::setw(14) << "pen_err(%)" << std::setw(18) << "area_solver(m2)" << std::setw(18)
+              << "area_analyt(m2)" << std::setw(14) << "area_err(%)" << std::endl;
     std::cout << std::string(112, '-') << std::endl;
 
     for (float d : depths) {
@@ -149,27 +144,24 @@ int main() {
         DEMSim.DoDynamicsThenSync(step_size);
 
         // Read back owner wildcards for the sphere (family 1)
-        std::vector<float> pen_vec  = DEMSim.GetFamilyOwnerWildcardValue(1, "penetration");
+        std::vector<float> pen_vec = DEMSim.GetFamilyOwnerWildcardValue(1, "penetration");
         std::vector<float> area_vec = DEMSim.GetFamilyOwnerWildcardValue(1, "area");
 
-        const float pen_solver  = pen_vec.empty()  ? 0.f : pen_vec[0];
+        const float pen_solver = pen_vec.empty() ? 0.f : pen_vec[0];
         const float area_solver = area_vec.empty() ? 0.f : area_vec[0];
 
         // Analytical values
-        const float pen_analyt  = d;
+        const float pen_analyt = d;
         const float area_analyt = PI * (2.f * R * d - d * d);
 
-        const float pen_err  = (pen_analyt  > 1e-12f) ? 100.f * std::abs(pen_solver  - pen_analyt)  / pen_analyt  : 0.f;
+        const float pen_err = (pen_analyt > 1e-12f) ? 100.f * std::abs(pen_solver - pen_analyt) / pen_analyt : 0.f;
         const float area_err = (area_analyt > 1e-12f) ? 100.f * std::abs(area_solver - area_analyt) / area_analyt : 0.f;
 
-        std::cout << std::setw(12) << std::fixed << std::setprecision(5) << d
-                  << std::setw(18) << std::setprecision(6) << pen_solver
-                  << std::setw(18) << std::setprecision(6) << pen_analyt
-                  << std::setw(14) << std::setprecision(2) << pen_err
-                  << std::setw(18) << std::setprecision(6) << area_solver
-                  << std::setw(18) << std::setprecision(6) << area_analyt
-                  << std::setw(14) << std::setprecision(2) << area_err
-                  << std::endl;
+        std::cout << std::setw(12) << std::fixed << std::setprecision(5) << d << std::setw(18) << std::setprecision(6)
+                  << pen_solver << std::setw(18) << std::setprecision(6) << pen_analyt << std::setw(14)
+                  << std::setprecision(2) << pen_err << std::setw(18) << std::setprecision(6) << area_solver
+                  << std::setw(18) << std::setprecision(6) << area_analyt << std::setw(14) << std::setprecision(2)
+                  << area_err << std::endl;
     }
 
     std::cout << std::string(112, '-') << std::endl;
