@@ -1621,8 +1621,8 @@ void DEMDynamicThread::writeSpheresAsChpfFromHost(std::ofstream& ptFile) {
         CoM.z = Z + simParams->LBFZ;
 
         size_t compOffset = (solverFlags.useClumpJitify) ? clumpComponentOffsetExt[i] : i;
-        float3 this_sp_deviation = make_float3(relPosSphereX[compOffset], relPosSphereY[compOffset],
-                                               relPosSphereZ[compOffset]);
+        float3 this_sp_deviation =
+            make_float3(relPosSphereX[compOffset], relPosSphereY[compOffset], relPosSphereZ[compOffset]);
         float4 this_sp_rot = make_float4(oriQx[this_owner], oriQy[this_owner], oriQz[this_owner], oriQw[this_owner]);
         applyOriQToVector3(this_sp_deviation, this_sp_rot);
         posX.at(num_output_spheres) = CoM.x + this_sp_deviation.x;
@@ -1735,8 +1735,8 @@ void DEMDynamicThread::writeSpheresAsCsvFromHost(std::ofstream& ptFile) {
         CoM.z = Z + simParams->LBFZ;
 
         size_t compOffset = (solverFlags.useClumpJitify) ? clumpComponentOffsetExt[i] : i;
-        float3 this_sp_deviation = make_float3(relPosSphereX[compOffset], relPosSphereY[compOffset],
-                                               relPosSphereZ[compOffset]);
+        float3 this_sp_deviation =
+            make_float3(relPosSphereX[compOffset], relPosSphereY[compOffset], relPosSphereZ[compOffset]);
         float4 this_sp_rot = make_float4(oriQx[this_owner], oriQy[this_owner], oriQz[this_owner], oriQw[this_owner]);
         applyOriQToVector3(this_sp_deviation, this_sp_rot);
         pos = CoM + this_sp_deviation;

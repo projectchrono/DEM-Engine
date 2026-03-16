@@ -169,9 +169,9 @@ DEME_KERNEL void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                 double3 cntPnt;  // cntPnt here is a placeholder
                 float3 cntNorm;  // cntNorm is placeholder too
                 contact_type = checkSphereEntityOverlap<double3, float, double>(
-                    myPosXYZ, myRadius, objType[objB], objBPosXYZ, objBRot,
-                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
-                    granData->marginSizeAnalytical[objB], cntPnt, cntNorm, overlapDepth, overlapArea);
+                    myPosXYZ, myRadius, objType[objB], objBPosXYZ, objBRot, objSize1[objB], objSize2[objB],
+                    objSize3[objB], objNormal[objB], granData->marginSizeAnalytical[objB], cntPnt, cntNorm,
+                    overlapDepth, overlapArea);
             }
             // overlapDepth (which has both entities' full margins) needs to be larger than the smaller one of the two
             // added margin to be considered in-contact.
@@ -388,9 +388,9 @@ DEME_KERNEL void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                     double3 cntPnt;  // cntPnt here is a placeholder
                     float3 cntNorm;  // cntNorm is placeholder too
                     contact_type = checkSphereEntityOverlap<double3, float, double>(
-                        myPosXYZ, myRadius, objType[objB], objBPosXYZ, objBRot,
-                        objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB],
-                        granData->marginSizeAnalytical[objB], cntPnt, cntNorm, overlapDepth, overlapArea);
+                        myPosXYZ, myRadius, objType[objB], objBPosXYZ, objBRot, objSize1[objB], objSize2[objB],
+                        objSize3[objB], objNormal[objB], granData->marginSizeAnalytical[objB], cntPnt, cntNorm,
+                        overlapDepth, overlapArea);
                 }
                 // overlapDepth (which has both entities' full margins) needs to be larger than the smaller one of the
                 // two added margin to be considered in-contact.

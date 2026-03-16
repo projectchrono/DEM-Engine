@@ -44,7 +44,7 @@ const std::string INSP_CODE_SPHERE_HIGH_ABSV = R"V0G0N(
         // main reason for querying max absv for us. So, it should be fine.
         float3 pRotVel = cross(rotVel, relPos);
         // Map rotational contribution back to global
-        applyOriQToVector3(pRotVel, make_float4(oriQx, oriQy, oriQz, oriQw));
+        applyOriQToVector3(pRotVel, oriQ);
         vel = length(pRotVel + linVel);
     }
     quantity[sphereID] = vel;

@@ -25,8 +25,7 @@ typedef uint16_t subVoxelPos_t;  ///< uint16 or uint32
 typedef uint64_t voxelID_t;
 // Quaternion component type
 typedef float oriQ_t;
-// Quaternion type should be consistent with the component type
-typedef float4 quat_t;
+// Quaternion type in DEME is float4, not configurable. One day, I hope it's converted to a compressed format.
 typedef uint32_t binID_t;
 typedef uint8_t objID_t;
 typedef uint16_t materialsOffset_t;

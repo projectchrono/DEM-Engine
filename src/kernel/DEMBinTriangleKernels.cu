@@ -801,13 +801,13 @@ DEME_KERNEL void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParam
             float3 objBPosXYZ = ownerXYZ + objBRelPos;
 
             deme::contact_t contact_type = checkTriEntityOverlapFP32(
-                vA1, vB1, vC1, objType[objB], objBPosXYZ, objBRot, objSize1[objB],
-                objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSizeAnalytical[objB]);
+                vA1, vB1, vC1, objType[objB], objBPosXYZ, objBRot, objSize1[objB], objSize2[objB], objSize3[objB],
+                objNormal[objB], granData->marginSizeAnalytical[objB]);
 
             if (contact_type == deme::NOT_A_CONTACT) {
-                contact_type = checkTriEntityOverlapFP32(
-                    vA2, vB2, vC2, objType[objB], objBPosXYZ, objBRot, objSize1[objB],
-                    objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSizeAnalytical[objB]);
+                contact_type = checkTriEntityOverlapFP32(vA2, vB2, vC2, objType[objB], objBPosXYZ, objBRot,
+                                                         objSize1[objB], objSize2[objB], objSize3[objB],
+                                                         objNormal[objB], granData->marginSizeAnalytical[objB]);
             }
 
             if (contact_type == deme::TRIANGLE_ANALYTICAL_CONTACT) {
@@ -1253,12 +1253,12 @@ DEME_KERNEL void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
             float3 objBPosXYZ = ownerXYZ + objBRelPos;
 
             deme::contact_t contact_type = checkTriEntityOverlapFP32(
-                vA1, vB1, vC1, objType[objB], objBPosXYZ, objBRot, objSize1[objB],
-                objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSizeAnalytical[objB]);
+                vA1, vB1, vC1, objType[objB], objBPosXYZ, objBRot, objSize1[objB], objSize2[objB], objSize3[objB],
+                objNormal[objB], granData->marginSizeAnalytical[objB]);
             if (contact_type == deme::NOT_A_CONTACT) {
-                contact_type = checkTriEntityOverlapFP32(
-                    vA2, vB2, vC2, objType[objB], objBPosXYZ, objBRot, objSize1[objB],
-                    objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSizeAnalytical[objB]);
+                contact_type = checkTriEntityOverlapFP32(vA2, vB2, vC2, objType[objB], objBPosXYZ, objBRot,
+                                                         objSize1[objB], objSize2[objB], objSize3[objB],
+                                                         objNormal[objB], granData->marginSizeAnalytical[objB]);
             }
 
             if (contact_type == deme::TRIANGLE_ANALYTICAL_CONTACT) {
