@@ -110,6 +110,7 @@ int main() {
     sphereA->SetMass(sphere_mass);
     sphereA->SetMOI(make_float3(sphere_moi, sphere_moi, sphere_moi));
     sphereA->SetInitPos(make_float3(0.f, 0.f, R));
+    sphereA->SetInitQuat(make_float4(0.7071, 0.7071, 0, 0));
     sphereA->SetFamily(1);
     DEMSim.SetFamilyFixed(1);
 
@@ -121,6 +122,7 @@ int main() {
     sphereB->SetMass(sphere_mass);
     sphereB->SetMOI(make_float3(sphere_moi, sphere_moi, sphere_moi));
     sphereB->SetInitPos(make_float3(0.f, 0.f, 3.f * R - d0));
+    sphereB->SetInitQuat(make_float4(0.7071, 0.7071, 0, 0));
     sphereB->SetFamily(2);
     DEMSim.SetFamilyFixed(2);
 

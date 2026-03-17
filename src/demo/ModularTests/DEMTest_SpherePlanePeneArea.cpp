@@ -111,6 +111,7 @@ int main() {
     sphere->SetMass(sphere_mass);
     sphere->SetMOI(make_float3(sphere_moi, sphere_moi, sphere_moi));
     sphere->SetInitPos(make_float3(0.f, 0.f, R - d0));
+    sphere->SetInitQuat(make_float4(0.7071, 0.7071, 0, 0));
     sphere->SetFamily(1);
     DEMSim.SetFamilyFixed(1);
 
