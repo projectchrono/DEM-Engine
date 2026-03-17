@@ -77,7 +77,7 @@ int main() {
     // Solver setup
     // =========================================================================
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity("INFO");
+    DEMSim.SetVerbosity("ERROR");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.InstructBoxDomainDimension(20, 20, 20);
     // No gravity: motion is fully prescribed
@@ -131,23 +131,27 @@ int main() {
     DEMSim.SetInitTimeStep(step_size);
     // Ensure deep penetration detection
     //// TODO: Change it to SetTriTriPenetration after penetration kT-dT transfer is implemented
-    DEMSim.SetExpandSafetyAdder(1e2);
+    DEMSim.SetExpandSafetyAdder(3e2);
     DEMSim.SetInitBinNumTarget(10);
-    DEMSim.SetErrorOutAvgContacts(1000);
+    DEMSim.SetErrorOutAvgContacts(10000);
     DEMSim.Initialize();
 
     // The two cylinders start intersecting; tell the solver the expected
     // initial tri-tri penetration so it can handle pre-existing overlap.
     // Must be called after Initialize().
-    DEMSim.SetTriTriPenetration(cyl_radius * 0.5);
+    // DEMSim.SetTriTriPenetration(cyl_radius * 0.5);
 
     std::cout << "\nRunning simulation for " << total_time << " s ..." << std::endl;
     std::cout << "Cylinder B axis starts along +x (90 deg from z) and ends along +z (co-axial)." << std::endl;
     std::cout << "----------------------------------------------------" << std::endl;
 
-    path out_dir = current_path();
-    out_dir /= "DEMTest_CylinderCrossRotation";
-    create_directory(out_dir);
+    path out_dir = current_path() / "modular_test_output" / "DEMTest_CylinderCrossRotation";
+    std::error_code dir_ec;
+    create_directories(out_dir, dir_ec);
+    if (dir_ec || !is_directory(out_dir)) {
+        std::cerr << "Failed to create output directory: " << out_dir << " (" << dir_ec.message() << ")" << std::endl;
+        return 1;
+    }
 
     std::vector<double> force_mags;
     std::vector<float3> avg_normals;
