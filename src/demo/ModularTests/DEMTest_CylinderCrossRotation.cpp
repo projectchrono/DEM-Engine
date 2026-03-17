@@ -131,15 +131,16 @@ int main() {
     DEMSim.SetInitTimeStep(step_size);
     // Ensure deep penetration detection
     //// TODO: Change it to SetTriTriPenetration after penetration kT-dT transfer is implemented
-    DEMSim.SetExpandSafetyAdder(1e2);
+    //// TODO: Right now cannot detect huge penetration tris, causing many 0-force cases
+    DEMSim.SetExpandSafetyAdder(3e2);
     DEMSim.SetInitBinNumTarget(10);
-    DEMSim.SetErrorOutAvgContacts(1000);
+    DEMSim.SetErrorOutAvgContacts(10000);
     DEMSim.Initialize();
 
     // The two cylinders start intersecting; tell the solver the expected
     // initial tri-tri penetration so it can handle pre-existing overlap.
     // Must be called after Initialize().
-    DEMSim.SetTriTriPenetration(cyl_radius * 0.5);
+    // DEMSim.SetTriTriPenetration(cyl_radius * 0.5);
 
     std::cout << "\nRunning simulation for " << total_time << " s ..." << std::endl;
     std::cout << "Cylinder B axis starts along +x (90 deg from z) and ends along +z (co-axial)." << std::endl;
