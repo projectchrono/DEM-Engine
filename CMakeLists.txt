@@ -292,6 +292,11 @@ file(COPY ${CMAKE_CURRENT_LIST_DIR}/src/kernel/ DESTINATION ${CMAKE_BINARY_DIR}/
 file(COPY ${CMAKE_CURRENT_LIST_DIR}/src/DEM/Defines.h DESTINATION ${CMAKE_BINARY_DIR}/DEM)
 file(COPY ${CMAKE_CURRENT_LIST_DIR}/src/DEM/VariableTypes.h DESTINATION ${CMAKE_BINARY_DIR}/DEM)
 install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/src/kernel/ DESTINATION ${CMAKE_INSTALL_DATADIR}/DEME/kernel/)
+install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/src/kernel/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/kernel/
+    FILES_MATCHING
+        PATTERN "*.cuh"
+        PATTERN "*.h"
+)
 
 # ---------------------------------------------------------------------------- #
 # Build embedded demos
