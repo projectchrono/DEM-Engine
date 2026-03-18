@@ -58,8 +58,8 @@ int main() {
     const float omega_y = -(float)(PI / 2.0) / total_time;  // rad/s
 
     // Simulation time settings
-    const float step_size = 1e-5f;
     const float frame_time = 0.05f;  // 20 frames total
+    const float step_size = frame_time;
     const int n_frames = static_cast<int>(total_time / frame_time);
 
     std::cout << "=====================================================" << std::endl;
@@ -129,10 +129,6 @@ int main() {
     // Initialize and run
     // =========================================================================
     DEMSim.SetInitTimeStep(step_size);
-    // Ensure deep penetration detection
-    //// TODO: Change it to SetTriTriPenetration after penetration kT-dT transfer is implemented
-    //// TODO: Right now cannot detect huge penetration tris, causing many 0-force cases
-    DEMSim.SetExpandSafetyAdder(3e2);
     DEMSim.SetInitBinNumTarget(10);
     DEMSim.SetErrorOutAvgContacts(10000);
     DEMSim.Initialize();
@@ -158,7 +154,7 @@ int main() {
     std::vector<float3> avg_normals;
 
     for (int i = 1; i <= n_frames; i++) {
-        DEMSim.DoDynamics(frame_time);
+        DEMSim.DoDynamicsThenSync(frame_time);
 
         // Write mesh snapshot at the start of this interval
         char meshfilename[200];
