@@ -8,6 +8,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <cstdio>
 #include <list>
 #include <cmath>
 #include <set>
@@ -634,10 +635,15 @@ inline std::vector<double> FrameTransformGlobalToLocal(const std::vector<double>
 
 // Default accuracy is 17. This accuracy is especially needed for MOIs and length-unit (l).
 inline std::string to_string_with_precision(const double a_value, const unsigned int n = 17) {
-    std::ostringstream out;
-    out.precision(n);
-    out << std::fixed << a_value;
-    return out.str();
+    // Use snprintf with %.*f instead of ostringstream to avoid locale-dependent ABI issues.
+    // Buffer size: sign(1) + max integer digits for double(308) + decimal point(1) + n decimal digits + null(1).
+    const int buf_size = 1 + 308 + 1 + static_cast<int>(n) + 1;
+    std::string result(buf_size, '\0');
+    int len = std::snprintf(result.data(), result.size(), "%.*f", static_cast<int>(n), a_value);
+    if (len < 0 || len >= buf_size)
+        throw std::runtime_error("to_string_with_precision: snprintf failed for value " + std::to_string(a_value));
+    result.resize(len);
+    return result;
 }
 
 // Release the memory allocated for an array
