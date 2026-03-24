@@ -152,7 +152,7 @@ void DEMSolver::SetVerbosity(const std::string& verbose) {
             verbosity = VERBOSITY::QUIET;
             break;
         case ("ERROR"_):
-            verbosity = VERBOSITY::DEME_ERROR;
+            verbosity = VERBOSITY::ERR;
             break;
         case ("WARNING"_):
             verbosity = VERBOSITY::WARNING;
