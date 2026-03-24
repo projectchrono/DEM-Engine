@@ -1367,7 +1367,7 @@ PYBIND11_MODULE(DEME, obj) {
 
     py::enum_<deme::VERBOSITY>(obj, "VERBOSITY")
         .value("QUIET", deme::VERBOSITY::QUIET)
-        .value("ERROR", deme::VERBOSITY::DEME_ERROR)
+        .value("ERROR", deme::VERBOSITY::ERR)
         .value("WARNING", deme::VERBOSITY::WARNING)
         .value("INFO", deme::VERBOSITY::INFO)
         .value("STEP_ANOMALY", deme::VERBOSITY::STEP_ANOMALY)
