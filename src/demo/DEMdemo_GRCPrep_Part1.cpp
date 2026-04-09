@@ -31,15 +31,14 @@ int main() {
     DEMSolver DEMSim;
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
+    // DEMSim.SetOutputContent(OUTPUT_CONTENT::FAMILY);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ);
-    // Let the contact output file include "GEO_ID" geoA and geoB (not just owner IDs A and B, but their components)
-    DEMSim.SetContactOutputContent({"OWNER", "GEO_ID", "FORCE", "POINT", "CNT_WILDCARD"});
 
     srand(759);
 
     // Define materials
-    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
-    auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
+    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.4}});
+    auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.4}});
 
     // Define the simulation world
     double world_y_size = 0.99;
@@ -55,23 +54,12 @@ int main() {
     float volume1 = 4.2520508;
     float mass1 = terrain_density * volume1;
     float3 MOI1 = make_float3(1.6850426, 1.6375114, 2.1187753) * terrain_density;
-    float volume2 = 2.1670011;
-    float mass2 = terrain_density * volume2;
-    float3 MOI2 = make_float3(0.57402126, 0.60616378, 0.92890173) * terrain_density;
     // Scale the template we just created
-    std::vector<double> scales = {0.014, 0.0075833, 0.0044, 0.003, 0.002, 0.0018333, 0.0017};
+    std::vector<double> scales = {0.007, 0.0035};
     // Then load it to system
-    std::shared_ptr<DEMClumpTemplate> my_template2 =
-        DEMSim.LoadClumpType(mass2, MOI2, GetDEMEDataFile("clumps/triangular_flat_6comp.csv"), mat_type_terrain);
     std::shared_ptr<DEMClumpTemplate> my_template1 =
         DEMSim.LoadClumpType(mass1, MOI1, GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain);
-    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates = {my_template2,
-                                                                                DEMSim.Duplicate(my_template2),
-                                                                                my_template1,
-                                                                                DEMSim.Duplicate(my_template1),
-                                                                                DEMSim.Duplicate(my_template1),
-                                                                                DEMSim.Duplicate(my_template1),
-                                                                                DEMSim.Duplicate(my_template1)};
+    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates = {my_template1, DEMSim.Duplicate(my_template1)};
     // Now scale those templates
     for (int i = 0; i < scales.size(); i++) {
         std::shared_ptr<DEMClumpTemplate>& my_template = ground_particle_templates.at(i);
@@ -85,7 +73,7 @@ int main() {
     }
 
     // Instatiate particles with a probability that is in line with their weight distribution.
-    std::vector<double> weight_perc = {0.1700, 0.2100, 0.1400, 0.1900, 0.1600, 0.0500, 0.0800};
+    std::vector<double> weight_perc = {0.8, 0.2};
     std::vector<double> grain_perc;
     for (int i = 0; i < scales.size(); i++) {
         grain_perc.push_back(weight_perc.at(i) / std::pow(scales.at(i), 3));
@@ -95,13 +83,9 @@ int main() {
         std::for_each(grain_perc.begin(), grain_perc.end(), [tmp](double& p) { p /= tmp; });
         std::cout << "Percentage of grains add up to " << vector_sum(grain_perc) << std::endl;
     }
-    std::random_device r;
-    std::default_random_engine e1(r());
-    // Distribution that defines different weights (17, 10, etc.) for numbers.
-    std::discrete_distribution<int> discrete_dist(grain_perc.begin(), grain_perc.end());
 
     // Sampler to use
-    HCPSampler sampler(scales.at(0) * 2.2);
+    HCPSampler sampler(scales.at(0) * 2.5);
 
     // Make ready for simulation
     float step_size = 1e-6;
@@ -118,14 +102,16 @@ int main() {
     DEMSim.Initialize();
 
     float time_end = 10.0;
+    unsigned int fps = 10;
+    unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
     path out_dir = current_path();
-    out_dir /= "DemoOutput_GRCPrep_Part1";
+    out_dir += "/CheapGRCPrep_Part1";
     create_directory(out_dir);
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
 
-    float sample_halfheight = 0.4;
+    float sample_halfheight = 0.18;
     float sample_halfwidth_x = (world_y_size * 0.96) / 2;
     float sample_halfwidth_y = (world_y_size * 0.96) / 2;
     float offset_z = bottom + sample_halfheight + 0.15;
@@ -142,9 +128,8 @@ int main() {
         auto heap_particles_xyz =
             sampler.SampleBox(sample_center, make_float3(sample_halfwidth_x, sample_halfwidth_y, sample_halfheight));
         for (unsigned int i = 0; i < heap_particles_xyz.size(); i++) {
-            int ind = std::round(discrete_dist(e1));
-            heap_template_in_use.push_back(ground_particle_templates.at(ind));
-            heap_family.push_back(ind);
+            heap_template_in_use.push_back(ground_particle_templates.at(0));
+            heap_family.push_back(0);
         }
         auto heap_particles = DEMSim.AddClumps(heap_template_in_use, heap_particles_xyz);
         // Give ground particles a small initial velocity so they `collapse' at the start of the simulation
@@ -158,9 +143,9 @@ int main() {
         // point of time.
         for (float t = 0; t < settle_batch_time; t += settle_frame_time) {
             std::cout << "Frame: " << currframe << std::endl;
-            char filename[100];
-            sprintf(filename, "DEMdemo_output_%04d.csv", currframe++);
-            DEMSim.WriteSphereFile(out_dir / filename);
+            char filename[200];
+            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
+            DEMSim.WriteSphereFile(std::string(filename));
             DEMSim.DoDynamicsThenSync(settle_frame_time);
         }
 
@@ -173,20 +158,16 @@ int main() {
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
     std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
 
-    char cp_filename[100];
-    sprintf(cp_filename, "GRC_3e5.csv");
-    DEMSim.WriteClumpFile(out_dir / cp_filename);
+    char cp_filename[200];
+    sprintf(cp_filename, "%s/GRC_3e5.csv", out_dir.c_str());
+    DEMSim.WriteClumpFile(std::string(cp_filename));
 
     DEMSim.ShowThreadCollaborationStats();
     DEMSim.ClearThreadCollaborationStats();
 
-    char cnt_filename[100];
-    sprintf(cnt_filename, "Contact_pairs_3e5.csv");
-    DEMSim.WriteContactFile(out_dir / cnt_filename);
-
-    std::cout << "----------------------------------------" << std::endl;
-    DEMSim.ShowMemStats();
-    std::cout << "----------------------------------------" << std::endl;
+    char cnt_filename[200];
+    sprintf(cnt_filename, "%s/Contact_pairs_3e5.csv", out_dir.c_str());
+    DEMSim.WriteContactFile(std::string(cnt_filename));
 
     std::cout << "DEMdemo_GRCPrep_Part1 exiting..." << std::endl;
     return 0;

@@ -74,11 +74,11 @@ for i in {1..1000}; do
 
     python3 -B gen_wheel.py -a $ampl -c $cp_dev -n $wave_num -t $thickness -g $height -d $num_g -r $rad -w $width -s 1 -f wheel_$SLURM_JOB_ID.obj >/dev/null 2>&1
     if [ $? -eq 0 ]; then
-        ./src/demo/DEMdemo_Meshed_Steering $sim_num $rad $mass $height $width $slope $cp_dev DEMdemo_Wheel_Steer_$SLURM_JOB_ID wheel_$SLURM_JOB_ID.obj $wr $G $mu
+        ./bin/RoverDesign_Steering $sim_num $rad $mass $height $width $slope $cp_dev DEMdemo_Wheel_Steer_$SLURM_JOB_ID wheel_$SLURM_JOB_ID.obj $wr $G $mu
         if [ $? -ne 0 ]; then
             echo "Steer simulation did not succeed."
         else 
-            ./src/demo/DEMdemo_Meshed_WheelDP_SlopeSlip $sim_num $rad $mass $height $width $slope $cp_dev DEMdemo_Wheel_Tests_$SLURM_JOB_ID wheel_$SLURM_JOB_ID.obj $wr $G $mu
+            ./bin/RoverDesign_Climbing $sim_num $rad $mass $height $width $slope $cp_dev DEMdemo_Wheel_Tests_$SLURM_JOB_ID wheel_$SLURM_JOB_ID.obj $wr $G $mu
             if [ $? -ne 0 ]; then
                 echo "Slip simulation did not succeed."
             else 
