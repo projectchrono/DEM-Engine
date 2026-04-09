@@ -106,7 +106,7 @@ int main(int argc, char* argv[]) {
 
     for (float Slope_deg : Slopes_deg) {
         DEMSolver DEMSim;
-        DEMSim.SetVerbosity(ERROR);
+        DEMSim.SetVerbosity("ERROR");
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
         DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
         DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);

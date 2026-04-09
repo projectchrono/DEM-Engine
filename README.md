@@ -1,6 +1,6 @@
 This is a branch specific to the reproducibility of the rover design paper.
 
-You could directly obtain the data from the `rover_performance.data.csv` file.
+You could directly obtain the data from the `rover_performance_data.csv` file.
 
 To re-generate the data (and verify the reproducibility yourself), do this:
 
@@ -11,7 +11,8 @@ To re-generate the data (and verify the reproducibility yourself), do this:
 - Create a new conda environment and do the following:
 
 ```
-conda install -c conda-forge pygalmesh conda install -c conda-forge trimesh
+conda install -c conda-forge pygalmesh 
+conda install -c conda-forge trimesh
 ```
 
 Then copy all `.py` files into your build folder.

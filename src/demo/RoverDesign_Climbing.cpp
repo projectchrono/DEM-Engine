@@ -101,7 +101,7 @@ int main(int argc, char* argv[]) {
 
     {
         DEMSolver DEMSim;
-        DEMSim.SetVerbosity(ERROR);
+        DEMSim.SetVerbosity("ERROR");
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
         DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
         DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
