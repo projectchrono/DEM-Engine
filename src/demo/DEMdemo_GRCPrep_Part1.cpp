@@ -55,7 +55,7 @@ int main() {
     float mass1 = terrain_density * volume1;
     float3 MOI1 = make_float3(1.6850426, 1.6375114, 2.1187753) * terrain_density;
     // Scale the template we just created
-    std::vector<double> scales = {0.007, 0.0035};
+    std::vector<double> scales = {0.008};
     // Then load it to system
     std::shared_ptr<DEMClumpTemplate> my_template1 =
         DEMSim.LoadClumpType(mass1, MOI1, GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain);
@@ -73,7 +73,7 @@ int main() {
     }
 
     // Instatiate particles with a probability that is in line with their weight distribution.
-    std::vector<double> weight_perc = {0.8, 0.2};
+    std::vector<double> weight_perc = {1.};
     std::vector<double> grain_perc;
     for (int i = 0; i < scales.size(); i++) {
         grain_perc.push_back(weight_perc.at(i) / std::pow(scales.at(i), 3));
@@ -96,8 +96,7 @@ int main() {
     // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(15.);
     // Error out vel is used to force the simulation to abort when something goes wrong.
-    DEMSim.SetErrorOutVelocity(15.);
-    DEMSim.SetExpandSafetyMultiplier(1.2);
+    DEMSim.SetErrorOutVelocity(300.);
     DEMSim.SetInitBinNumTarget(1e7);
     DEMSim.Initialize();
 

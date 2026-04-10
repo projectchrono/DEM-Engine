@@ -61,7 +61,7 @@ int main() {
     float mass1 = terrain_density * volume1;
     float3 MOI1 = make_float3(1.6850426, 1.6375114, 2.1187753) * terrain_density;
     // Scale the template we just created
-    std::vector<double> scales = {0.007, 0.0035};
+    std::vector<double> scales = {0.008};
     // Then load it to system
     std::shared_ptr<DEMClumpTemplate> my_template1 =
         DEMSim.LoadClumpType(mass1, MOI1, GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain);
@@ -107,27 +107,6 @@ int main() {
         // Our template names are 0000, 0001 etc.
         t_num++;
     }
-    // Remove some elements maybe? I feel this making the surface flatter
-    // std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
-    // for (size_t i = 0; i < in_xyz.size(); i++) {
-    //     if (in_xyz.at(i).z > -0.44)
-    //         elem_to_remove.at(i) = 1;
-    // }
-    // in_xyz.erase(
-    //     std::remove_if(in_xyz.begin(), in_xyz.end(),
-    //                    [&elem_to_remove, &in_xyz](const float3& i) { return elem_to_remove.at(&i - in_xyz.data());
-    //                    }),
-    //     in_xyz.end());
-    // in_quat.erase(
-    //     std::remove_if(in_quat.begin(), in_quat.end(),
-    //                    [&elem_to_remove, &in_quat](const float4& i) { return elem_to_remove.at(&i - in_quat.data());
-    //                    }),
-    //     in_quat.end());
-    // in_types.erase(
-    //     std::remove_if(in_types.begin(), in_types.end(),
-    //                    [&elem_to_remove, &in_types](const auto& i) { return elem_to_remove.at(&i - in_types.data());
-    //                    }),
-    //     in_types.end());
 
     // Finally, load the info into this batch
     DEMClumpBatch base_batch(in_xyz.size());
@@ -178,8 +157,7 @@ int main() {
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     // Error out vel is used to force the simulation to abort when something goes wrong.
-    DEMSim.SetErrorOutVelocity(15.);
-    DEMSim.SetExpandSafetyMultiplier(1.2);
+    DEMSim.SetErrorOutVelocity(300.);
     DEMSim.SetInitBinNumTarget(1e7);
     DEMSim.Initialize();
 
