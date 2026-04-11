@@ -11,9 +11,13 @@ To re-generate the data (and verify the reproducibility yourself), do this:
 - Create a new conda environment and do the following:
 
 ```
-conda install -c conda-forge pygalmesh 
-conda install -c conda-forge trimesh
+conda install -c conda-forge pygalmesh trimesh scipy 
+pip install pyfqmr 
 ```
+
+And install Python Blender bpy (potentially useful guide: https://stackoverflow.com/questions/10972637/how-can-i-access-bpy-in-standard-python-console-bpy-is-the-blender-python-thin; bpy repo you should use: https://projects.blender.org/blender/blender/src/branch/blender-v4.2-release/)
+
+Or, for installing Python Blender you could also try `python3.11 -m pip install bpy=4.2.0` if you are using Python 3.11.
 
 Then copy all `.py` files into your build folder.
 

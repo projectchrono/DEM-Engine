@@ -225,7 +225,8 @@ def GenWheel(rad=0.25, width=0.2, cp_deviation=0., g_height=0.02, g_width=0.005,
     bpy.ops.object.mode_set(mode='OBJECT')
 
     # Export the mesh to a file
-    bpy.ops.export_scene.obj(filepath=filename, use_selection=False)
+    # bpy.ops.export_scene.obj(filepath=filename, use_selection=False)
+    bpy.ops.wm.obj_export(filepath=filename, export_selected_objects=False)
 
     # mesh = util.as_mesh(trimesh.load(temp_filename))
     # trimesh.exchange.export.export_mesh(mesh, filename)
