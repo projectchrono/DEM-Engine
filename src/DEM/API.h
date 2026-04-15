@@ -1797,10 +1797,10 @@ class DEMSolver {
 
     // The number of dT steps before it waits for a kT update. The default value means every dT step will wait for a
     // newly produced contact-pair info (from kT) before proceeding.
-    int m_suggestedFutureDrift = 40;
+    int m_suggestedFutureDrift = 12;
 
     // This is an unused variable which is supposed to be related to m_suggestedFutureDrift...
-    int m_updateFreq = 20;
+    int m_updateFreq = 6;
 
     // The extra libs that the kernels need to include.
     std::string kernel_includes = "#include <curand_kernel.h>\n";
