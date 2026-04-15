@@ -825,7 +825,7 @@ class DEMDynamicThread {
                           std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs,
                           size_t nExistOwners,
                           size_t nExistSpheres,
-                          size_t nExistingPatches,
+                          size_t nExistingFacets,
                           unsigned int nExistingAnalGM);
     void populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                               const std::vector<float3>& input_ext_obj_xyz,

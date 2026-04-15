@@ -1210,11 +1210,11 @@ bool DEMSolver::GetMeshTriangleGeoRange(bodyID_t ownerID, bodyID_t& geoID_begin,
     n_triangles = 0;
     for (const auto& mesh : m_meshes) {
         if (mesh->owner == ownerID) {
-            // Geometry wildcards for meshes are patch-based in this branch.
-            n_triangles = mesh->GetNumPatches();
+            // Geometry wildcards for meshes are per-triangle.
+            n_triangles = mesh->GetNumTriangles();
             return true;
         }
-        geoID_begin += mesh->GetNumPatches();
+        geoID_begin += mesh->GetNumTriangles();
     }
     return false;
 }
