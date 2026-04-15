@@ -63,24 +63,50 @@ int main() {
 
     // For all the celestial bodies, define as templates. Their radii is just for visialization.
     float vis_size_scaler = 3;
-    auto Sun_template = DEMSim.LoadSphereType(1.989e30, 0.1 * vis_size_scaler, mat_type);
-    auto Mercury_template = DEMSim.LoadSphereType(3.3011e23, 0.02 * vis_size_scaler, mat_type);
-    auto Venus_template = DEMSim.LoadSphereType(4.8675e24, 0.035 * vis_size_scaler, mat_type);
+    auto Sun_template =
+        DEMSim.LoadSphereType(1.989e30, 2.0f / 5.0f * 1.989e30f * (0.1f * vis_size_scaler) * (0.1f * vis_size_scaler),
+                              0.1 * vis_size_scaler, mat_type);
+    auto Mercury_template = DEMSim.LoadSphereType(
+        3.3011e23, 2.0f / 5.0f * 3.3011e23f * (0.02f * vis_size_scaler) * (0.02f * vis_size_scaler),
+        0.02 * vis_size_scaler, mat_type);
+    auto Venus_template = DEMSim.LoadSphereType(
+        4.8675e24, 2.0f / 5.0f * 4.8675e24f * (0.035f * vis_size_scaler) * (0.035f * vis_size_scaler),
+        0.035 * vis_size_scaler, mat_type);
     float Earth_radius = 0.04 * vis_size_scaler;
     float Earth_mass = 5.9724e24;
-    auto Earth_template = DEMSim.LoadSphereType(Earth_mass, Earth_radius, mat_type);
-    auto Moon_template = DEMSim.LoadSphereType(7.342e22, 0.01 * vis_size_scaler, mat_type);
-    auto Mars_template = DEMSim.LoadSphereType(6.4171e23, 0.03 * vis_size_scaler, mat_type);
+    auto Earth_template = DEMSim.LoadSphereType(Earth_mass, 2.0f / 5.0f * Earth_mass * Earth_radius * Earth_radius,
+                                                Earth_radius, mat_type);
+    auto Moon_template =
+        DEMSim.LoadSphereType(7.342e22, 2.0f / 5.0f * 7.342e22f * (0.01f * vis_size_scaler) * (0.01f * vis_size_scaler),
+                              0.01 * vis_size_scaler, mat_type);
+    auto Mars_template = DEMSim.LoadSphereType(
+        6.4171e23, 2.0f / 5.0f * 6.4171e23f * (0.03f * vis_size_scaler) * (0.03f * vis_size_scaler),
+        0.03 * vis_size_scaler, mat_type);
     float Jupiter_radius = 0.08 * vis_size_scaler;
     float Jupiter_mass = 1.8982e27;
-    auto Jupiter_template = DEMSim.LoadSphereType(Jupiter_mass, Jupiter_radius, mat_type);
-    auto Io_template = DEMSim.LoadSphereType(8.9319e22, 0.004 * vis_size_scaler, mat_type);
-    auto Europa_template = DEMSim.LoadSphereType(4.7998e22, 0.004 * vis_size_scaler, mat_type);
-    auto Ganymede_template = DEMSim.LoadSphereType(1.4819e23, 0.004 * vis_size_scaler, mat_type);
-    auto Callisto_template = DEMSim.LoadSphereType(1.0759e23, 0.004 * vis_size_scaler, mat_type);
-    auto Saturn_template = DEMSim.LoadSphereType(5.6834e26, 0.07 * vis_size_scaler, mat_type);
-    auto Uranus_template = DEMSim.LoadSphereType(8.6810e25, 0.055 * vis_size_scaler, mat_type);
-    auto Neptune_template = DEMSim.LoadSphereType(1.0241e26, 0.06 * vis_size_scaler, mat_type);
+    auto Jupiter_template = DEMSim.LoadSphereType(
+        Jupiter_mass, 2.0f / 5.0f * Jupiter_mass * Jupiter_radius * Jupiter_radius, Jupiter_radius, mat_type);
+    auto Io_template = DEMSim.LoadSphereType(
+        8.9319e22, 2.0f / 5.0f * 8.9319e22f * (0.004f * vis_size_scaler) * (0.004f * vis_size_scaler),
+        0.004 * vis_size_scaler, mat_type);
+    auto Europa_template = DEMSim.LoadSphereType(
+        4.7998e22, 2.0f / 5.0f * 4.7998e22f * (0.004f * vis_size_scaler) * (0.004f * vis_size_scaler),
+        0.004 * vis_size_scaler, mat_type);
+    auto Ganymede_template = DEMSim.LoadSphereType(
+        1.4819e23, 2.0f / 5.0f * 1.4819e23f * (0.004f * vis_size_scaler) * (0.004f * vis_size_scaler),
+        0.004 * vis_size_scaler, mat_type);
+    auto Callisto_template = DEMSim.LoadSphereType(
+        1.0759e23, 2.0f / 5.0f * 1.0759e23f * (0.004f * vis_size_scaler) * (0.004f * vis_size_scaler),
+        0.004 * vis_size_scaler, mat_type);
+    auto Saturn_template = DEMSim.LoadSphereType(
+        5.6834e26, 2.0f / 5.0f * 5.6834e26f * (0.07f * vis_size_scaler) * (0.07f * vis_size_scaler),
+        0.07 * vis_size_scaler, mat_type);
+    auto Uranus_template = DEMSim.LoadSphereType(
+        8.6810e25, 2.0f / 5.0f * 8.6810e25f * (0.055f * vis_size_scaler) * (0.055f * vis_size_scaler),
+        0.055 * vis_size_scaler, mat_type);
+    auto Neptune_template = DEMSim.LoadSphereType(
+        1.0241e26, 2.0f / 5.0f * 1.0241e26f * (0.06f * vis_size_scaler) * (0.06f * vis_size_scaler),
+        0.06 * vis_size_scaler, mat_type);
 
     // Now load the bodies
     auto Sun = DEMSim.AddClumps(Sun_template, make_float3(0, 0, 0));
@@ -145,7 +171,7 @@ int main() {
     Moon->AddGeometryWildcard("my_mass", 7.342e22);
     */
 
-    float step_size = 0.001;
+    float step_size = 0.01;
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, 0));
     DEMSim.InstructBoxDomainDimension({-50, 50}, {-50, 50}, {-50, 50});

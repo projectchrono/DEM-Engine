@@ -834,7 +834,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
             analWildcards[i] =
                 std::make_unique<DualArray<float>>(nAnalGM, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
             patchWildcards[i] =
-                std::make_unique<DualArray<float>>(nMeshPatches, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+                std::make_unique<DualArray<float>>(nTriGM, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
         }
     }
     // existingContactTypes has a fixed size depending on how many contact types are defined
@@ -1276,7 +1276,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
             max_owner_bound_radius = this_owner_bound_radius;
         }
 
-        // Store inherent geo wildcards
+        // Store inherent geo wildcards (per-triangle: one value per triangle facet)
         {
             unsigned int w_num = 0;
             for (const auto& w_name : m_geo_wildcard_names) {
@@ -1287,8 +1287,8 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                         "initial values are defauled to 0.",
                         w_name.c_str());
                 } else {
-                    for (size_t jj = 0; jj < input_mesh_objs.at(i)->GetNumPatches(); jj++) {
-                        (*patchWildcards[w_num])[nExistingMeshPatches + p + jj] =
+                    for (size_t jj = 0; jj < input_mesh_objs.at(i)->GetNumTriangles(); jj++) {
+                        (*patchWildcards[w_num])[nExistingFacets + k + jj] =
                             input_mesh_objs.at(i)->geo_wildcards[w_name].at(jj);
                     }
                 }
@@ -1405,7 +1405,7 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
                                         std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs,
                                         size_t nExistOwners,
                                         size_t nExistSpheres,
-                                        size_t nExistingPatches,
+                                        size_t nExistingFacets,
                                         unsigned int nExistingAnalGM) {
     // We take notes on how many clumps each batch has, it will be useful when we assemble the tracker information
     std::vector<size_t> prescans_batch_size, prescans_batch_sphere_size;
@@ -1421,11 +1421,11 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
     for (const auto& geo_num : ext_obj_comp_num) {
         prescans_ext_obj_size.push_back(prescans_ext_obj_size.back() + geo_num);
     }
-    // Also take notes of num of patches of each mesh obj
+    // Also take notes of num of triangles of each mesh obj (for per-triangle geo wildcard tracking)
     std::vector<size_t> prescans_mesh_size;
     prescans_mesh_size.push_back(0);
     for (const auto& a_mesh : input_mesh_objs) {
-        prescans_mesh_size.push_back(prescans_mesh_size.back() + a_mesh->GetNumPatches());
+        prescans_mesh_size.push_back(prescans_mesh_size.back() + a_mesh->GetNumTriangles());
     }
 
     // Provide feedback to the tracked objects, tell them the owner numbers they are looking for
@@ -1455,8 +1455,8 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
                 tracked_obj->ownerID =
                     nExistOwners + ext_obj_comp_num.size() + prescans_batch_size.back() + tracked_obj->load_order;
                 tracked_obj->nSpanOwners = 1;
-                tracked_obj->geoID = nExistingPatches + prescans_mesh_size.at(tracked_obj->load_order);
-                // For mesh, nGeos is the number of patches
+                tracked_obj->geoID = nExistingFacets + prescans_mesh_size.at(tracked_obj->load_order);
+                // For mesh, nGeos is the number of triangles (per-triangle geo wildcard)
                 tracked_obj->nGeos =
                     prescans_mesh_size.at(tracked_obj->load_order + 1) - prescans_mesh_size.at(tracked_obj->load_order);
                 break;
@@ -1574,7 +1574,7 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
 
     // Make changes to tracked objects (potentially add more)
     buildTrackedObjs(input_clump_batches, ext_obj_comp_num, input_mesh_objs, tracked_objs, nExistingOwners,
-                     nExistingSpheres, nExistingPatches, nExistingAnalGM);
+                     nExistingSpheres, nExistingFacets, nExistingAnalGM);
 }
 
 #ifdef DEME_USE_CHPF

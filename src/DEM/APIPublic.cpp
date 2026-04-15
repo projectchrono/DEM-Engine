@@ -1210,11 +1210,11 @@ bool DEMSolver::GetMeshTriangleGeoRange(bodyID_t ownerID, bodyID_t& geoID_begin,
     n_triangles = 0;
     for (const auto& mesh : m_meshes) {
         if (mesh->owner == ownerID) {
-            // Geometry wildcards for meshes are patch-based in this branch.
-            n_triangles = mesh->GetNumPatches();
+            // Geometry wildcards for meshes are per-triangle.
+            n_triangles = mesh->GetNumTriangles();
             return true;
         }
-        geoID_begin += mesh->GetNumPatches();
+        geoID_begin += mesh->GetNumTriangles();
     }
     return false;
 }
@@ -2500,6 +2500,16 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadSphereType(float mass,
                                                             float radius,
                                                             const std::shared_ptr<DEMMaterial>& material) {
     float3 I = make_float3(2.0 / 5.0 * mass * radius * radius);
+    float3 pos = make_float3(0);
+    return LoadClumpType(mass, I, std::vector<float>(1, radius), std::vector<float3>(1, pos),
+                         std::vector<std::shared_ptr<DEMMaterial>>(1, material));
+}
+
+std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadSphereType(float mass,
+                                                            float moi,
+                                                            float radius,
+                                                            const std::shared_ptr<DEMMaterial>& material) {
+    float3 I = make_float3(moi);
     float3 pos = make_float3(0);
     return LoadClumpType(mass, I, std::vector<float>(1, radius), std::vector<float3>(1, pos),
                          std::vector<std::shared_ptr<DEMMaterial>>(1, material));

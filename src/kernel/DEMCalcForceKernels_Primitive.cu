@@ -285,6 +285,8 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             _massAcqStrat_;
             AOwnerMass = myMass;
         }
+        // Geo wildcards for mesh triangles are indexed by triangle ID (not patch ID)
+        myPatchID = triID;
         _forceModelIngredientAcqForA_;
         _forceModelGeoWildcardAcqForAMeshPatch_;
 
@@ -560,6 +562,8 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             _massAcqStrat_;
             BOwnerMass = myMass;
         }
+        // Geo wildcards for mesh triangles are indexed by triangle ID (not patch ID)
+        myPatchID = triID;
         _forceModelIngredientAcqForB_;
         _forceModelGeoWildcardAcqForBMeshPatch_;
 
