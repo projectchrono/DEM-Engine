@@ -511,7 +511,12 @@ PYBIND11_MODULE(DEME, obj) {
              "Instruct the solver that there is no need to record the contact force (and contact point location etc.) "
              "in an array.",
              py::arg("flag") = true)
-        .def("LoadSphereType", &deme::DEMSolver::LoadSphereType)
+        .def("LoadSphereType",
+             py::overload_cast<float, float, const std::shared_ptr<deme::DEMMaterial>&>(
+                 &deme::DEMSolver::LoadSphereType))
+        .def("LoadSphereType",
+             py::overload_cast<float, float, float, const std::shared_ptr<deme::DEMMaterial>&>(
+                 &deme::DEMSolver::LoadSphereType))
         .def("EnsureKernelErrMsgLineNum", &deme::DEMSolver::EnsureKernelErrMsgLineNum,
              "If true, each jitification string substitution will do a one-liner to one-liner replacement, so that if "
              "the kernel compilation fails, the error meessage line number will reflex the actual spot where that "

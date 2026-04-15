@@ -2505,6 +2505,16 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadSphereType(float mass,
                          std::vector<std::shared_ptr<DEMMaterial>>(1, material));
 }
 
+std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadSphereType(float mass,
+                                                            float moi,
+                                                            float radius,
+                                                            const std::shared_ptr<DEMMaterial>& material) {
+    float3 I = make_float3(moi);
+    float3 pos = make_float3(0);
+    return LoadClumpType(mass, I, std::vector<float>(1, radius), std::vector<float3>(1, pos),
+                         std::vector<std::shared_ptr<DEMMaterial>>(1, material));
+}
+
 std::shared_ptr<DEMExternObj> DEMSolver::AddExternalObject() {
     DEMExternObj an_obj;
     std::shared_ptr<DEMExternObj> ptr = std::make_shared<DEMExternObj>(std::move(an_obj));

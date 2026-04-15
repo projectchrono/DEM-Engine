@@ -477,6 +477,11 @@ class DEMSolver {
     std::shared_ptr<DEMClumpTemplate> LoadSphereType(float mass,
                                                      float radius,
                                                      const std::shared_ptr<DEMMaterial>& material);
+    /// A simplified version of LoadClumpType: it just loads a one-sphere clump template, with explicit MOI supplied
+    std::shared_ptr<DEMClumpTemplate> LoadSphereType(float mass,
+                                                     float moi,
+                                                     float radius,
+                                                     const std::shared_ptr<DEMMaterial>& material);
 
     /// @brief Load materials properties (Young's modulus, Poisson's ratio...) into the system.
     /// @param mat_prop Property name--value pairs, as an unordered_map.
