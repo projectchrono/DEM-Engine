@@ -68,6 +68,8 @@ int main() {
     DEMSim.SetGravitationalAcceleration(make_float3(0.f, 0.f, 0.f));
     // Mesh-mesh contacts must be enabled for two mesh spheres
     DEMSim.SetMeshUniversalContact(true);
+    // Use the simple patch ID-based triangle combination (RefBranch-style)
+    DEMSim.SetSimplePatchCombination(true);
 
     auto mat = DEMSim.LoadMaterial({{"E", E}, {"nu", nu}, {"CoR", CoR}, {"mu", mu}, {"Crr", 0.f}});
 
