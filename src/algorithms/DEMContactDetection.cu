@@ -2071,7 +2071,7 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                         if (isSupportedContactType(type) && cnt > 0) {
                             typeStartCountPatchMap_thisStep[type] = {offset, cnt};
                         }
-                        offset += host_type_counts[i];
+                        offset += cnt;
                     }
                     delete[] host_unique_types;
                     delete[] host_type_counts;
