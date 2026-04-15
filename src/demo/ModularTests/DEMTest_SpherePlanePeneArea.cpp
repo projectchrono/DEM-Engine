@@ -132,11 +132,12 @@ int main() {
     // =========================================================================
     // Loop over all penetration depths
     // =========================================================================
+    const int accuracy = 7, t_width = 18;
     std::cout << std::endl;
-    std::cout << std::setw(12) << "depth_d(m)" << std::setw(18) << "pen_solver(m)" << std::setw(18) << "pen_analyt(m)"
-              << std::setw(14) << "pen_err(%)" << std::setw(18) << "area_solver(m2)" << std::setw(18)
-              << "area_analyt(m2)" << std::setw(14) << "area_err(%)" << std::endl;
-    std::cout << std::string(112, '-') << std::endl;
+    std::cout << std::setw(t_width) << "depth_d(m)" << std::setw(t_width) << "pen_solver(m)" << std::setw(t_width)
+              << "pen_analyt(m)" << std::setw(t_width) << "pen_err(%)" << std::setw(t_width) << "area_solver(m2)"
+              << std::setw(t_width) << "area_analyt(m2)" << std::setw(14) << "area_err(%)" << std::endl;
+    std::cout << std::string(125, '-') << std::endl;
 
     for (float d : depths) {
         // Move sphere to the desired penetration depth
@@ -159,14 +160,14 @@ int main() {
         const float pen_err = (pen_analyt > 1e-12f) ? 100.f * std::abs(pen_solver - pen_analyt) / pen_analyt : 0.f;
         const float area_err = (area_analyt > 1e-12f) ? 100.f * std::abs(area_solver - area_analyt) / area_analyt : 0.f;
 
-        std::cout << std::setw(12) << std::fixed << std::setprecision(5) << d << std::setw(18) << std::setprecision(6)
-                  << pen_solver << std::setw(18) << std::setprecision(6) << pen_analyt << std::setw(14)
-                  << std::setprecision(2) << pen_err << std::setw(18) << std::setprecision(6) << area_solver
-                  << std::setw(18) << std::setprecision(6) << area_analyt << std::setw(14) << std::setprecision(2)
-                  << area_err << std::endl;
+        std::cout << std::setw(t_width) << std::fixed << std::setprecision(accuracy) << d << std::setw(t_width)
+                  << std::setprecision(accuracy) << pen_solver << std::setw(t_width) << std::setprecision(accuracy)
+                  << pen_analyt << std::setw(t_width) << std::setprecision(accuracy) << pen_err << std::setw(t_width)
+                  << std::setprecision(accuracy) << area_solver << std::setw(t_width) << std::setprecision(accuracy)
+                  << area_analyt << std::setw(t_width) << std::setprecision(accuracy) << area_err << std::endl;
     }
 
-    std::cout << std::string(112, '-') << std::endl;
+    std::cout << std::string(125, '-') << std::endl;
     std::cout << std::endl;
     std::cout << "Note: solver penetration uses the maximum projected vertex depth" << std::endl;
     std::cout << "      across all triangles in the contact patch; analytical area" << std::endl;
