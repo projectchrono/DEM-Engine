@@ -11,18 +11,6 @@
 
 namespace deme {
 
-struct CylGhostDebugRecord {
-    int type;  // 1 = triangle
-    bodyID_t geo_id;
-    bodyID_t owner_id;
-    unsigned char ghost_neg;
-    float3 pos;
-    float3 ghost_pos;
-    float dist_start;
-    float dist_end;
-    float ghost_dist;
-};
-
 inline __device__ float distSquaredPoint(const float3& p, const float3& c) {
     const float dx = p.x - c.x;
     const float dy = p.y - c.y;
@@ -65,109 +53,6 @@ __global__ void markBoolIf(notStupidBool_t* bool_arr, notStupidBool_t* value_arr
             bool_arr[myID] = 1;
         } else {
             bool_arr[myID] = 0;
-        }
-    }
-}
-
-__global__ void collectCylGhostDebugTriangles(DEMSimParams* simParams,
-                                              DEMDataKT* granData,
-                                              const float3* vA1,
-                                              const float3* vB1,
-                                              const float3* vC1,
-                                              const float3* vA2,
-                                              const float3* vB2,
-                                              const float3* vC2,
-                                              CylGhostDebugRecord* records,
-                                              unsigned long long* count,
-                                              unsigned long long max_records) {
-    const bodyID_t triID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (triID >= simParams->nTriGM) {
-        return;
-    }
-    const float3 A1 = vA1[triID];
-    const float3 B1 = vB1[triID];
-    const float3 C1 = vC1[triID];
-    const float3 A2 = vA2[triID];
-    const float3 B2 = vB2[triID];
-    const float3 C2 = vC2[triID];
-
-    const float3 centroid =
-        make_float3((A1.x + B1.x + C1.x) / 3.f, (A1.y + B1.y + C1.y) / 3.f, (A1.z + B1.z + C1.z) / 3.f);
-    float r2 = distSquaredPoint(A1, centroid);
-    r2 = DEME_MAX(r2, distSquaredPoint(B1, centroid));
-    r2 = DEME_MAX(r2, distSquaredPoint(C1, centroid));
-    r2 = DEME_MAX(r2, distSquaredPoint(A2, centroid));
-    r2 = DEME_MAX(r2, distSquaredPoint(B2, centroid));
-    r2 = DEME_MAX(r2, distSquaredPoint(C2, centroid));
-    const float myTriRadius = sqrtf(r2);
-
-    const float max_other =
-        (simParams->maxSphereRadius > simParams->maxTriRadius) ? simParams->maxSphereRadius : simParams->maxTriRadius;
-    const float other_margin = simParams->dyn.beta + simParams->maxFamilyExtraMargin;
-    const float ghost_dist = myTriRadius + max_other + other_margin;
-
-    const float3 origin = simParams->cylPeriodicOrigin;
-    const float3 n_start = simParams->cylPeriodicStartNormal;
-    const float3 n_end = simParams->cylPeriodicEndNormal;
-    const float3 pos_global = centroid - origin;
-    const float dist_start = dot(pos_global, n_start);
-    const float dist_end = dot(pos_global, n_end);
-
-    float min_d = DEME_HUGE_FLOAT;
-    float max_d = -DEME_HUGE_FLOAT;
-    updatePlaneMinMax(A1, origin, n_start, min_d, max_d);
-    updatePlaneMinMax(B1, origin, n_start, min_d, max_d);
-    updatePlaneMinMax(C1, origin, n_start, min_d, max_d);
-    updatePlaneMinMax(A2, origin, n_start, min_d, max_d);
-    updatePlaneMinMax(B2, origin, n_start, min_d, max_d);
-    updatePlaneMinMax(C2, origin, n_start, min_d, max_d);
-
-    if (min_d <= ghost_dist && max_d >= -ghost_dist) {
-        const float3 ghost_pos =
-            cylPeriodicRotate(centroid, origin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                              simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, simParams->cylPeriodicSinSpan);
-        const unsigned long long idx = atomicAdd(count, 1ULL);
-        if (idx < max_records) {
-            CylGhostDebugRecord rec;
-            rec.type = 1;
-            rec.geo_id = triID;
-            rec.owner_id = granData->ownerTriMesh[triID];
-            rec.ghost_neg = 0;
-            rec.pos = centroid;
-            rec.ghost_pos = ghost_pos;
-            rec.dist_start = dist_start;
-            rec.dist_end = dist_end;
-            rec.ghost_dist = ghost_dist;
-            records[idx] = rec;
-        }
-    }
-
-    min_d = DEME_HUGE_FLOAT;
-    max_d = -DEME_HUGE_FLOAT;
-    updatePlaneMinMax(A1, origin, n_end, min_d, max_d);
-    updatePlaneMinMax(B1, origin, n_end, min_d, max_d);
-    updatePlaneMinMax(C1, origin, n_end, min_d, max_d);
-    updatePlaneMinMax(A2, origin, n_end, min_d, max_d);
-    updatePlaneMinMax(B2, origin, n_end, min_d, max_d);
-    updatePlaneMinMax(C2, origin, n_end, min_d, max_d);
-
-    if (min_d <= ghost_dist && max_d >= -ghost_dist) {
-        const float3 ghost_pos =
-            cylPeriodicRotate(centroid, origin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                              simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, -simParams->cylPeriodicSinSpan);
-        const unsigned long long idx = atomicAdd(count, 1ULL);
-        if (idx < max_records) {
-            CylGhostDebugRecord rec;
-            rec.type = 1;
-            rec.geo_id = triID;
-            rec.owner_id = granData->ownerTriMesh[triID];
-            rec.ghost_neg = 1;
-            rec.pos = centroid;
-            rec.ghost_pos = ghost_pos;
-            rec.dist_start = dist_start;
-            rec.dist_end = dist_end;
-            rec.ghost_dist = ghost_dist;
-            records[idx] = rec;
         }
     }
 }
@@ -241,56 +126,34 @@ __global__ void extractPatchInvolvedContactPatchIDPairs(patchIDPair_t* contactPa
                                                         size_t nContacts) {
     contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContacts) {
-        bodyID_t bodyA_raw = idPrimitiveA[myID];
-        bodyID_t bodyB_raw = idPrimitiveB[myID];
-        bool ghostA = false;
-        bool ghostB = false;
-        bool ghostA_neg = false;
-        bool ghostB_neg = false;
-        bodyID_t bodyA = cylPeriodicDecodeID(bodyA_raw, ghostA, ghostA_neg);
-        bodyID_t bodyB = cylPeriodicDecodeID(bodyB_raw, ghostB, ghostB_neg);
+        bodyID_t bodyA = idPrimitiveA[myID];
+        bodyID_t bodyB = idPrimitiveB[myID];
         switch (contactTypePrimitive[myID]) {
             case SPHERE_TRIANGLE_CONTACT: {
                 bodyID_t patchB = triPatchID[bodyB];
-                if (ghostB) {
-                    patchB = cylPeriodicEncodeGhostID(patchB, ghostB_neg);
-                }
-                bodyID_t sphA = ghostA ? cylPeriodicEncodeGhostID(bodyA, ghostA_neg) : bodyA;
                 // For sphere-triangle contact: triangle has patch ID, sphere does not but its geoID serves the same
                 // purpose. We ensure sphere is A.
                 contactPatchPairs[myID] =
-                    encodeType<patchIDPair_t, bodyID_t>(sphA, patchB);  // Input bodyID_t, return patchIDPair_t
+                    encodeType<patchIDPair_t, bodyID_t>(bodyA, patchB);  // Input bodyID_t, return patchIDPair_t
                 break;
             }
             case TRIANGLE_ANALYTICAL_CONTACT: {
                 bodyID_t patchA = triPatchID[bodyA];
-                if (ghostA) {
-                    patchA = cylPeriodicEncodeGhostID(patchA, ghostA_neg);
-                }
-                bodyID_t objB = ghostB ? cylPeriodicEncodeGhostID(bodyB, ghostB_neg) : bodyB;
                 // For mesh-analytical contact: mesh has patch ID, analytical object does not but its geoID serves the
                 // same purpose. We ensure triangle is A.
-                contactPatchPairs[myID] = encodeType<patchIDPair_t, bodyID_t>(patchA, objB);
+                contactPatchPairs[myID] = encodeType<patchIDPair_t, bodyID_t>(patchA, bodyB);
                 break;
             }
             case TRIANGLE_TRIANGLE_CONTACT: {
                 bodyID_t patchA = triPatchID[bodyA];
                 bodyID_t patchB = triPatchID[bodyB];
-                if (ghostA) {
-                    patchA = cylPeriodicEncodeGhostID(patchA, ghostA_neg);
-                }
-                if (ghostB) {
-                    patchB = cylPeriodicEncodeGhostID(patchB, ghostB_neg);
-                }
                 // For triangle-triangle contact: both triangles have patch IDs. Keeps original order.
                 contactPatchPairs[myID] = encodeType<patchIDPair_t, bodyID_t>(patchA, patchB);
                 break;
             }
             default:
                 // In other sph-sph and sph-anal, for now, we just use geoID as patchIDs. Keeps original order.
-                contactPatchPairs[myID] =
-                    encodeType<patchIDPair_t, bodyID_t>(ghostA ? cylPeriodicEncodeGhostID(bodyA, ghostA_neg) : bodyA,
-                                                        ghostB ? cylPeriodicEncodeGhostID(bodyB, ghostB_neg) : bodyB);
+                contactPatchPairs[myID] = encodeType<patchIDPair_t, bodyID_t>(bodyA, bodyB);
                 break;
         }
     }
@@ -411,7 +274,7 @@ __global__ void buildGroupPrimitiveKeys(const contactPairs_t* groupIndex,
                                         size_t n) {
     contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
-        const bodyID_t phys_id = primitiveIDs[myID] & deme::CYL_PERIODIC_SPHERE_ID_MASK;
+        const bodyID_t phys_id = primitiveIDs[myID];
         keys[myID] = (static_cast<uint64_t>(groupIndex[myID]) << 32) | static_cast<uint64_t>(phys_id);
     }
 }
@@ -462,7 +325,7 @@ __global__ void computeGroupWinners(const contact_t* groupTypes,
         bool A_never = false;
         bool B_never = false;
         if (A_is_tri) {
-            const bodyID_t triA = groupPrimA[myID] & deme::CYL_PERIODIC_SPHERE_ID_MASK;
+            const bodyID_t triA = groupPrimA[myID];
             const bodyID_t ownerA = ownerTriMesh[triA];
             if (ownerA != NULL_BODYID) {
                 A_convex = (ownerMeshConvex[ownerA] != 0);
@@ -470,7 +333,7 @@ __global__ void computeGroupWinners(const contact_t* groupTypes,
             }
         }
         if (B_is_tri) {
-            const bodyID_t triB = groupPrimB[myID] & deme::CYL_PERIODIC_SPHERE_ID_MASK;
+            const bodyID_t triB = groupPrimB[myID];
             const bodyID_t ownerB = ownerTriMesh[triB];
             if (ownerB != NULL_BODYID) {
                 B_convex = (ownerMeshConvex[ownerB] != 0);
@@ -536,7 +399,7 @@ __global__ void selectWinnerPrimitive(const contactPairs_t* groupIndex,
         }
         const bool pickA = (groupWinnerIsA[grp] != 0);
         const bodyID_t raw = pickA ? idA[myID] : idB[myID];
-        winnerID[myID] = raw & deme::CYL_PERIODIC_SPHERE_ID_MASK;
+        winnerID[myID] = raw;
         winnerIsTri[myID] = groupWinnerIsTri[grp];
     }
 }
@@ -1057,24 +920,6 @@ __global__ void buildPatchContactMapping(bodyID_t* curr_idPatchA,
         contactMapping[myID] = my_partner;
     }
 }
-
-// If both sides are cylindrical-periodic ghosts, drop history.
-// Single-sided ghost contacts can legitimately persist across steps and should keep history.
-__global__ void resetMappingForGhostContacts(contactPairs_t* contactMapping,
-                                             const bodyID_t* idPatchA,
-                                             const bodyID_t* idPatchB,
-                                             size_t n) {
-    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (myID < n) {
-        const bool ghostA = (idPatchA[myID] & CYL_PERIODIC_GHOST_FLAG) != 0;
-        const bool ghostB = (idPatchB[myID] & CYL_PERIODIC_GHOST_FLAG) != 0;
-        if (ghostA && ghostB) {
-            contactMapping[myID] = NULL_MAPPING_PARTNER;
-        }
-    }
-}
-
-// The rest are old kernels only used in DEME2.x for primitive-primitive contact mapping
 /*
 __global__ void fillRunLengthArray(primitivesPrimTouches_t* runlength_full,
                                    bodyID_t* unique_ids,
