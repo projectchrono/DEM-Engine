@@ -486,6 +486,11 @@ void DEMSolver::SetPersistentContact(bool use) {
     dT->solverFlags.hasPersistentContacts = use;
 }
 
+void DEMSolver::SetSimplePatchCombination(bool use) {
+    kT->solverFlags.useSimplePatchCombination = use;
+    dT->solverFlags.useSimplePatchCombination = use;
+}
+
 void DEMSolver::SyncMemoryTransfer() {
     dT->syncMemoryTransfer();
     kT->syncMemoryTransfer();

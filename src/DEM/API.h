@@ -398,6 +398,16 @@ class DEMSolver {
     /// @details Set this to true if you later will call MarkPersistentContact series of methods.
     void SetPersistentContact(bool use = true);
 
+    /// @brief Set whether to use the simple patch ID-based triangle combination instead of the default
+    /// index-flooding-based approach.
+    /// @param use If true, all triangles that share the same patch ID pair are combined into a single patch contact
+    /// (the simple RefBranch-style approach). If false (default), the more complex connected-component flooding method
+    /// is used to identify islands of touching triangles and combine them into patch contacts.
+    /// @details The simple approach is faster and may be preferable when the patch ID assignment already captures the
+    /// desired contact grouping (e.g., all triangles in a mesh share one patch ID by default). The flooding approach
+    /// can produce multiple patch contacts per patch-ID pair when the touching region is geometrically disconnected.
+    void SetSimplePatchCombination(bool use = true);
+
     /// @brief Load a clump type into the API-level cache.
     /// @return the shared ptr to the clump type just loaded.
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,

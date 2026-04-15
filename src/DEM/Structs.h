@@ -560,6 +560,11 @@ struct SolverFlags {
 
     // Whether there are contacts that can never be removed.
     bool hasPersistentContacts = false;
+
+    // Whether to use the simple patch ID-based triangle combination (RefBranch approach) instead of the default
+    // index-flooding-based approach. When true, all triangles sharing the same patch ID pair are combined into one
+    // patch contact without the connected-component flooding step.
+    bool useSimplePatchCombination = false;
 };
 
 class DEMMaterial {
