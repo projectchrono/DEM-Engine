@@ -195,12 +195,6 @@ inline __device__ void integrateVelPos(deme::bodyID_t ownerID,
 
     // With v and omgBar. update pos now...
     {
-        bool wrapped = false;
-        float cos_delta = 1.f;
-        float sin_delta = 0.f;
-        float cos_half = 1.f;
-        float sin_half = 0.f;
-
         if (!LinXPrescribed) {
             // Impllicitly, pos integration strategy is here
             X += (double)v.x * h;
@@ -210,6 +204,33 @@ inline __device__ void integrateVelPos(deme::bodyID_t ownerID,
         }
         if (!LinZPrescribed) {
             Z += (double)v.z * h;
+        }
+
+        // Undo the influence of LBF...
+        X -= (double)simParams->LBFX;
+        Y -= (double)simParams->LBFY;
+        Z -= (double)simParams->LBFZ;
+        positionToVoxelID<deme::voxelID_t, deme::subVoxelPos_t, double>(
+            granData->voxelID[ownerID], granData->locX[ownerID], granData->locY[ownerID], granData->locZ[ownerID], X, Y,
+            Z, _nvXp2_, _nvYp2_, _voxelSize_, _l_);
+
+        if (!RotPrescribed) {
+            // Then integrate the quaternion
+            // 1st Taylor series multiplier. First use it to record delta rotation...
+            // Refer to
+            // https://stackoverflow.com/questions/24197182/efficient-quaternion-angular-velocity/24201879#24201879
+            const float3 ha = 0.5 * h * omgBar;
+            float4 oriQ = make_float4(ha.x, ha.y, ha.z, 1.0);  // xyzw
+            // Note: Yes it is Quat * deltaRot, not the other way around. Then store result in oriQ.
+            HamiltonProduct(oriQ.w, oriQ.x, oriQ.y, oriQ.z, granData->oriQw[ownerID], granData->oriQx[ownerID],
+                            granData->oriQy[ownerID], granData->oriQz[ownerID], oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+            // Normalizing it is essential. Note even if you use an exp map to update quaternion, you still need to
+            // normalize.
+            oriQ /= length(oriQ);
+            granData->oriQw[ownerID] = oriQ.w;
+            granData->oriQx[ownerID] = oriQ.x;
+            granData->oriQy[ownerID] = oriQ.y;
+            granData->oriQz[ownerID] = oriQ.z;
         }
     }
 }
