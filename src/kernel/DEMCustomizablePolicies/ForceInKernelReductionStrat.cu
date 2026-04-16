@@ -3,25 +3,6 @@ float3 forceB = make_float3(-force.x, -force.y, -force.z);
 float3 torqueA = torque_only_force;
 float3 torqueB = make_float3(-torque_only_force.x, -torque_only_force.y, -torque_only_force.z);
 
-if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
-    if (wrapA) {
-        const float sin_span = -wrapA_sin;
-        const float cos_span = wrapA_cos;
-        forceA = cylPeriodicRotate(forceA, make_float3(0.f, 0.f, 0.f), simParams->cylPeriodicAxisVec,
-                                   simParams->cylPeriodicU, simParams->cylPeriodicV, cos_span, sin_span);
-        torqueA = cylPeriodicRotate(torqueA, make_float3(0.f, 0.f, 0.f), simParams->cylPeriodicAxisVec,
-                                    simParams->cylPeriodicU, simParams->cylPeriodicV, cos_span, sin_span);
-    }
-    if (wrapB) {
-        const float sin_span = -wrapB_sin;
-        const float cos_span = wrapB_cos;
-        forceB = cylPeriodicRotate(forceB, make_float3(0.f, 0.f, 0.f), simParams->cylPeriodicAxisVec,
-                                   simParams->cylPeriodicU, simParams->cylPeriodicV, cos_span, sin_span);
-        torqueB = cylPeriodicRotate(torqueB, make_float3(0.f, 0.f, 0.f), simParams->cylPeriodicAxisVec,
-                                    simParams->cylPeriodicU, simParams->cylPeriodicV, cos_span, sin_span);
-    }
-}
-
 // Take care of A
 {
     atomicAdd(granData->aX + AOwner, forceA.x / AOwnerMass);

@@ -24,21 +24,6 @@ _kernelIncludes_;
 _massDefs_;
 _moiDefs_;
 
-inline __device__ float3 cylPeriodicRotateVecSpan(const float3& vec,
-                                                  const deme::DEMSimParams* simParams,
-                                                  float sin_span) {
-    return cylPeriodicRotate(vec, make_float3(0.f, 0.f, 0.f), simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                             simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, sin_span);
-}
-
-inline __device__ float3 cylPeriodicRotateVec(const float3& vec,
-                                              const deme::DEMSimParams* simParams,
-                                              float cos_theta,
-                                              float sin_theta) {
-    return cylPeriodicRotate(vec, make_float3(0.f, 0.f, 0.f), simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                             simParams->cylPeriodicV, cos_theta, sin_theta);
-}
-
 inline __device__ deme::bodyID_t getPatchOwnerSafe(const deme::DEMSimParams* simParams,
                                                    const deme::DEMDataDT* granData,
                                                    deme::bodyID_t patch_id,
@@ -78,14 +63,8 @@ DEME_KERNEL void forceToAcc(deme::DEMSimParams* simParams, deme::DEMDataDT* gran
         }
         const float3 F = granData->contactForces[myID];
         const float3 torque_only_force = granData->contactTorque_convToForce[myID];
-        const deme::bodyID_t idPatchA_raw = granData->idPatchA[myID];
-        const deme::bodyID_t idPatchB_raw = granData->idPatchB[myID];
-        bool ghostA = false;
-        bool ghostB = false;
-        bool ghostA_neg = false;
-        bool ghostB_neg = false;
-        const deme::bodyID_t idPatchA = cylPeriodicDecodeID(idPatchA_raw, ghostA, ghostA_neg);
-        const deme::bodyID_t idPatchB = cylPeriodicDecodeID(idPatchB_raw, ghostB, ghostB_neg);
+        const deme::bodyID_t idPatchA = granData->idPatchA[myID];
+        const deme::bodyID_t idPatchB = granData->idPatchB[myID];
         float3 forceA = F;
         float3 forceB = make_float3(-F.x, -F.y, -F.z);
         float3 torqueA = torque_only_force;
@@ -97,28 +76,6 @@ DEME_KERNEL void forceToAcc(deme::DEMSimParams* simParams, deme::DEMDataDT* gran
         if (ownerA == deme::NULL_BODYID || ownerB == deme::NULL_BODYID || ownerA >= simParams->nOwnerBodies ||
             ownerB >= simParams->nOwnerBodies) {
             return;
-        }
-
-        if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
-            // Use only the kT ghost flag to rotate forces back to the base-wedge frame.
-            int wrapShiftA = ghostA ? (ghostA_neg ? -1 : 1) : 0;
-            int wrapShiftB = ghostB ? (ghostB_neg ? -1 : 1) : 0;
-            if (granData->ownerCylWrapOffset) {
-                wrapShiftA += granData->ownerCylWrapOffset[ownerA];
-                wrapShiftB += granData->ownerCylWrapOffset[ownerB];
-            }
-            if (wrapShiftA != 0) {
-                float cos_theta = 1.f, sin_theta = 0.f, cos_half = 1.f, sin_half = 0.f;
-                cylPeriodicShiftTrig(-wrapShiftA, simParams, cos_theta, sin_theta, cos_half, sin_half);
-                forceA = cylPeriodicRotateVec(forceA, simParams, cos_theta, sin_theta);
-                torqueA = cylPeriodicRotateVec(torqueA, simParams, cos_theta, sin_theta);
-            }
-            if (wrapShiftB != 0) {
-                float cos_theta = 1.f, sin_theta = 0.f, cos_half = 1.f, sin_half = 0.f;
-                cylPeriodicShiftTrig(-wrapShiftB, simParams, cos_theta, sin_theta, cos_half, sin_half);
-                forceB = cylPeriodicRotateVec(forceB, simParams, cos_theta, sin_theta);
-                torqueB = cylPeriodicRotateVec(torqueB, simParams, cos_theta, sin_theta);
-            }
         }
 
         // Take care of A

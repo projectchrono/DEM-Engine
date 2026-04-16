@@ -536,9 +536,7 @@ class DEMSolver {
     /// @brief Get per-owner bound radius for n consecutive owners.
     std::vector<float> GetOwnerBoundRadius(bodyID_t ownerID, bodyID_t n = 1) const;
     /// @brief Get per-owner contact counts split by real/ghost(+)/ghost(-).
-    void GetOwnerContactGhostCounts(std::vector<int>& real_cnt,
-                                    std::vector<int>& ghost_pos_cnt,
-                                    std::vector<int>& ghost_neg_cnt) const;
+    void GetOwnerContactGhostCounts(std::vector<int>& real_cnt) const;
     /// @brief Request an immediate contact detection update (forces kT to refresh contacts next cycle).
     void RequestContactUpdate();
     /// @brief Enable per-triangle P/V/PxV tracking for the specified mesh owners.

@@ -1786,29 +1786,12 @@ void DEMSolver::setSimParams() {
                      m_expand_safety_multi, m_expand_base_vel, m_use_angvel_margin, m_force_model->m_contact_wildcards,
                      m_force_model->m_owner_wildcards, m_force_model->m_geo_wildcards);
 
-    auto apply_cyl_periodic = [&](DualStruct<DEMSimParams>& params) {
-        params->useCylPeriodic = m_use_cyl_periodic ? 1 : 0;
-        params->useCylPeriodicDiagCounters = m_cyl_periodic_diag ? 1 : 0;
-        params->cylPeriodicAxis = static_cast<unsigned char>(m_cyl_periodic_axis);
-        params->cylPeriodicStart = m_cyl_periodic_start;
-        params->cylPeriodicSpan = m_cyl_periodic_span;
-        params->cylPeriodicMinRadius = m_cyl_periodic_min_radius;
-        params->cylPeriodicCosSpan = m_cyl_periodic_cos_span;
-        params->cylPeriodicSinSpan = m_cyl_periodic_sin_span;
-        params->cylPeriodicCosHalfSpan = m_cyl_periodic_cos_half_span;
-        params->cylPeriodicSinHalfSpan = m_cyl_periodic_sin_half_span;
-        params->cylPeriodicAxisVec = m_cyl_periodic_axis_vec;
-        params->cylPeriodicU = m_cyl_periodic_u;
-        params->cylPeriodicV = m_cyl_periodic_v;
-        params->cylPeriodicStartNormal = m_cyl_periodic_start_normal;
-        params->cylPeriodicEndNormal = m_cyl_periodic_end_normal;
-        params->cylPeriodicOrigin = make_float3(-params->LBFX, -params->LBFY, -params->LBFZ);
-        params->maxSphereRadius = m_largest_radius;
-        params->maxTriRadius = m_largest_tri_radius;
-        params->maxFamilyExtraMargin = m_max_family_extra_margin;
-    };
-    apply_cyl_periodic(dT->simParams);
-    apply_cyl_periodic(kT->simParams);
+    dT->simParams->maxSphereRadius = m_largest_radius;
+    dT->simParams->maxTriRadius = m_largest_tri_radius;
+    dT->simParams->maxFamilyExtraMargin = m_max_family_extra_margin;
+    kT->simParams->maxSphereRadius = m_largest_radius;
+    kT->simParams->maxTriRadius = m_largest_tri_radius;
+    kT->simParams->maxFamilyExtraMargin = m_max_family_extra_margin;
 }
 
 void DEMSolver::allocateGPUArrays() {

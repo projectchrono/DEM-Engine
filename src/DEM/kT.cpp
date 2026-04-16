@@ -239,11 +239,6 @@ inline void DEMKinematicThread::unpackMyBuffer() {
         xl.add(&(stateParams.maxTriTriPenetration), &(stateParams.maxTriTriPenetration_buffer), sizeof(double));
         xl.run(dev, dev, streamInfo.stream);
     }
-    if (simParams->useCylPeriodicDiagCounters) {
-        DEME_GPU_CALL(cudaMemcpyAsync(granData->ownerCylGhostActive, ownerCylGhostActive_buffer.data(),
-                                      simParams->nOwnerBodies * sizeof(unsigned int), cudaMemcpyDeviceToDevice,
-                                      streamInfo.stream));
-    }
 
     // Make sure we don't have velocity that is too high
     cubMaxReduce<float>(absVel_buffer.data(), &(stateParams.maxVel), simParams->nOwnerBodies, streamInfo.stream,
@@ -759,7 +754,6 @@ void DEMKinematicThread::packDataPointers() {
     oriQz.bindDevicePointer(&(granData->oriQz));
     granData->ownerBoundRadius = nullptr;
     granData->ownerMeshShellHalfThickness = nullptr;
-    ownerCylGhostActive.bindDevicePointer(&(granData->ownerCylGhostActive));
     marginSizeSphere.bindDevicePointer(&(granData->marginSizeSphere));
     marginSizeTriangle.bindDevicePointer(&(granData->marginSizeTriangle));
     marginSizeAnalytical.bindDevicePointer(&(granData->marginSizeAnalytical));
@@ -826,7 +820,6 @@ void DEMKinematicThread::migrateDataToDevice() {
     oriQx.toDeviceAsync(streamInfo.stream);
     oriQy.toDeviceAsync(streamInfo.stream);
     oriQz.toDeviceAsync(streamInfo.stream);
-    ownerCylGhostActive.toDeviceAsync(streamInfo.stream);
     idPrimitiveA.toDeviceAsync(streamInfo.stream);
     idPrimitiveB.toDeviceAsync(streamInfo.stream);
     contactTypePrimitive.toDeviceAsync(streamInfo.stream);
@@ -1004,7 +997,6 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(oriQx, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(oriQy, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(oriQz, nOwnerBodies, 0);
-    DEME_DUAL_ARRAY_RESIZE(ownerCylGhostActive, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(ownerMeshConvex, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(ownerMeshNeverWinner, nOwnerBodies, 0);
     DEME_DEVICE_ARRAY_RESIZE(marginSizeSphere, nSpheresGM);
@@ -1024,7 +1016,6 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
         DEME_DEVICE_ARRAY_RESIZE(oriQ1_buffer, nOwnerBodies);
         DEME_DEVICE_ARRAY_RESIZE(oriQ2_buffer, nOwnerBodies);
         DEME_DEVICE_ARRAY_RESIZE(oriQ3_buffer, nOwnerBodies);
-        DEME_DEVICE_ARRAY_RESIZE(ownerCylGhostActive_buffer, nOwnerBodies);
         DEME_DEVICE_ARRAY_RESIZE(absVel_buffer, nOwnerBodies);
         DEME_DEVICE_ARRAY_RESIZE(absAngVel_buffer, nOwnerBodies);
         // DEME_ADVISE_DEVICE(voxelID_buffer, dT->streamInfo.device);
@@ -1423,7 +1414,6 @@ void DEMKinematicThread::prewarmKernels() {
     }
     if (bin_triangle_kernels) {
         bin_triangle_kernels->kernel("precomputeTriangleSandwichData").instantiate();
-        bin_triangle_kernels->kernel("markCylPeriodicOwnerGhosts").instantiate();
         bin_triangle_kernels->kernel("getNumberOfBinsEachTriangleTouches").instantiate();
         bin_triangle_kernels->kernel("populateBinTriangleTouchingPairs").instantiate();
     }

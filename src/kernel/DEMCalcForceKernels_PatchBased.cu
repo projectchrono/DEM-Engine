@@ -61,8 +61,6 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
     int desiredShiftB = 0;
     int ghostShiftA = 0;
     int ghostShiftB = 0;
-    int wrapShiftA = 0;
-    int wrapShiftB = 0;
     float desiredBestDist2 = 0.f;
     float desiredRadAOwner = 0.f;
     float desiredRadBOwner = 0.f;

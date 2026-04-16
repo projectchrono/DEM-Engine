@@ -340,7 +340,6 @@ DEME_KERNEL void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParam
                                                     const int3* UB_all,
                                                     const unsigned char* ok1_all,
                                                     const unsigned char* ok2_all,
-                                                    const unsigned int* ownerGhostFlags,
                                                     bool meshUniversalContact) {
     deme::bodyID_t triID = blockIdx.x * blockDim.x + threadIdx.x;
     if (triID >= simParams->nTriGM) {
@@ -451,9 +450,7 @@ DEME_KERNEL void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParam
             cy += binSizeF;
         }
     }
-    deme::binsTriangleTouches_t ghostBins = 0;
-
-    numBinsTriTouches[triID] = numSDsTouched + ghostBins;
+    numBinsTriTouches[triID] = numSDsTouched;
 
     if (meshUniversalContact) {
         deme::objID_t contact_count = 0;
@@ -521,7 +518,6 @@ DEME_KERNEL void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                                                   const int3* UB_all,
                                                   const unsigned char* ok1_all,
                                                   const unsigned char* ok2_all,
-                                                  const unsigned int* ownerGhostFlags,
                                                   // tri-anal output
                                                   deme::bodyID_t* idGeoA,
                                                   deme::bodyID_t* idGeoB,
@@ -641,262 +637,6 @@ DEME_KERNEL void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
             cy += binSizeF;
         }
     }
-    if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
-        const deme::bodyID_t ownerID = granData->ownerTriMesh[triID];
-        const unsigned int ghost_flags = ownerGhostFlags ? ownerGhostFlags[ownerID] : 0u;
-        const bool ownerGhostStart = (ghost_flags & deme::CYL_GHOST_HINT_START) != 0u;
-        const bool ownerGhostEnd = (ghost_flags & deme::CYL_GHOST_HINT_END) != 0u;
-        const float max_other = (simParams->maxSphereRadius > simParams->maxTriRadius) ? simParams->maxSphereRadius
-                                                                                       : simParams->maxTriRadius;
-        const float3 centroid =
-            make_float3((vA1.x + vB1.x + vC1.x) / 3.f, (vA1.y + vB1.y + vC1.y) / 3.f, (vA1.z + vB1.z + vC1.z) / 3.f);
-        float r2 = distSquaredPoint(vA1, centroid);
-        r2 = DEME_MAX(r2, distSquaredPoint(vB1, centroid));
-        r2 = DEME_MAX(r2, distSquaredPoint(vC1, centroid));
-        r2 = DEME_MAX(r2, distSquaredPoint(vA2, centroid));
-        r2 = DEME_MAX(r2, distSquaredPoint(vB2, centroid));
-        r2 = DEME_MAX(r2, distSquaredPoint(vC2, centroid));
-        const float myTriRadius = sqrtf(r2);
-        const float other_margin = simParams->dyn.beta + simParams->maxFamilyExtraMargin;
-        const float ghost_dist = myTriRadius + max_other + other_margin;
-
-        const float3 origin = simParams->cylPeriodicOrigin;
-        const float3 n = simParams->cylPeriodicStartNormal;
-        float min_d = DEME_HUGE_FLOAT;
-        float max_d = -DEME_HUGE_FLOAT;
-        updatePlaneMinMax(vA1, origin, n, min_d, max_d);
-        updatePlaneMinMax(vB1, origin, n, min_d, max_d);
-        updatePlaneMinMax(vC1, origin, n, min_d, max_d);
-        updatePlaneMinMax(vA2, origin, n, min_d, max_d);
-        updatePlaneMinMax(vB2, origin, n, min_d, max_d);
-        updatePlaneMinMax(vC2, origin, n, min_d, max_d);
-
-        if (ownerGhostStart || (min_d <= ghost_dist)) {
-            const float3 gA1 = cylPeriodicRotate(vA1, origin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                 simParams->cylPeriodicV, simParams->cylPeriodicCosSpan,
-                                                 simParams->cylPeriodicSinSpan);
-            const float3 gB1 = cylPeriodicRotate(vB1, origin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                 simParams->cylPeriodicV, simParams->cylPeriodicCosSpan,
-                                                 simParams->cylPeriodicSinSpan);
-            const float3 gC1 = cylPeriodicRotate(vC1, origin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                 simParams->cylPeriodicV, simParams->cylPeriodicCosSpan,
-                                                 simParams->cylPeriodicSinSpan);
-            const float3 gA2 = cylPeriodicRotate(vA2, origin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                 simParams->cylPeriodicV, simParams->cylPeriodicCosSpan,
-                                                 simParams->cylPeriodicSinSpan);
-            const float3 gB2 = cylPeriodicRotate(vB2, origin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                 simParams->cylPeriodicV, simParams->cylPeriodicCosSpan,
-                                                 simParams->cylPeriodicSinSpan);
-            const float3 gC2 = cylPeriodicRotate(vC2, origin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                 simParams->cylPeriodicV, simParams->cylPeriodicCosSpan,
-                                                 simParams->cylPeriodicSinSpan);
-            const float3 gShift = cylPeriodicRotate(
-                shift_world, make_float3(0.f, 0.f, 0.f), simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, simParams->cylPeriodicSinSpan);
-
-            deme::binID_t gL1[3], gU1[3], gL2[3], gU2[3];
-            const bool gok1 = boundingBoxIntersectBinAxisBounds(gL1, gU1, gA1, gB1, gC1, simParams);
-            const bool gok2 = boundingBoxIntersectBinAxisBounds(gL2, gU2, gA2, gB2, gC2, simParams);
-
-            if (gok1 || gok2) {
-                deme::binID_t gLx, gLy, gLz, gUx, gUy, gUz;
-                if (gok1 && gok2) {
-                    gLx = (deme::binID_t)DEME_MIN(gL1[0], gL2[0]);
-                    gLy = (deme::binID_t)DEME_MIN(gL1[1], gL2[1]);
-                    gLz = (deme::binID_t)DEME_MIN(gL1[2], gL2[2]);
-                    gUx = (deme::binID_t)DEME_MAX(gU1[0], gU2[0]);
-                    gUy = (deme::binID_t)DEME_MAX(gU1[1], gU2[1]);
-                    gUz = (deme::binID_t)DEME_MAX(gU1[2], gU2[2]);
-                } else if (gok1) {
-                    gLx = (deme::binID_t)gL1[0];
-                    gLy = (deme::binID_t)gL1[1];
-                    gLz = (deme::binID_t)gL1[2];
-                    gUx = (deme::binID_t)gU1[0];
-                    gUy = (deme::binID_t)gU1[1];
-                    gUz = (deme::binID_t)gU1[2];
-                } else {
-                    gLx = (deme::binID_t)gL2[0];
-                    gLy = (deme::binID_t)gL2[1];
-                    gLz = (deme::binID_t)gL2[2];
-                    gUx = (deme::binID_t)gU2[0];
-                    gUy = (deme::binID_t)gU2[1];
-                    gUz = (deme::binID_t)gU2[2];
-                }
-
-                const float binSizeFG = (float)simParams->dyn.binSize;
-                const float binHalfSpanG = binSizeFG * (0.5f + (float)DEME_BIN_ENLARGE_RATIO_FOR_FACETS);
-                const float startXG = binSizeFG * (float)gLx + 0.5f * binSizeFG;
-                const float startYG = binSizeFG * (float)gLy + 0.5f * binSizeFG;
-                const float startZG = binSizeFG * (float)gLz + 0.5f * binSizeFG;
-
-                // Incremental bin-local coordinates for ghost bins.
-                for (deme::binID_t i = gLx, ix = 0; i <= gUx; i++, ix++) {
-                    const float cx = startXG + (float)ix * binSizeFG;
-
-                    const float a0x = gA1.x - cx;
-                    const float a1x = gB1.x - cx;
-                    const float a2x = gC1.x - cx;
-
-                    float cy = startYG;
-                    for (deme::binID_t j = gLy; j <= gUy; j++) {
-                        const float a0y = gA1.y - cy;
-                        const float a1y = gB1.y - cy;
-                        const float a2y = gC1.y - cy;
-
-                        float3 a0 = make_float3(a0x, a0y, gA1.z - startZG);
-                        float3 a1 = make_float3(a1x, a1y, gB1.z - startZG);
-                        float3 a2 = make_float3(a2x, a2y, gC1.z - startZG);
-
-                        for (deme::binID_t k = gLz; k <= gUz; k++) {
-                            const bool inA = gok1 && (i >= (deme::binID_t)gL1[0] && i <= (deme::binID_t)gU1[0] &&
-                                                      j >= (deme::binID_t)gL1[1] && j <= (deme::binID_t)gU1[1] &&
-                                                      k >= (deme::binID_t)gL1[2] && k <= (deme::binID_t)gU1[2]);
-                            const bool inB = gok2 && (i >= (deme::binID_t)gL2[0] && i <= (deme::binID_t)gU2[0] &&
-                                                      j >= (deme::binID_t)gL2[1] && j <= (deme::binID_t)gU2[1] &&
-                                                      k >= (deme::binID_t)gL2[2] && k <= (deme::binID_t)gU2[2]);
-
-                            if (inA || inB) {
-                                const bool hit = triBoxOverlapBinLocalEdgesUnionShiftFP32(a0, a1, a2, gShift,
-                                                                                          binHalfSpanG, inA, inB);
-                                if (hit) {
-                                    const deme::binsTriangleTouchPairs_t outIdx = myReportOffset + count;
-                                    if (outIdx < myUpperBound) {
-                                        binIDsEachTriTouches[outIdx] = binIDFrom3Indices<deme::binID_t>(
-                                            i, j, k, simParams->nbX, simParams->nbY, simParams->nbZ);
-                                        triIDsEachBinTouches[outIdx] = cylPeriodicEncodeGhostID(triID, false);
-                                    }
-                                    count++;
-                                }
-                            }
-
-                            a0.z -= binSizeFG;
-                            a1.z -= binSizeFG;
-                            a2.z -= binSizeFG;
-                        }
-                        cy += binSizeFG;
-                    }
-                }
-            }
-        }
-        const float3 n_end = simParams->cylPeriodicEndNormal;
-        min_d = DEME_HUGE_FLOAT;
-        max_d = -DEME_HUGE_FLOAT;
-        updatePlaneMinMax(vA1, origin, n_end, min_d, max_d);
-        updatePlaneMinMax(vB1, origin, n_end, min_d, max_d);
-        updatePlaneMinMax(vC1, origin, n_end, min_d, max_d);
-        updatePlaneMinMax(vA2, origin, n_end, min_d, max_d);
-        updatePlaneMinMax(vB2, origin, n_end, min_d, max_d);
-        updatePlaneMinMax(vC2, origin, n_end, min_d, max_d);
-
-        if (ownerGhostEnd || (max_d >= -ghost_dist)) {
-            const float3 gA1 = cylPeriodicRotate(vA1, origin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                 simParams->cylPeriodicV, simParams->cylPeriodicCosSpan,
-                                                 -simParams->cylPeriodicSinSpan);
-            const float3 gB1 = cylPeriodicRotate(vB1, origin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                 simParams->cylPeriodicV, simParams->cylPeriodicCosSpan,
-                                                 -simParams->cylPeriodicSinSpan);
-            const float3 gC1 = cylPeriodicRotate(vC1, origin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                 simParams->cylPeriodicV, simParams->cylPeriodicCosSpan,
-                                                 -simParams->cylPeriodicSinSpan);
-            const float3 gA2 = cylPeriodicRotate(vA2, origin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                 simParams->cylPeriodicV, simParams->cylPeriodicCosSpan,
-                                                 -simParams->cylPeriodicSinSpan);
-            const float3 gB2 = cylPeriodicRotate(vB2, origin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                 simParams->cylPeriodicV, simParams->cylPeriodicCosSpan,
-                                                 -simParams->cylPeriodicSinSpan);
-            const float3 gC2 = cylPeriodicRotate(vC2, origin, simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                 simParams->cylPeriodicV, simParams->cylPeriodicCosSpan,
-                                                 -simParams->cylPeriodicSinSpan);
-            const float3 gShift = cylPeriodicRotate(
-                shift_world, make_float3(0.f, 0.f, 0.f), simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                simParams->cylPeriodicV, simParams->cylPeriodicCosSpan, -simParams->cylPeriodicSinSpan);
-
-            deme::binID_t gL1[3], gU1[3], gL2[3], gU2[3];
-            const bool gok1 = boundingBoxIntersectBinAxisBounds(gL1, gU1, gA1, gB1, gC1, simParams);
-            const bool gok2 = boundingBoxIntersectBinAxisBounds(gL2, gU2, gA2, gB2, gC2, simParams);
-
-            if (gok1 || gok2) {
-                deme::binID_t gLx, gLy, gLz, gUx, gUy, gUz;
-                if (gok1 && gok2) {
-                    gLx = (deme::binID_t)DEME_MIN(gL1[0], gL2[0]);
-                    gLy = (deme::binID_t)DEME_MIN(gL1[1], gL2[1]);
-                    gLz = (deme::binID_t)DEME_MIN(gL1[2], gL2[2]);
-                    gUx = (deme::binID_t)DEME_MAX(gU1[0], gU2[0]);
-                    gUy = (deme::binID_t)DEME_MAX(gU1[1], gU2[1]);
-                    gUz = (deme::binID_t)DEME_MAX(gU1[2], gU2[2]);
-                } else if (gok1) {
-                    gLx = (deme::binID_t)gL1[0];
-                    gLy = (deme::binID_t)gL1[1];
-                    gLz = (deme::binID_t)gL1[2];
-                    gUx = (deme::binID_t)gU1[0];
-                    gUy = (deme::binID_t)gU1[1];
-                    gUz = (deme::binID_t)gU1[2];
-                } else {
-                    gLx = (deme::binID_t)gL2[0];
-                    gLy = (deme::binID_t)gL2[1];
-                    gLz = (deme::binID_t)gL2[2];
-                    gUx = (deme::binID_t)gU2[0];
-                    gUy = (deme::binID_t)gU2[1];
-                    gUz = (deme::binID_t)gU2[2];
-                }
-
-                const float binSizeFG = (float)simParams->dyn.binSize;
-                const float binHalfSpanG = binSizeFG * (0.5f + (float)DEME_BIN_ENLARGE_RATIO_FOR_FACETS);
-                const float startXG = binSizeFG * (float)gLx + 0.5f * binSizeFG;
-                const float startYG = binSizeFG * (float)gLy + 0.5f * binSizeFG;
-                const float startZG = binSizeFG * (float)gLz + 0.5f * binSizeFG;
-
-                // Incremental bin-local coordinates for ghost bins.
-                for (deme::binID_t i = gLx, ix = 0; i <= gUx; i++, ix++) {
-                    const float cx = startXG + (float)ix * binSizeFG;
-
-                    const float a0x = gA1.x - cx;
-                    const float a1x = gB1.x - cx;
-                    const float a2x = gC1.x - cx;
-
-                    float cy = startYG;
-                    for (deme::binID_t j = gLy; j <= gUy; j++) {
-                        const float a0y = gA1.y - cy;
-                        const float a1y = gB1.y - cy;
-                        const float a2y = gC1.y - cy;
-
-                        float3 a0 = make_float3(a0x, a0y, gA1.z - startZG);
-                        float3 a1 = make_float3(a1x, a1y, gB1.z - startZG);
-                        float3 a2 = make_float3(a2x, a2y, gC1.z - startZG);
-
-                        for (deme::binID_t k = gLz; k <= gUz; k++) {
-                            const bool inA = gok1 && (i >= (deme::binID_t)gL1[0] && i <= (deme::binID_t)gU1[0] &&
-                                                      j >= (deme::binID_t)gL1[1] && j <= (deme::binID_t)gU1[1] &&
-                                                      k >= (deme::binID_t)gL1[2] && k <= (deme::binID_t)gU1[2]);
-                            const bool inB = gok2 && (i >= (deme::binID_t)gL2[0] && i <= (deme::binID_t)gU2[0] &&
-                                                      j >= (deme::binID_t)gL2[1] && j <= (deme::binID_t)gU2[1] &&
-                                                      k >= (deme::binID_t)gL2[2] && k <= (deme::binID_t)gU2[2]);
-
-                            if (inA || inB) {
-                                const bool hit = triBoxOverlapBinLocalEdgesUnionShiftFP32(a0, a1, a2, gShift,
-                                                                                          binHalfSpanG, inA, inB);
-                                if (hit) {
-                                    const deme::binsTriangleTouchPairs_t outIdx = myReportOffset + count;
-                                    if (outIdx < myUpperBound) {
-                                        binIDsEachTriTouches[outIdx] = binIDFrom3Indices<deme::binID_t>(
-                                            i, j, k, simParams->nbX, simParams->nbY, simParams->nbZ);
-                                        triIDsEachBinTouches[outIdx] = cylPeriodicEncodeGhostID(triID, true);
-                                    }
-                                    count++;
-                                }
-                            }
-
-                            a0.z -= binSizeFG;
-                            a1.z -= binSizeFG;
-                            a2.z -= binSizeFG;
-                        }
-                        cy += binSizeFG;
-                    }
-                }
-            }
-        }
-    }
-
     // As an ultra-safety net, neutralize any reserved-but-unwritten slots.
     // Small count/populate mismatches (e.g., due floating-point branch jitter) should not leak stale bin IDs.
     for (deme::binsTriangleTouchPairs_t outIdx = myReportOffset + count; outIdx < myUpperBound; ++outIdx) {

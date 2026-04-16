@@ -660,9 +660,7 @@ class DEMDynamicThread {
     /// Get this owner's bound radius for n consecutive items.
     std::vector<float> getOwnerBoundRadius(bodyID_t ownerID, bodyID_t n = 1);
     /// Get per-owner contact counts split by real/ghost(+)/ghost(-).
-    void getOwnerContactGhostCounts(std::vector<int>& real_cnt,
-                                    std::vector<int>& ghost_pos_cnt,
-                                    std::vector<int>& ghost_neg_cnt);
+    void getOwnerContactGhostCounts(std::vector<int>& real_cnt);
     // Get the current auto-adjusted update freq.
     float getUpdateFreq() const;
 

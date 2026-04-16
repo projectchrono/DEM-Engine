@@ -56,12 +56,8 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
         }
         bodyID_t geoA_raw = granData->idPatchA[i];
         bodyID_t geoB_raw = granData->idPatchB[i];
-        bool ghostA = false;
-        bool ghostB = false;
-        bool ghostA_neg = false;
-        bool ghostB_neg = false;
-        bodyID_t geoA = cylPeriodicDecodeID(geoA_raw, ghostA, ghostA_neg);
-        bodyID_t geoB = cylPeriodicDecodeID(geoB_raw, ghostB, ghostB_neg);
+        bodyID_t geoA = geoA_raw;
+        bodyID_t geoB = geoB_raw;
         bodyID_t ownerA = DEME_GET_PATCH_OWNER_ID(geoA, decodeTypeA(typeContact));
         bodyID_t ownerB = DEME_GET_PATCH_OWNER_ID(geoB, decodeTypeB(typeContact));
         bool AorB;  // true for A, false for B
@@ -100,29 +96,6 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
                 }
             }
             ownerID = ownerA;
-            if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
-                int wrapShift = ghostA ? (ghostA_neg ? -1 : 1) : 0;
-                if (wrapShift != 0) {
-                    float cos_theta = 1.f, sin_theta = 0.f, cos_half = 1.f, sin_half = 0.f;
-                    cylPeriodicShiftTrig(-wrapShift, simParams, cos_theta, sin_theta, cos_half, sin_half);
-                    force = cylPeriodicRotate(force, make_float3(0.f, 0.f, 0.f), simParams->cylPeriodicAxisVec,
-                                              simParams->cylPeriodicU, simParams->cylPeriodicV, cos_theta, sin_theta);
-                    if (need_torque) {
-                        torque_only_force = cylPeriodicRotate(torque_only_force, make_float3(0.f, 0.f, 0.f),
-                                                              simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                              simParams->cylPeriodicV, cos_theta, sin_theta);
-                    }
-                    if (!cntPnt_is_local) {
-                        float3 cp_local = make_float3(cntPnt.x - simParams->LBFX, cntPnt.y - simParams->LBFY,
-                                                      cntPnt.z - simParams->LBFZ);
-                        cp_local =
-                            cylPeriodicRotate(cp_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec,
-                                              simParams->cylPeriodicU, simParams->cylPeriodicV, cos_theta, sin_theta);
-                        cntPnt = make_float3(cp_local.x + simParams->LBFX, cp_local.y + simParams->LBFY,
-                                             cp_local.z + simParams->LBFZ);
-                    }
-                }
-            }
         } else {
             if (cntPnt_is_local) {
                 cntPnt = granData->contactPointGeometryB[i];
@@ -135,29 +108,6 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
             force = -force;
             if (need_torque)
                 torque_only_force = -torque_only_force;
-            if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
-                int wrapShift = ghostB ? (ghostB_neg ? -1 : 1) : 0;
-                if (wrapShift != 0) {
-                    float cos_theta = 1.f, sin_theta = 0.f, cos_half = 1.f, sin_half = 0.f;
-                    cylPeriodicShiftTrig(-wrapShift, simParams, cos_theta, sin_theta, cos_half, sin_half);
-                    force = cylPeriodicRotate(force, make_float3(0.f, 0.f, 0.f), simParams->cylPeriodicAxisVec,
-                                              simParams->cylPeriodicU, simParams->cylPeriodicV, cos_theta, sin_theta);
-                    if (need_torque) {
-                        torque_only_force = cylPeriodicRotate(torque_only_force, make_float3(0.f, 0.f, 0.f),
-                                                              simParams->cylPeriodicAxisVec, simParams->cylPeriodicU,
-                                                              simParams->cylPeriodicV, cos_theta, sin_theta);
-                    }
-                    if (!cntPnt_is_local) {
-                        float3 cp_local = make_float3(cntPnt.x - simParams->LBFX, cntPnt.y - simParams->LBFY,
-                                                      cntPnt.z - simParams->LBFZ);
-                        cp_local =
-                            cylPeriodicRotate(cp_local, simParams->cylPeriodicOrigin, simParams->cylPeriodicAxisVec,
-                                              simParams->cylPeriodicU, simParams->cylPeriodicV, cos_theta, sin_theta);
-                        cntPnt = make_float3(cp_local.x + simParams->LBFX, cp_local.y + simParams->LBFY,
-                                             cp_local.z + simParams->LBFZ);
-                    }
-                }
-            }
         }
         oriQ.w = granData->oriQw[ownerID];
         oriQ.x = granData->oriQx[ownerID];
@@ -818,10 +768,8 @@ __global__ void computePatchPVScalars_impl(const DEMSimParams* simParams,
 
     const bodyID_t geoA_raw = granData->idPatchA[patchContactID];
     const bodyID_t geoB_raw = granData->idPatchB[patchContactID];
-    bool ghostA = false, ghostA_neg = false;
-    bool ghostB = false, ghostB_neg = false;
-    const bodyID_t geoA = cylPeriodicDecodeID(geoA_raw, ghostA, ghostA_neg);
-    const bodyID_t geoB = cylPeriodicDecodeID(geoB_raw, ghostB, ghostB_neg);
+    const bodyID_t geoA = geoA_raw;
+    const bodyID_t geoB = geoB_raw;
     const bodyID_t ownerA = DEME_GET_PATCH_OWNER_ID(geoA, decodeTypeA(patchType));
     const bodyID_t ownerB = DEME_GET_PATCH_OWNER_ID(geoB, decodeTypeB(patchType));
 
@@ -990,8 +938,7 @@ __global__ void accumulateTrianglePVFromPatchContacts_impl(const DEMSimParams* s
 
     // Track any contact contribution on triangle sides (sphere-triangle and triangle-triangle).
     if (typeA == GEO_T_TRIANGLE) {
-        bool triGhost = false, triGhostNeg = false;
-        const bodyID_t triA = cylPeriodicDecodeID(granData->idPrimitiveA[primContactID], triGhost, triGhostNeg);
+        const bodyID_t triA = granData->idPrimitiveA[primContactID];
         if (triA < simParams->nTriGM) {
             const int localIdx = triGlobalToLocal[triA];
             if (localIdx >= 0) {
@@ -1001,8 +948,7 @@ __global__ void accumulateTrianglePVFromPatchContacts_impl(const DEMSimParams* s
         }
     }
     if (typeB == GEO_T_TRIANGLE) {
-        bool triGhost = false, triGhostNeg = false;
-        const bodyID_t triB = cylPeriodicDecodeID(granData->idPrimitiveB[primContactID], triGhost, triGhostNeg);
+        const bodyID_t triB = granData->idPrimitiveB[primContactID];
         if (triB < simParams->nTriGM) {
             const int localIdx = triGlobalToLocal[triB];
             if (localIdx >= 0) {
@@ -1067,14 +1013,6 @@ __global__ void prepareAccArrays_impl(DEMSimParams* simParams, DEMDataDT* granDa
     size_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < simParams->nOwnerBodies) {
         cleanUpAcc(myID, simParams, granData);
-        if (simParams->useCylPeriodicDiagCounters) {
-            if (granData->ownerCylSkipCount) {
-                granData->ownerCylSkipCount[myID] = 0;
-            }
-            if (granData->ownerCylSkipPotentialCount) {
-                granData->ownerCylSkipPotentialCount[myID] = 0;
-            }
-        }
     }
 }
 

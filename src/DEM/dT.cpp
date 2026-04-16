@@ -1186,7 +1186,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
 
         const float shell_half_thickness = fmaxf(input_mesh_objs.at(i)->GetShellHalfThickness(), 0.f);
 
-        // Per-owner circumscribed radius (used by cylindrical periodicity wrap decisions).
+        // Per-owner circumscribed radius.
         // For a mesh, use the maximum distance of any vertex to the mesh local origin plus shell half-thickness.
         // Note: DEME assumes the mesh is defined in its CoM (or reference) frame; if not, this bound will
         // be conservative, which is still safe.
@@ -4434,15 +4434,11 @@ std::vector<float> DEMDynamicThread::getOwnerBoundRadius(bodyID_t ownerID, bodyI
     return radii;
 }
 
-void DEMDynamicThread::getOwnerContactGhostCounts(std::vector<int>& real_cnt,
-                                                  std::vector<int>& ghost_pos_cnt,
-                                                  std::vector<int>& ghost_neg_cnt) {
+void DEMDynamicThread::getOwnerContactGhostCounts(std::vector<int>& real_cnt) {
     solverScratchSpace.numContacts.toHost();
     const size_t nContacts = *solverScratchSpace.numContacts;
     const size_t nOwners = simParams->nOwnerBodies;
     real_cnt.assign(nOwners, 0);
-    ghost_pos_cnt.assign(nOwners, 0);
-    ghost_neg_cnt.assign(nOwners, 0);
     if (nContacts == 0) {
         return;
     }
