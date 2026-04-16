@@ -4434,35 +4434,6 @@ std::vector<float> DEMDynamicThread::getOwnerBoundRadius(bodyID_t ownerID, bodyI
     return radii;
 }
 
-void DEMDynamicThread::getOwnerContactGhostCounts(std::vector<int>& real_cnt) {
-    solverScratchSpace.numContacts.toHost();
-    const size_t nContacts = *solverScratchSpace.numContacts;
-    const size_t nOwners = simParams->nOwnerBodies;
-    real_cnt.assign(nOwners, 0);
-    if (nContacts == 0) {
-        return;
-    }
-    migrateContactInfoToHost();
-    for (size_t i = 0; i < nContacts; i++) {
-        const contact_t type = contactTypePatch[i];
-        if (type == NOT_A_CONTACT) {
-            continue;
-        }
-        const geoType_t typeA = decodeTypeA(type);
-        const geoType_t typeB = decodeTypeB(type);
-        const bodyID_t idA_raw = idPatchA[i];
-        const bodyID_t idB_raw = idPatchB[i];
-        const bodyID_t ownerA = getPatchOwnerID(idA_raw, typeA);
-        const bodyID_t ownerB = getPatchOwnerID(idB_raw, typeB);
-        if (ownerA != NULL_BODYID) {
-            real_cnt[ownerA]++;
-        }
-        if (ownerB != NULL_BODYID) {
-            real_cnt[ownerB]++;
-        }
-    }
-}
-
 void DEMDynamicThread::configureTrianglePVTracking(const std::vector<bodyID_t>& mesh_owner_ids) {
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
 

@@ -85,20 +85,12 @@ int main() {
     std::mt19937 rng(42);
     unsigned int created = 0;
 
-    auto in_periodic_wedge_with_margin = [&](float x, float y) {
-        (void)x;
-        (void)y;
-        return true;
-    };
-
     std::vector<float3> candidate_positions;
     for (float z = -sample_halfheight; z <= sample_halfheight; z += fill_spacing) {
         for (float y = -sample_radius; y <= sample_radius; y += fill_spacing) {
             for (float x = -sample_radius; x <= sample_radius; x += fill_spacing) {
                 const float r2 = x * x + y * y;
                 if (r2 > sample_radius * sample_radius)
-                    continue;
-                if (!in_periodic_wedge_with_margin(x, y))
                     continue;
                 candidate_positions.push_back(make_float3(x, y, z));
             }

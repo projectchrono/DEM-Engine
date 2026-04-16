@@ -211,7 +211,6 @@ inline __device__ void integrateVelPos(deme::bodyID_t ownerID,
         if (!LinZPrescribed) {
             Z += (double)v.z * h;
         }
-
     }
 }
 

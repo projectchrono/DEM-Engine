@@ -725,10 +725,6 @@ std::vector<float> DEMSolver::GetOwnerBoundRadius(bodyID_t ownerID, bodyID_t n) 
     return dT->getOwnerBoundRadius(ownerID, n);
 }
 
-void DEMSolver::GetOwnerContactGhostCounts(std::vector<int>& real_cnt) const {
-    dT->getOwnerContactGhostCounts(real_cnt);
-}
-
 void DEMSolver::RequestContactUpdate() {
     assertSysInit("RequestContactUpdate");
     dT->announceCritical();

@@ -23,8 +23,7 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
                                             T1* radii,
                                             T2* bodyX,
                                             T2* bodyY,
-                                            T2* bodyZ,
-                                            signed char* ghostFlags) {
+                                            T2* bodyZ) {
     deme::bodyID_t sphereID = sphereID_in;
 
     deme::bodyID_t ownerID = granData->ownerClumpBody[sphereID];
@@ -57,7 +56,6 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
     bodyY[myThreadID] = ownerY + (double)myRelPos.y;
     bodyZ[myThreadID] = ownerZ + (double)myRelPos.z;
     radii[myThreadID] = myRadius;
-    ghostFlags[myThreadID] = 0;
 }
 
 inline __device__ bool calcContactPoint(deme::DEMSimParams* simParams,
@@ -101,7 +99,6 @@ DEME_KERNEL void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
     __shared__ double bodyY[DEME_NUM_SPHERES_PER_CD_BATCH];
     __shared__ double bodyZ[DEME_NUM_SPHERES_PER_CD_BATCH];
     __shared__ deme::family_t ownerFamilies[DEME_NUM_SPHERES_PER_CD_BATCH];
-    __shared__ signed char ghostFlags[DEME_NUM_SPHERES_PER_CD_BATCH];
     __shared__ deme::binContactPairs_t blockPairCnt;
 
     // typedef cub::BlockReduce<deme::binContactPairs_t, DEME_KT_CD_NTHREADS_PER_BLOCK> BlockReduceT;
@@ -144,7 +141,7 @@ DEME_KERNEL void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
             deme::bodyID_t sphereID =
                 sphereIDsEachBinTouches_sorted[thisBodiesTableEntry + processed_count + myThreadID];
             fillSharedMemSpheres<float, double>(simParams, granData, myThreadID, sphereID, ownerIDs, bodyIDs,
-                                                ownerFamilies, radii, bodyX, bodyY, bodyZ, ghostFlags);
+                                                ownerFamilies, radii, bodyX, bodyY, bodyZ);
         }
         __syncthreads();
 
@@ -178,7 +175,6 @@ DEME_KERNEL void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
                 if (granData->familyMasks[maskMatID] != deme::DONT_PREVENT_CONTACT) {
                     continue;
                 }
-
 
                 deme::binID_t contactPntBin;
                 bool in_contact = calcContactPoint(simParams, bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], radii[bodyA],
@@ -222,7 +218,6 @@ DEME_KERNEL void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
                 float cur_radii;
                 double cur_bodyX, cur_bodyY, cur_bodyZ;
                 deme::family_t cur_ownerFamily;
-                signed char cur_isGhost = 0;
                 {
                     const deme::spheresBinTouches_t cur_ind = processed_count + DEME_NUM_SPHERES_PER_CD_BATCH + i;
                     deme::bodyID_t cur_sphereID = sphereIDsEachBinTouches_sorted[thisBodiesTableEntry + cur_ind];
@@ -231,7 +226,7 @@ DEME_KERNEL void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
                     // fast. And it's not really shared mem filling, just using that function to get the info.
                     fillSharedMemSpheres<float, double>(simParams, granData, 0, cur_sphereID, &cur_ownerID, &cur_bodyID,
                                                         &cur_ownerFamily, &cur_radii, &cur_bodyX, &cur_bodyY,
-                                                        &cur_bodyZ, &cur_isGhost);
+                                                        &cur_bodyZ);
                 }
                 // Then each in-shared-mem sphere compares against it. But first, check if same owner...
                 if (ownerIDs[myThreadID] == cur_ownerID)
@@ -283,7 +278,6 @@ DEME_KERNEL void populateSphereContactPairsEachBin(deme::DEMSimParams* simParams
     __shared__ double bodyY[DEME_NUM_SPHERES_PER_CD_BATCH];
     __shared__ double bodyZ[DEME_NUM_SPHERES_PER_CD_BATCH];
     __shared__ deme::family_t ownerFamilies[DEME_NUM_SPHERES_PER_CD_BATCH];
-    __shared__ signed char ghostFlags[DEME_NUM_SPHERES_PER_CD_BATCH];
     __shared__ deme::binContactPairs_t blockPairCnt;
 
     const deme::spheresBinTouches_t nBodiesInBin = numSpheresBinTouches[blockIdx.x];
@@ -318,7 +312,7 @@ DEME_KERNEL void populateSphereContactPairsEachBin(deme::DEMSimParams* simParams
             deme::bodyID_t sphereID =
                 sphereIDsEachBinTouches_sorted[thisBodiesTableEntry + processed_count + myThreadID];
             fillSharedMemSpheres<float, double>(simParams, granData, myThreadID, sphereID, ownerIDs, bodyIDs,
-                                                ownerFamilies, radii, bodyX, bodyY, bodyZ, ghostFlags);
+                                                ownerFamilies, radii, bodyX, bodyY, bodyZ);
         }
         __syncthreads();
 
@@ -352,7 +346,6 @@ DEME_KERNEL void populateSphereContactPairsEachBin(deme::DEMSimParams* simParams
                 if (granData->familyMasks[maskMatID] != deme::DONT_PREVENT_CONTACT) {
                     continue;
                 }
-
 
                 deme::binID_t contactPntBin;
                 bool in_contact = calcContactPoint(simParams, bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], radii[bodyA],
@@ -400,7 +393,6 @@ DEME_KERNEL void populateSphereContactPairsEachBin(deme::DEMSimParams* simParams
                 float cur_radii;
                 double cur_bodyX, cur_bodyY, cur_bodyZ;
                 deme::family_t cur_ownerFamily;
-                signed char cur_isGhost = 0;
                 {
                     const deme::spheresBinTouches_t cur_ind = processed_count + DEME_NUM_SPHERES_PER_CD_BATCH + i;
                     deme::bodyID_t cur_sphereID = sphereIDsEachBinTouches_sorted[thisBodiesTableEntry + cur_ind];
@@ -409,7 +401,7 @@ DEME_KERNEL void populateSphereContactPairsEachBin(deme::DEMSimParams* simParams
                     // fast.
                     fillSharedMemSpheres<float, double>(simParams, granData, 0, cur_sphereID, &cur_ownerID, &cur_bodyID,
                                                         &cur_ownerFamily, &cur_radii, &cur_bodyX, &cur_bodyY,
-                                                        &cur_bodyZ, &cur_isGhost);
+                                                        &cur_bodyZ);
                 }
                 // Then each in-shared-mem sphere compares against it. But first, check if same owner...
                 if (ownerIDs[myThreadID] == cur_ownerID)

@@ -623,8 +623,7 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 .instantiate()
                 .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
                 .launch(&simParams, &granData, numBinsTriTouches, numAnalGeoTriTouches, tri_vA1, tri_vB1, tri_vC1,
-                        tri_shift, tri_L1, tri_U1, tri_L2, tri_U2, tri_ok1, tri_ok2,
-                        solverFlags.meshUniversalContact);
+                        tri_shift, tri_L1, tri_U1, tri_L2, tri_U2, tri_ok1, tri_ok2, solverFlags.meshUniversalContact);
 
             // std::cout << "numBinsTriTouches: " << std::endl;
             // displayDeviceArray<binsTriangleTouches_t>(numBinsTriTouches, simParams->nTriGM);

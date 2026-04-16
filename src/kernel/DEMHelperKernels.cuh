@@ -78,15 +78,6 @@ __host__ __device__ T2 clampBetween3Comp(const T1& data, const T2& low, const T2
     res.z = DEME_MIN(DEME_MAX(data.z, low.z), high.z);
     return res;
 }
-// Make sure a T1 type triplet falls in a range, then output as T2 type
-template <typename T1, typename T2>
-__host__ __device__ T2 clampBetween3Comp(const T1& data, const T2& low, const T2& high) {
-    T2 res;
-    res.x = DEME_MIN(DEME_MAX(data.x, low.x), high.x);
-    res.y = DEME_MIN(DEME_MAX(data.y, low.y), high.y);
-    res.z = DEME_MIN(DEME_MAX(data.z, low.z), high.z);
-    return res;
-}
 
 // Make sure a T1 type triplet falls in a range, then output as T2 type
 template <typename T1, typename T2>

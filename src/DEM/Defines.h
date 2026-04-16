@@ -127,14 +127,14 @@ constexpr contact_t ALL_CONTACT_TYPES[NUM_SUPPORTED_CONTACT_TYPES] = {
     TRIANGLE_ANALYTICAL_CONTACT};
 
 // Device version of getting geo owner ID
-#define DEME_GET_GEO_OWNER_ID(geo, type)                                             \
+#define DEME_GET_GEO_OWNER_ID(geo, type)                                  \
     ((type) == deme::GEO_T_SPHERE       ? granData->ownerClumpBody[(geo)] \
      : (type) == deme::GEO_T_TRIANGLE   ? granData->ownerTriMesh[(geo)]   \
      : (type) == deme::GEO_T_ANALYTICAL ? granData->ownerAnalBody[(geo)]  \
                                         : deme::NULL_BODYID)
 
 // Device version of getting patch owner ID
-#define DEME_GET_PATCH_OWNER_ID(patchID, type)                                                   \
+#define DEME_GET_PATCH_OWNER_ID(patchID, type)                                \
     ((type) == deme::GEO_T_SPHERE       ? granData->ownerClumpBody[(patchID)] \
      : (type) == deme::GEO_T_TRIANGLE   ? granData->ownerPatchMesh[(patchID)] \
      : (type) == deme::GEO_T_ANALYTICAL ? granData->ownerAnalBody[(patchID)]  \

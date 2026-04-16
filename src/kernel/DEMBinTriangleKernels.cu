@@ -324,7 +324,6 @@ DEME_KERNEL void precomputeTriangleSandwichData(
     }
 }
 
-
 DEME_KERNEL void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams,
                                                     deme::DEMDataKT* granData,
                                                     deme::binsTriangleTouches_t* numBinsTriTouches,

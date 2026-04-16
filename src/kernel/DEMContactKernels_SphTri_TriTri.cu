@@ -45,10 +45,8 @@ inline __device__ void fillSharedMemTriangles(deme::DEMSimParams* simParams,
                                               float3* triBNode1,
                                               float3* triBNode2,
                                               float3* triBNode3,
-                                              float3* triCenters,
-                                              signed char* triGhostFlags) {
+                                              float3* triCenters) {
     deme::bodyID_t tri_id = triID_in;
-    triGhostFlags[myThreadID] = 0;
 
     const deme::bodyID_t ownerID = granData->ownerTriMesh[tri_id];
     triIDs[myThreadID] = tri_id;
@@ -85,8 +83,7 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
                                             T1* radii,
                                             T2* bodyX,
                                             T2* bodyY,
-                                            T2* bodyZ,
-                                            signed char* ghostFlags) {
+                                            T2* bodyZ) {
     // Keep a local `sphereID` for component acquisition macros.
     deme::bodyID_t sphereID = sphereID_in;
 
@@ -120,9 +117,7 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
     bodyY[myThreadID] = ownerY + myRelPos.y;
     bodyZ[myThreadID] = ownerZ + myRelPos.z;
     radii[myThreadID] = myRadius;
-    ghostFlags[myThreadID] = 0;
 }
-
 
 inline __device__ bool checkPrismPrismContact(deme::DEMSimParams* simParams,
                                               const float3& triANode1,
@@ -174,7 +169,6 @@ DEME_KERNEL void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParam
     __shared__ float3 triBNode3[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ float3 triCenters[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ deme::family_t triOwnerFamilies[DEME_NUM_TRIANGLES_PER_CD_BATCH];
-    __shared__ signed char triGhostFlags[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ deme::binContactPairs_t blockSphTriPairCnt, blockTriTriPairCnt;
 
     // typedef cub::BlockReduce<deme::binContactPairs_t, DEME_KT_CD_NTHREADS_PER_BLOCK> BlockReduceT;
@@ -229,7 +223,7 @@ DEME_KERNEL void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParam
             deme::bodyID_t triID = triIDsEachBinTouches_sorted[thisTriTableEntry + processed_count + myThreadID];
             fillSharedMemTriangles(simParams, granData, myThreadID, triID, triOwnerIDs, triIDs, triOwnerFamilies,
                                    tri_vA1_all, tri_vB1_all, tri_vC1_all, tri_shift_all, triANode1, triANode2,
-                                   triANode3, triBNode1, triBNode2, triBNode3, triCenters, triGhostFlags);
+                                   triANode3, triBNode1, triBNode2, triBNode3, triCenters);
         }
         __syncthreads();
 
@@ -244,11 +238,10 @@ DEME_KERNEL void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParam
                 deme::family_t ownerFamily;
                 float myRadius;
                 float3 sphXYZ;
-                signed char sph_isGhost = 0;
 
                 // Borrow it from another kernel file...
                 fillSharedMemSpheres<float, float>(simParams, granData, 0, sphereID, &ownerID, &sphereID, &ownerFamily,
-                                                   &myRadius, &sphXYZ.x, &sphXYZ.y, &sphXYZ.z, &sph_isGhost);
+                                                   &myRadius, &sphXYZ.x, &sphXYZ.y, &sphXYZ.z);
                 // Test contact with each triangle in shared memory
                 for (deme::trianglesBinTouches_t ind = 0; ind < this_batch_active_count; ind++) {
                     // A mesh facet and a sphere may have the same owner... although it is not possible with the current
@@ -363,7 +356,6 @@ DEME_KERNEL void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParam
                     float3 cur_triANode1, cur_triANode2, cur_triANode3, cur_triBNode1, cur_triBNode2, cur_triBNode3;
                     float3 cur_triCenter;
                     deme::family_t cur_ownerFamily;
-                    signed char cur_isGhost = 0;
                     {
                         const deme::trianglesBinTouches_t cur_ind =
                             processed_count + DEME_NUM_TRIANGLES_PER_CD_BATCH + i;
@@ -374,7 +366,7 @@ DEME_KERNEL void getNumberOfTriangleContactsEachBin(deme::DEMSimParams* simParam
                         fillSharedMemTriangles(simParams, granData, 0, cur_triID, &cur_ownerID, &cur_bodyID,
                                                &cur_ownerFamily, tri_vA1_all, tri_vB1_all, tri_vC1_all, tri_shift_all,
                                                &cur_triANode1, &cur_triANode2, &cur_triANode3, &cur_triBNode1,
-                                               &cur_triBNode2, &cur_triBNode3, &cur_triCenter, &cur_isGhost);
+                                               &cur_triBNode2, &cur_triBNode3, &cur_triCenter);
                     }
                     // Then each in-shared-mem sphere compares against it. But first, check if same owner...
                     if (triOwnerIDs[myThreadID] == cur_ownerID)
@@ -447,7 +439,6 @@ DEME_KERNEL void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
     __shared__ float3 triBNode3[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ float3 triCenters[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ deme::family_t triOwnerFamilies[DEME_NUM_TRIANGLES_PER_CD_BATCH];
-    __shared__ signed char triGhostFlags[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ deme::binContactPairs_t blockSphTriPairCnt, blockTriTriPairCnt;
 
     const deme::trianglesBinTouches_t nTriInBin = numTrianglesBinTouches[blockIdx.x];
@@ -498,7 +489,7 @@ DEME_KERNEL void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
             deme::bodyID_t triID = triIDsEachBinTouches_sorted[thisTriTableEntry + processed_count + myThreadID];
             fillSharedMemTriangles(simParams, granData, myThreadID, triID, triOwnerIDs, triIDs, triOwnerFamilies,
                                    tri_vA1_all, tri_vB1_all, tri_vC1_all, tri_shift_all, triANode1, triANode2,
-                                   triANode3, triBNode1, triBNode2, triBNode3, triCenters, triGhostFlags);
+                                   triANode3, triBNode1, triBNode2, triBNode3, triCenters);
         }
         __syncthreads();
 
@@ -513,11 +504,10 @@ DEME_KERNEL void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                 deme::family_t ownerFamily;
                 float myRadius;
                 float3 sphXYZ;
-                signed char sph_isGhost = 0;
 
                 // Borrow it from another kernel file...
                 fillSharedMemSpheres<float, float>(simParams, granData, 0, sphereID, &ownerID, &sphereID, &ownerFamily,
-                                                   &myRadius, &sphXYZ.x, &sphXYZ.y, &sphXYZ.z, &sph_isGhost);
+                                                   &myRadius, &sphXYZ.x, &sphXYZ.y, &sphXYZ.z);
                 // Test contact with each triangle in shared memory
                 for (deme::trianglesBinTouches_t ind = 0; ind < this_batch_active_count; ind++) {
                     // A mesh facet and a sphere may have the same owner... although it is not possible with the current
@@ -649,7 +639,6 @@ DEME_KERNEL void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                     float3 cur_triANode1, cur_triANode2, cur_triANode3, cur_triBNode1, cur_triBNode2, cur_triBNode3;
                     float3 cur_triCenter;
                     deme::family_t cur_ownerFamily;
-                    signed char cur_isGhost = 0;
                     {
                         const deme::trianglesBinTouches_t cur_ind =
                             processed_count + DEME_NUM_TRIANGLES_PER_CD_BATCH + i;
@@ -660,7 +649,7 @@ DEME_KERNEL void populateTriangleContactsEachBin(deme::DEMSimParams* simParams,
                         fillSharedMemTriangles(simParams, granData, 0, cur_triID, &cur_ownerID, &cur_bodyID,
                                                &cur_ownerFamily, tri_vA1_all, tri_vB1_all, tri_vC1_all, tri_shift_all,
                                                &cur_triANode1, &cur_triANode2, &cur_triANode3, &cur_triBNode1,
-                                               &cur_triBNode2, &cur_triBNode3, &cur_triCenter, &cur_isGhost);
+                                               &cur_triBNode2, &cur_triBNode3, &cur_triCenter);
                     }
                     // Then each in-shared-mem sphere compares against it. But first, check if same owner...
                     if (triOwnerIDs[myThreadID] == cur_ownerID)

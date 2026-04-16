@@ -106,6 +106,20 @@ int main() {
     top_bot_planes->SetFamily(drum_family);
     auto planes_tracker = DEMSim.Track(top_bot_planes);
 
+    // Then sample some particles inside the drum
+    std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_type;
+    std::vector<float3> input_xyz;
+    std::vector<unsigned int> family_code;
+    float3 sample_center = make_float3(0, 0, 0);
+    float sample_halfheight = CylHeight / 2.0 - 3.0 * safe_delta;
+    float sample_halfwidth = CylRad / 1.5;
+    auto input_material_xyz =
+        DEMBoxGridSampler(sample_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight),
+                          scaling * std::cbrt(2.0) * 2.1, scaling * std::cbrt(2.0) * 2.1, scaling * 2 * 2.1);
+    // Keep the legacy non-periodic path exactly intact.
+    input_xyz.insert(input_xyz.end(), input_material_xyz.begin(), input_material_xyz.end());
+    unsigned int num_clumps = input_material_xyz.size();
+
     // Casually select from generated clump types
     for (unsigned int i = 0; i < num_clumps; i++) {
         input_template_type.push_back(clump_types.at(i % clump_types.size()));

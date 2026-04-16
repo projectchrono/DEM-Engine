@@ -65,7 +65,6 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
     float desiredRadAOwner = 0.f;
     float desiredRadBOwner = 0.f;
 
-
     // Decompose ContactType to get the types of A and B (known at compile time)
     constexpr deme::geoType_t AType = (CONTACT_TYPE >> 4);
     constexpr deme::geoType_t BType = (CONTACT_TYPE & 0xF);
