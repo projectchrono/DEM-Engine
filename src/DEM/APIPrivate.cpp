@@ -860,14 +860,10 @@ void DEMSolver::figureOutNV() {
 
 void DEMSolver::decideBinSize() {
     // find the smallest radius
-    m_largest_radius = 0.f;
     for (auto elem : m_template_sp_radii) {
         for (auto radius : elem) {
             if (radius < m_smallest_radius) {
                 m_smallest_radius = radius;
-            }
-            if (radius > m_largest_radius) {
-                m_largest_radius = radius;
             }
         }
     }
@@ -1333,9 +1329,6 @@ void DEMSolver::preprocessTriangleObjs() {
                 r2 = std::max(r2, dist2(tri.p2));
                 r2 = std::max(r2, dist2(tri.p3));
                 const float radius = std::sqrt(r2) + shell_half_thickness;
-                if (radius > m_largest_tri_radius) {
-                    m_largest_tri_radius = radius;
-                }
             }
             m_mesh_facets.push_back(tri);
 
@@ -1785,13 +1778,6 @@ void DEMSolver::setSimParams() {
                      m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_max_tritri_penetration,
                      m_expand_safety_multi, m_expand_base_vel, m_use_angvel_margin, m_force_model->m_contact_wildcards,
                      m_force_model->m_owner_wildcards, m_force_model->m_geo_wildcards);
-
-    dT->simParams->maxSphereRadius = m_largest_radius;
-    dT->simParams->maxTriRadius = m_largest_tri_radius;
-    dT->simParams->maxFamilyExtraMargin = m_max_family_extra_margin;
-    kT->simParams->maxSphereRadius = m_largest_radius;
-    kT->simParams->maxTriRadius = m_largest_tri_radius;
-    kT->simParams->maxFamilyExtraMargin = m_max_family_extra_margin;
 }
 
 void DEMSolver::allocateGPUArrays() {

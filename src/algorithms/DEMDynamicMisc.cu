@@ -8,26 +8,6 @@
 
 #include <kernel/DEMHelperKernels.cuh>
 
-// Reject insane local contact points that are actually packed-double storage (overlap depth / area).
-// This prevents catastrophic torque explosions when a slot is misclassified as patch-contact.
-__device__ inline bool saneLocalCP(const float3& p) {
-    // packed-double storage often yields absurd magnitudes (1e10+), while real local CP is on mm–cm scale.
-    // Also reject NaN/inf.
-    if (!isfinite(p.x) || !isfinite(p.y) || !isfinite(p.z))
-        return false;
-    const float m2 = p.x * p.x + p.y * p.y + p.z * p.z;
-    // 1 meter in local space is already absurd for your cube sizes; threshold can be tuned.
-    return (m2 < 1.0f);
-}
-
-__device__ inline bool saneLocalCPWithBound(const float3& p, float max_norm) {
-    if (!isfinite(p.x) || !isfinite(p.y) || !isfinite(p.z))
-        return false;
-    max_norm = fmaxf(max_norm, 1e-6f);
-    const float m2 = p.x * p.x + p.y * p.y + p.z * p.z;
-    return (m2 <= max_norm * max_norm);
-}
-
 namespace deme {
 
 __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
@@ -54,10 +34,8 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
         if (typeContact == NOT_A_CONTACT) {
             return;
         }
-        bodyID_t geoA_raw = granData->idPatchA[i];
-        bodyID_t geoB_raw = granData->idPatchB[i];
-        bodyID_t geoA = geoA_raw;
-        bodyID_t geoB = geoB_raw;
+        bodyID_t geoA = granData->idPatchA[i];
+        bodyID_t geoB = granData->idPatchB[i];
         bodyID_t ownerA = DEME_GET_PATCH_OWNER_ID(geoA, decodeTypeA(typeContact));
         bodyID_t ownerB = DEME_GET_PATCH_OWNER_ID(geoB, decodeTypeB(typeContact));
         bool AorB;  // true for A, false for B
@@ -86,23 +64,11 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
         double3 CoM;
         float4 oriQ;
         bodyID_t ownerID;
-        bool cntPnt_is_local = true;
         if (AorB) {
-            if (cntPnt_is_local) {
                 cntPnt = granData->contactPointGeometryA[i];
-                // Some pipelines multiplex this field; if it is not a sane local point, treat it as a global CP.
-                if (!saneLocalCP(cntPnt)) {
-                    cntPnt_is_local = false;
-                }
-            }
             ownerID = ownerA;
         } else {
-            if (cntPnt_is_local) {
                 cntPnt = granData->contactPointGeometryB[i];
-                if (!saneLocalCP(cntPnt)) {
-                    cntPnt_is_local = false;
-                }
-            }
             ownerID = ownerB;
             // Force dir flipped
             force = -force;
@@ -124,32 +90,14 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
         CoM.y += simParams->LBFY;
         CoM.z += simParams->LBFZ;
         if (need_torque) {
-            float3 cntPnt_local = cntPnt;
-            if (!cntPnt_is_local) {
-                cntPnt_local = make_float3(cntPnt.x - (float)CoM.x, cntPnt.y - (float)CoM.y, cntPnt.z - (float)CoM.z);
-                applyOriQToVector3(cntPnt_local, make_float4(-oriQ.x, -oriQ.y, -oriQ.z, oriQ.w));
-            }
-            // Final guard: reject implausibly large local lever arms for this owner.
-            float max_lever = 1.0f;
-            if (granData->ownerBoundRadius && ownerID != NULL_BODYID && ownerID < simParams->nOwnerBodies) {
-                const float bound_r = fmaxf(granData->ownerBoundRadius[ownerID], 0.f);
-                // Keep some tolerance for non-spherical geometry and contact-point scatter.
-                max_lever = fmaxf(4.0f * bound_r, 5e-2f);
-            }
-            if (!saneLocalCPWithBound(cntPnt_local, max_lever)) {
-                d_torques[writeIndex] = make_float3(0.f, 0.f, 0.f);
-            } else {
                 float3 myF = force + torque_only_force;
                 applyOriQToVector3(myF, make_float4(-oriQ.x, -oriQ.y, -oriQ.z, oriQ.w));
-                float3 torque = cross(cntPnt_local, myF);
+                float3 torque = cross(cntPnt, myF);
                 if (!torque_in_local) {
                     applyOriQToVector3(torque, oriQ);
                 }
                 d_torques[writeIndex] = torque;
-            }
-        }
-        if (cntPnt_is_local) {
-            applyFrameTransformLocalToGlobal<float3, double3, float4>(cntPnt, CoM, oriQ);
+                applyFrameTransformLocalToGlobal<float3, double3, float4>(cntPnt, CoM, oriQ);
         }
         d_points[writeIndex] = cntPnt;
         d_forces[writeIndex] = force;
@@ -766,10 +714,8 @@ __global__ void computePatchPVScalars_impl(const DEMSimParams* simParams,
         return;
     }
 
-    const bodyID_t geoA_raw = granData->idPatchA[patchContactID];
-    const bodyID_t geoB_raw = granData->idPatchB[patchContactID];
-    const bodyID_t geoA = geoA_raw;
-    const bodyID_t geoB = geoB_raw;
+    const bodyID_t geoA = granData->idPatchA[patchContactID];
+    const bodyID_t geoB = granData->idPatchB[patchContactID];
     const bodyID_t ownerA = DEME_GET_PATCH_OWNER_ID(geoA, decodeTypeA(patchType));
     const bodyID_t ownerB = DEME_GET_PATCH_OWNER_ID(geoB, decodeTypeB(patchType));
 
@@ -802,18 +748,6 @@ __global__ void computePatchPVScalars_impl(const DEMSimParams* simParams,
 
             float3 rA_global =
                 make_float3(cp_global.x - (float)comA.x, cp_global.y - (float)comA.y, cp_global.z - (float)comA.z);
-            if (granData->ownerBoundRadius) {
-                const float bound_r = fmaxf(granData->ownerBoundRadius[ownerA], 0.f);
-                if (isfinite(bound_r) && bound_r > DEME_TINY_FLOAT) {
-                    const float geom_tol = fmaxf(simParams->dyn.beta + simParams->maxFamilyExtraMargin, 0.f) + 1e-4f;
-                    const float max_lever = fmaxf(bound_r + geom_tol, 1e-3f);
-                    const float r2 = dot(rA_global, rA_global);
-                    const float max2 = max_lever * max_lever;
-                    if (isfinite(r2) && r2 > max2) {
-                        rA_global *= max_lever * rsqrtf(r2);
-                    }
-                }
-            }
             velCPA = linVelA + cross(angVelA_global, rA_global);
         }
     }
@@ -839,18 +773,6 @@ __global__ void computePatchPVScalars_impl(const DEMSimParams* simParams,
 
             float3 rB_global =
                 make_float3(cp_global.x - (float)comB.x, cp_global.y - (float)comB.y, cp_global.z - (float)comB.z);
-            if (granData->ownerBoundRadius) {
-                const float bound_r = fmaxf(granData->ownerBoundRadius[ownerB], 0.f);
-                if (isfinite(bound_r) && bound_r > DEME_TINY_FLOAT) {
-                    const float geom_tol = fmaxf(simParams->dyn.beta + simParams->maxFamilyExtraMargin, 0.f) + 1e-4f;
-                    const float max_lever = fmaxf(bound_r + geom_tol, 1e-3f);
-                    const float r2 = dot(rB_global, rB_global);
-                    const float max2 = max_lever * max_lever;
-                    if (isfinite(r2) && r2 > max2) {
-                        rB_global *= max_lever * rsqrtf(r2);
-                    }
-                }
-            }
             velCPB = linVelB + cross(angVelB_global, rB_global);
         }
     }

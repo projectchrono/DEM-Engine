@@ -350,10 +350,6 @@ class DEMDynamicThread {
     // What type is this owner? Clump? Analytical object? Meshed object?
     DualArray<ownerType_t> ownerTypes = DualArray<ownerType_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
-    // Per-owner bounding radius (circumscribed sphere radius in the owner's local frame).
-    // Used to keep per-owner bound radii for ghost size decisions.
-    DualArray<float> ownerBoundRadius = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-
     // Those are the large ones, ones that have the same length as the number of clumps
     // The mass/MOI offsets
     DualArray<inertiaOffset_t> inertiaPropOffsets =
@@ -657,8 +653,6 @@ class DEMDynamicThread {
     std::vector<float3> getOwnerAngAcc(bodyID_t ownerID, bodyID_t n = 1);
     /// Get this owner's family number, for n consecutive items.
     std::vector<unsigned int> getOwnerFamily(bodyID_t ownerID, bodyID_t n = 1);
-    /// Get this owner's bound radius for n consecutive items.
-    std::vector<float> getOwnerBoundRadius(bodyID_t ownerID, bodyID_t n = 1);
     // Get the current auto-adjusted update freq.
     float getUpdateFreq() const;
 

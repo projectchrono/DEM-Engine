@@ -29,6 +29,11 @@ __host__ __device__ T1 dot3(const T1& x1, const T1& x2, const T1& x3, const T1& 
     return x1 * y1 + x2 * y2 + x3 * y3;
 }
 
+template <typename T1>
+__host__ __device__ bool isfinite3(const T1& v) {
+    return isfinite(v.x) && isfinite(v.y) && isfinite(v.z);
+}
+
 // Integer division that rounds towards -infty
 template <typename T1, typename T2>
 __host__ __device__ T1 div_floor(const T1& a, const T2& b) {

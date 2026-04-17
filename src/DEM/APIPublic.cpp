@@ -721,10 +721,6 @@ std::vector<unsigned int> DEMSolver::GetOwnerFamily(bodyID_t ownerID, bodyID_t n
     return dT->getOwnerFamily(ownerID, n);
 }
 
-std::vector<float> DEMSolver::GetOwnerBoundRadius(bodyID_t ownerID, bodyID_t n) const {
-    return dT->getOwnerBoundRadius(ownerID, n);
-}
-
 void DEMSolver::RequestContactUpdate() {
     assertSysInit("RequestContactUpdate");
     dT->announceCritical();
@@ -2400,17 +2396,6 @@ void DEMSolver::SetFamilyExtraMargin(unsigned int N, float extra_size) {
     }
     kT->familyExtraMarginSize.setVal(extra_size, N);
     dT->familyExtraMarginSize.setVal(extra_size, N);
-    if (extra_size > m_max_family_extra_margin) {
-        m_max_family_extra_margin = extra_size;
-    }
-    if (sys_initialized) {
-        dT->simParams->maxFamilyExtraMargin = m_max_family_extra_margin;
-        kT->simParams->maxFamilyExtraMargin = m_max_family_extra_margin;
-        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
-        dT->simParams.toDeviceAsync(dT->streamInfo.stream);
-        DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
-        kT->simParams.toDeviceAsync(kT->streamInfo.stream);
-    }
 }
 
 void DEMSolver::ClearCache() {
@@ -3547,22 +3532,6 @@ void DEMSolver::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::ve
 
     // This method requires kT and dT are sync-ed
     // resetWorkerThreads();
-
-    float max_factor = 0.f;
-    for (float factor : factors) {
-        if (factor > max_factor) {
-            max_factor = factor;
-        }
-    }
-    if (max_factor > 1.f && m_largest_radius > 0.f) {
-        m_largest_radius *= max_factor;
-        dT->simParams->maxSphereRadius = m_largest_radius;
-        kT->simParams->maxSphereRadius = m_largest_radius;
-        DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
-        dT->simParams.toDeviceAsync(dT->streamInfo.stream);
-        DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
-        kT->simParams.toDeviceAsync(kT->streamInfo.stream);
-    }
 
     std::thread dThread = std::move(std::thread([this, IDs, factors]() { this->dT->changeOwnerSizes(IDs, factors); }));
     std::thread kThread = std::move(std::thread([this, IDs, factors]() { this->kT->changeOwnerSizes(IDs, factors); }));

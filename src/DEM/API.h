@@ -533,8 +533,6 @@ class DEMSolver {
     /// @param n The number of consecutive owners.
     /// @return The family number.
     std::vector<unsigned int> GetOwnerFamily(bodyID_t ownerID, bodyID_t n = 1) const;
-    /// @brief Get per-owner bound radius for n consecutive owners.
-    std::vector<float> GetOwnerBoundRadius(bodyID_t ownerID, bodyID_t n = 1) const;
     /// @brief Request an immediate contact detection update (forces kT to refresh contacts next cycle).
     void RequestContactUpdate();
     /// @brief Enable per-triangle P/V/PxV tracking for the specified mesh owners.
@@ -1757,12 +1755,6 @@ class DEMSolver {
     bool sys_initialized = false;
     // Smallest sphere radius (used to let the user know whether the expand factor is sufficient)
     float m_smallest_radius = DEME_HUGE_FLOAT;
-    // Largest sphere radius (for periodic ghost broadphase)
-    float m_largest_radius = 0.f;
-    // Largest triangle radius (for periodic ghost broadphase)
-    float m_largest_tri_radius = 0.f;
-    // Max family extra margin (for periodic ghost broadphase)
-    float m_max_family_extra_margin = 0.f;
 
     // The number of dT steps before it waits for a kT update. The default value means every dT step will wait for a
     // newly produced contact-pair info (from kT) before proceeding.

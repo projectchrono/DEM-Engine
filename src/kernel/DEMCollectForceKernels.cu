@@ -2,22 +2,6 @@
 #include <DEM/Defines.h>
 #include <DEMHelperKernels.cuh>
 
-// Small helper for finite checks on device
-inline __device__ bool deme_isfinite3(const float3& v) {
-    return isfinite(v.x) && isfinite(v.y) && isfinite(v.z);
-}
-
-inline __device__ float deme_len2(const float3& v) {
-    return v.x * v.x + v.y * v.y + v.z * v.z;
-}
-
-inline __device__ bool deme_sane_local_cp(const float3& p, float max_norm) {
-    if (!isfinite(p.x) || !isfinite(p.y) || !isfinite(p.z)) {
-        return false;
-    }
-    max_norm = fmaxf(max_norm, 1e-6f);
-    return deme_len2(p) <= max_norm * max_norm;
-}
 _kernelIncludes_;
 
 // Mass properties are below, if jitified mass properties are in use
@@ -93,14 +77,8 @@ DEME_KERNEL void forceToAcc(deme::DEMSimParams* simParams, deme::DEMDataDT* gran
                 _moiAcqStrat_;
             }
 
-            float max_local_lever = 2e-2f;
-            if (granData->ownerBoundRadius && myOwner != deme::NULL_BODYID && myOwner < simParams->nOwnerBodies) {
-                const float bound_r = fmaxf(granData->ownerBoundRadius[myOwner], 0.f);
-                const float geom_tol = fmaxf(simParams->dyn.beta + simParams->maxFamilyExtraMargin, 0.f) + 1e-4f;
-                max_local_lever = fmaxf(bound_r + geom_tol, 1e-3f);
-            }
-            const bool bad_vec = !deme_isfinite3(forceA) || !deme_isfinite3(torqueA);
-            const bool bad_cp = !deme_sane_local_cp(myCntPnt, max_local_lever);
+            const bool bad_vec = !isfinite3(forceA) || !isfinite3(torqueA);
+            const bool bad_cp = !isfinite3(myCntPnt);
 
             atomicAdd(granData->aX + myOwner, forceA.x / myMass);
             atomicAdd(granData->aY + myOwner, forceA.y / myMass);
@@ -141,14 +119,8 @@ DEME_KERNEL void forceToAcc(deme::DEMSimParams* simParams, deme::DEMDataDT* gran
                 _moiAcqStrat_;
             }
 
-            float max_local_lever = 2e-2f;
-            if (granData->ownerBoundRadius && myOwner != deme::NULL_BODYID && myOwner < simParams->nOwnerBodies) {
-                const float bound_r = fmaxf(granData->ownerBoundRadius[myOwner], 0.f);
-                const float geom_tol = fmaxf(simParams->dyn.beta + simParams->maxFamilyExtraMargin, 0.f) + 1e-4f;
-                max_local_lever = fmaxf(bound_r + geom_tol, 1e-3f);
-            }
-            const bool bad_vec = !deme_isfinite3(myCntPnt) || !deme_isfinite3(forceB) || !deme_isfinite3(torqueB);
-            const bool bad_cp = !deme_sane_local_cp(myCntPnt, max_local_lever);
+            const bool bad_vec = !isfinite3(forceB) || !isfinite3(torqueB);
+            const bool bad_cp = !isfinite3(myCntPnt);
 
             atomicAdd(granData->aX + myOwner, forceB.x / myMass);
             atomicAdd(granData->aY + myOwner, forceB.y / myMass);

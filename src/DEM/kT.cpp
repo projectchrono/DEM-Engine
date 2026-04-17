@@ -336,63 +336,6 @@ inline void DEMKinematicThread::unpackMyBuffer() {
                          (size_t)(simParams->nAnalGM), streamInfo.stream);
     }
 
-    // Keep ghosting/wrapping margins consistent with kT's dynamic margin size.
-    if (pSchedSupport) {
-        float ghost_margin = simParams->dyn.beta;
-        if (!solverFlags.isExpandFactorFixed) {
-            float max_margin = 0.f;
-            float tmp_sph = -DEME_HUGE_FLOAT;
-            float tmp_tri = -DEME_HUGE_FLOAT;
-            float tmp_anal = -DEME_HUGE_FLOAT;
-            const bool has_margins = (simParams->nSpheresGM > 0) || (simParams->nTriGM > 0) || (simParams->nAnalGM > 0);
-            if (has_margins) {
-                float* max_margin_dev = (float*)solverScratchSpace.allocateTempVector("maxMarginTmp", sizeof(float));
-                if (simParams->nSpheresGM > 0) {
-                    cubMaxReduce<float>(granData->marginSizeSphere, max_margin_dev, simParams->nSpheresGM,
-                                        streamInfo.stream, solverScratchSpace);
-                    DEME_GPU_CALL(cudaMemcpyAsync(&tmp_sph, max_margin_dev, sizeof(float), cudaMemcpyDeviceToHost,
-                                                  streamInfo.stream));
-                }
-                if (simParams->nTriGM > 0) {
-                    cubMaxReduce<float>(granData->marginSizeTriangle, max_margin_dev, simParams->nTriGM,
-                                        streamInfo.stream, solverScratchSpace);
-                    DEME_GPU_CALL(cudaMemcpyAsync(&tmp_tri, max_margin_dev, sizeof(float), cudaMemcpyDeviceToHost,
-                                                  streamInfo.stream));
-                }
-                if (simParams->nAnalGM > 0) {
-                    cubMaxReduce<float>(granData->marginSizeAnalytical, max_margin_dev, simParams->nAnalGM,
-                                        streamInfo.stream, solverScratchSpace);
-                    DEME_GPU_CALL(cudaMemcpyAsync(&tmp_anal, max_margin_dev, sizeof(float), cudaMemcpyDeviceToHost,
-                                                  streamInfo.stream));
-                }
-                DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-                if (std::isfinite(tmp_sph) && tmp_sph > max_margin) {
-                    max_margin = tmp_sph;
-                }
-                if (std::isfinite(tmp_tri) && tmp_tri > max_margin) {
-                    max_margin = tmp_tri;
-                }
-                if (std::isfinite(tmp_anal) && tmp_anal > max_margin) {
-                    max_margin = tmp_anal;
-                }
-                solverScratchSpace.finishUsingTempVector("maxMarginTmp");
-            }
-
-            ghost_margin = max_margin - simParams->maxFamilyExtraMargin;
-            if (!std::isfinite(ghost_margin) || ghost_margin < 0.f) {
-                ghost_margin = 0.f;
-            }
-        }
-        if (!std::isfinite(ghost_margin) || ghost_margin < 0.f) {
-            ghost_margin = 0.f;
-        }
-        if (fabsf(simParams->dyn.beta - ghost_margin) > 1e-8f) {
-            simParams->dyn.beta = ghost_margin;
-            simParams.toDeviceAsync(streamInfo.stream);
-        }
-        pSchedSupport->kinematicGhostMargin.store(ghost_margin, std::memory_order_relaxed);
-    }
-
     // Update dT's write pointers (buffer and DualArray ping-pong via swap_device_buffer)
     dT->granData->pKTOwnedBuffer_absVel = absVel_buffer.data();
     dT->granData->pKTOwnedBuffer_absAngVel = absAngVel_buffer.data();
@@ -752,7 +695,6 @@ void DEMKinematicThread::packDataPointers() {
     oriQx.bindDevicePointer(&(granData->oriQx));
     oriQy.bindDevicePointer(&(granData->oriQy));
     oriQz.bindDevicePointer(&(granData->oriQz));
-    granData->ownerBoundRadius = nullptr;
     granData->ownerMeshShellHalfThickness = nullptr;
     marginSizeSphere.bindDevicePointer(&(granData->marginSizeSphere));
     marginSizeTriangle.bindDevicePointer(&(granData->marginSizeTriangle));
@@ -877,7 +819,6 @@ void DEMKinematicThread::packTransferPointers(DEMDynamicThread*& dT) {
     // Set the pointers to dT owned buffers
     granData->pDTOwnedBuffer_nPrimitiveContacts = &(dT->nPrimitiveContactPairs_buffer);
     granData->pDTOwnedBuffer_nPatchContacts = &(dT->nPatchContactPairs_buffer);
-    granData->ownerBoundRadius = dT->ownerBoundRadius.data();
     granData->ownerMeshShellHalfThickness = nullptr;
     for (size_t owner = 0; owner < dT->simParams->nOwnerBodies; owner++) {
         if (dT->ownerMeshShellHalfThickness[owner] > DEME_TINY_FLOAT) {

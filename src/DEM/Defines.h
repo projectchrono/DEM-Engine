@@ -340,9 +340,6 @@ struct DEMDataDT {
 
     ownerType_t* ownerTypes;
 
-    // Per-owner bounding radius (circumscribed sphere radius in the owner's local frame).
-    float* ownerBoundRadius;
-
     subVoxelPos_t* locX;
     subVoxelPos_t* locY;
     subVoxelPos_t* locZ;
@@ -474,8 +471,6 @@ struct DEMDataKT {
     oriQ_t* oriQx;
     oriQ_t* oriQy;
     oriQ_t* oriQz;
-    // Per-owner bounding radius (shared from dT).
-    float* ownerBoundRadius = nullptr;
     // Derived from absv which is for determining contact margin size. Each type of primitive geometry has its own size.
     float* marginSizeSphere;
     float* marginSizeAnalytical;

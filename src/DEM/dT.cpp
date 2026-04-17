@@ -53,7 +53,6 @@ void DEMDynamicThread::packDataPointers() {
     familyID.bindDevicePointer(&(granData->familyID));
     voxelID.bindDevicePointer(&(granData->voxelID));
     ownerTypes.bindDevicePointer(&(granData->ownerTypes));
-    ownerBoundRadius.bindDevicePointer(&(granData->ownerBoundRadius));
     locX.bindDevicePointer(&(granData->locX));
     locY.bindDevicePointer(&(granData->locY));
     locZ.bindDevicePointer(&(granData->locZ));
@@ -223,7 +222,6 @@ void DEMDynamicThread::migrateDataToDevice() {
     familyID.toDeviceAsync(streamInfo.stream);
     voxelID.toDeviceAsync(streamInfo.stream);
     ownerTypes.toDeviceAsync(streamInfo.stream);
-    ownerBoundRadius.toDeviceAsync(streamInfo.stream);
     locX.toDeviceAsync(streamInfo.stream);
     locY.toDeviceAsync(streamInfo.stream);
     locZ.toDeviceAsync(streamInfo.stream);
@@ -697,7 +695,6 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
 
     // Resize to number of owners
     DEME_DUAL_ARRAY_RESIZE(ownerTypes, nOwnerBodies, 0);
-    DEME_DUAL_ARRAY_RESIZE(ownerBoundRadius, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(inertiaPropOffsets, nOwnerBodies, 0);
     // If we jitify mass properties, then
     if (solverFlags.useMassJitify) {
@@ -968,19 +965,6 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                 auto this_clump_no_sp_relPos = clump_templates.spRelPos.at(type_of_this_clump);
                 auto this_clump_no_sp_mat_ids = clump_templates.matIDs.at(type_of_this_clump);
 
-                // Per-owner circumscribed radius.
-                // For a clump, this is the maximum of |relPos| + radius over all its sphere components.
-                float this_owner_bound_radius = 0.f;
-                for (size_t jj = 0; jj < this_clump_no_sp_radii.size(); jj++) {
-                    const float3 relPos = this_clump_no_sp_relPos.at(jj);
-                    const float r = this_clump_no_sp_radii.at(jj);
-                    const float dist = length(relPos) + r;
-                    if (dist > this_owner_bound_radius) {
-                        this_owner_bound_radius = dist;
-                    }
-                }
-                ownerBoundRadius[nExistOwners + i] = this_owner_bound_radius;
-
                 for (size_t jj = 0; jj < this_clump_no_sp_radii.size(); jj++) {
                     sphereMaterialOffset[nExistSpheres + k] = this_clump_no_sp_mat_ids.at(jj);
                     ownerClumpBody[nExistSpheres + k] = nExistOwners + i;
@@ -1185,20 +1169,6 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         ownerTypes[i + owner_offset_for_mesh_obj] = OWNER_T_MESH;
 
         const float shell_half_thickness = fmaxf(input_mesh_objs.at(i)->GetShellHalfThickness(), 0.f);
-
-        // Per-owner circumscribed radius.
-        // For a mesh, use the maximum distance of any vertex to the mesh local origin plus shell half-thickness.
-        // Note: DEME assumes the mesh is defined in its CoM (or reference) frame; if not, this bound will
-        // be conservative, which is still safe.
-        float this_owner_bound_radius = 0.f;
-        for (const auto& v : input_mesh_objs.at(i)->m_vertices) {
-            const float dist = length(v);
-            if (dist > this_owner_bound_radius) {
-                this_owner_bound_radius = dist;
-            }
-        }
-        this_owner_bound_radius += shell_half_thickness;
-        ownerBoundRadius[i + owner_offset_for_mesh_obj] = this_owner_bound_radius;
 
         // Store inherent geo wildcards (per-triangle: one value per triangle facet)
         {
@@ -2608,13 +2578,6 @@ inline void DEMDynamicThread::unpackMyBuffer() {
     // kT's batch of produce is made with this max drift in mind
     pSchedSupport->dynamicMaxFutureDrift = (pSchedSupport->kinematicMaxFutureDrift).load();
     // DEME_DEBUG_PRINTF("dynamicMaxFutureDrift is %u", (pSchedSupport->dynamicMaxFutureDrift).load());
-    if (pSchedSupport) {
-        const float ghost_margin = pSchedSupport->kinematicGhostMargin.load(std::memory_order_relaxed);
-        if (ghost_margin > 0.f && fabsf(simParams->dyn.beta - ghost_margin) > 1e-8f) {
-            simParams->dyn.beta = ghost_margin;
-            simParams.toDeviceAsync(streamInfo.stream);
-        }
-    }
 
     contactMappingUsesBuffer = false;
     DEME_GPU_CALL(cudaMemcpy(&(solverScratchSpace.numPrimitiveContacts), &nPrimitiveContactPairs_buffer, sizeof(size_t),
@@ -4422,16 +4385,6 @@ std::vector<unsigned int> DEMDynamicThread::getOwnerFamily(bodyID_t ownerID, bod
         fam[i] = (unsigned int)(+(short_fam[i]));
     }
     return fam;
-}
-
-std::vector<float> DEMDynamicThread::getOwnerBoundRadius(bodyID_t ownerID, bodyID_t n) {
-    std::vector<float> radii(n);
-    ownerBoundRadius.toHost();
-    auto vals = ownerBoundRadius.getVal(ownerID, n);
-    for (bodyID_t i = 0; i < n; i++) {
-        radii[i] = vals[i];
-    }
-    return radii;
 }
 
 void DEMDynamicThread::configureTrianglePVTracking(const std::vector<bodyID_t>& mesh_owner_ids) {
