@@ -183,36 +183,6 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
         }
     }
 
-    //// NO CLAMPING. CURRENT FORCE IMPLEMENTATION IS PHYSICAL AND STABLE.
-    // // Patch-level geometric invariant guard for real owner-owner contacts.
-    // // Prevent rare depth outliers from injecting unphysical force/energy.
-    // if constexpr (AType == deme::GEO_T_SPHERE && BType == deme::GEO_T_TRIANGLE) {
-    //     if (ContactType != deme::NOT_A_CONTACT) {
-    //         const float3 cpRelToSphere = to_float3(contactPnt - bodyAPos);
-    //         const float cpRel2 = dot(cpRelToSphere, cpRelToSphere);
-    //         const float shell_half_B = ownerShellHalfThickness(simParams, granData, ownerB);
-    //         const float maxSphereReach =
-    //             ARadius + shell_half_B +
-    //             fmaxf(simParams->dyn.beta + simParams->maxFamilyExtraMargin + extraMarginSize, 0.f) + 1e-6f;
-    //         if (!isfinite(cpRel2) || cpRel2 > maxSphereReach * maxSphereReach) {
-    //             ContactType = deme::NOT_A_CONTACT;
-    //             overlapDepth = -DEME_HUGE_FLOAT;
-    //             overlapArea = 0.0;
-    //         }
-    //     }
-    // }
-    // if constexpr (BType != deme::GEO_T_ANALYTICAL) {
-    //     constexpr bool apply_shape_depth_cap = (AType == deme::GEO_T_TRIANGLE) && (BType == deme::GEO_T_TRIANGLE);
-    //     if (ContactType != deme::NOT_A_CONTACT &&
-    //         !clampPatchPenetrationByOwnerBounds(simParams, granData, ownerA, ownerB, AOwnerPos, BOwnerPos,
-    //                                             contactPnt, B2A, extraMarginSize, overlapDepth,
-    //                                             apply_shape_depth_cap)) {
-    //         ContactType = deme::NOT_A_CONTACT;
-    //         overlapDepth = -DEME_HUGE_FLOAT;
-    //         overlapArea = 0.0;
-    //     }
-    // }
-
     // Now compute forces using the patch-based contact data
     _forceModelContactWildcardAcq_;
 
@@ -225,19 +195,8 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
     // Map contact point location to bodies' local reference frames
     applyOriQToVector3(locCPA, make_float4(-AOriQ.x, -AOriQ.y, -AOriQ.z, AOriQ.w));
     applyOriQToVector3(locCPB, make_float4(-BOriQ.x, -BOriQ.y, -BOriQ.z, BOriQ.w));
-    // {
-    //     const float max_lever_A = maxOwnerLocalLever(simParams, granData, ownerA, extraMarginSize);
-    //     const float max_lever_B = maxOwnerLocalLever(simParams, granData, ownerB, extraMarginSize);
-    //     clampLocalContactPoint(locCPA, max_lever_A);
-    //     clampLocalContactPoint(locCPB, max_lever_B);
-    // }
 
-    const deme::contact_t ContactType_candidate = ContactType;
-    const bool activeForThisStep = (ContactType_candidate != deme::NOT_A_CONTACT);
-    const deme::contact_t ContactType_forWrite = activeForThisStep ? ContactType_candidate : deme::NOT_A_CONTACT;
-    ContactType = ContactType_forWrite;
-
-    if (activeForThisStep) {
+    if (ContactType != deme::NOT_A_CONTACT) {
         // The force model is user-specifiable
         // NOTE!! "force" and all wildcards must be properly set by this piece of code
         { _DEMForceModel_; }
@@ -245,24 +204,17 @@ __device__ __forceinline__ void calculatePatchContactForces_impl(deme::DEMSimPar
         // If force model modifies owner wildcards, write them back here
         _forceModelOwnerWildcardWrite_;
     } else {
+        // Note in DEME3, we do not clear force array anymore in each timestep, so always writing back force and contact
+        // points, even for zero-force non-contacts, is needed (unless of course, the user instructed no force record).
+        // This design has implications in our new two-step patch-based force calculation algorithm, as we re-use some
+        // force-storing arrays for intermediate values.
         force = make_float3(0.f, 0.f, 0.f);
         torque_only_force = make_float3(0.f, 0.f, 0.f);
         locCPA = make_float3(0.f, 0.f, 0.f);
         locCPB = make_float3(0.f, 0.f, 0.f);
-        if (ContactType_candidate == deme::NOT_A_CONTACT) {
-            _forceModelContactWildcardDestroy_;
-        }
+        _forceModelContactWildcardDestroy_;
     }
 
-    // Note in DEME3, we do not clear force array anymore in each timestep, so always writing back force and contact
-    // points, even for zero-force non-contacts, is needed (unless of course, the user instructed no force record). This
-    // design has implications in our new two-step patch-based force calculation algorithm, as we re-use some
-    // force-storing arrays for intermediate values.
-
-    if (ContactType == deme::NOT_A_CONTACT) {
-        locCPA = make_float3(0.f, 0.f, 0.f);
-        locCPB = make_float3(0.f, 0.f, 0.f);
-    }
     // Write contact location values back to global memory (after periodic wrap correction).
     _contactInfoWrite_;
 

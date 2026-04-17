@@ -426,11 +426,8 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         applyOriQToVector3(locCPA, make_float4(-AOriQ.x, -AOriQ.y, -AOriQ.z, AOriQ.w));
         applyOriQToVector3(locCPB, make_float4(-BOriQ.x, -BOriQ.y, -BOriQ.z, BOriQ.w));
 
-        const deme::contact_t ContactType_candidate = ContactType;
-        const bool activeForThisStep = (ContactType_candidate != deme::NOT_A_CONTACT);
-
         // Force model execution (or skip for inactive periodic candidate)
-        if (activeForThisStep) {
+        if (ContactType != deme::NOT_A_CONTACT) {
             // The following part, the force model, is user-specifiable
             // NOTE!! "force" and all wildcards must be properly set by this piece of code
             { _DEMForceModel_; }
@@ -439,27 +436,18 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             _forceModelOwnerWildcardWrite_;
         } else {
             // No contribution from this candidate in this step.
+            // Note in DEME3, we do not clear force array anymore in each timestep, so always writing back force and
+            // contact
+            // points, even for zero-force non-contacts, is needed (unless of course, the user instructed no force
+            // record). This design has implications in our new two-step patch-based force calculation algorithm, as we
+            // re-use some force-storing arrays for intermediate values.
             force = make_float3(0.f, 0.f, 0.f);
             torque_only_force = make_float3(0.f, 0.f, 0.f);
-            if (ContactType_candidate == deme::NOT_A_CONTACT) {
-                _forceModelContactWildcardDestroy_;
-            }
-        }
-
-        // For output/contact-point bookkeeping, treat non-active contacts as non-contacts.
-        if (!activeForThisStep) {
-            ContactType = deme::NOT_A_CONTACT;
-        }
-
-        // Note in DEME3, we do not clear force array anymore in each timestep, so always writing back force and contact
-        // points, even for zero-force non-contacts, is needed (unless of course, the user instructed no force record).
-        // This design has implications in our new two-step patch-based force calculation algorithm, as we re-use some
-        // force-storing arrays for intermediate values.
-
-        if (ContactType == deme::NOT_A_CONTACT) {
             locCPA = make_float3(0.f, 0.f, 0.f);
             locCPB = make_float3(0.f, 0.f, 0.f);
+            _forceModelContactWildcardDestroy_;
         }
+
         // Write contact location values back to global memory (after periodic wrap correction).
         _contactInfoWrite_;
 
@@ -470,22 +458,6 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // to be destroyed for non-contact, so it has to go last.
         _forceModelContactWildcardWrite_;
     } else {  // If this is the kernel for a mesh-related contact, another follow-up kernel is needed to compute force
-        if constexpr (AType == deme::GEO_T_SPHERE && BType == deme::GEO_T_TRIANGLE) {
-            if (ContactType != deme::NOT_A_CONTACT) {
-                const float3 cpRelToSphere = to_float3(contactPnt - bodyAPos);
-                const float cpRel2 = dot(cpRelToSphere, cpRelToSphere);
-                const float shell_half_B = ownerShellHalfThickness(simParams, granData, ownerB);
-                const float maxSphereReach =
-                    ARadius + shell_half_B +
-                    fmaxf(simParams->dyn.beta + simParams->maxFamilyExtraMargin + extraMarginSize, 0.f) + 1e-6f;
-                if (!isfinite(cpRel2) || cpRel2 > maxSphereReach * maxSphereReach) {
-                    ContactType = deme::NOT_A_CONTACT;
-                    overlapDepth = -1.0;
-                    overlapArea = 0.0;
-                }
-            }
-        }
-
         // Use contactForces, contactPointGeometryAB to store the contact info for the next
         // kernel to compute forces. contactForces is used to store the contact normal. contactPointGeometryA is used to
         // store the (double) contact penetration. contactPointGeometryB is used to store the (double) contact area

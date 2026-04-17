@@ -1315,21 +1315,6 @@ void DEMSolver::preprocessTriangleObjs() {
                     tri.p3 = tmp;
                 }
             }
-            {
-                const float3 centroid =
-                    make_float3((tri.p1.x + tri.p2.x + tri.p3.x) / 3.f, (tri.p1.y + tri.p2.y + tri.p3.y) / 3.f,
-                                (tri.p1.z + tri.p2.z + tri.p3.z) / 3.f);
-                auto dist2 = [&](const float3& p) {
-                    const float dx = p.x - centroid.x;
-                    const float dy = p.y - centroid.y;
-                    const float dz = p.z - centroid.z;
-                    return dx * dx + dy * dy + dz * dz;
-                };
-                float r2 = dist2(tri.p1);
-                r2 = std::max(r2, dist2(tri.p2));
-                r2 = std::max(r2, dist2(tri.p3));
-                const float radius = std::sqrt(r2) + shell_half_thickness;
-            }
             m_mesh_facets.push_back(tri);
 
             const auto& nb = local_neighbors[i];

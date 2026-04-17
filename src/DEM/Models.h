@@ -352,9 +352,9 @@ inline void equip_geo_wildcards(std::string& definition,
     for (const auto& name : added_ingredients) {
         definition += "float* " + name + "_A, *" + name + "_B;\n";
         acquisition_A_sph += name + "_A = granData->sphereWildcards[" + std::to_string(i) + "];\n";
-        acquisition_A_patch += name + "_A = granData->patchWildcards[" + std::to_string(i) + "];\n";
+        acquisition_A_patch += name + "_A = granData->triWildcards[" + std::to_string(i) + "];\n";
         acquisition_B_sph += name + "_B = granData->sphereWildcards[" + std::to_string(i) + "];\n";
-        acquisition_B_patch += name + "_B = granData->patchWildcards[" + std::to_string(i) + "];\n";
+        acquisition_B_patch += name + "_B = granData->triWildcards[" + std::to_string(i) + "];\n";
         acquisition_B_anal += name + "_B = granData->analWildcards[" + std::to_string(i) + "];\n";
         i++;
     }

@@ -65,10 +65,10 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
         float4 oriQ;
         bodyID_t ownerID;
         if (AorB) {
-                cntPnt = granData->contactPointGeometryA[i];
+            cntPnt = granData->contactPointGeometryA[i];
             ownerID = ownerA;
         } else {
-                cntPnt = granData->contactPointGeometryB[i];
+            cntPnt = granData->contactPointGeometryB[i];
             ownerID = ownerB;
             // Force dir flipped
             force = -force;
@@ -90,14 +90,14 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
         CoM.y += simParams->LBFY;
         CoM.z += simParams->LBFZ;
         if (need_torque) {
-                float3 myF = force + torque_only_force;
-                applyOriQToVector3(myF, make_float4(-oriQ.x, -oriQ.y, -oriQ.z, oriQ.w));
-                float3 torque = cross(cntPnt, myF);
-                if (!torque_in_local) {
-                    applyOriQToVector3(torque, oriQ);
-                }
-                d_torques[writeIndex] = torque;
-                applyFrameTransformLocalToGlobal<float3, double3, float4>(cntPnt, CoM, oriQ);
+            float3 myF = force + torque_only_force;
+            applyOriQToVector3(myF, make_float4(-oriQ.x, -oriQ.y, -oriQ.z, oriQ.w));
+            float3 torque = cross(cntPnt, myF);
+            if (!torque_in_local) {
+                applyOriQToVector3(torque, oriQ);
+            }
+            d_torques[writeIndex] = torque;
+            applyFrameTransformLocalToGlobal<float3, double3, float4>(cntPnt, CoM, oriQ);
         }
         d_points[writeIndex] = cntPnt;
         d_forces[writeIndex] = force;

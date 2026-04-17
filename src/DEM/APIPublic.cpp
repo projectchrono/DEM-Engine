@@ -267,6 +267,9 @@ DEMSolver::~DEMSolver() {
 
 void DEMSolver::SetVerbosity(verbosity_t verbose) {
     switch (verbose) {
+        case VERBOSITY_QUIET:
+            Logger::GetInstance().SetVerbosity(VERBOSITY_QUIET);
+            break;
         case VERBOSITY_ERROR:
             Logger::GetInstance().SetVerbosity(VERBOSITY_ERROR);
             break;
@@ -290,6 +293,9 @@ void DEMSolver::SetVerbosity(verbosity_t verbose) {
 
 void DEMSolver::SetVerbosity(const std::string& verbose) {
     switch (hash_charr(str_to_upper(verbose).c_str())) {
+        case "QUIET"_:
+            SetVerbosity(VERBOSITY_QUIET);
+            break;
         case "ERROR"_:
             SetVerbosity(VERBOSITY_ERROR);
             break;
@@ -992,8 +998,8 @@ std::vector<float> DEMSolver::GetFamilyOwnerWildcardValue(unsigned int N, const 
     return res;
 }
 
-std::vector<float> DEMSolver::GetPatchWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
-    assertSysInit("GetPatchWildcardValue");
+std::vector<float> DEMSolver::GetTriWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
+    assertSysInit("GetTriWildcardValue");
     if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
         DEME_ERROR(
             "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
@@ -1001,7 +1007,7 @@ std::vector<float> DEMSolver::GetPatchWildcardValue(bodyID_t geoID, const std::s
             name.c_str());
     }
     std::vector<float> res;
-    dT->getPatchWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
+    dT->getTriWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
     return res;
 }
 
@@ -1211,9 +1217,9 @@ bool DEMSolver::GetMeshTrianglePVHandover(bodyID_t ownerID,
     triP.clear();
     triV.clear();
     triPxV.clear();
-    dT->getPatchWildcardValue(triP, geo_begin, m_geo_wc_num.at(nameP), n_tri);
-    dT->getPatchWildcardValue(triV, geo_begin, m_geo_wc_num.at(nameV), n_tri);
-    dT->getPatchWildcardValue(triPxV, geo_begin, m_geo_wc_num.at(namePxV), n_tri);
+    dT->getTriWildcardValue(triP, geo_begin, m_geo_wc_num.at(nameP), n_tri);
+    dT->getTriWildcardValue(triV, geo_begin, m_geo_wc_num.at(nameV), n_tri);
+    dT->getTriWildcardValue(triPxV, geo_begin, m_geo_wc_num.at(namePxV), n_tri);
     return triP.size() == n_tri && triV.size() == n_tri && triPxV.size() == n_tri;
 }
 
@@ -1981,15 +1987,15 @@ void DEMSolver::CorrectFamilyQuaternion(unsigned int ID, const std::string& q_fo
     m_input_family_prescription.push_back(preInfo);
 }
 
-void DEMSolver::SetPatchWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals) {
-    assertSysInit("SetPatchWildcardValue");
+void DEMSolver::SetTriWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals) {
+    assertSysInit("SetTriWildcardValue");
     if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
         DEME_ERROR(
             "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
             "SetPerGeometryWildcards in the force model first.",
             name.c_str());
     }
-    dT->setPatchWildcardValue(geoID, m_geo_wc_num.at(name), vals);
+    dT->setTriWildcardValue(geoID, m_geo_wc_num.at(name), vals);
 }
 
 void DEMSolver::SetSphereWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals) {

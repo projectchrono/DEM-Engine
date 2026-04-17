@@ -920,6 +920,8 @@ __global__ void buildPatchContactMapping(bodyID_t* curr_idPatchA,
         contactMapping[myID] = my_partner;
     }
 }
+
+// The rest are old kernels only used in DEME2.x for primitive-primitive contact mapping
 /*
 __global__ void fillRunLengthArray(primitivesPrimTouches_t* runlength_full,
                                    bodyID_t* unique_ids,

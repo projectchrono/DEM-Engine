@@ -301,9 +301,6 @@ struct DEMSimParams {
     // User's box size
     float3 userBoxMin;
     float3 userBoxMax;
-    float maxSphereRadius = 0.f;
-    float maxTriRadius = 0.f;
-    float maxFamilyExtraMargin = 0.f;
     // Stepping method
     TIME_INTEGRATOR stepping = TIME_INTEGRATOR::FORWARD_EULER;
     // Whether needs to store the contact normal
@@ -456,7 +453,7 @@ struct DEMDataDT {
     float* ownerWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
     float* sphereWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
     float* analWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
-    float* patchWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
+    float* triWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
 };
 
 // A struct that holds pointers to data arrays that kT uses
