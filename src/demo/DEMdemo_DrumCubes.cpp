@@ -31,8 +31,6 @@ using namespace deme;
 using namespace std::filesystem;
 
 int main() {
-    const bool disable_periodic = false;
-
     DEMSolver DEMSim;
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::FAMILY);
@@ -79,27 +77,6 @@ int main() {
     top_bot_planes->SetFamily(drum_family);
     auto planes_tracker = DEMSim.Track(top_bot_planes);
 
-    // -------------------------------------------------------------------------
-    // Cylindrical periodicity in angular direction (wedge) + robust start pos
-    // -------------------------------------------------------------------------
-    const float cyl_periodic_start = 0.0f;
-    const float cyl_periodic_end = deme::PI / 2.0f;
-    const float two_pi = 2.0f * deme::PI;
-
-    float span = cyl_periodic_end - cyl_periodic_start;
-    if (span < 0.0f)
-        span += two_pi;
-    const float wedge_clear = half_diag + safe_delta;
-    float cyl_min_radius_geom = 0.0f;
-    if (span > 1e-6f && std::sin(0.5f * span) > 1e-6f) {
-        cyl_min_radius_geom = wedge_clear / std::sin(0.5f * span);
-    }
-    const float cyl_min_radius = std::max(half_diag + safe_delta, cyl_min_radius_geom);
-
-    if (!disable_periodic) {
-        DEMSim.SetCylindricalPeriodicity(SPATIAL_DIR::Z, cyl_periodic_start, cyl_periodic_end, cyl_min_radius);
-    }
-
     // Place cubes on a grid inside the drum, limited to the periodic wedge (mit Randabstand)
     const unsigned int target_cubes = 5000;
     float sample_radius = CylRad - half_diag - safe_delta;
@@ -108,39 +85,12 @@ int main() {
     std::mt19937 rng(42);
     unsigned int created = 0;
 
-    auto in_periodic_wedge_with_margin = [&](float x, float y) {
-        const float r2 = x * x + y * y;
-        if ((!disable_periodic) && (r2 < cyl_min_radius * cyl_min_radius))
-            return false;
-        if (disable_periodic)
-            return true;
-
-        const float r = std::sqrt(r2);
-        float angle = std::atan2(y, x);
-        if (angle < 0.0f)
-            angle += two_pi;
-
-        float rel = angle - cyl_periodic_start;
-        if (rel < 0.0f)
-            rel += two_pi;
-
-        if (rel > span)
-            return false;
-
-        // Abstand zu beiden radialen Keilflächen: r*sin(rel) und r*sin(span-rel)
-        const float d_start = r * std::sin(rel);
-        const float d_end = r * std::sin(span - rel);
-        return (d_start >= wedge_clear) && (d_end >= wedge_clear);
-    };
-
     std::vector<float3> candidate_positions;
     for (float z = -sample_halfheight; z <= sample_halfheight; z += fill_spacing) {
         for (float y = -sample_radius; y <= sample_radius; y += fill_spacing) {
             for (float x = -sample_radius; x <= sample_radius; x += fill_spacing) {
                 const float r2 = x * x + y * y;
                 if (r2 > sample_radius * sample_radius)
-                    continue;
-                if (!in_periodic_wedge_with_margin(x, y))
                     continue;
                 candidate_positions.push_back(make_float3(x, y, z));
             }
@@ -189,8 +139,7 @@ int main() {
     float frame_time = 1.0f / fps;
 
     std::cout << "Output at " << fps << " FPS" << std::endl;
-    std::cout << "DrumCubes config: cube_size=" << cube_size << "m, target_cubes=" << target_cubes
-              << ", periodic=" << (disable_periodic ? "off" : "on") << std::endl;
+    std::cout << "DrumCubes config: cube_size=" << cube_size << "m, target_cubes=" << target_cubes << std::endl;
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();

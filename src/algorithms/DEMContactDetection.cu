@@ -538,7 +538,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
         // used as read-only ingredients in kernels. But their data is stored using DualArray, as the data need at some
         // point be processed on host.
         binID_t *mapTriActBinToSphActBin, *activeBinIDsForTri;
-        unsigned int* ownerGhostFlags = nullptr;
         if (simParams->nTriGM > 0) {
             // 0-th step: Make `sandwich' for each triangle (or say, create a prism out of each triangle). This is
             // obviously for our delayed contact detection safety. And finally, if a sphere's distance away from one of
@@ -619,22 +618,12 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
             // Sandwich nodes are no longer needed beyond prepass.
             scratchPad.finishUsingTempVector("sandwichANode1");
             scratchPad.finishUsingTempVector("sandwichBNode1");
-            if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
-                CD_temp_arr_bytes = simParams->nOwnerBodies * sizeof(unsigned int);
-                ownerGhostFlags = (unsigned int*)scratchPad.allocateTempVector("ownerGhostFlags", CD_temp_arr_bytes);
-                DEME_GPU_CALL(cudaMemsetAsync(ownerGhostFlags, 0, CD_temp_arr_bytes, this_stream));
-                bin_triangle_kernels->kernel("markCylPeriodicOwnerGhosts")
-                    .instantiate()
-                    .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
-                    .launch(&simParams, &granData, tri_vA1, tri_vB1, tri_vC1, tri_shift, ownerGhostFlags);
-            }
 
             bin_triangle_kernels->kernel("getNumberOfBinsEachTriangleTouches")
                 .instantiate()
                 .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
                 .launch(&simParams, &granData, numBinsTriTouches, numAnalGeoTriTouches, tri_vA1, tri_vB1, tri_vC1,
-                        tri_shift, tri_L1, tri_U1, tri_L2, tri_U2, tri_ok1, tri_ok2, ownerGhostFlags,
-                        solverFlags.meshUniversalContact);
+                        tri_shift, tri_L1, tri_U1, tri_L2, tri_U2, tri_ok1, tri_ok2, solverFlags.meshUniversalContact);
 
             // std::cout << "numBinsTriTouches: " << std::endl;
             // displayDeviceArray<binsTriangleTouches_t>(numBinsTriTouches, simParams->nTriGM);
@@ -709,11 +698,8 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
                 .launch(&simParams, &granData, numBinsTriTouchesScan, numAnalGeoTriTouchesScan, binIDsEachTriTouches,
                         triIDsEachBinTouches, tri_vA1, tri_vB1, tri_vC1, tri_shift, tri_L1, tri_U1, tri_L2, tri_U2,
-                        tri_ok1, tri_ok2, ownerGhostFlags, idTriA, idGeoB, dType, solverFlags.meshUniversalContact);
+                        tri_ok1, tri_ok2, idTriA, idGeoB, dType, solverFlags.meshUniversalContact);
 
-            if (ownerGhostFlags) {
-                scratchPad.finishUsingTempVector("ownerGhostFlags");
-            }
             scratchPad.finishUsingTempVector("tri_L1");
             scratchPad.finishUsingTempVector("tri_U1");
             scratchPad.finishUsingTempVector("tri_L2");
@@ -2175,15 +2161,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 }
             }
 
-            if (simParams->useCylPeriodic && simParams->cylPeriodicSpan > 0.f) {
-                size_t blocks_needed =
-                    (*scratchPad.numContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-                if (blocks_needed > 0) {
-                    resetMappingForGhostContacts<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                                   this_stream>>>(granData->contactMapping, granData->idPatchA,
-                                                                  granData->idPatchB, *scratchPad.numContacts);
-                }
-            }
             // Synchronize once after all mapping kernels are launched
             // std::cout << "Patch contact mapping:" << std::endl;
             // displayDeviceArray<contactPairs_t>(granData->contactMapping, *scratchPad.numContacts);

@@ -245,8 +245,6 @@ class DEMDynamicThread {
 
     // dT believes this amount of future drift is ideal
     DualStruct<unsigned int> perhapsIdealFutureDrift = DualStruct<unsigned int>(0);
-    // Total number of force-relevant periodic skip candidates since last kT unpack.
-    DualStruct<unsigned int> ownerCylSkipPotentialTotal = DualStruct<unsigned int>(0);
 
     // Buffer arrays for storing info from the dT side.
     // kT modifies these arrays; dT uses them only.
@@ -300,10 +298,6 @@ class DEMDynamicThread {
     // Pointers to those data arrays defined below, stored in a struct
     DualStruct<DEMDataDT> granData = DualStruct<DEMDataDT>();
 
-    // For cylindrical periodicity: indices of per-contact wildcard triplets (x,y,z) that represent global vectors
-    // and must be rotated when an owner wraps.
-    DualArray<int3> cylPeriodicWCTriplets = DualArray<int3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-
     // Body-related arrays, for dT's personal use (not transfer buffer)
 
     // Those are the smaller ones, the unique, template ones
@@ -355,27 +349,6 @@ class DEMDynamicThread {
 
     // What type is this owner? Clump? Analytical object? Meshed object?
     DualArray<ownerType_t> ownerTypes = DualArray<ownerType_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-
-    // Per-owner bounding radius (circumscribed sphere radius in the owner's local frame).
-    // Used by cylindrical periodicity wrapping logic to keep per-owner ghost bands consistent with kT ghosting.
-    DualArray<float> ownerBoundRadius = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-
-    // Per-owner cylindrical periodic wrap count (filled every integration step; consumed to rotate contact history).
-    DualArray<int> ownerCylWrapK = DualArray<int>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    // Cumulative cylindrical wrap offset since last kT update (used to interpret ghost IDs under async drift).
-    DualArray<int> ownerCylWrapOffset = DualArray<int>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    // Per-owner cylindrical periodic flags shared by kT and dT.
-    // Bit CYL_GHOST_HINT_START (0x1): start-side ghost hint (+span).
-    // Bit CYL_GHOST_HINT_END (0x2): end-side ghost hint (-span).
-    // Bit CYL_GHOST_HINT_MISMATCH (0x4): dT observed kT/dT branch mismatch.
-    DualArray<unsigned int> ownerCylGhostActive =
-        DualArray<unsigned int>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    // Per-owner count of periodic candidates skipped because kT/dT image branches differ in this dT step.
-    DualArray<unsigned int> ownerCylSkipCount =
-        DualArray<unsigned int>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    // Subset of ownerCylSkipCount where the skipped candidate would otherwise be a contact.
-    DualArray<unsigned int> ownerCylSkipPotentialCount =
-        DualArray<unsigned int>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Those are the large ones, ones that have the same length as the number of clumps
     // The mass/MOI offsets
@@ -467,7 +440,7 @@ class DEMDynamicThread {
     // Geometric entities' wildcards
     std::vector<std::unique_ptr<DualArray<float>>> sphereWildcards;
     std::vector<std::unique_ptr<DualArray<float>>> analWildcards;
-    std::vector<std::unique_ptr<DualArray<float>>> patchWildcards;
+    std::vector<std::unique_ptr<DualArray<float>>> triWildcards;
 
     // Storage for the names of the contact wildcards (whose order agrees with the impl-level wildcard numbering, from 1
     // to n)
@@ -680,22 +653,6 @@ class DEMDynamicThread {
     std::vector<float3> getOwnerAngAcc(bodyID_t ownerID, bodyID_t n = 1);
     /// Get this owner's family number, for n consecutive items.
     std::vector<unsigned int> getOwnerFamily(bodyID_t ownerID, bodyID_t n = 1);
-    /// Get this owner's cylindrical wrap count for n consecutive items.
-    std::vector<int> getOwnerCylWrapK(bodyID_t ownerID, bodyID_t n = 1);
-    /// Get this owner's cylindrical wrap offset since the last kT update for n consecutive items.
-    std::vector<int> getOwnerCylWrapOffset(bodyID_t ownerID, bodyID_t n = 1);
-    /// Get this owner's bound radius for n consecutive items.
-    std::vector<float> getOwnerBoundRadius(bodyID_t ownerID, bodyID_t n = 1);
-    /// Get this owner's cylindrical ghost-active flag for n consecutive items.
-    std::vector<unsigned int> getOwnerCylGhostActive(bodyID_t ownerID, bodyID_t n = 1);
-    /// Get this owner's count of periodic candidates skipped due to image-branch mismatch.
-    std::vector<unsigned int> getOwnerCylSkipCount(bodyID_t ownerID, bodyID_t n = 1);
-    /// Get this owner's count of force-relevant periodic skips (candidate would otherwise be a contact).
-    std::vector<unsigned int> getOwnerCylSkipPotentialCount(bodyID_t ownerID, bodyID_t n = 1);
-    /// Get per-owner contact counts split by real/ghost(+)/ghost(-).
-    void getOwnerContactGhostCounts(std::vector<int>& real_cnt,
-                                    std::vector<int>& ghost_pos_cnt,
-                                    std::vector<int>& ghost_neg_cnt);
     // Get the current auto-adjusted update freq.
     float getUpdateFreq() const;
 
@@ -732,8 +689,8 @@ class DEMDynamicThread {
     /// @brief Set all meshes in this family to have this material.
     void setFamilyMeshMaterial(unsigned int N, unsigned int mat_id);
 
-    /// @brief Set the geometry wildcards of mesh patches, starting from geoID, for the length of vals.
-    void setPatchWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
+    /// @brief Set the geometry wildcards of mesh triangles, starting from geoID, for the length of vals.
+    void setTriWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
     /// @brief Set the geometry wildcards of spheres, starting from geoID, for the length of vals.
     void setSphWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
     /// @brief Set the geometry wildcards of analytical components, starting from geoID, for the length of vals.
@@ -748,8 +705,8 @@ class DEMDynamicThread {
 
     /// @brief Fill res with the `wc_num' wildcard values, for n spheres starting from ID.
     void getSphereWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
-    /// @brief Fill res with the `wc_num' wildcard values, for n mesh patches starting from ID.
-    void getPatchWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
+    /// @brief Fill res with the `wc_num' wildcard values, for n mesh triangles starting from ID.
+    void getTriWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
     /// @brief Fill res with the `wc_num' wildcard values, for n analytical entities starting from ID.
     void getAnalWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
 
@@ -1286,7 +1243,7 @@ class DEMDynamicThread {
     void migrateClumpHighOrderInfoToHost();
     void migrateOwnerWildcardToHost();
     void migrateSphGeoWildcardToHost();
-    void migratePatchGeoWildcardToHost();
+    void migrateTriGeoWildcardToHost();
     void migrateAnalGeoWildcardToHost();
     void migrateContactInfoToHost();
 

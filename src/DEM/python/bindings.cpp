@@ -714,7 +714,8 @@ PYBIND11_MODULE(DEME, obj) {
         .def("EnableGeometryWildcardOutput", &deme::DEMSolver::EnableGeometryWildcardOutput,
              "Enable or disable geometry wildcard output.", py::arg("enable") = true)
         .def("SetVerbosity", static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetVerbosity),
-             "Set the verbosity level of the solver.")
+             "Set the verbosity level of the solver. Select from 'QUIET', 'ERROR', 'WARNING', 'INFO', 'METRIC' or "
+             "'DEBUG'. Recommend 'INFO'.")
         .def("EnableStoreNormals", &deme::DEMSolver::EnableStoreNormals,
              "Let the solver store the contact normal information for every contact (or disable it).",
              py::arg("enable") = true)
@@ -1075,8 +1076,8 @@ PYBIND11_MODULE(DEME, obj) {
              "Get all contact forces and torque that concern a list of owners.", py::arg("ownerIDs"), py::arg("points"),
              py::arg("forces"), py::arg("torques"), py::arg("torque_in_local") = false)
 
-        .def("SetPatchWildcardValue", &deme::DEMSolver::SetPatchWildcardValue,
-             "Set the wildcard values of some patches.")
+        .def("SetTriWildcardValue", &deme::DEMSolver::SetTriWildcardValue,
+             "Set the wildcard values of some mesh triangles.")
         .def("SetSphereWildcardValue", &deme::DEMSolver::SetSphereWildcardValue,
              "Set the wildcard values of some spheres.")
         .def("SetAnalWildcardValue", &deme::DEMSolver::SetAnalWildcardValue,
@@ -1104,8 +1105,8 @@ PYBIND11_MODULE(DEME, obj) {
         .def("GetFamilyOwnerWildcardValue", &deme::DEMSolver::GetFamilyOwnerWildcardValue,
              "Get the owner wildcard's values of all entities in family N.")
 
-        .def("GetPatchWildcardValue", &deme::DEMSolver::GetPatchWildcardValue,
-             "Get the geometry wildcard's values of a series of mesh patches (convex components).")
+        .def("GetTriWildcardValue", &deme::DEMSolver::GetTriWildcardValue,
+             "Get the geometry wildcard's values of a series of mesh triangles.")
         .def("GetSphereWildcardValue", &deme::DEMSolver::GetSphereWildcardValue,
              "Get the geometry wildcard's values of a series of spheres.")
         .def("GetAnalWildcardValue", &deme::DEMSolver::GetAnalWildcardValue,
