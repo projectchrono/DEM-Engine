@@ -97,8 +97,9 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
                 applyOriQToVector3(torque, oriQ);
             }
             d_torques[writeIndex] = torque;
-            applyFrameTransformLocalToGlobal<float3, double3, float4>(cntPnt, CoM, oriQ);
         }
+
+        applyFrameTransformLocalToGlobal<float3, double3, float4>(cntPnt, CoM, oriQ);
         d_points[writeIndex] = cntPnt;
         d_forces[writeIndex] = force;
     }

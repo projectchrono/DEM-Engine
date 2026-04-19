@@ -98,7 +98,8 @@ int main() {
             // files. If a contact involves at least one of the owner IDs provided as the first arg of
             // GetOwnerContactForces, it will be outputted. Note if a contact involves two IDs of the user-provided
             // list, then the force for that contact will be given as the force experienced by whichever owner that
-            // appears earlier in the ID list. DEMSim.GetOwnerContactForces({ID1, ID2}, points_mesh, forces_mesh);
+            // appears earlier in the ID list.
+            DEMSim.GetOwnerContactForces({ID1, ID2}, points_mesh, forces_mesh);
 
             std::cout << "----------------------------------------" << std::endl;
             std::cout << "Particle 1 Z coord is " << pos1.z << std::endl;
