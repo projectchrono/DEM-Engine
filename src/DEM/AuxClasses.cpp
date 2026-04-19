@@ -196,6 +196,13 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
             thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
             index_name = "myOwner";
             break;
+        case ("max_absangvel"_):
+            inspection_code = INSP_CODE_EVERYTHING_ABSANGVEL;
+            reduce_flavor = CUB_REDUCE_FLAVOR::MAX;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
+            index_name = "myOwner";
+            break;
         case ("clump_kinetic_energy"_):
             inspection_code = INSP_CODE_CLUMP_KE;
             reduce_flavor = CUB_REDUCE_FLAVOR::SUM;
