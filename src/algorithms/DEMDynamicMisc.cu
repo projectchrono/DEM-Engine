@@ -90,10 +90,14 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
         CoM.y += simParams->LBFY;
         CoM.z += simParams->LBFZ;
         if (need_torque) {
-            float3 myF = force + torque_only_force;
-            applyOriQToVector3(myF, make_float4(-oriQ.x, -oriQ.y, -oriQ.z, oriQ.w));
-            float3 torque = cross(cntPnt, myF);
+            // This is `extra torque', not including force-generated torque. The user computes the latter by themselves
+            // using the contact point and force output. The reason we separate this `extra torque' from the
+            // force-generated torque is that some contact models (e.g. tangential spring) may generate torque without
+            // generating any net force.
+            applyOriQToVector3(torque_only_force, make_float4(-oriQ.x, -oriQ.y, -oriQ.z, oriQ.w));
+            float3 torque = cross(cntPnt, torque_only_force);
             if (!torque_in_local) {
+                // Back to global
                 applyOriQToVector3(torque, oriQ);
             }
             d_torques[writeIndex] = torque;

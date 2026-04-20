@@ -1130,8 +1130,12 @@ class DEMSolver {
     /// @param ownerIDs The IDs of the owners.
     /// @param points Fill this vector of float3 with the XYZ components of the contact points.
     /// @param forces Fill this vector of float3 with the XYZ components of the forces.
-    /// @param torques Fill this vector of float3 with the XYZ components of the torques (in local frame).
-    /// @param torque_in_local If true, output torque in this body's local ref frame.
+    /// @param torques Fill this vector of float3 with the XYZ components of the torques. Note this torque should be
+    /// considered `extra torque'. The user should understand that the `force' should also generate torque, as long as
+    /// the contact point is not CoM. The `torque' is different from that, and only arises as a result of some
+    /// torque-generating contact force model.
+    /// @param torque_in_local If true, output torque in this body's local ref frame. Otherwise, output torque in the
+    /// global ref frame. Note the force is always in the global ref frame.
     /// @return Number of force pairs.
     size_t GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
                                  std::vector<float3>& points,
