@@ -546,6 +546,134 @@ void computeFinalContactPointsPerPatch(double3* totalWeightedContactPoints,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// PatchContactAccum-based single-pass reduction kernels
+////////////////////////////////////////////////////////////////////////////////
+
+// Compute one PatchContactAccum per primitive contact.
+// This fuses computeWeightedUsefulPenetration and computeWeightedContactPoints into one kernel pass,
+// allowing the caller to use a single cubSumReduceByKey<PatchContactAccum> instead of four separate
+// ReduceByKey passes.
+__global__ void computePatchContactAccumulators_impl(DEMDataDT* granData,
+                                                     const float3* votedNormals,
+                                                     const contactPairs_t* keys,
+                                                     PatchContactAccum* accumulators,
+                                                     contactPairs_t startOffsetPrimitive,
+                                                     contactPairs_t startOffsetPatch,
+                                                     contactPairs_t count) {
+    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < count) {
+        contactPairs_t myContactID = startOffsetPrimitive + idx;
+
+        // Read area, penetration, original normal, and contact point from granData
+        double area = float3StorageToDouble(granData->contactPointGeometryB[myContactID]);
+        double originalPenetration = float3StorageToDouble(granData->contactPointGeometryA[myContactID]);
+        if (originalPenetration <= 0.0) {
+            originalPenetration = 0.0;
+        }
+        float3 originalNormal = granData->contactForces[myContactID];
+        double3 contactPoint = to_double3(granData->contactTorque_convToForce[myContactID]);
+
+        // Project onto the patch-voted normal
+        contactPairs_t localPatchIdx = keys[idx] - startOffsetPatch;
+        float3 votedNormal = votedNormals[localPatchIdx];
+        float dotProduct = dot(originalNormal, votedNormal);
+
+        double projectedPenetration = originalPenetration * (double)dotProduct;
+        double projectedArea = area * (double)dotProduct;
+        if (projectedPenetration <= 0.0) {
+            projectedPenetration = 0.0;
+        }
+        if (projectedArea <= 0.0) {
+            projectedArea = 0.0;
+        }
+
+        double weight = projectedPenetration * projectedArea;
+
+        PatchContactAccum accum;
+        accum.sumProjArea = projectedArea;
+        accum.maxProjPen = projectedPenetration;
+        accum.sumWeight = weight;
+        accum.sumWeightedCP = contactPoint * weight;
+        accum.sumAreaWeightedCP = contactPoint * projectedArea;
+        accumulators[idx] = accum;
+    }
+}
+
+void computePatchContactAccumulators(DEMDataDT* granData,
+                                     const float3* votedNormals,
+                                     const contactPairs_t* keys,
+                                     PatchContactAccum* accumulators,
+                                     contactPairs_t startOffsetPrimitive,
+                                     contactPairs_t startOffsetPatch,
+                                     contactPairs_t count,
+                                     cudaStream_t& this_stream) {
+    size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        computePatchContactAccumulators_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            granData, votedNormals, keys, accumulators, startOffsetPrimitive, startOffsetPatch, count);
+    }
+}
+
+// Finalize per-patch results from PatchContactAccum reduced values.
+// Mirrors finalizePatchResults but reads all patch-level quantities from a single PatchContactAccum array,
+// avoiding the need to materialize totalProjectedAreas, votedPenetrations, and votedContactPoints arrays.
+// When sumProjArea > 0 but sumWeight ~ 0 (near-zero projected penetrations), falls back to the
+// area-weighted contact point (sumAreaWeightedCP / sumProjArea) instead of returning (0,0,0).
+__global__ void finalizePatchResultsFromAccumulators_impl(const PatchContactAccum* patchAccumulators,
+                                                          const float3* votedNormals,
+                                                          const float3* zeroAreaNormals,
+                                                          const double* zeroAreaPenetrations,
+                                                          const double3* zeroAreaContactPoints,
+                                                          double* finalAreas,
+                                                          float3* finalNormals,
+                                                          double* finalPenetrations,
+                                                          double3* finalContactPoints,
+                                                          contactPairs_t count) {
+    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < count) {
+        const PatchContactAccum& accum = patchAccumulators[idx];
+
+        if (accum.sumProjArea > 0.0) {
+            // Normal case: use voted results
+            finalAreas[idx] = accum.sumProjArea;
+            finalNormals[idx] = votedNormals[idx];
+            finalPenetrations[idx] = accum.maxProjPen;
+            if (accum.sumWeight > 0.0) {
+                finalContactPoints[idx] = accum.sumWeightedCP * (1.0 / accum.sumWeight);
+            } else {
+                // Near-zero penetration fallback: use area-weighted contact point
+                finalContactPoints[idx] = accum.sumAreaWeightedCP * (1.0 / accum.sumProjArea);
+            }
+        } else {
+            // Zero-area case: use max-penetration primitive's results
+            finalAreas[idx] = 0.0;
+            finalNormals[idx] = zeroAreaNormals[idx];
+            finalPenetrations[idx] = zeroAreaPenetrations[idx];
+            finalContactPoints[idx] = zeroAreaContactPoints[idx];
+        }
+    }
+}
+
+void finalizePatchResultsFromAccumulators(const PatchContactAccum* patchAccumulators,
+                                          const float3* votedNormals,
+                                          const float3* zeroAreaNormals,
+                                          const double* zeroAreaPenetrations,
+                                          const double3* zeroAreaContactPoints,
+                                          double* finalAreas,
+                                          float3* finalNormals,
+                                          double* finalPenetrations,
+                                          double3* finalContactPoints,
+                                          contactPairs_t count,
+                                          cudaStream_t& this_stream) {
+    size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        finalizePatchResultsFromAccumulators_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            patchAccumulators, votedNormals, zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, finalAreas,
+            finalNormals, finalPenetrations, finalContactPoints, count);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // Per-triangle P / V / P*V accumulation from patch contacts
 ////////////////////////////////////////////////////////////////////////////////
 
