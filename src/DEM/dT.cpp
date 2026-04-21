@@ -3000,8 +3000,10 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                                                       patchAccumulators, numUniqueKeys, countPrimitive,
                                                                       streamInfo.stream, solverScratchSpace);
                 // primitiveAccumulators are no longer needed for finalization (patchAccumulators holds the totals).
-                // They are kept alive here for the triPV tracking block below, which may use them to distribute
-                // per-patch force contributions back to individual primitives.
+                // When triPV tracking is re-enabled, keep them alive past the triPV block and pass them to
+                // accumulateTrianglePVFromPatchContacts so it can distribute per-patch force contributions back
+                // to individual primitives proportionally.
+                solverScratchSpace.finishUsingTempVector("primitiveAccumulators");
 
                 // Step 6: Extract primitive penetrations for the zero-area fallback (max-negative reduce).
                 double* primitivePenetrations = (double*)solverScratchSpace.allocateTempVector(
@@ -3119,7 +3121,6 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 }
 
                 // Final clean up
-                solverScratchSpace.finishUsingTempVector("primitiveAccumulators");
                 solverScratchSpace.finishUsingTempVector("patchAccumulators");
                 solverScratchSpace.finishUsingTempVector("votedNormals");
                 solverScratchSpace.finishUsingTempVector("finalAreas");
