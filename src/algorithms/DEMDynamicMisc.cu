@@ -23,10 +23,20 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
                                                       bool torque_in_local) {
     size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < numCnt) {
-        contact_t typeContact = granData->contactTypePatch[i];
+        const bool patch_space = (granData->contactTypePatch && granData->idPatchA && granData->idPatchB);
+        if (!patch_space) {
+            // IMPORTANT: Patch and primitive contact arrays do not share the same index space.
+            // This kernel is intended for PATCH contacts only. Handling primitive contacts must use a separate kernel
+            // launch.
+            return;
+        }
+        const contact_t typeContact = granData->contactTypePatch[i];
+        if (typeContact == NOT_A_CONTACT) {
+            return;
+        }
         bodyID_t geoA = granData->idPatchA[i];
-        bodyID_t ownerA = DEME_GET_PATCH_OWNER_ID(geoA, decodeTypeA(typeContact));
         bodyID_t geoB = granData->idPatchB[i];
+        bodyID_t ownerA = DEME_GET_PATCH_OWNER_ID(geoA, decodeTypeA(typeContact));
         bodyID_t ownerB = DEME_GET_PATCH_OWNER_ID(geoB, decodeTypeB(typeContact));
         bool AorB;  // true for A, false for B
         if (cuda_binary_search<bodyID_t, ssize_t>(d_ownerIDs, ownerA, 0, IDListSize - 1)) {
@@ -37,13 +47,13 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
             return;
         }
 
-        float3 force, torque;
-        force = granData->contactForces[i];
-        // Note torque, like force, is in global
-        if (need_torque)
-            torque = granData->contactTorque_convToForce[i];
+        float3 force = granData->contactForces[i];
+        float3 torque_only_force = make_float3(0.f, 0.f, 0.f);
+        if (need_torque) {
+            torque_only_force = granData->contactTorque_convToForce[i];
+        }
         {
-            float mag = (need_torque) ? length(force) + length(torque) : length(force);
+            float mag = length(force) + length(torque_only_force);
             if (mag < DEME_TINY_FLOAT)
                 return;
         }
@@ -63,22 +73,12 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
             // Force dir flipped
             force = -force;
             if (need_torque)
-                torque = -torque;
+                torque_only_force = -torque_only_force;
         }
         oriQ.w = granData->oriQw[ownerID];
         oriQ.x = granData->oriQx[ownerID];
         oriQ.y = granData->oriQy[ownerID];
         oriQ.z = granData->oriQz[ownerID];
-        // Must derive torque in local...
-        if (need_torque) {
-            applyOriQToVector3<float, oriQ_t>(torque.x, torque.y, torque.z, oriQ.w, -oriQ.x, -oriQ.y, -oriQ.z);
-            // Force times point...
-            torque = cross(cntPnt, torque);
-            if (!torque_in_local) {  // back to global if needed
-                applyOriQToVector3<float, oriQ_t>(torque.x, torque.y, torque.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
-            }
-        }
-
         voxelID_t voxel = granData->voxelID[ownerID];
         subVoxelPos_t subVoxX = granData->locX[ownerID];
         subVoxelPos_t subVoxY = granData->locY[ownerID];
@@ -89,11 +89,23 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
         CoM.x += simParams->LBFX;
         CoM.y += simParams->LBFY;
         CoM.z += simParams->LBFZ;
+        if (need_torque) {
+            // This is `extra torque', not including force-generated torque. The user computes the latter by themselves
+            // using the contact point and force output. The reason we separate this `extra torque' from the
+            // force-generated torque is that some contact models (e.g. tangential spring) may generate torque without
+            // generating any net force.
+            applyOriQToVector3(torque_only_force, make_float4(-oriQ.x, -oriQ.y, -oriQ.z, oriQ.w));
+            float3 torque = cross(cntPnt, torque_only_force);
+            if (!torque_in_local) {
+                // Back to global
+                applyOriQToVector3(torque, oriQ);
+            }
+            d_torques[writeIndex] = torque;
+        }
+
         applyFrameTransformLocalToGlobal<float3, double3, float4>(cntPnt, CoM, oriQ);
         d_points[writeIndex] = cntPnt;
         d_forces[writeIndex] = force;
-        if (need_torque)
-            d_torques[writeIndex] = torque;
     }
 }
 
@@ -113,7 +125,6 @@ void getContactForcesConcerningOwners(float3* d_points,
     getContactForcesConcerningOwners_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
         d_points, d_forces, d_torques, reinterpret_cast<unsigned long long*>(d_numUsefulCnt), d_ownerIDs, IDListSize,
         simParams, granData, numCnt, need_torque, torque_in_local);
-    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -164,7 +175,6 @@ void prepareWeightedNormalsForVoting(DEMDataDT* granData,
     if (blocks_needed > 0) {
         prepareWeightedNormalsForVoting_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             granData, weightedNormals, areas, keys, startOffset, count, contactType);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -200,7 +210,6 @@ void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
     if (blocks_needed > 0) {
         normalizeAndScatterVotedNormals_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             votedWeightedNormals, output, count);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -292,7 +301,6 @@ void computeWeightedUsefulPenetration(DEMDataDT* granData,
         computeWeightedUsefulPenetration_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             granData, votedNormals, keys, areas, projectedPenetrations, projectedAreas, startOffsetPrimitive,
             startOffsetPatch, count);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -325,7 +333,6 @@ void extractPrimitivePenetrations(DEMDataDT* granData,
     if (blocks_needed > 0) {
         extractPrimitivePenetrations_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             granData, penetrations, startOffset, count);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -398,7 +405,6 @@ void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
                                                              this_stream>>>(
             granData, maxPenetrations, zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, keys,
             startOffsetPrimitive, startOffsetPatch, countPrimitive);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -456,7 +462,6 @@ void finalizePatchResults(double* totalProjectedAreas,
             totalProjectedAreas, votedNormals, votedPenetrations, votedContactPoints, zeroAreaNormals,
             zeroAreaPenetrations, zeroAreaContactPoints, finalAreas, finalNormals, finalPenetrations,
             finalContactPoints, count);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -505,7 +510,6 @@ void computeWeightedContactPoints(DEMDataDT* granData,
         computeWeightedContactPoints_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             granData, weightedContactPoints, weights, projectedPenetrations, projectedAreas, startOffsetPrimitive,
             count);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -538,7 +542,234 @@ void computeFinalContactPointsPerPatch(double3* totalWeightedContactPoints,
     if (blocks_needed > 0) {
         computeFinalContactPointsPerPatch_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             totalWeightedContactPoints, totalWeights, finalContactPoints, count);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Per-triangle P / V / P*V accumulation from patch contacts
+////////////////////////////////////////////////////////////////////////////////
+
+__global__ void computePatchPVScalars_impl(const DEMSimParams* simParams,
+                                           DEMDataDT* granData,
+                                           const float3* finalNormals,
+                                           const double3* finalContactPoints,
+                                           contactPairs_t startOffsetPatch,
+                                           contactPairs_t countPatch,
+                                           float* patchNormalForce,
+                                           float* patchSlipSpeed) {
+    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= countPatch || !patchNormalForce || !patchSlipSpeed || !finalContactPoints) {
+        return;
+    }
+
+    patchNormalForce[idx] = 0.f;
+    patchSlipSpeed[idx] = 0.f;
+
+    const contactPairs_t patchContactID = startOffsetPatch + idx;
+    const contact_t patchType = granData->contactTypePatch[patchContactID];
+    if (patchType == NOT_A_CONTACT) {
+        return;
+    }
+
+    float3 normal = finalNormals[idx];
+    const float n2 = dot(normal, normal);
+    if (!(n2 > DEME_TINY_FLOAT)) {
+        return;
+    }
+    normal *= rsqrtf(n2);
+
+    const float3 patchForce = granData->contactForces[patchContactID];
+    const float normalForce = fabsf(dot(patchForce, normal));
+    if (!(normalForce > DEME_TINY_FLOAT)) {
+        return;
+    }
+
+    const bodyID_t geoA = granData->idPatchA[patchContactID];
+    const bodyID_t geoB = granData->idPatchB[patchContactID];
+    const bodyID_t ownerA = DEME_GET_PATCH_OWNER_ID(geoA, decodeTypeA(patchType));
+    const bodyID_t ownerB = DEME_GET_PATCH_OWNER_ID(geoB, decodeTypeB(patchType));
+
+    float3 velCPA = make_float3(0.f, 0.f, 0.f);
+    float3 velCPB = make_float3(0.f, 0.f, 0.f);
+    const double3 cp_d = finalContactPoints[idx];
+    if (!isfinite(cp_d.x) || !isfinite(cp_d.y) || !isfinite(cp_d.z)) {
+        return;
+    }
+    const float3 cp_global = make_float3((float)cp_d.x, (float)cp_d.y, (float)cp_d.z);
+
+    if (ownerA != NULL_BODYID && ownerA < simParams->nOwnerBodies) {
+        float3 linVelA = make_float3(granData->vX[ownerA], granData->vY[ownerA], granData->vZ[ownerA]);
+        float3 angVelA_local =
+            make_float3(granData->omgBarX[ownerA], granData->omgBarY[ownerA], granData->omgBarZ[ownerA]);
+        const float4 oriA = make_float4(granData->oriQx[ownerA], granData->oriQy[ownerA], granData->oriQz[ownerA],
+                                        granData->oriQw[ownerA]);
+        if (isfinite(linVelA.x) && isfinite(linVelA.y) && isfinite(linVelA.z) && isfinite(angVelA_local.x) &&
+            isfinite(angVelA_local.y) && isfinite(angVelA_local.z)) {
+            float3 angVelA_global = angVelA_local;
+            applyOriQToVector3(angVelA_global, oriA);
+
+            double3 comA;
+            voxelIDToPosition<double, voxelID_t, subVoxelPos_t>(
+                comA.x, comA.y, comA.z, granData->voxelID[ownerA], granData->locX[ownerA], granData->locY[ownerA],
+                granData->locZ[ownerA], simParams->nvXp2, simParams->nvYp2, simParams->voxelSize, simParams->l);
+            comA.x += simParams->LBFX;
+            comA.y += simParams->LBFY;
+            comA.z += simParams->LBFZ;
+
+            float3 rA_global =
+                make_float3(cp_global.x - (float)comA.x, cp_global.y - (float)comA.y, cp_global.z - (float)comA.z);
+            velCPA = linVelA + cross(angVelA_global, rA_global);
+        }
+    }
+
+    if (ownerB != NULL_BODYID && ownerB < simParams->nOwnerBodies) {
+        float3 linVelB = make_float3(granData->vX[ownerB], granData->vY[ownerB], granData->vZ[ownerB]);
+        float3 angVelB_local =
+            make_float3(granData->omgBarX[ownerB], granData->omgBarY[ownerB], granData->omgBarZ[ownerB]);
+        const float4 oriB = make_float4(granData->oriQx[ownerB], granData->oriQy[ownerB], granData->oriQz[ownerB],
+                                        granData->oriQw[ownerB]);
+        if (isfinite(linVelB.x) && isfinite(linVelB.y) && isfinite(linVelB.z) && isfinite(angVelB_local.x) &&
+            isfinite(angVelB_local.y) && isfinite(angVelB_local.z)) {
+            float3 angVelB_global = angVelB_local;
+            applyOriQToVector3(angVelB_global, oriB);
+
+            double3 comB;
+            voxelIDToPosition<double, voxelID_t, subVoxelPos_t>(
+                comB.x, comB.y, comB.z, granData->voxelID[ownerB], granData->locX[ownerB], granData->locY[ownerB],
+                granData->locZ[ownerB], simParams->nvXp2, simParams->nvYp2, simParams->voxelSize, simParams->l);
+            comB.x += simParams->LBFX;
+            comB.y += simParams->LBFY;
+            comB.z += simParams->LBFZ;
+
+            float3 rB_global =
+                make_float3(cp_global.x - (float)comB.x, cp_global.y - (float)comB.y, cp_global.z - (float)comB.z);
+            velCPB = linVelB + cross(angVelB_global, rB_global);
+        }
+    }
+
+    const float3 relVel = velCPA - velCPB;
+    const float vRelN = dot(relVel, normal);
+    const float3 vRelT = relVel - vRelN * normal;
+    const float slipSpeed = length(vRelT);
+    if (!isfinite(slipSpeed) || !(slipSpeed >= 0.f)) {
+        return;
+    }
+    patchNormalForce[idx] = normalForce;
+    patchSlipSpeed[idx] = slipSpeed;
+}
+
+void computePatchPVScalars(DEMSimParams* simParams,
+                           DEMDataDT* granData,
+                           const float3* finalNormals,
+                           const double3* finalContactPoints,
+                           contactPairs_t startOffsetPatch,
+                           contactPairs_t countPatch,
+                           float* patchNormalForce,
+                           float* patchSlipSpeed,
+                           cudaStream_t& this_stream) {
+    size_t blocks_needed = (countPatch + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        computePatchPVScalars_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            simParams, granData, finalNormals, finalContactPoints, startOffsetPatch, countPatch, patchNormalForce,
+            patchSlipSpeed);
+    }
+}
+
+__global__ void accumulateTrianglePVFromPatchContacts_impl(const DEMSimParams* simParams,
+                                                           DEMDataDT* granData,
+                                                           const contactPairs_t* keys,
+                                                           const PatchContactAccum* primitiveAccumulators,
+                                                           const PatchContactAccum* patchAccumulators,
+                                                           const float* patchNormalForce,
+                                                           const float* patchSlipSpeed,
+                                                           contactPairs_t startOffsetPrimitive,
+                                                           contactPairs_t startOffsetPatch,
+                                                           contactPairs_t countPrimitive,
+                                                           const int* triGlobalToLocal,
+                                                           float* triAccumP,
+                                                           float* triAccumPV) {
+    contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= countPrimitive || !triGlobalToLocal || !triAccumP || !triAccumPV) {
+        return;
+    }
+
+    const contactPairs_t primContactID = startOffsetPrimitive + idx;
+    const contactPairs_t patchContactID = keys[idx];
+    if (patchContactID < startOffsetPatch) {
+        return;
+    }
+    const contactPairs_t localPatchIdx = patchContactID - startOffsetPatch;
+
+    const double patchWeight = patchAccumulators[localPatchIdx].sumWeight;
+    const double primitiveWeight = primitiveAccumulators[idx].sumWeight;
+    if (patchWeight <= 0.0 || primitiveWeight <= 0.0) {
+        return;
+    }
+
+    float share = static_cast<float>(primitiveWeight / patchWeight);
+    if (!(share > 0.f)) {
+        return;
+    }
+    share = fminf(share, 1.f);
+
+    const float normalForce = patchNormalForce[localPatchIdx];
+    if (!(normalForce > DEME_TINY_FLOAT)) {
+        return;
+    }
+    const float pContribution = normalForce * share;
+    const float slipSpeed = patchSlipSpeed[localPatchIdx];
+    const float pvContribution = pContribution * slipSpeed;
+
+    const contact_t primType = granData->contactTypePrimitive[primContactID];
+    if (primType == NOT_A_CONTACT) {
+        return;
+    }
+
+    const geoType_t typeA = decodeTypeA(primType);
+    const geoType_t typeB = decodeTypeB(primType);
+
+    // Track any contact contribution on triangle sides (sphere-triangle and triangle-triangle).
+    if (typeA == GEO_T_TRIANGLE) {
+        const bodyID_t triA = granData->idPrimitiveA[primContactID];
+        if (triA < simParams->nTriGM) {
+            const int localIdx = triGlobalToLocal[triA];
+            if (localIdx >= 0) {
+                atomicAdd(triAccumP + localIdx, pContribution);
+                atomicAdd(triAccumPV + localIdx, pvContribution);
+            }
+        }
+    }
+    if (typeB == GEO_T_TRIANGLE) {
+        const bodyID_t triB = granData->idPrimitiveB[primContactID];
+        if (triB < simParams->nTriGM) {
+            const int localIdx = triGlobalToLocal[triB];
+            if (localIdx >= 0) {
+                atomicAdd(triAccumP + localIdx, pContribution);
+                atomicAdd(triAccumPV + localIdx, pvContribution);
+            }
+        }
+    }
+}
+
+void accumulateTrianglePVFromPatchContacts(DEMSimParams* simParams,
+                                           DEMDataDT* granData,
+                                           const contactPairs_t* keys,
+                                           const PatchContactAccum* primitiveAccumulators,
+                                           const PatchContactAccum* patchAccumulators,
+                                           const float* patchNormalForce,
+                                           const float* patchSlipSpeed,
+                                           contactPairs_t startOffsetPrimitive,
+                                           contactPairs_t startOffsetPatch,
+                                           contactPairs_t countPrimitive,
+                                           const int* triGlobalToLocal,
+                                           float* triAccumP,
+                                           float* triAccumPV,
+                                           cudaStream_t& this_stream) {
+    size_t blocks_needed = (countPrimitive + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        accumulateTrianglePVFromPatchContacts_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            simParams, granData, keys, primitiveAccumulators, patchAccumulators, patchNormalForce, patchSlipSpeed,
+            startOffsetPrimitive, startOffsetPatch, countPrimitive, triGlobalToLocal, triAccumP, triAccumPV);
     }
 }
 
@@ -593,7 +824,6 @@ void prepareForceArrays(DEMSimParams* simParams,
     if (blocks_needed_for_force_prep > 0) {
         prepareForceArrays_impl<<<blocks_needed_for_force_prep, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             simParams, granData, nPrimitiveContactPairs);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -602,7 +832,6 @@ void prepareAccArrays(DEMSimParams* simParams, DEMDataDT* granData, bodyID_t nOw
     if (blocks_needed_for_acc_prep > 0) {
         prepareAccArrays_impl<<<blocks_needed_for_acc_prep, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(simParams,
                                                                                                           granData);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -640,7 +869,6 @@ void rearrangeContactWildcards(DEMDataDT* granData,
     if (blocks_needed > 0) {
         rearrangeContactWildcards_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             granData, wildcard, sentry, nWildcards, nContactPairs);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 
@@ -662,7 +890,6 @@ void markAliveContacts(float* wildcard, notStupidBool_t* sentry, size_t nContact
     if (blocks_needed > 0) {
         markAliveContacts_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(wildcard, sentry,
                                                                                               nContactPairs);
-        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 }
 

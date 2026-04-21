@@ -3135,7 +3135,6 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                         }
                     }
                 }
-                DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
                 if (triPVTrackingEnabled && triPVNumTrackedTriangles > 0) {
                     float* patchNormalForce =
