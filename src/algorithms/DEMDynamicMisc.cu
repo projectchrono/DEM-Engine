@@ -131,50 +131,35 @@ void getContactForcesConcerningOwners(float3* d_points,
 // Patch-based voting kernels for mesh contact correction
 ////////////////////////////////////////////////////////////////////////////////
 
-// Kernel to compute weighted normals (normal * area) for voting
-// Also prepares the area values for reduction and extracts the keys (geomToPatchMap values)
+// Optimized kernel: prepares weighted normals only (normal * area).
+// Keys are sourced directly from granData->geomToPatchMap by the caller; no key/area output arrays needed.
 __global__ void prepareWeightedNormalsForVoting_impl(DEMDataDT* granData,
                                                      float3* weightedNormals,
-                                                     double* areas,
-                                                     contactPairs_t* keys,
                                                      contactPairs_t startOffset,
-                                                     contactPairs_t count,
-                                                     contact_t contactType) {
+                                                     contactPairs_t count) {
     contactPairs_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < count) {
         contactPairs_t myContactID = startOffset + idx;
 
-        // Get the contact normal from contactForces
-        float3 normal = granData->contactForces[myContactID];
+        const float3 normal = granData->contactForces[myContactID];
+        const float3 areaStorage = granData->contactPointGeometryB[myContactID];
+        float area = float3StorageToDouble(areaStorage);
 
-        // Extract the area (double) from contactPointGeometryB (stored as float3)
-        float3 areaStorage = granData->contactPointGeometryB[myContactID];
-        double area = float3StorageToDouble(areaStorage);
-
-        // Compute weighted normal (normal * area)
-        // Note that fake contacts do not affect as their area is 0
-        weightedNormals[idx] = make_float3((double)normal.x * area, (double)normal.y * area, (double)normal.z * area);
-
-        // Store area for reduction
-        areas[idx] = area;
-
-        // Extract key from geomToPatchMap
-        keys[idx] = granData->geomToPatchMap[myContactID];
+        // Compute weighted normal (normal * area).
+        // Fake contacts do not contribute since their area is 0.
+        weightedNormals[idx] = make_float3(normal.x * area, normal.y * area, normal.z * area);
     }
 }
 
 void prepareWeightedNormalsForVoting(DEMDataDT* granData,
                                      float3* weightedNormals,
-                                     double* areas,
-                                     contactPairs_t* keys,
                                      contactPairs_t startOffset,
                                      contactPairs_t count,
-                                     contact_t contactType,
                                      cudaStream_t& this_stream) {
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         prepareWeightedNormalsForVoting_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            granData, weightedNormals, areas, keys, startOffset, count, contactType);
+            granData, weightedNormals, startOffset, count);
     }
 }
 

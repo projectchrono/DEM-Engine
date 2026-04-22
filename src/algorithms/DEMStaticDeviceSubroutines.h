@@ -175,24 +175,9 @@ void getContactForcesConcerningOwners(float3* d_points,
 // Patch-based voting wrappers for mesh contact correction
 ////////////////////////////////////////////////////////////////////////////////
 
-// Prepares weighted normals (normal * area / penetration) for voting.
-//
-// The weighted normal magnitude represents the voting power. The subsequent normalization step only
-// needs the *direction*, therefore any positive scalar multiple of the weight yields the same
-// voted direction.  The current implementation follows the existing, validated semantics.
-void prepareWeightedNormalsForVoting(DEMDataDT* granData,
-                                     float3* weightedNormals,
-                                     double* areas,
-                                     contactPairs_t* keys,
-                                     contactPairs_t startOffset,
-                                     contactPairs_t count,
-                                     contact_t contactType,
-                                     cudaStream_t& this_stream);
-
-// Optimized overload: prepares weighted normals only.
-//
-// This avoids materializing temporary areas/keys buffers. Keys can be sourced directly from
-// granData->geomToPatchMap + startOffsetPrimitive in the caller.
+// Prepares weighted normals (normal * area) for voting.
+// Keys are sourced directly from granData->geomToPatchMap + startOffsetPrimitive by the caller,
+// avoiding a temporary key buffer and a separate kernel write for keys/areas.
 void prepareWeightedNormalsForVoting(DEMDataDT* granData,
                                      float3* weightedNormals,
                                      contactPairs_t startOffset,

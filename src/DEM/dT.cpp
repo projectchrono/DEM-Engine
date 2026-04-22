@@ -2933,47 +2933,42 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
             // Multiple contact quantities (areas, penetrations, contact points) are computed
             // by a single fused kernel, then reduced independently per contact type.
             if (countPrimitive > 0) {
-                // Allocate temporary arrays for the voting process
-                float3* weightedNormals =
-                    (float3*)solverScratchSpace.allocateTempVector("weightedNormals", countPrimitive * sizeof(float3));
-                // areas is still needed by the existing prepareWeightedNormalsForVoting overload but is not
-                // used further; it is freed immediately after that call.
-                double* areas =
-                    (double*)solverScratchSpace.allocateTempVector("areas", countPrimitive * sizeof(double));
-                // Keys extracted from geomToPatchMap - these map primitives to patch pairs
-                contactPairs_t* keys = (contactPairs_t*)solverScratchSpace.allocateTempVector(
-                    "votingKeys", countPrimitive * sizeof(contactPairs_t));
+                // Keys are already available on device: geomToPatchMap maps each primitive contact to its patch pair.
+                // This avoids materializing a separate temporary key buffer.
+                contactPairs_t* keys = granData.geomToPatchMap + startOffsetPrimitive;
 
                 // Allocate arrays for reduce-by-key results (uniqueKeys uses contactPairs_t, not patchIDPair_t)
                 contactPairs_t* uniqueKeys = (contactPairs_t*)solverScratchSpace.allocateTempVector(
                     "uniqueKeys", countPrimitive * sizeof(contactPairs_t));
-                float3* votedWeightedNormals = (float3*)solverScratchSpace.allocateTempVector(
-                    "votedWeightedNormals", countPrimitive * sizeof(float3));
                 solverScratchSpace.allocateDualStruct("numUniqueKeys");
                 size_t* numUniqueKeys = solverScratchSpace.getDualStructDevice("numUniqueKeys");
 
-                // Step 1: Prepare weighted normals, areas, and keys
-                // The kernel extracts keys from geomToPatchMap, computes weighted normals, and stores areas
-                prepareWeightedNormalsForVoting(&granData, weightedNormals, areas, keys, startOffsetPrimitive,
-                                                countPrimitive, contact_type, streamInfo.stream);
-                // areas is no longer needed; computePerPrimitiveWeightedQuantities reads directly from granData
-                solverScratchSpace.finishUsingTempVector("areas");
+                // Step 1: Prepare weighted normals for voting (normal * area).
+                float3* weightedNormals =
+                    (float3*)solverScratchSpace.allocateTempVector("weightedNormals", countPrimitive * sizeof(float3));
+                prepareWeightedNormalsForVoting(&granData, weightedNormals, startOffsetPrimitive, countPrimitive,
+                                                streamInfo.stream);
 
-                // Step 2: Reduce-by-key for weighted normals (sum)
-                // The keys are geomToPatchMap values (contactPairs_t), which group primitives by patch pair
+                // Step 2: Reduce-by-key for weighted normals (sum).
+                // Allocate output as countPatch (not countPrimitive): CUB outputs exactly countPatch unique entries.
+                float3* votedWeightedNormals = (float3*)solverScratchSpace.allocateTempVector(
+                    "votedWeightedNormals", countPatch * sizeof(float3));
                 cubSumReduceByKey<contactPairs_t, float3>(keys, uniqueKeys, weightedNormals, votedWeightedNormals,
                                                           numUniqueKeys, countPrimitive, streamInfo.stream,
                                                           solverScratchSpace);
                 solverScratchSpace.finishUsingTempVector("weightedNormals");
-                // For extra safety
-                solverScratchSpace.syncDualStructDeviceToHost("numUniqueKeys");
-                size_t numUniqueKeysHost = *(solverScratchSpace.getDualStructHost("numUniqueKeys"));
-                if (numUniqueKeysHost != countPatch) {
-                    DEME_ERROR(
-                        "Patch-based contact voting produced %zu unique patch pairs, but expected %zu pairs for "
-                        "contact type %d!",
-                        numUniqueKeysHost, countPatch, contact_type);
-                }
+
+                // Sanity check (debug only: avoids a D2H sync on the release path).
+                DEME_DEBUG_EXEC({
+                    solverScratchSpace.syncDualStructDeviceToHost("numUniqueKeys");
+                    size_t numUniqueKeysHost = *(solverScratchSpace.getDualStructHost("numUniqueKeys"));
+                    if (numUniqueKeysHost != countPatch) {
+                        DEME_ERROR(
+                            "Patch-based contact voting produced %zu unique patch pairs, but expected %zu pairs for "
+                            "contact type %d!",
+                            numUniqueKeysHost, countPatch, contact_type);
+                    }
+                });
 
                 // Step 3: Normalize the voted normals by total area and scatter back to a temp array.
                 float3* votedNormals =
@@ -3060,8 +3055,8 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("maxPenetrations");
 
                 // Clean up: uniqueKeys and numUniqueKeys are no longer needed after all reductions.
-                // votingKeys (keys) is kept alive until after the triPV block, since
-                // accumulateTrianglePVFromPatchContacts still needs the primitive-to-patch mapping.
+                // keys is a direct pointer into granData->geomToPatchMap and is kept alive until after
+                // the triPV block, since accumulateTrianglePVFromPatchContacts still needs it.
                 solverScratchSpace.finishUsingTempVector("uniqueKeys");
                 solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
 
@@ -3149,9 +3144,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     //           << std::endl;
                 }
 
-                // Final clean up
-                // votingKeys and primitiveWeights are freed here (after triPV tracking which may use them)
-                solverScratchSpace.finishUsingTempVector("votingKeys");
+                // Final clean up (primitiveWeights freed after triPV tracking which may use it)
                 solverScratchSpace.finishUsingTempVector("totalWeights");
                 solverScratchSpace.finishUsingTempVector("primitiveWeights");
                 solverScratchSpace.finishUsingTempVector("votedNormals");
