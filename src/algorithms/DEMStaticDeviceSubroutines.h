@@ -206,76 +206,22 @@ void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
                                      contactPairs_t count,
                                      cudaStream_t& this_stream);
 
-// Patch-level accumulator used to fuse multiple ReduceByKey passes.
-//
-// The reduction operator is component-wise associative (sum + max), therefore it can safely be used
-// with CUB ReduceByKey.
-struct PatchContactAccum {
-    double sumProjArea;         ///< Sum of projected contact areas (per patch)
-    double maxProjPen;          ///< Max projected penetration (per patch)
-    double sumWeight;           ///< Sum of weights w = projectedPenetration * projectedArea (per patch)
-    double3 sumWeightedCP;      ///< Sum of (contactPoint * w) (per patch)
-    double3 sumAreaWeightedCP;  ///< Sum of (contactPoint * projectedArea), for near-zero penetration fallback
-
-    __host__ __device__ __forceinline__ PatchContactAccum operator+(const PatchContactAccum& other) const {
-        PatchContactAccum out;
-        out.sumProjArea = sumProjArea + other.sumProjArea;
-        out.maxProjPen = (maxProjPen > other.maxProjPen) ? maxProjPen : other.maxProjPen;
-        out.sumWeight = sumWeight + other.sumWeight;
-        out.sumWeightedCP =
-            make_double3(sumWeightedCP.x + other.sumWeightedCP.x, sumWeightedCP.y + other.sumWeightedCP.y,
-                         sumWeightedCP.z + other.sumWeightedCP.z);
-        out.sumAreaWeightedCP = make_double3(sumAreaWeightedCP.x + other.sumAreaWeightedCP.x,
-                                             sumAreaWeightedCP.y + other.sumAreaWeightedCP.y,
-                                             sumAreaWeightedCP.z + other.sumAreaWeightedCP.z);
-        return out;
-    }
-};
-
-// Computes per-primitive patch accumulators:
-//   - sumProjArea: projected area contribution
-//   - maxProjPen:  projected penetration contribution (to be reduced by max)
-//   - sumWeight:   weight contribution (for contact point averaging)
-//   - sumWeightedCP: weighted contact point contribution
-//   - sumAreaWeightedCP: area-weighted CP contribution (fallback when sumWeight ~ 0)
-void computePatchContactAccumulators(DEMDataDT* granData,
-                                     const float3* votedNormals,
-                                     const contactPairs_t* keys,
-                                     PatchContactAccum* accumulators,
-                                     contactPairs_t startOffsetPrimitive,
-                                     contactPairs_t startOffsetPatch,
-                                     contactPairs_t count,
-                                     cudaStream_t& this_stream);
-
-// Finalizes patch results by combining patch-accumulator voting with zero-area / SAT-fail fallback.
-//
-// Semantics match finalizePatchResults(), but avoids materializing intermediate arrays
-// (totalProjectedAreas, votedPenetrations, votedContactPoints).
-void finalizePatchResultsFromAccumulators(const PatchContactAccum* patchAccumulators,
-                                          const float3* votedNormals,
-                                          const float3* zeroAreaNormals,
-                                          const double* zeroAreaPenetrations,
-                                          const double3* zeroAreaContactPoints,
-                                          double* finalAreas,
-                                          float3* finalNormals,
-                                          double* finalPenetrations,
-                                          double3* finalContactPoints,
-                                          contactPairs_t count,
-                                          cudaStream_t& this_stream);
-
-// Computes projected penetration and area for each primitive contact
-// Both the penetration and area are projected onto the voted normal
-// If the projected penetration becomes negative, both are set to 0
-void computeWeightedUsefulPenetration(DEMDataDT* granData,
-                                      float3* votedNormals,
-                                      contactPairs_t* keys,
-                                      double* areas,
-                                      double* projectedPenetrations,
-                                      double* projectedAreas,
-                                      contactPairs_t startOffsetPrimitive,
-                                      contactPairs_t startOffsetPatch,
-                                      contactPairs_t count,
-                                      cudaStream_t& this_stream);
+// Computes three per-primitive weighted quantities in a single fused kernel pass:
+//   projectedAreas[i] = area_i * dot(normal_i, votedNormal)   (clamped to >= 0)
+//   weights[i]        = projectedArea_i * projectedPen_i       (= projArea * projPen)
+//   weightedCPs[i]    = contactPoint_i * weights[i]
+// These three arrays are then independently reduced per patch via cubSumReduceByKey.
+// The per-patch penetration is computed in finalizePatchResults as totalWeights/totalProjAreas.
+void computePerPrimitiveWeightedQuantities(DEMDataDT* granData,
+                                           const float3* votedNormals,
+                                           const contactPairs_t* keys,
+                                           double* projectedAreas,
+                                           double* weights,
+                                           double3* weightedCPs,
+                                           contactPairs_t startOffsetPrimitive,
+                                           contactPairs_t startOffsetPatch,
+                                           contactPairs_t count,
+                                           cudaStream_t& this_stream);
 
 // Extracts primitive penetrations from contactPointGeometryA for max-reduce operation
 void extractPrimitivePenetrations(DEMDataDT* granData,
@@ -297,11 +243,14 @@ void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
                                                    contactPairs_t countPrimitive,
                                                    cudaStream_t& this_stream);
 
-// Finalizes patch results by combining normal voting with zero-area case handling
+// Finalizes patch results using the Fixing_Mesh_Particles convention:
+//   finalPen = totalWeights / totalProjAreas  (weighted-average projected penetration)
+// This guarantees finalPen = 0 when totalWeights = 0, avoiding spurious forces from
+// geometrically degenerate primitive pairs where projectedArea > 0 but projectedPen = 0.
 void finalizePatchResults(double* totalProjectedAreas,
+                          double* totalWeights,
                           float3* votedNormals,
-                          double* votedPenetrations,
-                          double3* votedContactPoints,
+                          double3* totalWeightedCPs,
                           float3* zeroAreaNormals,
                           double* zeroAreaPenetrations,
                           double3* zeroAreaContactPoints,
@@ -311,33 +260,6 @@ void finalizePatchResults(double* totalProjectedAreas,
                           double3* finalContactPoints,
                           contactPairs_t count,
                           cudaStream_t& this_stream);
-
-// Finalizes patch contact points by combining voting with zero-area case handling
-void finalizePatchContactPoints(double* totalAreas,
-                                double3* votedContactPoints,
-                                double3* zeroAreaContactPoints,
-                                double3* finalContactPoints,
-                                contactPairs_t count,
-                                cudaStream_t& this_stream);
-
-// Computes weighted contact points for each primitive contact
-// The weight is: projected_penetration * projected_area
-void computeWeightedContactPoints(DEMDataDT* granData,
-                                  double3* weightedContactPoints,
-                                  double* weights,
-                                  double* projectedPenetrations,
-                                  double* projectedAreas,
-                                  contactPairs_t startOffsetPrimitive,
-                                  contactPairs_t count,
-                                  cudaStream_t& this_stream);
-
-// Computes final contact points per patch by dividing by total weight
-// If total weight is 0, contact point is set to (0,0,0)
-void computeFinalContactPointsPerPatch(double3* totalWeightedContactPoints,
-                                       double* totalWeights,
-                                       double3* finalContactPoints,
-                                       contactPairs_t count,
-                                       cudaStream_t& this_stream);
 
 // Compute per-patch normal-force magnitude and tangential slip speed used by per-triangle diagnostics.
 void computePatchPVScalars(DEMSimParams* simParams,
@@ -355,8 +277,8 @@ void computePatchPVScalars(DEMSimParams* simParams,
 void accumulateTrianglePVFromPatchContacts(DEMSimParams* simParams,
                                            DEMDataDT* granData,
                                            const contactPairs_t* keys,
-                                           const PatchContactAccum* primitiveAccumulators,
-                                           const PatchContactAccum* patchAccumulators,
+                                           const double* primitiveWeights,
+                                           const double* patchWeights,
                                            const float* patchNormalForce,
                                            const float* patchSlipSpeed,
                                            contactPairs_t startOffsetPrimitive,

@@ -2930,9 +2930,8 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
             contactPairs_t countPatch = start_count_patch.second;
 
             // Vote for the contact direction; voting power depends on the contact area.
-            // Multiple contact quantities (areas, penetrations, contact points) are now bundled into
-            // a single PatchContactAccum struct and reduced in one cubSumReduceByKey pass instead of
-            // the former four separate passes.
+            // Multiple contact quantities (areas, penetrations, contact points) are computed
+            // by a single fused kernel, then reduced independently per contact type.
             if (countPrimitive > 0) {
                 // Allocate temporary arrays for the voting process
                 float3* weightedNormals =
@@ -2957,7 +2956,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 // The kernel extracts keys from geomToPatchMap, computes weighted normals, and stores areas
                 prepareWeightedNormalsForVoting(&granData, weightedNormals, areas, keys, startOffsetPrimitive,
                                                 countPrimitive, contact_type, streamInfo.stream);
-                // areas is no longer needed; computePatchContactAccumulators reads it directly from granData
+                // areas is no longer needed; computePerPrimitiveWeightedQuantities reads directly from granData
                 solverScratchSpace.finishUsingTempVector("areas");
 
                 // Step 2: Reduce-by-key for weighted normals (sum)
@@ -2982,28 +2981,42 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 normalizeAndScatterVotedNormals(votedWeightedNormals, votedNormals, countPatch, streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
 
-                // Step 4: Compute one PatchContactAccum per primitive.
-                // Each accumulator bundles the projected area, max projected penetration, weighted contact point,
-                // and area-weighted contact point. A single cubSumReduceByKey (step 5) then replaces the four
-                // separate ReduceByKey passes that were previously needed.
-                PatchContactAccum* primitiveAccumulators = (PatchContactAccum*)solverScratchSpace.allocateTempVector(
-                    "primitiveAccumulators", countPrimitive * sizeof(PatchContactAccum));
-                computePatchContactAccumulators(&granData, votedNormals, keys, primitiveAccumulators,
-                                                startOffsetPrimitive, startOffsetPatch, countPrimitive,
-                                                streamInfo.stream);
+                // Step 4: Fused kernel — compute per-primitive projected areas, weights (projArea*projPen), and
+                // weighted contact points. One kernel pass replaces the former two separate kernel calls
+                // (computeWeightedUsefulPenetration + computeWeightedContactPoints).
+                double* primitiveProjectedAreas = (double*)solverScratchSpace.allocateTempVector(
+                    "primitiveProjectedAreas", countPrimitive * sizeof(double));
+                double* primitiveWeights = (double*)solverScratchSpace.allocateTempVector(
+                    "primitiveWeights", countPrimitive * sizeof(double));
+                double3* primitiveWeightedCPs = (double3*)solverScratchSpace.allocateTempVector(
+                    "primitiveWeightedCPs", countPrimitive * sizeof(double3));
+                computePerPrimitiveWeightedQuantities(&granData, votedNormals, keys, primitiveProjectedAreas,
+                                                      primitiveWeights, primitiveWeightedCPs, startOffsetPrimitive,
+                                                      startOffsetPatch, countPrimitive, streamInfo.stream);
 
-                // Step 5: Single CUB ReduceByKey over PatchContactAccum (sum + max via operator+).
-                // Output size is countPatch; we allocate countPrimitive to satisfy CUB's output-buffer requirement.
-                PatchContactAccum* patchAccumulators = (PatchContactAccum*)solverScratchSpace.allocateTempVector(
-                    "patchAccumulators", countPrimitive * sizeof(PatchContactAccum));
-                cubSumReduceByKey<contactPairs_t, PatchContactAccum>(keys, uniqueKeys, primitiveAccumulators,
-                                                                      patchAccumulators, numUniqueKeys, countPrimitive,
-                                                                      streamInfo.stream, solverScratchSpace);
-                // primitiveAccumulators are no longer needed for finalization (patchAccumulators holds the totals).
-                // When triPV tracking is re-enabled, keep them alive past the triPV block and pass them to
-                // accumulateTrianglePVFromPatchContacts so it can distribute per-patch force contributions back
-                // to individual primitives proportionally.
-                solverScratchSpace.finishUsingTempVector("primitiveAccumulators");
+                // Step 5a: Sum-reduce-by-key for total projected areas per patch
+                double* totalProjAreas =
+                    (double*)solverScratchSpace.allocateTempVector("totalProjAreas", countPatch * sizeof(double));
+                cubSumReduceByKey<contactPairs_t, double>(keys, uniqueKeys, primitiveProjectedAreas, totalProjAreas,
+                                                          numUniqueKeys, countPrimitive, streamInfo.stream,
+                                                          solverScratchSpace);
+                solverScratchSpace.finishUsingTempVector("primitiveProjectedAreas");
+
+                // Step 5b: Sum-reduce-by-key for total weights per patch
+                double* totalWeights =
+                    (double*)solverScratchSpace.allocateTempVector("totalWeights", countPatch * sizeof(double));
+                cubSumReduceByKey<contactPairs_t, double>(keys, uniqueKeys, primitiveWeights, totalWeights,
+                                                          numUniqueKeys, countPrimitive, streamInfo.stream,
+                                                          solverScratchSpace);
+                // primitiveWeights kept alive for optional triPV tracking
+
+                // Step 5c: Sum-reduce-by-key for total weighted contact points per patch
+                double3* totalWeightedCPs =
+                    (double3*)solverScratchSpace.allocateTempVector("totalWeightedCPs", countPatch * sizeof(double3));
+                cubSumReduceByKey<contactPairs_t, double3>(keys, uniqueKeys, primitiveWeightedCPs, totalWeightedCPs,
+                                                           numUniqueKeys, countPrimitive, streamInfo.stream,
+                                                           solverScratchSpace);
+                solverScratchSpace.finishUsingTempVector("primitiveWeightedCPs");
 
                 // Step 6: Extract primitive penetrations for the zero-area fallback (max-negative reduce).
                 double* primitivePenetrations = (double*)solverScratchSpace.allocateTempVector(
@@ -3039,10 +3052,10 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 solverScratchSpace.finishUsingTempVector("uniqueKeys");
                 solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
 
-                // Step 9: Finalize patch results from the single PatchContactAccum reduction.
-                // If patch-based projected area is 0 (or this patch pair consists of no SAT pair), meaning no
-                // physical contact, we use the fallback estimations (zeroArea*) of CP, penetration, and area.
-                // When sumProjArea > 0 but sumWeight ~ 0, falls back to area-weighted contact point.
+                // Step 9: Finalize patch results using the Fixing_Mesh_Particles formula:
+                //   finalPen = totalWeights / totalProjAreas  (weighted-average projected penetration).
+                // When totalWeights == 0 (all projected penetrations zero), finalPen = 0 so no force is applied,
+                // eliminating the spurious contact-point/velocity bug observed with the max-penetration formula.
                 double* finalAreas =
                     (double*)solverScratchSpace.allocateTempVector("finalAreas", countPatch * sizeof(double));
                 float3* finalNormals =
@@ -3054,13 +3067,14 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
 
                 double3* finalContactPoints =
                     (double3*)solverScratchSpace.allocateTempVector("finalContactPoints", countPatch * sizeof(double3));
-                finalizePatchResultsFromAccumulators(patchAccumulators, votedNormals, zeroAreaNormals,
-                                                     zeroAreaPenetrations, zeroAreaContactPoints, finalAreas,
-                                                     finalNormals, finalPenetrations.data(), finalContactPoints,
-                                                     countPatch, streamInfo.stream);
+                finalizePatchResults(totalProjAreas, totalWeights, votedNormals, totalWeightedCPs, zeroAreaNormals,
+                                     zeroAreaPenetrations, zeroAreaContactPoints, finalAreas, finalNormals,
+                                     finalPenetrations.data(), finalContactPoints, countPatch, streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("zeroAreaNormals");
                 solverScratchSpace.finishUsingTempVector("zeroAreaPenetrations");
                 solverScratchSpace.finishUsingTempVector("zeroAreaContactPoints");
+                solverScratchSpace.finishUsingTempVector("totalProjAreas");
+                solverScratchSpace.finishUsingTempVector("totalWeightedCPs");
 
                 // Now we have:
                 // - finalAreas: final contact area per patch pair (countPatch elements)
@@ -3099,7 +3113,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     // computePatchPVScalars(&simParams, &granData, finalNormals, finalContactPoints, startOffsetPatch,
                     //                       countPatch, patchNormalForce, patchSlipSpeed, streamInfo.stream);
                     // accumulateTrianglePVFromPatchContacts(
-                    //     &simParams, &granData, keys, primitiveAccumulators, patchAccumulators,
+                    //     &simParams, &granData, keys, primitiveWeights, totalWeights,
                     //     patchNormalForce, patchSlipSpeed, startOffsetPrimitive, startOffsetPatch, countPrimitive,
                     //     triPVGlobalTriToLocal.device(), triPVAccumP.device(), triPVAccumPV.device(),
                     //     streamInfo.stream);
@@ -3121,7 +3135,8 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 }
 
                 // Final clean up
-                solverScratchSpace.finishUsingTempVector("patchAccumulators");
+                solverScratchSpace.finishUsingTempVector("totalWeights");
+                solverScratchSpace.finishUsingTempVector("primitiveWeights");
                 solverScratchSpace.finishUsingTempVector("votedNormals");
                 solverScratchSpace.finishUsingTempVector("finalAreas");
                 solverScratchSpace.finishUsingTempVector("finalNormals");
