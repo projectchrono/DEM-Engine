@@ -217,18 +217,19 @@ void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
 // Per-primitive weighted quantity computation (fused kernel)
 ////////////////////////////////////////////////////////////////////////////////
 
-// Fused kernel that computes three per-primitive quantities in a single pass:
+// Fused kernel that computes four per-primitive quantities in a single pass:
 //   projectedAreas[i]  = area_i * dot(normal_i, votedNormal)   (clamped to >= 0)
+//   projectedPens[i]   = pen_i  * dot(normal_i, votedNormal)   (clamped to >= 0)
 //   weights[i]         = projectedArea_i * projectedPen_i       (w = projArea * projPen)
 //   weightedCPs[i]     = contactPoint_i * weights[i]
-// These three arrays are later reduced per-patch via cubSumReduceByKey.
-// Penetration is NOT reduced separately; the per-patch penetration is derived as
-//   finalPen = totalWeights / totalProjAreas   (Fixing_Mesh_Particles convention)
-// so that finalPen = 0 whenever totalWeights = 0, avoiding spurious forces.
+// These arrays are later reduced per-patch via CUB:
+//   projectedAreas and weights and weightedCPs via cubSumReduceByKey,
+//   projectedPens via cubMaxReduceByKey (to get per-patch max projected penetration).
 __global__ void computePerPrimitiveWeightedQuantities_impl(DEMDataDT* granData,
                                                            const float3* votedNormals,
                                                            const contactPairs_t* keys,
                                                            double* projectedAreas,
+                                                           double* projectedPens,
                                                            double* weights,
                                                            double3* weightedCPs,
                                                            contactPairs_t startOffsetPrimitive,
@@ -264,6 +265,7 @@ __global__ void computePerPrimitiveWeightedQuantities_impl(DEMDataDT* granData,
         double w = projArea * projPen;
 
         projectedAreas[idx] = projArea;
+        projectedPens[idx] = projPen;
         weights[idx] = w;
         weightedCPs[idx] = cp * w;
     }
@@ -273,6 +275,7 @@ void computePerPrimitiveWeightedQuantities(DEMDataDT* granData,
                                            const float3* votedNormals,
                                            const contactPairs_t* keys,
                                            double* projectedAreas,
+                                           double* projectedPens,
                                            double* weights,
                                            double3* weightedCPs,
                                            contactPairs_t startOffsetPrimitive,
@@ -282,8 +285,8 @@ void computePerPrimitiveWeightedQuantities(DEMDataDT* granData,
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         computePerPrimitiveWeightedQuantities_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            granData, votedNormals, keys, projectedAreas, weights, weightedCPs, startOffsetPrimitive, startOffsetPatch,
-            count);
+            granData, votedNormals, keys, projectedAreas, projectedPens, weights, weightedCPs, startOffsetPrimitive,
+            startOffsetPatch, count);
     }
 }
 
@@ -392,10 +395,10 @@ void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
 }
 
 // Kernel to finalize patch results by combining normal voting results with zero-area case handling.
-// Uses Fixing_Mesh_Particles convention: finalPen = totalWeights / totalProjAreas.
-// This ensures that when totalWeights == 0 (all projected penetrations are zero), finalPen = 0
-// and therefore no force is applied, regardless of the contact point value.
+// finalPen is the max projected penetration among all primitives in the patch (from cubMaxReduceByKey).
+// The contact point is still the weight-averaged contact point (weight = projArea * projPen).
 __global__ void finalizePatchResults_impl(double* totalProjectedAreas,
+                                          double* maxProjPens,
                                           double* totalWeights,
                                           float3* votedNormals,
                                           double3* totalWeightedCPs,
@@ -413,17 +416,15 @@ __global__ void finalizePatchResults_impl(double* totalProjectedAreas,
 
         if (projArea > 0.0) {
             // Normal case: use voted results.
-            // Penetration is the area-weighted average projected penetration (Fixing_Mesh_Particles formula).
-            // When totalWeights == 0, finalPen = 0 so no force is applied.
-            double totalWeight = totalWeights[idx];
+            // Penetration is the max projected penetration among all primitives in this patch.
             finalAreas[idx] = projArea;
             finalNormals[idx] = votedNormals[idx];
-            finalPenetrations[idx] = totalWeight / projArea;
+            finalPenetrations[idx] = maxProjPens[idx];
+            double totalWeight = totalWeights[idx];
             if (totalWeight > 0.0) {
                 finalContactPoints[idx] = totalWeightedCPs[idx] * (1.0 / totalWeight);
             } else {
-                // No positive-penetration primitive contributed; pen = 0 so force = 0.
-                // Contact point value is irrelevant, but set to zero for cleanliness.
+                // No positive-weight primitive contributed; set CP to zero (pen = 0 means no force anyway).
                 finalContactPoints[idx] = make_double3(0.0, 0.0, 0.0);
             }
         } else {
@@ -437,6 +438,7 @@ __global__ void finalizePatchResults_impl(double* totalProjectedAreas,
 }
 
 void finalizePatchResults(double* totalProjectedAreas,
+                          double* maxProjPens,
                           double* totalWeights,
                           float3* votedNormals,
                           double3* totalWeightedCPs,
@@ -452,8 +454,9 @@ void finalizePatchResults(double* totalProjectedAreas,
     size_t blocks_needed = (count + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
         finalizePatchResults_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
-            totalProjectedAreas, totalWeights, votedNormals, totalWeightedCPs, zeroAreaNormals, zeroAreaPenetrations,
-            zeroAreaContactPoints, finalAreas, finalNormals, finalPenetrations, finalContactPoints, count);
+            totalProjectedAreas, maxProjPens, totalWeights, votedNormals, totalWeightedCPs, zeroAreaNormals,
+            zeroAreaPenetrations, zeroAreaContactPoints, finalAreas, finalNormals, finalPenetrations, finalContactPoints,
+            count);
     }
 }
 

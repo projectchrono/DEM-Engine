@@ -2981,18 +2981,21 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 normalizeAndScatterVotedNormals(votedWeightedNormals, votedNormals, countPatch, streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("votedWeightedNormals");
 
-                // Step 4: Fused kernel — compute per-primitive projected areas, weights (projArea*projPen), and
-                // weighted contact points. One kernel pass replaces the former two separate kernel calls
-                // (computeWeightedUsefulPenetration + computeWeightedContactPoints).
+                // Step 4: Fused kernel — compute per-primitive projected areas, projected penetrations,
+                // weights (projArea*projPen), and weighted contact points. One kernel pass replaces the
+                // former two separate kernel calls (computeWeightedUsefulPenetration + computeWeightedContactPoints).
                 double* primitiveProjectedAreas = (double*)solverScratchSpace.allocateTempVector(
                     "primitiveProjectedAreas", countPrimitive * sizeof(double));
+                double* primitiveProjectedPens = (double*)solverScratchSpace.allocateTempVector(
+                    "primitiveProjectedPens", countPrimitive * sizeof(double));
                 double* primitiveWeights = (double*)solverScratchSpace.allocateTempVector(
                     "primitiveWeights", countPrimitive * sizeof(double));
                 double3* primitiveWeightedCPs = (double3*)solverScratchSpace.allocateTempVector(
                     "primitiveWeightedCPs", countPrimitive * sizeof(double3));
                 computePerPrimitiveWeightedQuantities(&granData, votedNormals, keys, primitiveProjectedAreas,
-                                                      primitiveWeights, primitiveWeightedCPs, startOffsetPrimitive,
-                                                      startOffsetPatch, countPrimitive, streamInfo.stream);
+                                                      primitiveProjectedPens, primitiveWeights, primitiveWeightedCPs,
+                                                      startOffsetPrimitive, startOffsetPatch, countPrimitive,
+                                                      streamInfo.stream);
 
                 // Step 5a: Sum-reduce-by-key for total projected areas per patch
                 double* totalProjAreas =
@@ -3002,15 +3005,24 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                                                           solverScratchSpace);
                 solverScratchSpace.finishUsingTempVector("primitiveProjectedAreas");
 
-                // Step 5b: Sum-reduce-by-key for total weights per patch
+                // Step 5b: Max-reduce-by-key for per-patch max projected penetration.
+                // finalPen is the max (deepest) projected penetration among all primitives in the patch.
+                double* maxProjPens =
+                    (double*)solverScratchSpace.allocateTempVector("maxProjPens", countPatch * sizeof(double));
+                cubMaxReduceByKey<contactPairs_t, double>(keys, uniqueKeys, primitiveProjectedPens, maxProjPens,
+                                                          numUniqueKeys, countPrimitive, streamInfo.stream,
+                                                          solverScratchSpace);
+                solverScratchSpace.finishUsingTempVector("primitiveProjectedPens");
+
+                // Step 5c: Sum-reduce-by-key for total weights per patch (used for contact point averaging)
                 double* totalWeights =
                     (double*)solverScratchSpace.allocateTempVector("totalWeights", countPatch * sizeof(double));
                 cubSumReduceByKey<contactPairs_t, double>(keys, uniqueKeys, primitiveWeights, totalWeights,
                                                           numUniqueKeys, countPrimitive, streamInfo.stream,
                                                           solverScratchSpace);
-                // primitiveWeights kept alive for optional triPV tracking
+                // primitiveWeights kept alive for triPV tracking
 
-                // Step 5c: Sum-reduce-by-key for total weighted contact points per patch
+                // Step 5d: Sum-reduce-by-key for total weighted contact points per patch
                 double3* totalWeightedCPs =
                     (double3*)solverScratchSpace.allocateTempVector("totalWeightedCPs", countPatch * sizeof(double3));
                 cubSumReduceByKey<contactPairs_t, double3>(keys, uniqueKeys, primitiveWeightedCPs, totalWeightedCPs,
@@ -3047,15 +3059,16 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     startOffsetPrimitive, startOffsetPatch, countPrimitive, streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("maxPenetrations");
 
-                // Clean up keys arrays now that we're done with reductions
-                solverScratchSpace.finishUsingTempVector("votingKeys");
+                // Clean up: uniqueKeys and numUniqueKeys are no longer needed after all reductions.
+                // votingKeys (keys) is kept alive until after the triPV block, since
+                // accumulateTrianglePVFromPatchContacts still needs the primitive-to-patch mapping.
                 solverScratchSpace.finishUsingTempVector("uniqueKeys");
                 solverScratchSpace.finishUsingDualStruct("numUniqueKeys");
 
-                // Step 9: Finalize patch results using the Fixing_Mesh_Particles formula:
-                //   finalPen = totalWeights / totalProjAreas  (weighted-average projected penetration).
-                // When totalWeights == 0 (all projected penetrations zero), finalPen = 0 so no force is applied,
-                // eliminating the spurious contact-point/velocity bug observed with the max-penetration formula.
+                // Step 9: Finalize patch results.
+                // finalPen = max projected penetration (maxProjPens), not an average.
+                // finalCP  = weight-averaged contact point (weight = projArea * projPen).
+                // Zero-area patches use the max-penetration primitive's fallback values.
                 double* finalAreas =
                     (double*)solverScratchSpace.allocateTempVector("finalAreas", countPatch * sizeof(double));
                 float3* finalNormals =
@@ -3067,13 +3080,15 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
 
                 double3* finalContactPoints =
                     (double3*)solverScratchSpace.allocateTempVector("finalContactPoints", countPatch * sizeof(double3));
-                finalizePatchResults(totalProjAreas, totalWeights, votedNormals, totalWeightedCPs, zeroAreaNormals,
-                                     zeroAreaPenetrations, zeroAreaContactPoints, finalAreas, finalNormals,
-                                     finalPenetrations.data(), finalContactPoints, countPatch, streamInfo.stream);
+                finalizePatchResults(totalProjAreas, maxProjPens, totalWeights, votedNormals, totalWeightedCPs,
+                                     zeroAreaNormals, zeroAreaPenetrations, zeroAreaContactPoints, finalAreas,
+                                     finalNormals, finalPenetrations.data(), finalContactPoints, countPatch,
+                                     streamInfo.stream);
                 solverScratchSpace.finishUsingTempVector("zeroAreaNormals");
                 solverScratchSpace.finishUsingTempVector("zeroAreaPenetrations");
                 solverScratchSpace.finishUsingTempVector("zeroAreaContactPoints");
                 solverScratchSpace.finishUsingTempVector("totalProjAreas");
+                solverScratchSpace.finishUsingTempVector("maxProjPens");
                 solverScratchSpace.finishUsingTempVector("totalWeightedCPs");
 
                 // Now we have:
@@ -3110,13 +3125,13 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                         (float*)solverScratchSpace.allocateTempVector("patchNormalForce", countPatch * sizeof(float));
                     float* patchSlipSpeed =
                         (float*)solverScratchSpace.allocateTempVector("patchSlipSpeed", countPatch * sizeof(float));
-                    // computePatchPVScalars(&simParams, &granData, finalNormals, finalContactPoints, startOffsetPatch,
-                    //                       countPatch, patchNormalForce, patchSlipSpeed, streamInfo.stream);
-                    // accumulateTrianglePVFromPatchContacts(
-                    //     &simParams, &granData, keys, primitiveWeights, totalWeights,
-                    //     patchNormalForce, patchSlipSpeed, startOffsetPrimitive, startOffsetPatch, countPrimitive,
-                    //     triPVGlobalTriToLocal.device(), triPVAccumP.device(), triPVAccumPV.device(),
-                    //     streamInfo.stream);
+                    computePatchPVScalars(&simParams, &granData, finalNormals, finalContactPoints, startOffsetPatch,
+                                          countPatch, patchNormalForce, patchSlipSpeed, streamInfo.stream);
+                    accumulateTrianglePVFromPatchContacts(
+                        &simParams, &granData, keys, primitiveWeights, totalWeights,
+                        patchNormalForce, patchSlipSpeed, startOffsetPrimitive, startOffsetPatch, countPrimitive,
+                        triPVGlobalTriToLocal.device(), triPVAccumP.device(), triPVAccumPV.device(),
+                        streamInfo.stream);
                     solverScratchSpace.finishUsingTempVector("patchNormalForce");
                     solverScratchSpace.finishUsingTempVector("patchSlipSpeed");
                 }
@@ -3135,6 +3150,8 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 }
 
                 // Final clean up
+                // votingKeys and primitiveWeights are freed here (after triPV tracking which may use them)
+                solverScratchSpace.finishUsingTempVector("votingKeys");
                 solverScratchSpace.finishUsingTempVector("totalWeights");
                 solverScratchSpace.finishUsingTempVector("primitiveWeights");
                 solverScratchSpace.finishUsingTempVector("votedNormals");

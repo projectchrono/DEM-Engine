@@ -206,16 +206,17 @@ void normalizeAndScatterVotedNormals(float3* votedWeightedNormals,
                                      contactPairs_t count,
                                      cudaStream_t& this_stream);
 
-// Computes three per-primitive weighted quantities in a single fused kernel pass:
+// Computes four per-primitive weighted quantities in a single fused kernel pass:
 //   projectedAreas[i] = area_i * dot(normal_i, votedNormal)   (clamped to >= 0)
+//   projectedPens[i]  = pen_i  * dot(normal_i, votedNormal)   (clamped to >= 0)
 //   weights[i]        = projectedArea_i * projectedPen_i       (= projArea * projPen)
 //   weightedCPs[i]    = contactPoint_i * weights[i]
-// These three arrays are then independently reduced per patch via cubSumReduceByKey.
-// The per-patch penetration is computed in finalizePatchResults as totalWeights/totalProjAreas.
+// projectedAreas/weights/weightedCPs are sum-reduced per patch; projectedPens are max-reduced per patch.
 void computePerPrimitiveWeightedQuantities(DEMDataDT* granData,
                                            const float3* votedNormals,
                                            const contactPairs_t* keys,
                                            double* projectedAreas,
+                                           double* projectedPens,
                                            double* weights,
                                            double3* weightedCPs,
                                            contactPairs_t startOffsetPrimitive,
@@ -243,11 +244,11 @@ void findMaxPenetrationPrimitiveForZeroAreaPatches(DEMDataDT* granData,
                                                    contactPairs_t countPrimitive,
                                                    cudaStream_t& this_stream);
 
-// Finalizes patch results using the Fixing_Mesh_Particles convention:
-//   finalPen = totalWeights / totalProjAreas  (weighted-average projected penetration)
-// This guarantees finalPen = 0 when totalWeights = 0, avoiding spurious forces from
-// geometrically degenerate primitive pairs where projectedArea > 0 but projectedPen = 0.
+// Finalizes patch results: finalPen = max projected penetration (from cubMaxReduceByKey);
+// finalCP = weight-averaged contact point (weight = projArea * projPen).
+// Zero-area patches fall back to the max-penetration primitive's values.
 void finalizePatchResults(double* totalProjectedAreas,
+                          double* maxProjPens,
                           double* totalWeights,
                           float3* votedNormals,
                           double3* totalWeightedCPs,
