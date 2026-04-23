@@ -308,7 +308,8 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             // Remove suspicious back-face false pairings: reject the contact if the penetration depth is too
             // large relative to the distance between the contact point and either mesh's geometric center.
             if ((in_contact || shell_contact_candidate) && simParams->triTriContactRejectionRatio >= 0.f &&
-                granData->ownerMeshGeomCenter) {
+                granData->ownerMeshGeomCenter && ownerA < simParams->nOwnerBodies &&
+                ownerB < simParams->nOwnerBodies) {
                 const double ratio = (double)simParams->triTriContactRejectionRatio;
                 float3 relCenterA = granData->ownerMeshGeomCenter[ownerA];
                 applyOriQToVector3(relCenterA, AOriQ);
