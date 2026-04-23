@@ -111,7 +111,7 @@ int main() {
     DEMSim.Initialize();
 
     path out_dir = current_path();
-    out_dir /= "DemoOutput_DrumCubes";
+    out_dir /= "DemoOutput_DrumCubesSmall";
     create_directory(out_dir);
 
     float time_end = 3.0f;
@@ -157,6 +157,6 @@ int main() {
     DEMSim.ShowMemStats();
     std::cout << "----------------------------------------" << std::endl;
 
-    std::cout << "DEMdemo_DrumCubes exiting..." << std::endl;
+    std::cout << "DemoOutput_DrumCubesSmall exiting..." << std::endl;
     return 0;
 }

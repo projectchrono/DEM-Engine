@@ -440,11 +440,10 @@ void finalizePatchResults(double* totalProjectedAreas,
     if (blocks_needed > 0) {
         finalizePatchResults_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
             totalProjectedAreas, maxProjPens, totalWeights, votedNormals, totalWeightedCPs, zeroAreaNormals,
-            zeroAreaPenetrations, zeroAreaContactPoints, finalAreas, finalNormals, finalPenetrations, finalContactPoints,
-            count);
+            zeroAreaPenetrations, zeroAreaContactPoints, finalAreas, finalNormals, finalPenetrations,
+            finalContactPoints, count);
     }
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////
 // Per-triangle P / V / P*V accumulation from patch contacts
