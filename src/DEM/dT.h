@@ -480,6 +480,8 @@ class DEMDynamicThread {
         DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // Per-owner shell half-thickness (0 for non-shell owners).
     DualArray<float> ownerMeshShellHalfThickness = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // Per-owner mesh geometric center in local frame (relative to CoM), for mesh owners only.
+    DualArray<float3> ownerMeshGeomCenter = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // Mesh patch information: each facet belongs to a patch, and each patch has material properties
     // Patch ID for each triangle facet (maps facet to patch)
     DualArray<bodyID_t> triPatchID = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
@@ -629,6 +631,7 @@ class DEMDynamicThread {
                       float expand_factor,
                       float approx_max_vel,
                       double max_tritri_penetration,
+                      float triTriContactRejectionRatio,
                       float expand_safety_param,
                       float expand_safety_adder,
                       bool use_angvel_margin,

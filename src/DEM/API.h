@@ -248,6 +248,13 @@ class DEMSolver {
         m_max_tritri_penetration = max_margin;
     }
 
+    /// @brief Set the ratio threshold used to reject suspicious triangle-triangle contacts. A contact is rejected when
+    /// the penetration depth exceeds this fraction of the distance from the contact point to a mesh's geometric center
+    /// (checked for both meshes involved). Set to a larger value to be more permissive, or a smaller value to be more
+    /// aggressive in rejecting back-face false contacts. A negative value disables this guard entirely.
+    /// @param ratio The rejection ratio threshold.
+    void SetTriTriContactRejectionRatio(float ratio) { m_triTriContactRejectionRatio = ratio; }
+
     /// @brief Used to force the solver to error out when there are too many spheres in a bin. A huge number can be used
     /// to discourage this error type.
     /// @param max_sph Max number of spheres in a bin.
@@ -1751,6 +1758,8 @@ class DEMSolver {
     // User-instructed maximum tri-tri penetration margin (to prevent super large margins)
     double m_max_tritri_penetration = DEME_HUGE_FLOAT;
 
+    // Ratio threshold for rejecting suspicious tri-tri contacts based on penetration depth vs center-contact distance.
+    float m_triTriContactRejectionRatio = 0.8f;
     // The number of user-estimated (max) number of owners that will be present in the simulation. If 0, then the arrays
     // will just be resized at intialization based on the input size.
     size_t m_instructed_num_owners = 0;

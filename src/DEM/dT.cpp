@@ -120,6 +120,7 @@ void DEMDynamicThread::packDataPointers() {
     ownerMeshConvex.bindDevicePointer(&(granData->ownerMeshConvex));
     ownerMeshNeverWinner.bindDevicePointer(&(granData->ownerMeshNeverWinner));
     ownerMeshShellHalfThickness.bindDevicePointer(&(granData->ownerMeshShellHalfThickness));
+    ownerMeshGeomCenter.bindDevicePointer(&(granData->ownerMeshGeomCenter));
     ownerPatchMesh.bindDevicePointer(&(granData->ownerPatchMesh));
     triPatchID.bindDevicePointer(&(granData->triPatchID));
     triNeighborIndex.bindDevicePointer(&(granData->triNeighborIndex));
@@ -287,6 +288,7 @@ void DEMDynamicThread::migrateDataToDevice() {
     ownerMeshConvex.toDeviceAsync(streamInfo.stream);
     ownerMeshNeverWinner.toDeviceAsync(streamInfo.stream);
     ownerMeshShellHalfThickness.toDeviceAsync(streamInfo.stream);
+    ownerMeshGeomCenter.toDeviceAsync(streamInfo.stream);
     ownerPatchMesh.toDeviceAsync(streamInfo.stream);
     triPatchID.toDeviceAsync(streamInfo.stream);
     triNeighborIndex.toDeviceAsync(streamInfo.stream);
@@ -488,6 +490,7 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                     float expand_factor,
                                     float approx_max_vel,
                                     double max_tritri_penetration,
+                                    float triTriContactRejectionRatio,
                                     float expand_safety_param,
                                     float expand_safety_adder,
                                     bool use_angvel_margin,
@@ -519,6 +522,7 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->dyn.expSafetyMulti = expand_safety_param;
     simParams->dyn.expSafetyAdder = expand_safety_adder;
     simParams->capTriTriPenetration = max_tritri_penetration;
+    simParams->triTriContactRejectionRatio = triTriContactRejectionRatio;
     simParams->useAngVelMargin = use_angvel_margin ? 1 : 0;
 
     simParams->nContactWildcards = contact_wildcards.size();
@@ -645,6 +649,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(ownerMeshConvex, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(ownerMeshNeverWinner, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(ownerMeshShellHalfThickness, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerMeshGeomCenter, nOwnerBodies, make_float3(0));
 
     // Resize the family mask `matrix' (in fact it is flattened)
     DEME_DUAL_ARRAY_RESIZE(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
@@ -1249,6 +1254,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         size_t this_facet_owner = mesh_facet_owner.at(k);
         const bool mesh_needs_neighbors =
             !(input_mesh_obj_convex.at(this_facet_owner) != 0 && input_mesh_obj_never_winner.at(this_facet_owner) != 0);
+        const size_t k_facet_start = k;
         for (; k < mesh_facet_owner.size(); k++) {
             // mesh_facet_owner run length is the num of facets in this mesh entity
             if (mesh_facet_owner.at(k) != this_facet_owner)
@@ -1278,6 +1284,25 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         ownerMeshConvex[owner_id] = input_mesh_obj_convex.at(i);
         ownerMeshNeverWinner[owner_id] = input_mesh_obj_never_winner.at(i);
         ownerMeshShellHalfThickness[owner_id] = shell_half_thickness;
+
+        // Compute the mesh's geometric center as the average of all triangle vertices in local frame.
+        {
+            const size_t num_tris = k - k_facet_start;
+            float3 geom_center = make_float3(0.f, 0.f, 0.f);
+            for (size_t kk = k_facet_start; kk < k; kk++) {
+                const DEMTriangle& tri = mesh_facets.at(kk);
+                geom_center.x += tri.p1.x + tri.p2.x + tri.p3.x;
+                geom_center.y += tri.p1.y + tri.p2.y + tri.p3.y;
+                geom_center.z += tri.p1.z + tri.p2.z + tri.p3.z;
+            }
+            if (num_tris > 0) {
+                const float inv = 1.0f / (3.0f * (float)num_tris);
+                geom_center.x *= inv;
+                geom_center.y *= inv;
+                geom_center.z *= inv;
+            }
+            ownerMeshGeomCenter[owner_id] = geom_center;
+        }
 
         // Cached initial values for wildcards of this mesh is not needed anymore
         m_meshes.back()->ClearWildcards();

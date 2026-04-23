@@ -314,6 +314,10 @@ struct DEMSimParams {
     // Max tri-tri penetration margin (to prevent super large margins from being added)
     double capTriTriPenetration = DEME_HUGE_FLOAT;
 
+    // Ratio threshold for rejecting suspicious tri-tri contacts: a contact is rejected when the penetration depth
+    // exceeds this fraction of the distance from the contact point to a mesh's geometric center.
+    float triTriContactRejectionRatio = 0.8f;
+
     // The max vel at which the solver errors out
     float errOutVel = DEME_HUGE_FLOAT;
     // The max ang vel at which the solver errors out
@@ -403,6 +407,8 @@ struct DEMDataDT {
     notStupidBool_t* ownerMeshNeverWinner;
     // Per-owner shell half-thickness (0 for regular meshes/clumps/analytical owners).
     float* ownerMeshShellHalfThickness;
+    // Per-owner mesh geometric center in local frame (relative to CoM), for mesh owners only.
+    float3* ownerMeshGeomCenter;
     bodyID_t* triPatchID;
     // Map global triangle ID -> compact neighbor index (NULL_BODYID if neighbors are not stored)
     bodyID_t* triNeighborIndex;
