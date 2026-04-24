@@ -1409,11 +1409,11 @@ void DEMDynamicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpB
     // For initialization, owner array offset is 0
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_rot, input_ext_obj_family,
                          input_mesh_objs, input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family,
-                         input_mesh_obj_convex, input_mesh_obj_never_winner, input_mesh_obj_watertight, mesh_facet_owner, mesh_facet_patch,
-                         mesh_facet_neighbor1, mesh_facet_neighbor2, mesh_facet_neighbor3, mesh_facets,
-                         mesh_patch_owner, mesh_patch_materials, clump_templates, ext_obj_mass_types, ext_obj_moi_types,
-                         ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, mesh_obj_mass_offsets, 0, 0, 0, 0,
-                         0);
+                         input_mesh_obj_convex, input_mesh_obj_never_winner, input_mesh_obj_watertight,
+                         mesh_facet_owner, mesh_facet_patch, mesh_facet_neighbor1, mesh_facet_neighbor2,
+                         mesh_facet_neighbor3, mesh_facets, mesh_patch_owner, mesh_patch_materials, clump_templates,
+                         ext_obj_mass_types, ext_obj_moi_types, ext_obj_comp_num, mesh_obj_mass_types,
+                         mesh_obj_moi_types, mesh_obj_mass_offsets, 0, 0, 0, 0, 0);
 
     buildTrackedObjs(input_clump_batches, ext_obj_comp_num, input_mesh_objs, tracked_objs, 0, 0, 0, 0);
 }
@@ -1466,11 +1466,12 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
     // Analytical objects-related arrays should be empty
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_rot, input_ext_obj_family,
                          input_mesh_objs, input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family,
-                         input_mesh_obj_convex, input_mesh_obj_never_winner, input_mesh_obj_watertight, mesh_facet_owner, mesh_facet_patch,
-                         mesh_facet_neighbor1, mesh_facet_neighbor2, mesh_facet_neighbor3, mesh_facets,
-                         mesh_patch_owner, mesh_patch_materials, clump_templates, ext_obj_mass_types, ext_obj_moi_types,
-                         ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, mesh_obj_mass_offsets,
-                         nExistingOwners, nExistingSpheres, nExistingFacets, nExistingPatches, nExistingTriNeighbors);
+                         input_mesh_obj_convex, input_mesh_obj_never_winner, input_mesh_obj_watertight,
+                         mesh_facet_owner, mesh_facet_patch, mesh_facet_neighbor1, mesh_facet_neighbor2,
+                         mesh_facet_neighbor3, mesh_facets, mesh_patch_owner, mesh_patch_materials, clump_templates,
+                         ext_obj_mass_types, ext_obj_moi_types, ext_obj_comp_num, mesh_obj_mass_types,
+                         mesh_obj_moi_types, mesh_obj_mass_offsets, nExistingOwners, nExistingSpheres, nExistingFacets,
+                         nExistingPatches, nExistingTriNeighbors);
 
     // Make changes to tracked objects (potentially add more)
     buildTrackedObjs(input_clump_batches, ext_obj_comp_num, input_mesh_objs, tracked_objs, nExistingOwners,

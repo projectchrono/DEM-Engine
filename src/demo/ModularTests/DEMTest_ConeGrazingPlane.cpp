@@ -85,6 +85,7 @@ int main() {
     DEMSim.SetMeshUniversalContact(true);
     DEMSim.SetExpandSafetyType("auto");
     DEMSim.SetExpandSafetyAdder(graze_speed);
+    // DEMSim.SetSimplePatchCombination(true);
 
     auto mat = DEMSim.LoadMaterial({{"E", E}, {"nu", nu}, {"CoR", CoR}, {"mu", mu}, {"Crr", 0.0f}});
 
