@@ -488,6 +488,7 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                     float expand_factor,
                                     float approx_max_vel,
                                     double max_tritri_penetration,
+                                    float triTriContactRejectionRatio,
                                     float expand_safety_param,
                                     float expand_safety_adder,
                                     bool use_angvel_margin,
@@ -519,6 +520,7 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->dyn.expSafetyMulti = expand_safety_param;
     simParams->dyn.expSafetyAdder = expand_safety_adder;
     simParams->capTriTriPenetration = max_tritri_penetration;
+    simParams->triTriContactRejectionRatio = triTriContactRejectionRatio;
     simParams->useAngVelMargin = use_angvel_margin ? 1 : 0;
 
     simParams->nContactWildcards = contact_wildcards.size();

@@ -122,7 +122,7 @@ int main() {
     float max_v = 0.f;
 
     DEMSim.InstructBoxDomainDimension(0.4, 0.4, 0.4);
-    float step_size = 1e-4f;
+    float step_size = 1e-5f;
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGPUTimersEnabled(true);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
