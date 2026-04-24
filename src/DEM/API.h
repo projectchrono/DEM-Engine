@@ -2053,6 +2053,8 @@ class DEMSolver {
     std::vector<unsigned int> m_input_mesh_obj_family;
     std::vector<notStupidBool_t> m_input_mesh_obj_convex;
     std::vector<notStupidBool_t> m_input_mesh_obj_never_winner;
+    // 1 if the mesh is watertight (closed/manifold), 0 otherwise. Populated via DEMMesh::IsWatertight() at load time.
+    std::vector<notStupidBool_t> m_input_mesh_obj_watertight;
 
     // Processed unique family prescription info
     std::vector<familyPrescription_t> m_unique_family_prescription;
