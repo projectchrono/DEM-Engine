@@ -643,6 +643,10 @@ PYBIND11_MODULE(DEME, obj) {
         .def("SetMaxTriTriPenetration", &deme::DEMSolver::SetMaxTriTriPenetration,
              "Set the maximum allowed triangle-triangle penetration used as the margin added in kT contact detection. "
              "This value caps the penetration margin added to prevent excessively large values.")
+        .def("SetTriTriContactRejectionRatio", &deme::DEMSolver::SetTriTriContactRejectionRatio,
+             "Set the ratio threshold for rejecting suspicious tri-tri contacts. A contact is rejected when the "
+             "penetration depth exceeds this fraction of the contact-point-to-mesh-center distance for either mesh "
+             "involved. A negative value disables the guard entirely.")
         .def("GetAvgSphContacts", &deme::DEMSolver::GetAvgSphContacts,
              "Get the current number of contacts each sphere has")
         .def("UseAdaptiveBinSize", &deme::DEMSolver::UseAdaptiveBinSize,

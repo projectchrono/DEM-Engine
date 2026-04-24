@@ -629,6 +629,7 @@ class DEMDynamicThread {
                       float expand_factor,
                       float approx_max_vel,
                       double max_tritri_penetration,
+                      float triTriContactRejectionRatio,
                       float expand_safety_param,
                       float expand_safety_adder,
                       bool use_angvel_margin,

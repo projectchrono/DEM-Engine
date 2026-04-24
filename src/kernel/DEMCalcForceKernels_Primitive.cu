@@ -4,37 +4,6 @@
 #include <DEMCollisionKernels_SphTri_TriTri.cuh>
 _kernelIncludes_;
 
-// Reject same-sided tri-tri pairings that commonly arise when kT look-ahead is very large.
-// This uses only local facet orientations and contact normal, so it does not rely on body/patch centers and works
-// with concave meshes as long as winding is consistent.
-inline __device__ bool rejectTriTriSameSidedPair(const double3& triANode1,
-                                                 const double3& triANode2,
-                                                 const double3& triANode3,
-                                                 const double3& triBNode1,
-                                                 const double3& triBNode2,
-                                                 const double3& triBNode3,
-                                                 const float3& B2A) {
-    const float3 nA = to_float3(cross(triANode2 - triANode1, triANode3 - triANode1));
-    const float3 nB = to_float3(cross(triBNode2 - triBNode1, triBNode3 - triBNode1));
-
-    const float len2A = length2(nA);
-    const float len2B = length2(nB);
-    if (len2A <= DEME_TINY_FLOAT || len2B <= DEME_TINY_FLOAT) {
-        return false;
-    }
-
-    const float3 nA_unit = nA * rsqrtf(len2A);
-    const float3 nB_unit = nB * rsqrtf(len2B);
-
-    // sameFacing > 0 means normals generally point to the same side.
-    const float sameFacing = dot(nA_unit, nB_unit);
-    // For a physical interface between 2 closed shells, B2A should not align with both normals simultaneously.
-    const float alignProd = dot(B2A, nA_unit) * dot(B2A, nB_unit);
-
-    // Chosen to be cheap and robust: cull only clearly same-sided/strongly aligned false pairings.
-    return (sameFacing > 0.0f) && (alignProd > 0.01f);
-}
-
 inline __device__ float ownerShellHalfThickness(const deme::DEMSimParams* simParams,
                                                 const deme::DEMDataDT* granData,
                                                 deme::bodyID_t ownerID) {
@@ -336,13 +305,30 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
                 }
             }
 
-            // Remove opposite-side false pairings without using center-direction heuristics.
-            if ((in_contact || shell_contact_candidate) &&
-                rejectTriTriSameSidedPair(triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3, B2A)) {
-                in_contact = false;
-                shell_contact_candidate = false;
-                overlapDepth = -DEME_HUGE_FLOAT;
-                overlapArea = 0.0;
+            // Remove suspicious back-face false pairings: reject the contact if the penetration depth is too
+            // large relative to the distance between the contact point and either triangle's patch center.
+            // We use triPatchID[triangleID] to look up the mesh-defined patch center from relPosPatch, because
+            // idPatchA/B in the contact array represents island-merged synthetic group IDs in the complex flooding
+            // path and does not directly index relPosPatch; only the triangle-derived patch ID is reliable here.
+            if ((in_contact || shell_contact_candidate) && simParams->triTriContactRejectionRatio >= 0.f &&
+                granData->relPosPatch && granData->triPatchID) {
+                const double ratio = (double)simParams->triTriContactRejectionRatio;
+                const deme::bodyID_t patchA = granData->triPatchID[idA_raw];
+                float3 relPatchCenterA = granData->relPosPatch[patchA];
+                applyOriQToVector3(relPatchCenterA, AOriQ);
+                const double3 patchCenterA = AOwnerPos + to_double3(relPatchCenterA);
+                const double distA = length(contactPnt - patchCenterA);
+                const deme::bodyID_t patchB = granData->triPatchID[idB_raw];
+                float3 relPatchCenterB = granData->relPosPatch[patchB];
+                applyOriQToVector3(relPatchCenterB, BOriQ);
+                const double3 patchCenterB = BOwnerPos + to_double3(relPatchCenterB);
+                const double distB = length(contactPnt - patchCenterB);
+                if (overlapDepth > ratio * distA || overlapDepth > ratio * distB) {
+                    in_contact = false;
+                    shell_contact_candidate = false;
+                    overlapDepth = -DEME_HUGE_FLOAT;
+                    overlapArea = 0.0;
+                }
             }
 
             // Fix ContactType if needed

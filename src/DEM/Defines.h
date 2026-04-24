@@ -314,6 +314,10 @@ struct DEMSimParams {
     // Max tri-tri penetration margin (to prevent super large margins from being added)
     double capTriTriPenetration = DEME_HUGE_FLOAT;
 
+    // Ratio threshold for rejecting suspicious tri-tri contacts: a contact is rejected when the penetration depth
+    // exceeds this fraction of the distance from the contact point to a mesh's geometric center.
+    float triTriContactRejectionRatio = 0.8f;
+
     // The max vel at which the solver errors out
     float errOutVel = DEME_HUGE_FLOAT;
     // The max ang vel at which the solver errors out
