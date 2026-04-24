@@ -306,19 +306,23 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             }
 
             // Remove suspicious back-face false pairings: reject the contact if the penetration depth is too
-            // large relative to the distance between the contact point and either mesh's geometric center.
+            // large relative to the distance between the contact point and either triangle's patch center.
+            // We use triPatchID[triangleID] to look up the mesh-defined patch center from relPosPatch, because
+            // idPatchA/B in the contact array represents island-merged synthetic group IDs in the complex flooding
+            // path and does not directly index relPosPatch; only the triangle-derived patch ID is reliable here.
             if ((in_contact || shell_contact_candidate) && simParams->triTriContactRejectionRatio >= 0.f &&
-                granData->ownerMeshGeomCenter && ownerA < simParams->nOwnerBodies &&
-                ownerB < simParams->nOwnerBodies) {
+                granData->relPosPatch && granData->triPatchID) {
                 const double ratio = (double)simParams->triTriContactRejectionRatio;
-                float3 relCenterA = granData->ownerMeshGeomCenter[ownerA];
-                applyOriQToVector3(relCenterA, AOriQ);
-                const double3 geomCenterA = AOwnerPos + to_double3(relCenterA);
-                const double distA = length(contactPnt - geomCenterA);
-                float3 relCenterB = granData->ownerMeshGeomCenter[ownerB];
-                applyOriQToVector3(relCenterB, BOriQ);
-                const double3 geomCenterB = BOwnerPos + to_double3(relCenterB);
-                const double distB = length(contactPnt - geomCenterB);
+                const deme::bodyID_t patchA = granData->triPatchID[idA_raw];
+                float3 relPatchCenterA = granData->relPosPatch[patchA];
+                applyOriQToVector3(relPatchCenterA, AOriQ);
+                const double3 patchCenterA = AOwnerPos + to_double3(relPatchCenterA);
+                const double distA = length(contactPnt - patchCenterA);
+                const deme::bodyID_t patchB = granData->triPatchID[idB_raw];
+                float3 relPatchCenterB = granData->relPosPatch[patchB];
+                applyOriQToVector3(relPatchCenterB, BOriQ);
+                const double3 patchCenterB = BOwnerPos + to_double3(relPatchCenterB);
+                const double distB = length(contactPnt - patchCenterB);
                 if (overlapDepth > ratio * distA || overlapDepth > ratio * distB) {
                     in_contact = false;
                     shell_contact_candidate = false;

@@ -407,8 +407,6 @@ struct DEMDataDT {
     notStupidBool_t* ownerMeshNeverWinner;
     // Per-owner shell half-thickness (0 for regular meshes/clumps/analytical owners).
     float* ownerMeshShellHalfThickness;
-    // Per-owner mesh geometric center in local frame (relative to CoM), for mesh owners only.
-    float3* ownerMeshGeomCenter;
     bodyID_t* triPatchID;
     // Map global triangle ID -> compact neighbor index (NULL_BODYID if neighbors are not stored)
     bodyID_t* triNeighborIndex;
