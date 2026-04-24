@@ -143,7 +143,7 @@ __global__ void prepareWeightedNormalsForVoting_impl(DEMDataDT* granData,
 
         const float3 normal = granData->contactForces[myContactID];
         const float3 areaStorage = granData->contactPointGeometryB[myContactID];
-        float area = float3StorageToDouble(areaStorage);
+        const double area = float3StorageToDouble(areaStorage);
 
         // Compute weighted normal (normal * area).
         // Fake contacts do not contribute since their area is 0.
