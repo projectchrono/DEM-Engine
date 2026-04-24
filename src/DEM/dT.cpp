@@ -119,6 +119,7 @@ void DEMDynamicThread::packDataPointers() {
     ownerTriMesh.bindDevicePointer(&(granData->ownerTriMesh));
     ownerMeshConvex.bindDevicePointer(&(granData->ownerMeshConvex));
     ownerMeshNeverWinner.bindDevicePointer(&(granData->ownerMeshNeverWinner));
+    ownerMeshWatertight.bindDevicePointer(&(granData->ownerMeshWatertight));
     ownerMeshShellHalfThickness.bindDevicePointer(&(granData->ownerMeshShellHalfThickness));
     ownerPatchMesh.bindDevicePointer(&(granData->ownerPatchMesh));
     triPatchID.bindDevicePointer(&(granData->triPatchID));
@@ -286,6 +287,7 @@ void DEMDynamicThread::migrateDataToDevice() {
     ownerTriMesh.toDeviceAsync(streamInfo.stream);
     ownerMeshConvex.toDeviceAsync(streamInfo.stream);
     ownerMeshNeverWinner.toDeviceAsync(streamInfo.stream);
+    ownerMeshWatertight.toDeviceAsync(streamInfo.stream);
     ownerMeshShellHalfThickness.toDeviceAsync(streamInfo.stream);
     ownerPatchMesh.toDeviceAsync(streamInfo.stream);
     triPatchID.toDeviceAsync(streamInfo.stream);
@@ -646,6 +648,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(angAccSpecified, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(ownerMeshConvex, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(ownerMeshNeverWinner, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerMeshWatertight, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(ownerMeshShellHalfThickness, nOwnerBodies, 0);
 
     // Resize the family mask `matrix' (in fact it is flattened)
@@ -854,6 +857,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                                             const std::vector<unsigned int>& input_mesh_obj_family,
                                             const std::vector<notStupidBool_t>& input_mesh_obj_convex,
                                             const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
+                                            const std::vector<notStupidBool_t>& input_mesh_obj_watertight,
                                             const std::vector<unsigned int>& mesh_facet_owner,
                                             const std::vector<bodyID_t>& mesh_facet_patch,
                                             const std::vector<bodyID_t>& mesh_facet_neighbor1,
@@ -1279,6 +1283,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         familyID[owner_id] = this_family_num;
         ownerMeshConvex[owner_id] = input_mesh_obj_convex.at(i);
         ownerMeshNeverWinner[owner_id] = input_mesh_obj_never_winner.at(i);
+        ownerMeshWatertight[owner_id] = input_mesh_obj_watertight.at(i);
         ownerMeshShellHalfThickness[owner_id] = shell_half_thickness;
 
         // Cached initial values for wildcards of this mesh is not needed anymore
@@ -1371,6 +1376,7 @@ void DEMDynamicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpB
                                      const std::vector<unsigned int>& input_mesh_obj_family,
                                      const std::vector<notStupidBool_t>& input_mesh_obj_convex,
                                      const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
+                                     const std::vector<notStupidBool_t>& input_mesh_obj_watertight,
                                      const std::vector<unsigned int>& mesh_facet_owner,
                                      const std::vector<bodyID_t>& mesh_facet_patch,
                                      const std::vector<bodyID_t>& mesh_facet_neighbor1,
@@ -1403,7 +1409,7 @@ void DEMDynamicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpB
     // For initialization, owner array offset is 0
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_rot, input_ext_obj_family,
                          input_mesh_objs, input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family,
-                         input_mesh_obj_convex, input_mesh_obj_never_winner, mesh_facet_owner, mesh_facet_patch,
+                         input_mesh_obj_convex, input_mesh_obj_never_winner, input_mesh_obj_watertight, mesh_facet_owner, mesh_facet_patch,
                          mesh_facet_neighbor1, mesh_facet_neighbor2, mesh_facet_neighbor3, mesh_facets,
                          mesh_patch_owner, mesh_patch_materials, clump_templates, ext_obj_mass_types, ext_obj_moi_types,
                          ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, mesh_obj_mass_offsets, 0, 0, 0, 0,
@@ -1422,6 +1428,7 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                                              const std::vector<unsigned int>& input_mesh_obj_family,
                                              const std::vector<notStupidBool_t>& input_mesh_obj_convex,
                                              const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
+                                             const std::vector<notStupidBool_t>& input_mesh_obj_watertight,
                                              const std::vector<unsigned int>& mesh_facet_owner,
                                              const std::vector<bodyID_t>& mesh_facet_patch,
                                              const std::vector<bodyID_t>& mesh_facet_neighbor1,
@@ -1459,7 +1466,7 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
     // Analytical objects-related arrays should be empty
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_rot, input_ext_obj_family,
                          input_mesh_objs, input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family,
-                         input_mesh_obj_convex, input_mesh_obj_never_winner, mesh_facet_owner, mesh_facet_patch,
+                         input_mesh_obj_convex, input_mesh_obj_never_winner, input_mesh_obj_watertight, mesh_facet_owner, mesh_facet_patch,
                          mesh_facet_neighbor1, mesh_facet_neighbor2, mesh_facet_neighbor3, mesh_facets,
                          mesh_patch_owner, mesh_patch_materials, clump_templates, ext_obj_mass_types, ext_obj_moi_types,
                          ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, mesh_obj_mass_offsets,

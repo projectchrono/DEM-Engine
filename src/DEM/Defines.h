@@ -405,6 +405,9 @@ struct DEMDataDT {
     bodyID_t* ownerAnalBody;
     notStupidBool_t* ownerMeshConvex;
     notStupidBool_t* ownerMeshNeverWinner;
+    // Per-owner watertightness flag: 1 if mesh owner's surface is closed/manifold (watertight), 0 otherwise.
+    // Non-watertight meshes have unreliable patch centers, so the back-face rejection guard is skipped for them.
+    notStupidBool_t* ownerMeshWatertight;
     // Per-owner shell half-thickness (0 for regular meshes/clumps/analytical owners).
     float* ownerMeshShellHalfThickness;
     bodyID_t* triPatchID;

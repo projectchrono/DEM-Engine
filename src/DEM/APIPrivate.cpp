@@ -1213,6 +1213,7 @@ void DEMSolver::preprocessTriangleObjs() {
         m_input_mesh_obj_family.push_back(mesh_obj->family_code);
         m_input_mesh_obj_convex.push_back(mesh_obj->is_convex ? 1 : 0);
         m_input_mesh_obj_never_winner.push_back(mesh_obj->never_winner ? 1 : 0);
+        m_input_mesh_obj_watertight.push_back(mesh_obj->IsWatertight() ? 1 : 0);
         m_mesh_facet_owner.insert(m_mesh_facet_owner.end(), mesh_obj->GetNumTriangles(), thisMeshObj);
 
         const bodyID_t tri_offset = static_cast<bodyID_t>(m_mesh_facets.size());
@@ -1811,7 +1812,7 @@ void DEMSolver::initializeGPUArrays() {
         m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
         // Meshed objects' initial stats
         cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_input_mesh_obj_convex,
-        m_input_mesh_obj_never_winner, m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facet_neighbor1,
+        m_input_mesh_obj_never_winner, m_input_mesh_obj_watertight, m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facet_neighbor1,
         m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets, m_mesh_patch_owner, m_mesh_patch_materials,
         // Clump template name mapping
         m_template_number_name_map,
@@ -1867,7 +1868,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
         // Meshed objects' initial stats
         cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_input_mesh_obj_convex,
-        m_input_mesh_obj_never_winner, m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facet_neighbor1,
+        m_input_mesh_obj_never_winner, m_input_mesh_obj_watertight, m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facet_neighbor1,
         m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets, m_mesh_patch_owner, m_mesh_patch_materials,
         // Clump template info (mass, sphere components, materials etc.)
         flattened_clump_templates,

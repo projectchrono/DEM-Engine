@@ -306,24 +306,43 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
             }
 
             // Remove suspicious back-face false pairings: reject the contact if the penetration depth is too
-            // large relative to the distance between the contact point and either triangle's patch center.
+            // large relative to the distance between the contact point and a triangle's patch center.
             // We use triPatchID[triangleID] to look up the mesh-defined patch center from relPosPatch, because
             // idPatchA/B in the contact array represents island-merged synthetic group IDs in the complex flooding
             // path and does not directly index relPosPatch; only the triangle-derived patch ID is reliable here.
+            // For non-watertight meshes the patch center is not representative, so the corresponding half of the
+            // guard is skipped. The check for the watertight side is still applied.
             if ((in_contact || shell_contact_candidate) && simParams->triTriContactRejectionRatio >= 0.f &&
                 granData->relPosPatch && granData->triPatchID) {
                 const double ratio = (double)simParams->triTriContactRejectionRatio;
+                bool reject = false;
+                // Check mesh A side only if mesh A's owner is watertight
                 const deme::bodyID_t patchA = granData->triPatchID[idA_raw];
-                float3 relPatchCenterA = granData->relPosPatch[patchA];
-                applyOriQToVector3(relPatchCenterA, AOriQ);
-                const double3 patchCenterA = AOwnerPos + to_double3(relPatchCenterA);
-                const double distA = length(contactPnt - patchCenterA);
-                const deme::bodyID_t patchB = granData->triPatchID[idB_raw];
-                float3 relPatchCenterB = granData->relPosPatch[patchB];
-                applyOriQToVector3(relPatchCenterB, BOriQ);
-                const double3 patchCenterB = BOwnerPos + to_double3(relPatchCenterB);
-                const double distB = length(contactPnt - patchCenterB);
-                if (overlapDepth > ratio * distA || overlapDepth > ratio * distB) {
+                const deme::bodyID_t patchOwnerA = granData->ownerPatchMesh[patchA];
+                if (!granData->ownerMeshWatertight || granData->ownerMeshWatertight[patchOwnerA]) {
+                    float3 relPatchCenterA = granData->relPosPatch[patchA];
+                    applyOriQToVector3(relPatchCenterA, AOriQ);
+                    const double3 patchCenterA = AOwnerPos + to_double3(relPatchCenterA);
+                    const double distA = length(contactPnt - patchCenterA);
+                    if (overlapDepth > ratio * distA) {
+                        reject = true;
+                    }
+                }
+                // Check mesh B side only if mesh B's owner is watertight
+                if (!reject) {
+                    const deme::bodyID_t patchB = granData->triPatchID[idB_raw];
+                    const deme::bodyID_t patchOwnerB = granData->ownerPatchMesh[patchB];
+                    if (!granData->ownerMeshWatertight || granData->ownerMeshWatertight[patchOwnerB]) {
+                        float3 relPatchCenterB = granData->relPosPatch[patchB];
+                        applyOriQToVector3(relPatchCenterB, BOriQ);
+                        const double3 patchCenterB = BOwnerPos + to_double3(relPatchCenterB);
+                        const double distB = length(contactPnt - patchCenterB);
+                        if (overlapDepth > ratio * distB) {
+                            reject = true;
+                        }
+                    }
+                }
+                if (reject) {
                     in_contact = false;
                     shell_contact_candidate = false;
                     overlapDepth = -DEME_HUGE_FLOAT;
