@@ -187,8 +187,10 @@ int main() {
         // Current angle of Cylinder B axis from the z-axis
         float angle_deg = 90.0f + omega_y * static_cast<float>(i) * frame_time * 180.0f / (float)PI;
 
-        std::cout << "t=" << i * frame_time << "s" << "  axis_angle_from_z=" << angle_deg << " deg"
-                  << "  |F_cnt_avg|=" << length(avg_force) << " N" << "  #MM_contacts=" << mm_cnt;
+        std::cout << "t=" << i * frame_time << "s"
+                  << "  axis_angle_from_z=" << angle_deg << " deg"
+                  << "  |F_cnt_avg|=" << length(avg_force) << " N"
+                  << "  #MM_contacts=" << mm_cnt;
 
         if (mm_cnt > 0) {
             float nm =

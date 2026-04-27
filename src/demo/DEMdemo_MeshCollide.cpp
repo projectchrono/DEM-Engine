@@ -31,6 +31,7 @@ int main() {
     // If not, meshes will not have contacts with each other or analytical boundaries (but still have contacts with
     // clumps).
     DEMSim.SetMeshUniversalContact(true);
+    // DEMSim.SetSimplePatchCombination(true);
 
     // Special material: has a cohesion param
     auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.3}, {"Crr", 0.0}});

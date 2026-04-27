@@ -181,7 +181,9 @@ int main() {
         auto cnt_info = DEMSim.GetContactDetailedInfo(0.0f);
         int num_cnts = cnt_info->GetContactType().size();
 
-        std::cout << "t=" << i * frame_time << "s" << "  tip_x=" << tip_x << " m" << "  tip_z=" << tip_z << " m"
+        std::cout << "t=" << i * frame_time << "s"
+                  << "  tip_x=" << tip_x << " m"
+                  << "  tip_z=" << tip_z << " m"
                   << "  #MM_contacts=" << num_cnts << "  |F_cnt|=" << force_mag << " N";
 
         if (force_mag > 1e-3) {
