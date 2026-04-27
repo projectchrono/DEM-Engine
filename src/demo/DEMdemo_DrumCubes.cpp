@@ -169,10 +169,8 @@ int main() {
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
-    std::cout << (time_sec.count()) / time_end * 10.0 << " seconds (wall time) to finish 10 seconds' simulation"
-              << std::endl;
-    std::cout << (dynamics_wall) / time_end * 10.0
-              << " seconds (wall time, DoDynamics only) to finish 10 seconds' simulation" << std::endl;
+    std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
+    std::cout << dynamics_wall << " seconds (wall time, DoDynamics only) to finish the simulation" << std::endl;
     DEMSim.ShowThreadCollaborationStats();
     DEMSim.ClearThreadCollaborationStats();
 

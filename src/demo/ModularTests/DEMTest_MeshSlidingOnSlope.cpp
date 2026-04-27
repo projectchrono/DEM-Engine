@@ -191,9 +191,8 @@ int main() {
         float3 vel = cube_tracker->Vel();
         double vel_mag = std::sqrt((double)vel.x * vel.x + (double)vel.y * vel.y + (double)vel.z * vel.z);
 
-        std::cout << "t=" << i * frame_time << "s (avg over " << n_sub_samples << " sub-steps)"
-                  << "  pos=(" << pos.x << "," << pos.y << "," << pos.z << ")"
-                  << "  |v|=" << vel_mag << " m/s"
+        std::cout << "t=" << i * frame_time << "s (avg over " << n_sub_samples << " sub-steps)" << "  pos=(" << pos.x
+                  << "," << pos.y << "," << pos.z << ")" << "  |v|=" << vel_mag << " m/s"
                   << "  |F_cnt_avg|=" << force_mag << " N";
 
         if (force_mag > 1.0) {
