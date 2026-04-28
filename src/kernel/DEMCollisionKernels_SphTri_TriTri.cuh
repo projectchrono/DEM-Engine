@@ -893,6 +893,11 @@ __device__ __forceinline__ Scalar satSeparationOnAxis(const Vec& axis,
  * @param depth Output: penetration depth (max distance of submerged vertices)
  * @param area Output: area of the clipping polygon
  * @param centroid Output: centroid of the clipping polygon
+ * @param minPenetrationFullySubmerged Output: shallowest vertex penetration depth, but ONLY non-zero when all 3
+ *        incident vertices are submerged (i.e., the incident triangle is completely below the reference plane). When
+ *        fewer than 3 vertices are submerged this is set to 0. This value is used by kT margin sizing: a triangle
+ *        that is fully submerged in the reference plane direction cannot be detected by SAT, so its shallowest
+ *        vertex depth tells us the minimum extra margin we must add to keep the contact traceable.
  * @return true if there is contact (at least one vertex submerged), false otherwise
  */
 template <typename T1, typename T2>
@@ -901,11 +906,14 @@ __device__ bool projectTriangleOntoTriangle(const T1* incTri,
                                             const T1& refNormal,
                                             T2& depth,
                                             T2& area,
-                                            T1& centroid) {
+                                            T1& centroid,
+                                            T2& minPenetrationFullySubmerged) {
     // Compute signed distances of incident triangle vertices to reference plane
     area = T2(0.0);
+    minPenetrationFullySubmerged = T2(0.0);
     T2 incDists[3];
     T2 maxPenetration = 0.0;
+    T2 minPenetration = T2(DEME_HUGE_FLOAT);
     int8_t numSubmerged = 0;
 #pragma unroll
     for (int8_t i = 0; i < 3; ++i) {
@@ -915,7 +923,14 @@ __device__ bool projectTriangleOntoTriangle(const T1* incTri,
             T2 pen = -incDists[i];
             if (pen > maxPenetration)
                 maxPenetration = pen;
+            if (pen < minPenetration)
+                minPenetration = pen;
         }
+    }
+    // The shallowest penetration is only meaningful when ALL vertices are submerged: that is the only case where the
+    // incident triangle is completely buried and cannot be found by SAT on its own.
+    if (numSubmerged == 3) {
+        minPenetrationFullySubmerged = minPenetration;
     }
 
     // If no vertices are submerged, no contact
@@ -1484,11 +1499,21 @@ __device__ bool checkTriangleTriangleOverlap(
     T1& normal,         ///< contact normal (B2A direction)
     T2& depth,          ///< penetration (positive if in contact)
     T2& projectedArea,  ///< projected area of clipping polygon (optional output)
-    T1& point) {        ///< contact point
+    T1& point,          ///< contact point
+    T2& minDepthA,      ///< shallowest penetration of triA into triB's plane; non-zero only when triA is fully
+                        ///< submerged below triB's plane (all 3 vertices on the negative side). Used to size kT
+                        ///< contact-detection margins for buried-triangle scenarios.
+    T2& minDepthB) {    ///< shallowest penetration of triB into triA's plane; non-zero only when triB is fully
+                        ///< submerged below triA's plane. Same purpose as minDepthA.
     // Triangle A vertices (tri1)
     const T1 triA[3] = {A1, B1, C1};
     // Triangle B vertices (tri2)
     const T1 triB[3] = {A2, B2, C2};
+
+    // Initialise both min-depth outputs to 0; they will be set to non-zero only when the corresponding triangle
+    // is completely submerged in the other triangle's plane.
+    minDepthA = T2(0.0);
+    minDepthB = T2(0.0);
 
     // Compute face normal for triangle A first; triangle B normal is only needed if B->A projection hits.
     T1 nA = normalize(cross(B1 - A1, C1 - A1));
@@ -1500,10 +1525,11 @@ __device__ bool checkTriangleTriangleOverlap(
     // and clip using Sutherland-Hodgman algorithm
     // ========================================================================
 
-    // Project triangle B onto triangle A's plane and clip against A
+    // Project triangle B onto triangle A's plane and clip against A.
+    // minDepthB is set non-zero only if all of triB is below triA's plane (fully submerged).
     T2 depthBA, areaBA;
     T1 centroidBA;
-    const bool contactBA = projectTriangleOntoTriangle<T1, T2>(triB, triA, nA, depthBA, areaBA, centroidBA);
+    const bool contactBA = projectTriangleOntoTriangle<T1, T2>(triB, triA, nA, depthBA, areaBA, centroidBA, minDepthB);
 
     if (!contactBA) {
         // No contact detected, Provide separation info
@@ -1526,11 +1552,12 @@ __device__ bool checkTriangleTriangleOverlap(
         return false;
     }
 
-    // Project triangle A onto triangle B's plane and clip against B
+    // Project triangle A onto triangle B's plane and clip against B.
+    // minDepthA is set non-zero only if all of triA is below triB's plane (fully submerged).
     T1 nB = normalize(cross(B2 - A2, C2 - A2));
     T2 depthAB, areaAB;
     T1 centroidAB;
-    const bool contactAB = projectTriangleOntoTriangle<T1, T2>(triA, triB, nB, depthAB, areaAB, centroidAB);
+    const bool contactAB = projectTriangleOntoTriangle<T1, T2>(triA, triB, nB, depthAB, areaAB, centroidAB, minDepthA);
 
     if (!contactAB) {
         // No contact detected, Provide separation info

@@ -42,6 +42,12 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
     double overlapDepth = 0.0;
     // Area of the contact surface, or in the mesh--mesh case, area of the clipping polygon projection
     double overlapArea = 0.0;
+    // Shallowest vertex penetration of triA into triB's plane, and vice versa.
+    // Non-zero ONLY when that triangle is completely submerged (all 3 vertices below the other's plane).
+    // Used to register in maxTriTriPenetration so kT can expand contact-detection margins enough to keep
+    // fully-buried triangles' contacts traceable by the broad phase.
+    double minDepthA = 0.0;
+    double minDepthB = 0.0;
     // `Body pos' in the primitive contact kernel means the position of the primitive itself, e.g., sphere center or
     // triangle nodes
     double3 AOwnerPos, bodyAPos, BOwnerPos, bodyBPos;
@@ -270,9 +276,9 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         } else if constexpr (AType == deme::GEO_T_TRIANGLE) {
             // Triangle--triangle contact, a bit more complex...
             double3 contact_normal;
-            bool in_contact = checkTriangleTriangleOverlap<double3, double>(triANode1, triANode2, triANode3, triBNode1,
-                                                                            triBNode2, triBNode3, contact_normal,
-                                                                            overlapDepth, overlapArea, contactPnt);
+            bool in_contact = checkTriangleTriangleOverlap<double3, double>(
+                triANode1, triANode2, triANode3, triBNode1, triBNode2, triBNode3, contact_normal, overlapDepth,
+                overlapArea, contactPnt, minDepthA, minDepthB);
             bool shell_contact_candidate = false;
             B2A = to_float3(contact_normal);
             if (in_contact) {
@@ -468,15 +474,25 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // store the (double) contact penetration. contactPointGeometryB is used to store the (double) contact area
         // contactTorque_convToForce is used to store the contact point position (cast from double3 to float3)
 
-        // For tri-tri contacts, atomically update the per-triangle max penetration so kT can use it for margin sizing.
-        // Non-negative floats maintain IEEE 754 bit-ordering under unsigned int reinterpretation, so atomicMax on
-        // their unsigned int bit representation gives the correct result.
+        // For tri-tri contacts, atomically update the per-triangle shallowest-penetration array so kT can use it for
+        // margin sizing. We store the shallowest (minimum) vertex penetration depth for each triangle, but only when
+        // that triangle is completely submerged (all 3 vertices below the other mesh's plane). A fully submerged
+        // triangle cannot be detected by SAT; the shallowest vertex depth is the tightest lower bound on how much
+        // extra contact-detection margin kT must add to keep that contact traceable. Using the shallowest depth
+        // (rather than the deepest overlapDepth) avoids unnecessarily inflating the margin when only one or two
+        // vertices are deeply buried. Non-negative floats maintain IEEE 754 bit-ordering under unsigned int
+        // reinterpretation, so atomicMax on their unsigned int bit representation gives the correct result.
         // Skipped when meshParticlesLowPoly is enabled (the array is not used by kT in that mode).
         if constexpr (CONTACT_TYPE == deme::TRIANGLE_TRIANGLE_CONTACT) {
-            if (!simParams->meshParticlesLowPoly && ContactType != deme::NOT_A_CONTACT && overlapDepth > 0.0) {
-                unsigned int valBits = __float_as_uint(static_cast<float>(overlapDepth));
-                atomicMax((unsigned int*)&granData->maxTriTriPenetration[idA_raw], valBits);
-                atomicMax((unsigned int*)&granData->maxTriTriPenetration[idB_raw], valBits);
+            if (!simParams->meshParticlesLowPoly && ContactType != deme::NOT_A_CONTACT) {
+                if (minDepthA > 0.0) {
+                    unsigned int valBits = __float_as_uint(static_cast<float>(minDepthA));
+                    atomicMax((unsigned int*)&granData->maxTriTriPenetration[idA_raw], valBits);
+                }
+                if (minDepthB > 0.0) {
+                    unsigned int valBits = __float_as_uint(static_cast<float>(minDepthB));
+                    atomicMax((unsigned int*)&granData->maxTriTriPenetration[idB_raw], valBits);
+                }
             }
         }
 
