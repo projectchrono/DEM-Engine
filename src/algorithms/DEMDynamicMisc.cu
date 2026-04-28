@@ -253,6 +253,11 @@ __global__ void computePerPrimitiveWeightedQuantities_impl(DEMDataDT* granData,
         projectedPens[idx] = projPen;
         weights[idx] = w;
         weightedCPs[idx] = cp * w;
+
+        // printf(
+        //     "voted normal: (%f, %f, %f), original normal: (%f, %f, %f), original pen: %f, dot: %f, "
+        //     "projected pen: %f, area: %f, projected area: %f\n", vn.x, vn.y, vn.z, normal.x,
+        //     normal.y, normal.z, pen, dp, projPen, area, projArea);
     }
 }
 

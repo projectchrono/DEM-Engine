@@ -2990,7 +2990,7 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                 // weights (projArea*projPen), and weighted contact points. One kernel pass replaces the
                 // former two separate kernel calls (computeWeightedUsefulPenetration + computeWeightedContactPoints).
 
-                // NOTE: We tested the following treatment: Fusing the following few quantities into one struct (like a
+                // NOTE: We tested the following treatment: Fusing the following few quantities into one struct (like
                 // AoS), then define the + operator for it to max/sum reduce it in one CUB call. Turns out, although it
                 // reduces the number of CUB calls from 4 or 5 to 1, it is not more efficient. It seems that the better
                 // alignment and perhaps more manageable single-kernel data size by using separate arrays, still wins
