@@ -6,7 +6,7 @@
 
 class HeaderGenerator {
   public:
-    std::string generateHeader(const std::filesystem::path&){
+    std::string generateHeader(const std::filesystem::path&) {
 
         // read source from file
 

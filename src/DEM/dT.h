@@ -277,7 +277,7 @@ class DEMDynamicThread {
 
     // Per-triangle maximum primitive-based tri-tri penetration depth (computed each step via atomic max in the
     // primitive force kernel; transferred to kT each work order)
-    DeviceArray<double> maxTriTriPenetration = DeviceArray<double>(&m_approxDeviceBytesUsed);
+    DeviceArray<float> maxTriTriPenetration = DeviceArray<float>(&m_approxDeviceBytesUsed);
 
     // Optional per-triangle diagnostics (P, V, P*V) for selected mesh owners.
     bool triPVTrackingEnabled = false;
@@ -951,9 +951,7 @@ class DEMDynamicThread {
     void workerThread();
 
     // Sync my stream
-    void syncMemoryTransfer() {
-        DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-    }
+    void syncMemoryTransfer() { DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream)); }
 
     // Record and sync a reusable event on the main stream
     void recordAndSyncEvent();
@@ -1162,9 +1160,7 @@ class DEMDynamicThread {
     };
     FutureDriftRegulator futureDriftRegulator;
     // Helpers for future drift regulator -
-    static inline unsigned clamp_drift_u(unsigned v, unsigned maxv) {
-        return (v < 1u) ? 1u : (v > maxv ? maxv : v);
-    }
+    static inline unsigned clamp_drift_u(unsigned v, unsigned maxv) { return (v < 1u) ? 1u : (v > maxv ? maxv : v); }
     static inline unsigned clamp_wait_i(int v, unsigned maxv) {
         if (v <= 0)
             return 0u;

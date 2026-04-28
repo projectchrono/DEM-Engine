@@ -234,8 +234,7 @@ int main() {
         float tip_r = std::sqrt(pos.x * pos.x + pos.y * pos.y) - centroid_above_tip;
 
         std::cout << "t=" << t_end << "s (avg over " << n_sub_samples << " sub-steps)"
-                  << "  centroid_r=" << std::sqrt(pos.x * pos.x + pos.y * pos.y) << " m"
-                  << "  tip_r~" << tip_r << " m"
+                  << "  centroid_r=" << std::sqrt(pos.x * pos.x + pos.y * pos.y) << " m" << "  tip_r~" << tip_r << " m"
                   << "  |F_cnt_avg|=" << force_mag << " N";
 
         if (force_mag > 1e-3) {

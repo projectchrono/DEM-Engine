@@ -689,7 +689,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     // maxTriTriPenetration stores per-triangle max primitive-based tri-tri penetration for transfer to kT.
     // After initialization, it stores no meaningful values, so it must be zeroed here.
     DEME_DEVICE_ARRAY_RESIZE(maxTriTriPenetration, nTriGM);
-    DEME_GPU_CALL(cudaMemset(maxTriTriPenetration.data(), 0, nTriGM * sizeof(double)));
+    DEME_GPU_CALL(cudaMemset(maxTriTriPenetration.data(), 0, nTriGM * sizeof(float)));
 
     // Resize to the number of mesh patches
     DEME_DUAL_ARRAY_RESIZE(ownerPatchMesh, nMeshPatches, 0);
@@ -2766,7 +2766,7 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
 
     xfer::XferList xm;
     xm.add(granData->pKTOwnedBuffer_maxTriTriPenetration, maxTriTriPenetration.data(),
-           (size_t)simParams->nTriGM * sizeof(double));
+           (size_t)simParams->nTriGM * sizeof(float));
     xm.run(dstDev, srcDev, xfer_stream);
 
     if (solverFlags.willMeshDeform) {
@@ -3191,8 +3191,8 @@ void DEMDynamicThread::calculateForces() {
     // or other sources.
     // Reset per-triangle max tri-tri penetration for this timestep (must happen before the primitive force kernels
     // which update it via atomic max; zeroing unconditionally ensures a clean slate every step for kT).
-    DEME_GPU_CALL(cudaMemsetAsync(maxTriTriPenetration.data(), 0, (size_t)simParams->nTriGM * sizeof(double),
-                                  streamInfo.stream));
+    DEME_GPU_CALL(
+        cudaMemsetAsync(maxTriTriPenetration.data(), 0, (size_t)simParams->nTriGM * sizeof(float), streamInfo.stream));
     if (nContactPairs > 0) {
         timers.StartGpuTimer("Calculate contact forces", streamInfo.stream);
         DEME_NVTX_RANGE("dT::contactForces");

@@ -242,7 +242,7 @@ inline void DEMKinematicThread::unpackMyBuffer() {
     // array (on kT's device). This must happen before computeMarginFromAbsv, which reads maxTriTriPenetration[triID].
     if (simParams->nTriGM > 0) {
         DEME_GPU_CALL(cudaMemcpyAsync(maxTriTriPenetration.data(), maxTriTriPenetration_buffer.data(),
-                                      (size_t)simParams->nTriGM * sizeof(double), cudaMemcpyDeviceToDevice,
+                                      (size_t)simParams->nTriGM * sizeof(float), cudaMemcpyDeviceToDevice,
                                       streamInfo.stream));
     }
 

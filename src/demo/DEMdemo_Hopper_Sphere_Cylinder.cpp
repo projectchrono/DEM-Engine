@@ -218,7 +218,7 @@ int main() {
     // make cylinders
     //
     {
-        float shift_xyz = 1.0 * (length)*1.1;
+        float shift_xyz = 1.0 * (length) * 1.1;
         float x = 0;
         float y = 0;
 
@@ -307,7 +307,7 @@ int main() {
     //
 
     {
-        float shift_xyz = 1.0 * (radiusSph)*2.0;
+        float shift_xyz = 1.0 * (radiusSph) * 2.0;
         float x = 0;
         float y = 0;
 

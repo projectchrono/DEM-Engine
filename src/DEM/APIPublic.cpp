@@ -1305,9 +1305,9 @@ void DEMSolver::SetTriTriPenetration(double penetration) {
     if (nTriGM == 0) {
         return;
     }
-    std::vector<double> hostBuf(nTriGM, penetration);
-    DEME_GPU_CALL(cudaMemcpy(dT->maxTriTriPenetration.data(), hostBuf.data(), nTriGM * sizeof(double),
-                             cudaMemcpyHostToDevice));
+    std::vector<float> hostBuf(nTriGM, static_cast<float>(penetration));
+    DEME_GPU_CALL(
+        cudaMemcpy(dT->maxTriTriPenetration.data(), hostBuf.data(), nTriGM * sizeof(float), cudaMemcpyHostToDevice));
 }
 
 void DEMSolver::SetExpandSafetyType(const std::string& insp_type) {
