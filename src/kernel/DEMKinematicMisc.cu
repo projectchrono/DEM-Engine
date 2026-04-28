@@ -95,6 +95,9 @@ DEME_KERNEL void computeMarginFromAbsv_implTri(deme::DEMSimParams* simParams,
         double finalMargin =
             (double)(vel * simParams->dyn.expSafetyMulti + simParams->dyn.expSafetyAdder) * (*ts) * (*maxDrift) +
             granData->familyExtraMarginSize[my_family];
+        // The finalMargin should not be smaller than the existing penetration, so we always take into account the
+        // already submerged triangles (unless we know for mesh-mesh contact, there won't be triangles completely
+        // submerged inside another mesh)
         if (!simParams->meshParticlesLowPoly && finalMargin < penetrationMargin) {
             finalMargin = penetrationMargin;
         }
