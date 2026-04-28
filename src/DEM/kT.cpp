@@ -238,8 +238,8 @@ inline void DEMKinematicThread::unpackMyBuffer() {
         xl.run(dev, dev, streamInfo.stream);
     }
 
-    // Copy the per-triangle max tri-tri penetration array from the transfer buffer to kT's working array.
-    // This must happen before computeMarginFromAbsv, which reads granData->maxTriTriPenetration.
+    // Copy the per-triangle max tri-tri penetration array from the transfer buffer (on dT's device) to kT's working
+    // array (on kT's device). This must happen before computeMarginFromAbsv, which reads maxTriTriPenetration[triID].
     if (simParams->nTriGM > 0) {
         DEME_GPU_CALL(cudaMemcpyAsync(maxTriTriPenetration.data(), maxTriTriPenetration_buffer.data(),
                                       (size_t)simParams->nTriGM * sizeof(double), cudaMemcpyDeviceToDevice,
