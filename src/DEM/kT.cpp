@@ -181,7 +181,7 @@ inline void DEMKinematicThread::computeMarginFromAbsv(float* absVel_owner, float
             .instantiate()
             .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
             .launch(&simParams, &granData, absVel_owner, absAngVel_owner, &(stateParams.ts), &(stateParams.maxDrift),
-                    &(stateParams.maxTriTriPenetration), solverFlags.meshUniversalContact, (size_t)simParams->nTriGM);
+                    maxTriTriPenetration.data(), solverFlags.meshUniversalContact, (size_t)simParams->nTriGM);
     }
     blocks_needed = (simParams->nAnalGM + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed > 0) {
@@ -219,7 +219,6 @@ inline void DEMKinematicThread::unpackMyBuffer() {
         xfer::XferList scalars;
         scalars.add(&(stateParams.ts), &(stateParams.ts_buffer), sizeof(float));
         scalars.add(&(stateParams.maxDrift), &(stateParams.maxDrift_buffer), sizeof(unsigned int));
-        scalars.add(&(stateParams.maxTriTriPenetration), &(stateParams.maxTriTriPenetration_buffer), sizeof(double));
         scalars.run(dev, dev, streamInfo.stream);
         // swap_device_buffer updates pointer fields in host-side granData via DualArray binding; sync them to device
         // immediately because kernels below use the device-side copy of granData.
@@ -236,8 +235,15 @@ inline void DEMKinematicThread::unpackMyBuffer() {
         xl.add(granData->oriQz, oriQ3_buffer.data(), simParams->nOwnerBodies * sizeof(oriQ_t));
         xl.add(&(stateParams.ts), &(stateParams.ts_buffer), sizeof(float));
         xl.add(&(stateParams.maxDrift), &(stateParams.maxDrift_buffer), sizeof(unsigned int));
-        xl.add(&(stateParams.maxTriTriPenetration), &(stateParams.maxTriTriPenetration_buffer), sizeof(double));
         xl.run(dev, dev, streamInfo.stream);
+    }
+
+    // Copy the per-triangle max tri-tri penetration array from the transfer buffer to kT's working array.
+    // This must happen before computeMarginFromAbsv, which reads granData->maxTriTriPenetration.
+    if (simParams->nTriGM > 0) {
+        DEME_GPU_CALL(cudaMemcpyAsync(maxTriTriPenetration.data(), maxTriTriPenetration_buffer.data(),
+                                      (size_t)simParams->nTriGM * sizeof(double), cudaMemcpyDeviceToDevice,
+                                      streamInfo.stream));
     }
 
     // Make sure we don't have velocity that is too high
@@ -247,7 +253,6 @@ inline void DEMKinematicThread::unpackMyBuffer() {
                         solverScratchSpace);
     stateParams.maxVel.toHost();
     stateParams.maxAngVel.toHost();
-    stateParams.maxTriTriPenetration.toHost();
     if (*stateParams.maxVel > simParams->errOutVel || !std::isfinite(*stateParams.maxVel) ||
         *stateParams.maxAngVel > simParams->errOutAngVel || !std::isfinite(*stateParams.maxAngVel)) {
         DEME_ERROR(
@@ -265,14 +270,8 @@ inline void DEMKinematicThread::unpackMyBuffer() {
         DEME_STATUS("OVER_MAX_VEL", "Simulation entity velocity reached %.6g, over the user-estimated max (%.6g)",
                     *stateParams.maxVel, simParams->dyn.approxMaxVel);
     }
-    if (*stateParams.maxTriTriPenetration > simParams->capTriTriPenetration) {
-        DEME_STATUS("OVER_MAX_MESH_PENETRATION",
-                    "Mesh--mesh contact penetration reached %.6g, over the user-estimated max (%.6g)",
-                    *stateParams.maxTriTriPenetration, simParams->capTriTriPenetration);
-    }
     DEME_DEBUG_PRINTF("kT received an update, max vel: %.6g", *stateParams.maxVel);
     DEME_DEBUG_PRINTF("kT received an update, max ang vel: %.6g", *stateParams.maxAngVel);
-    DEME_DEBUG_PRINTF("kT received an update, max tri--tri penetration: %.6g", *stateParams.maxTriTriPenetration);
 
     // Whatever drift value dT says, kT listens; unless kinematicMaxFutureDrift is negative in which case the user
     // explicitly said not caring the future drift.
@@ -351,6 +350,7 @@ inline void DEMKinematicThread::unpackMyBuffer() {
     dT->granData->pKTOwnedBuffer_relPosNode1 = relPosNode1_buffer.data();
     dT->granData->pKTOwnedBuffer_relPosNode2 = relPosNode2_buffer.data();
     dT->granData->pKTOwnedBuffer_relPosNode3 = relPosNode3_buffer.data();
+    dT->granData->pKTOwnedBuffer_maxTriTriPenetration = maxTriTriPenetration_buffer.data();
 }
 
 inline void DEMKinematicThread::sendToTheirBuffer() {
@@ -740,6 +740,7 @@ void DEMKinematicThread::packDataPointers() {
     relPosNode1.bindDevicePointer(&(granData->relPosNode1));
     relPosNode2.bindDevicePointer(&(granData->relPosNode2));
     relPosNode3.bindDevicePointer(&(granData->relPosNode3));
+    maxTriTriPenetration.bindDevicePointer(&(granData->maxTriTriPenetration));
 
     // Template array pointers
     radiiSphere.bindDevicePointer(&(granData->radiiSphere));
@@ -978,6 +979,8 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
         DEME_DEVICE_ARRAY_RESIZE(relPosNode1_buffer, nTriGM);
         DEME_DEVICE_ARRAY_RESIZE(relPosNode2_buffer, nTriGM);
         DEME_DEVICE_ARRAY_RESIZE(relPosNode3_buffer, nTriGM);
+        // Buffer for per-triangle max tri-tri penetration (must be on dT's device for fast write)
+        DEME_DEVICE_ARRAY_RESIZE(maxTriTriPenetration_buffer, nTriGM);
 
         // Unset the device change we just did
         DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
@@ -996,6 +999,8 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(relPosNode1, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(relPosNode2, nTriGM, make_float3(0));
     DEME_DUAL_ARRAY_RESIZE(relPosNode3, nTriGM, make_float3(0));
+    // kT's working copy of per-triangle max tri-tri penetration (on kT's device)
+    DEME_DEVICE_ARRAY_RESIZE(maxTriTriPenetration, nTriGM);
 
     // And analytical geometry owner array
     DEME_DUAL_ARRAY_RESIZE(ownerAnalBody, nAnalGM, 0);

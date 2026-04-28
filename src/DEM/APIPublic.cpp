@@ -1299,8 +1299,15 @@ void DEMSolver::SetTriTriPenetration(double penetration) {
             "SetTriTriPenetration called before system initialization. This has no effect until after Initialize()."));
         return;
     }
-    // Directly set the value in dT
-    *dT->maxTriTriPenetration = penetration;
+    // Fill the entire per-triangle array with the given penetration value so kT uses it for all triangles in the next
+    // contact detection run.
+    size_t nTriGM = dT->maxTriTriPenetration.size();
+    if (nTriGM == 0) {
+        return;
+    }
+    std::vector<double> hostBuf(nTriGM, penetration);
+    DEME_GPU_CALL(cudaMemcpy(dT->maxTriTriPenetration.data(), hostBuf.data(), nTriGM * sizeof(double),
+                             cudaMemcpyHostToDevice));
 }
 
 void DEMSolver::SetExpandSafetyType(const std::string& insp_type) {

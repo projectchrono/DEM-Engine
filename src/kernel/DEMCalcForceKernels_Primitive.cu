@@ -468,6 +468,17 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // store the (double) contact penetration. contactPointGeometryB is used to store the (double) contact area
         // contactTorque_convToForce is used to store the contact point position (cast from double3 to float3)
 
+        // For tri-tri contacts, atomically update the per-triangle max penetration so kT can use it for margin sizing.
+        // Non-negative doubles maintain IEEE 754 bit-ordering, so atomicMax on their unsigned long long reinterpretation
+        // gives the correct result.
+        if constexpr (CONTACT_TYPE == deme::TRIANGLE_TRIANGLE_CONTACT) {
+            if (ContactType != deme::NOT_A_CONTACT && overlapDepth > 0.0) {
+                unsigned long long valBits = __double_as_longlong(overlapDepth);
+                atomicMax((unsigned long long*)&granData->maxTriTriPenetration[idA_raw], valBits);
+                atomicMax((unsigned long long*)&granData->maxTriTriPenetration[idB_raw], valBits);
+            }
+        }
+
         // Store contact normal (B2A is already a float3)
         granData->contactForces[myPrimitiveContactID] = B2A;
         // Store contact penetration depth (double) in contactPointGeometryA (float3)

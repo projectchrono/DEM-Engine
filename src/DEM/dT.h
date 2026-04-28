@@ -272,11 +272,12 @@ class DEMDynamicThread {
                                                             DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed)};
     int kt_write_buf = 0;  // which buffer kT writes to next
 
-    // Permanent array for patch contact penetrations (used to compute max tri-tri penetration)
+    // Permanent array for patch contact penetrations (output of patch-based force correction kernel)
     DeviceArray<double> finalPenetrations = DeviceArray<double>(&m_approxDeviceBytesUsed);
 
-    // Max tri-tri penetration value to be sent to kT
-    DualStruct<double> maxTriTriPenetration = DualStruct<double>(0.0);
+    // Per-triangle maximum primitive-based tri-tri penetration depth (computed each step via atomic max in the
+    // primitive force kernel; transferred to kT each work order)
+    DeviceArray<double> maxTriTriPenetration = DeviceArray<double>(&m_approxDeviceBytesUsed);
 
     // Optional per-triangle diagnostics (P, V, P*V) for selected mesh owners.
     bool triPVTrackingEnabled = false;

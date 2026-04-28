@@ -421,6 +421,8 @@ struct DEMDataDT {
     float3* relPosNode3;
     float3* relPosPatch;
     materialsOffset_t* patchMaterialOffset;
+    // Per-triangle maximum primitive-based tri-tri penetration depth (updated atomically by the primitive force kernel)
+    double* maxTriTriPenetration = nullptr;
 
     // pointer to remote buffer where kinematic thread stores work-order data provided by the dynamic thread
     unsigned int* pKTOwnedBuffer_maxDrift = nullptr;
@@ -504,6 +506,8 @@ struct DEMDataKT {
     float3* relPosNode1;
     float3* relPosNode2;
     float3* relPosNode3;
+    // Per-triangle maximum primitive-based tri-tri penetration depth (received from dT each work order)
+    double* maxTriTriPenetration = nullptr;
 
     // kT produces contact info, and stores it, temporarily
     bodyID_t* idPrimitiveA;
