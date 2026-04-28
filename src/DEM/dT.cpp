@@ -2765,8 +2765,10 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
     }
 
     xfer::XferList xm;
-    xm.add(granData->pKTOwnedBuffer_maxTriTriPenetration, maxTriTriPenetration.data(),
-           (size_t)simParams->nTriGM * sizeof(float));
+    if (!simParams->meshParticlesLowPoly) {
+        xm.add(granData->pKTOwnedBuffer_maxTriTriPenetration, maxTriTriPenetration.data(),
+               (size_t)simParams->nTriGM * sizeof(float));
+    }
     xm.run(dstDev, srcDev, xfer_stream);
 
     if (solverFlags.willMeshDeform) {
@@ -3189,10 +3191,12 @@ void DEMDynamicThread::calculateForces() {
 
     // If no contact then we don't have to calculate forces. Note there might still be forces, coming from prescription
     // or other sources.
-    // Reset per-triangle max tri-tri penetration for this timestep (must happen before the primitive force kernels
-    // which update it via atomic max; zeroing unconditionally ensures a clean slate every step for kT).
-    DEME_GPU_CALL(
-        cudaMemsetAsync(maxTriTriPenetration.data(), 0, (size_t)simParams->nTriGM * sizeof(float), streamInfo.stream));
+    // Reset per-triangle max tri-tri penetration for this timestep (skipped when meshParticlesLowPoly is enabled,
+    // since the atomicMax updates and kT transfer are also skipped in that mode).
+    if (!simParams->meshParticlesLowPoly) {
+        DEME_GPU_CALL(cudaMemsetAsync(maxTriTriPenetration.data(), 0, (size_t)simParams->nTriGM * sizeof(float),
+                                      streamInfo.stream));
+    }
     if (nContactPairs > 0) {
         timers.StartGpuTimer("Calculate contact forces", streamInfo.stream);
         DEME_NVTX_RANGE("dT::contactForces");

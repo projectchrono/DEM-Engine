@@ -471,8 +471,9 @@ __device__ __forceinline__ void calculatePrimitiveContactForces_impl(deme::DEMSi
         // For tri-tri contacts, atomically update the per-triangle max penetration so kT can use it for margin sizing.
         // Non-negative floats maintain IEEE 754 bit-ordering under unsigned int reinterpretation, so atomicMax on
         // their unsigned int bit representation gives the correct result.
+        // Skipped when meshParticlesLowPoly is enabled (the array is not used by kT in that mode).
         if constexpr (CONTACT_TYPE == deme::TRIANGLE_TRIANGLE_CONTACT) {
-            if (ContactType != deme::NOT_A_CONTACT && overlapDepth > 0.0) {
+            if (!simParams->meshParticlesLowPoly && ContactType != deme::NOT_A_CONTACT && overlapDepth > 0.0) {
                 unsigned int valBits = __float_as_uint(static_cast<float>(overlapDepth));
                 atomicMax((unsigned int*)&granData->maxTriTriPenetration[idA_raw], valBits);
                 atomicMax((unsigned int*)&granData->maxTriTriPenetration[idB_raw], valBits);

@@ -497,6 +497,11 @@ void DEMSolver::SetSimplePatchCombination(bool use) {
     dT->solverFlags.useSimplePatchCombination = use;
 }
 
+void DEMSolver::SetMeshParticlesLowPoly(bool use) {
+    kT->simParams->meshParticlesLowPoly = use;
+    dT->simParams->meshParticlesLowPoly = use;
+}
+
 void DEMSolver::SyncMemoryTransfer() {
     dT->syncMemoryTransfer();
     kT->syncMemoryTransfer();

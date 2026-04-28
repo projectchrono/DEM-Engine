@@ -328,6 +328,12 @@ struct DEMSimParams {
     unsigned int errOutBinTriNum = 32768;
     // Whether angular velocity contributes to contact margin sizing (and sphere--sphere rot. velocity use).
     notStupidBool_t useAngVelMargin = 1;
+
+    // When true, the per-triangle maxTriTriPenetration array is neither computed (atomic max skipped in force kernel),
+    // nor transferred to kT, nor used to guard finalMargin in computeMarginFromAbsv. This saves compute time when the
+    // user knows that meshed particles have a low polygon count (e.g. box with 12 triangles, tetrahedron with 4) and
+    // mesh-mesh contacts are always SAT-traceable, i.e. no triangle can be completely submerged inside another mesh.
+    bool meshParticlesLowPoly = false;
 };
 
 // A struct that holds pointers to data arrays that dT uses

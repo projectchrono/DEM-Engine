@@ -91,10 +91,11 @@ DEME_KERNEL void computeMarginFromAbsv_implTri(deme::DEMSimParams* simParams,
         }
         // We hope that penetrationMargin is small, so it's absorbed into the velocity-induce margin.
         // But if not, it should prevail to avoid losing contacts involving triangles inside another mesh.
+        // When meshParticlesLowPoly is enabled the array was never written this step, so finalMargin stands as-is.
         double finalMargin =
             (double)(vel * simParams->dyn.expSafetyMulti + simParams->dyn.expSafetyAdder) * (*ts) * (*maxDrift) +
             granData->familyExtraMarginSize[my_family];
-        if (finalMargin < penetrationMargin) {
+        if (!simParams->meshParticlesLowPoly && finalMargin < penetrationMargin) {
             finalMargin = penetrationMargin;
         }
 
