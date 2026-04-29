@@ -1496,24 +1496,23 @@ __device__ bool checkTriangleTriangleOverlap(
     const T1& A2,
     const T1& B2,
     const T1& C2,
-    T1& normal,         ///< contact normal (B2A direction)
-    T2& depth,          ///< penetration (positive if in contact)
-    T2& projectedArea,  ///< projected area of clipping polygon (optional output)
-    T1& point,          ///< contact point
-    T2& minDepthA,      ///< shallowest penetration of triA into triB's plane; non-zero only when triA is fully
-                        ///< submerged below triB's plane (all 3 vertices on the negative side). Used to size kT
-                        ///< contact-detection margins for buried-triangle scenarios.
-    T2& minDepthB) {    ///< shallowest penetration of triB into triA's plane; non-zero only when triB is fully
-                        ///< submerged below triA's plane. Same purpose as minDepthA.
+    T1& normal,              ///< contact normal (B2A direction)
+    T2& depth,               ///< penetration (positive if in contact)
+    T2& projectedArea,       ///< projected area of clipping polygon (optional output)
+    T1& point,               ///< contact point
+    T2& minDepthSelected) {  ///< shallowest vertex penetration from the SELECTED projection direction only.
+                             ///< Non-zero only when the incident triangle in that chosen direction is fully submerged
+                             ///< (all 3 vertices below the reference plane). We use the selected direction's min depth
+                             ///< for both triangles' margin competition via atomicMax, because depth and minDepth must
+                             ///< come from the same projection to remain physically consistent. Any contact partner
+                             ///< may contribute a larger value through a different contact pair, handled atomically.
     // Triangle A vertices (tri1)
     const T1 triA[3] = {A1, B1, C1};
     // Triangle B vertices (tri2)
     const T1 triB[3] = {A2, B2, C2};
 
-    // Initialise both min-depth outputs to 0; they will be set to non-zero only when the corresponding triangle
-    // is completely submerged in the other triangle's plane.
-    minDepthA = T2(0.0);
-    minDepthB = T2(0.0);
+    // Initialise to 0; set non-zero below only when the selected projection's incident triangle is fully submerged.
+    minDepthSelected = T2(0.0);
 
     // Compute face normal for triangle A first; triangle B normal is only needed if B->A projection hits.
     T1 nA = normalize(cross(B1 - A1, C1 - A1));
@@ -1526,10 +1525,10 @@ __device__ bool checkTriangleTriangleOverlap(
     // ========================================================================
 
     // Project triangle B onto triangle A's plane and clip against A.
-    // minDepthB is set non-zero only if all of triB is below triA's plane (fully submerged).
-    T2 depthBA, areaBA;
+    // minBA is non-zero only if all of triB is fully submerged below triA's plane.
+    T2 depthBA, areaBA, minBA;
     T1 centroidBA;
-    const bool contactBA = projectTriangleOntoTriangle<T1, T2>(triB, triA, nA, depthBA, areaBA, centroidBA, minDepthB);
+    const bool contactBA = projectTriangleOntoTriangle<T1, T2>(triB, triA, nA, depthBA, areaBA, centroidBA, minBA);
 
     if (!contactBA) {
         // No contact detected, Provide separation info
@@ -1553,11 +1552,11 @@ __device__ bool checkTriangleTriangleOverlap(
     }
 
     // Project triangle A onto triangle B's plane and clip against B.
-    // minDepthA is set non-zero only if all of triA is below triB's plane (fully submerged).
+    // minAB is non-zero only if all of triA is fully submerged below triB's plane.
     T1 nB = normalize(cross(B2 - A2, C2 - A2));
-    T2 depthAB, areaAB;
+    T2 depthAB, areaAB, minAB;
     T1 centroidAB;
-    const bool contactAB = projectTriangleOntoTriangle<T1, T2>(triA, triB, nB, depthAB, areaAB, centroidAB, minDepthA);
+    const bool contactAB = projectTriangleOntoTriangle<T1, T2>(triA, triB, nB, depthAB, areaAB, centroidAB, minAB);
 
     if (!contactAB) {
         // No contact detected, Provide separation info
@@ -1585,19 +1584,23 @@ __device__ bool checkTriangleTriangleOverlap(
     // smaller one projected onto the larger one: nearly 0 area (depending on numerical stability, may actually be 0);
     // Larger one projected onto the smaller one: almost covers the entire smaller surface. We always want them both
     // have non-0 projection area, and then select the shorter projection distance one. This is good for stability.
+    // The min depth (for kT margin sizing) comes from the selected projection direction so that depth and minDepth
+    // remain physically consistent: both triangles share this contact and thus share the same penetration metrics.
     if (depthBA < depthAB) {
-        // Use B->A projection results
+        // Use B->A projection results; minBA belongs to this direction.
         depth = depthBA;
         projectedArea = areaBA;
         normal = -1.0 * nA;  // Pay attention to direction
+        minDepthSelected = minBA;
 
         // Contact point: centroid on A's plane, moved back by half depth
         point = centroidBA - nA * (depth * 0.5);
     } else {
-        // Use A->B projection results
+        // Use A->B projection results; minAB belongs to this direction.
         depth = depthAB;
         projectedArea = areaAB;
         normal = nB;
+        minDepthSelected = minAB;
 
         // Contact point: centroid on B's plane, moved back by half depth
         point = centroidAB - nB * (depth * 0.5);
