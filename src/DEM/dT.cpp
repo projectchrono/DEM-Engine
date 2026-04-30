@@ -133,6 +133,7 @@ void DEMDynamicThread::packDataPointers() {
     relPosNode3.bindDevicePointer(&(granData->relPosNode3));
     relPosPatch.bindDevicePointer(&(granData->relPosPatch));
     patchMaterialOffset.bindDevicePointer(&(granData->patchMaterialOffset));
+    maxTriTriPenetration.bindDevicePointer(&(granData->maxTriTriPenetration));
 
     // Template array pointers
     radiiSphere.bindDevicePointer(&(granData->radiiSphere));
@@ -459,7 +460,7 @@ void DEMDynamicThread::packTransferPointers(DEMKinematicThread*& kT) {
     // Single-number data are now not packaged in granData...
     granData->pKTOwnedBuffer_ts = &(kT->stateParams.ts_buffer);
     granData->pKTOwnedBuffer_maxDrift = &(kT->stateParams.maxDrift_buffer);
-    granData->pKTOwnedBuffer_maxTriTriPenetration = &(kT->stateParams.maxTriTriPenetration_buffer);
+    granData->pKTOwnedBuffer_maxTriTriPenetration = kT->maxTriTriPenetration_buffer.data();
 }
 
 void DEMDynamicThread::changeFamily(unsigned int ID_from, unsigned int ID_to) {
@@ -685,15 +686,15 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(triNeighbor1, nTriNeighbors, NULL_BODYID);
     DEME_DUAL_ARRAY_RESIZE(triNeighbor2, nTriNeighbors, NULL_BODYID);
     DEME_DUAL_ARRAY_RESIZE(triNeighbor3, nTriNeighbors, NULL_BODYID);
+    // maxTriTriPenetration stores per-triangle max primitive-based tri-tri penetration for transfer to kT.
+    // After initialization, it stores no meaningful values, so it must be zeroed here.
+    DEME_DEVICE_ARRAY_RESIZE(maxTriTriPenetration, nTriGM);
+    DEME_GPU_CALL(cudaMemset(maxTriTriPenetration.data(), 0, nTriGM * sizeof(float)));
 
     // Resize to the number of mesh patches
     DEME_DUAL_ARRAY_RESIZE(ownerPatchMesh, nMeshPatches, 0);
     DEME_DUAL_ARRAY_RESIZE(patchMaterialOffset, nMeshPatches, 0);
     DEME_DUAL_ARRAY_RESIZE(relPosPatch, nMeshPatches, make_float3(0));
-    // maxTriTriPenetration usually keeps the max tri--tri penetration during the on-going simulation. But after
-    // initialization, when it stores no meaningful values, dT will send a work order to kT, so maxTriTriPenetration's
-    // value has to be initialized.
-    DEME_GPU_CALL(cudaMemset(maxTriTriPenetration.getDevicePointer(), 0, sizeof(double)));
 
     // Resize to the number of analytical geometries
     DEME_DUAL_ARRAY_RESIZE(ownerAnalBody, nAnalGM, 0);
@@ -2764,7 +2765,10 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
     }
 
     xfer::XferList xm;
-    xm.add(granData->pKTOwnedBuffer_maxTriTriPenetration, maxTriTriPenetration.getDevicePointer(), sizeof(double));
+    if (!simParams->meshParticlesLowPoly) {
+        xm.add(granData->pKTOwnedBuffer_maxTriTriPenetration, maxTriTriPenetration.data(),
+               (size_t)simParams->nTriGM * sizeof(float));
+    }
     xm.run(dstDev, srcDev, xfer_stream);
 
     if (solverFlags.willMeshDeform) {
@@ -2924,9 +2928,6 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
     const ContactTypeMap<std::pair<contactPairs_t, contactPairs_t>>& typeStartCountPatchMap,
     const ContactTypeMap<std::vector<std::pair<std::shared_ptr<JitHelper::CachedProgram>, std::string>>>&
         typeKernelMap) {
-    // Reset max tri-tri penetration for this timestep on device (kT may need this info)
-    DEME_GPU_CALL(cudaMemset(maxTriTriPenetration.getDevicePointer(), 0, sizeof(double)));
-
     // For each contact type that exists, check if it is patch(mesh)-related type...
     for (size_t i = 0; i < m_numExistingTypes; i++) {
         contact_t contact_type = existingContactTypes[i];
@@ -3148,19 +3149,6 @@ inline void DEMDynamicThread::dispatchPatchBasedForceCorrections(
                     solverScratchSpace.finishUsingTempVector("patchSlipSpeed");
                 }
 
-                // If this is a tri-tri contact, compute max penetration for kT
-                // The max value stays on device until sendToTheirBuffer transfers it
-                if (contact_type == TRIANGLE_TRIANGLE_CONTACT && countPatch > 0) {
-                    // Compute max penetration and store it on device
-                    // Note: penetration values should always be non-negative in physical contacts
-                    cubMaxReduce<double>(finalPenetrations.data(), &maxTriTriPenetration, countPatch, streamInfo.stream,
-                                         solverScratchSpace);
-                    // No toHost() here - keep on device since host never needs it
-                    // maxTriTriPenetration.toHost();
-                    // std::cout << "Max tri-tri penetration after patch-based correction: " << *maxTriTriPenetration
-                    //           << std::endl;
-                }
-
                 // Final clean up (primitiveWeights freed after triPV tracking which may use it)
                 solverScratchSpace.finishUsingTempVector("totalWeights");
                 solverScratchSpace.finishUsingTempVector("primitiveWeights");
@@ -3203,6 +3191,12 @@ void DEMDynamicThread::calculateForces() {
 
     // If no contact then we don't have to calculate forces. Note there might still be forces, coming from prescription
     // or other sources.
+    // Reset per-triangle max tri-tri penetration for this timestep (skipped when meshParticlesLowPoly is enabled,
+    // since the atomicMax updates and kT transfer are also skipped in that mode).
+    if (!simParams->meshParticlesLowPoly) {
+        DEME_GPU_CALL(cudaMemsetAsync(maxTriTriPenetration.data(), 0, (size_t)simParams->nTriGM * sizeof(float),
+                                      streamInfo.stream));
+    }
     if (nContactPairs > 0) {
         timers.StartGpuTimer("Calculate contact forces", streamInfo.stream);
         DEME_NVTX_RANGE("dT::contactForces");

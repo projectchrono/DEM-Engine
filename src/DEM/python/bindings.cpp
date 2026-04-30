@@ -614,6 +614,12 @@ PYBIND11_MODULE(DEME, obj) {
              "Set whether the solver should expect the user to mark certain contacts as persistent across kT updates. "
              "Set this to true if you later will call MarkPersistentContact series of methods.",
              py::arg("use") = true)
+        .def("SetMeshParticlesLowPoly", &deme::DEMSolver::SetMeshParticlesLowPoly,
+             "Declare that all meshed particles have a low polygon count (e.g. box, tetrahedron). When enabled, the "
+             "per-triangle maxTriTriPenetration array is neither computed, transferred to kT, nor used to inflate "
+             "contact-detection margins, saving compute time. Toggle this on only when you are confident that no "
+             "triangle from one mesh will ever be completely submerged inside another mesh.",
+             py::arg("use") = true)
 
         .def("SetExpandSafetyType", &deme::DEMSolver::SetExpandSafetyType,
              "A string. If 'auto': the solver automatically derives.")

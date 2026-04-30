@@ -398,6 +398,16 @@ class DEMSolver {
     /// can produce multiple patch contacts per patch-ID pair when the touching region is geometrically disconnected.
     void SetSimplePatchCombination(bool use = true);
 
+    /// @brief Declare that all meshed particles in the simulation have a low polygon count (e.g., boxes, tetrahedra).
+    /// @param use If true (default when called), the per-triangle maxTriTriPenetration array will NOT be computed,
+    /// transferred to kT, or used to inflate contact-detection margins. Default is false (feature is active).
+    /// @details Toggle this on only when you are confident that mesh-mesh contacts are always SAT-traceable, i.e. no
+    /// triangle from one mesh will ever be completely submerged inside another mesh (separated from it), which is far
+    /// more likely with low-poly meshes (12-triangle box, 4-facet tetrahedron, etc.). When toggled on, the arrays are
+    /// still allocated so memory remains valid; only the compute and data-transfer steps are skipped. This toggle can
+    /// be changed on the fly after initialization.
+    void SetMeshParticlesLowPoly(bool use = true);
+
     /// @brief Load a clump type into the API-level cache.
     /// @return the shared ptr to the clump type just loaded.
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,

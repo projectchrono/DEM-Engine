@@ -328,6 +328,12 @@ struct DEMSimParams {
     unsigned int errOutBinTriNum = 32768;
     // Whether angular velocity contributes to contact margin sizing (and sphere--sphere rot. velocity use).
     notStupidBool_t useAngVelMargin = 1;
+
+    // When true, the per-triangle maxTriTriPenetration array is neither computed (atomic max skipped in force kernel),
+    // nor transferred to kT, nor used to guard finalMargin in computeMarginFromAbsv. This saves compute time when the
+    // user knows that meshed particles have a low polygon count (e.g. box with 12 triangles, tetrahedron with 4) and
+    // mesh-mesh contacts are always SAT-traceable, i.e. no triangle can be completely submerged inside another mesh.
+    bool meshParticlesLowPoly = false;
 };
 
 // A struct that holds pointers to data arrays that dT uses
@@ -421,6 +427,8 @@ struct DEMDataDT {
     float3* relPosNode3;
     float3* relPosPatch;
     materialsOffset_t* patchMaterialOffset;
+    // Per-triangle maximum primitive-based tri-tri penetration depth (updated atomically by the primitive force kernel)
+    float* maxTriTriPenetration = nullptr;
 
     // pointer to remote buffer where kinematic thread stores work-order data provided by the dynamic thread
     unsigned int* pKTOwnedBuffer_maxDrift = nullptr;
@@ -439,7 +447,7 @@ struct DEMDataDT {
     float3* pKTOwnedBuffer_relPosNode1 = nullptr;
     float3* pKTOwnedBuffer_relPosNode2 = nullptr;
     float3* pKTOwnedBuffer_relPosNode3 = nullptr;
-    double* pKTOwnedBuffer_maxTriTriPenetration = nullptr;
+    float* pKTOwnedBuffer_maxTriTriPenetration = nullptr;
 
     // The collection of pointers to DEM template arrays such as radiiSphere, still useful when there are template info
     // not directly jitified into the kernels
@@ -504,6 +512,8 @@ struct DEMDataKT {
     float3* relPosNode1;
     float3* relPosNode2;
     float3* relPosNode3;
+    // Per-triangle maximum primitive-based tri-tri penetration depth (received from dT each work order)
+    float* maxTriTriPenetration = nullptr;
 
     // kT produces contact info, and stores it, temporarily
     bodyID_t* idPrimitiveA;
