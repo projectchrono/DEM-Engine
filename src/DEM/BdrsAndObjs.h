@@ -796,32 +796,32 @@ class DEMMesh : public DEMInitializer {
     ////////////////////////////////////////////////////////
     // Some geo wildcard-related stuff
     ////////////////////////////////////////////////////////
-    // Initial geometry wildcard that all patches should have
+    // Initial geometry wildcard that all triangles should have (one value per triangle facet)
     std::unordered_map<std::string, std::vector<float>> geo_wildcards;
     // Can be used to save mem after initialization
     void ClearWildcards() { deallocate_array(geo_wildcards); }
     void SetGeometryWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
-        if (wildcards.begin()->second.size() != nPatches) {
+        if (wildcards.begin()->second.size() != nTri) {
             DEME_ERROR(
-                "Input gemometry wildcard arrays in a SetGeometryWildcards call must all have the same size as "
-                "the number of patches in this mesh.\nHere, the input array has length %zu but this mesh has %u "
-                "patches.",
-                wildcards.begin()->second.size(), nPatches);
+                "Input geometry wildcard arrays in a SetGeometryWildcards call must all have the same size as "
+                "the number of triangles in this mesh.\nHere, the input array has length %zu but this mesh has %zu "
+                "triangles.",
+                wildcards.begin()->second.size(), nTri);
         }
         geo_wildcards = wildcards;
     }
     void AddGeometryWildcard(const std::string& name, const std::vector<float>& vals) {
-        if (vals.size() != nPatches) {
+        if (vals.size() != nTri) {
             DEME_ERROR(
-                "Input gemometry wildcard array in a AddGeometryWildcard call must have the same size as the "
-                "number of patches in this mesh.\nHere, the input array has length %zu but this mesh has %u "
-                "patches.",
-                vals.size(), nPatches);
+                "Input geometry wildcard array in a AddGeometryWildcard call must have the same size as the "
+                "number of triangles in this mesh.\nHere, the input array has length %zu but this mesh has %zu "
+                "triangles.",
+                vals.size(), nTri);
         }
         geo_wildcards[name] = vals;
     }
     void AddGeometryWildcard(const std::string& name, float val) {
-        AddGeometryWildcard(name, std::vector<float>(nPatches, val));
+        AddGeometryWildcard(name, std::vector<float>(nTri, val));
     }
 };
 

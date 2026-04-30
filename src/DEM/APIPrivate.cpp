@@ -860,14 +860,10 @@ void DEMSolver::figureOutNV() {
 
 void DEMSolver::decideBinSize() {
     // find the smallest radius
-    m_largest_radius = 0.f;
     for (auto elem : m_template_sp_radii) {
         for (auto radius : elem) {
             if (radius < m_smallest_radius) {
                 m_smallest_radius = radius;
-            }
-            if (radius > m_largest_radius) {
-                m_largest_radius = radius;
             }
         }
     }
@@ -1217,6 +1213,7 @@ void DEMSolver::preprocessTriangleObjs() {
         m_input_mesh_obj_family.push_back(mesh_obj->family_code);
         m_input_mesh_obj_convex.push_back(mesh_obj->is_convex ? 1 : 0);
         m_input_mesh_obj_never_winner.push_back(mesh_obj->never_winner ? 1 : 0);
+        m_input_mesh_obj_watertight.push_back(mesh_obj->IsWatertight() ? 1 : 0);
         m_mesh_facet_owner.insert(m_mesh_facet_owner.end(), mesh_obj->GetNumTriangles(), thisMeshObj);
 
         const bodyID_t tri_offset = static_cast<bodyID_t>(m_mesh_facets.size());
@@ -1317,24 +1314,6 @@ void DEMSolver::preprocessTriangleObjs() {
                     float3 tmp = tri.p2;
                     tri.p2 = tri.p3;
                     tri.p3 = tmp;
-                }
-            }
-            {
-                const float3 centroid =
-                    make_float3((tri.p1.x + tri.p2.x + tri.p3.x) / 3.f, (tri.p1.y + tri.p2.y + tri.p3.y) / 3.f,
-                                (tri.p1.z + tri.p2.z + tri.p3.z) / 3.f);
-                auto dist2 = [&](const float3& p) {
-                    const float dx = p.x - centroid.x;
-                    const float dy = p.y - centroid.y;
-                    const float dz = p.z - centroid.z;
-                    return dx * dx + dy * dy + dz * dz;
-                };
-                float r2 = dist2(tri.p1);
-                r2 = std::max(r2, dist2(tri.p2));
-                r2 = std::max(r2, dist2(tri.p3));
-                const float radius = std::sqrt(r2) + shell_half_thickness;
-                if (radius > m_largest_tri_radius) {
-                    m_largest_tri_radius = radius;
                 }
             }
             m_mesh_facets.push_back(tri);
@@ -1779,36 +1758,14 @@ void DEMSolver::setSimParams() {
 
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
                      m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_max_tritri_penetration,
-                     m_expand_safety_multi, m_expand_base_vel, m_use_angvel_margin, m_force_model->m_contact_wildcards,
-                     m_force_model->m_owner_wildcards, m_force_model->m_geo_wildcards);
+                     m_triTriContactRejectionRatio, m_expand_safety_multi, m_expand_base_vel, m_use_angvel_margin,
+                     m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards,
+                     m_force_model->m_geo_wildcards);
     kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
                      m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_max_tritri_penetration,
-                     m_expand_safety_multi, m_expand_base_vel, m_use_angvel_margin, m_force_model->m_contact_wildcards,
-                     m_force_model->m_owner_wildcards, m_force_model->m_geo_wildcards);
-
-    auto apply_cyl_periodic = [&](DualStruct<DEMSimParams>& params) {
-        params->useCylPeriodic = m_use_cyl_periodic ? 1 : 0;
-        params->useCylPeriodicDiagCounters = m_cyl_periodic_diag ? 1 : 0;
-        params->cylPeriodicAxis = static_cast<unsigned char>(m_cyl_periodic_axis);
-        params->cylPeriodicStart = m_cyl_periodic_start;
-        params->cylPeriodicSpan = m_cyl_periodic_span;
-        params->cylPeriodicMinRadius = m_cyl_periodic_min_radius;
-        params->cylPeriodicCosSpan = m_cyl_periodic_cos_span;
-        params->cylPeriodicSinSpan = m_cyl_periodic_sin_span;
-        params->cylPeriodicCosHalfSpan = m_cyl_periodic_cos_half_span;
-        params->cylPeriodicSinHalfSpan = m_cyl_periodic_sin_half_span;
-        params->cylPeriodicAxisVec = m_cyl_periodic_axis_vec;
-        params->cylPeriodicU = m_cyl_periodic_u;
-        params->cylPeriodicV = m_cyl_periodic_v;
-        params->cylPeriodicStartNormal = m_cyl_periodic_start_normal;
-        params->cylPeriodicEndNormal = m_cyl_periodic_end_normal;
-        params->cylPeriodicOrigin = make_float3(-params->LBFX, -params->LBFY, -params->LBFZ);
-        params->maxSphereRadius = m_largest_radius;
-        params->maxTriRadius = m_largest_tri_radius;
-        params->maxFamilyExtraMargin = m_max_family_extra_margin;
-    };
-    apply_cyl_periodic(dT->simParams);
-    apply_cyl_periodic(kT->simParams);
+                     m_triTriContactRejectionRatio, m_expand_safety_multi, m_expand_base_vel, m_use_angvel_margin,
+                     m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards,
+                     m_force_model->m_geo_wildcards);
 }
 
 void DEMSolver::allocateGPUArrays() {
@@ -1855,8 +1812,9 @@ void DEMSolver::initializeGPUArrays() {
         m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
         // Meshed objects' initial stats
         cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_input_mesh_obj_convex,
-        m_input_mesh_obj_never_winner, m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facet_neighbor1,
-        m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets, m_mesh_patch_owner, m_mesh_patch_materials,
+        m_input_mesh_obj_never_winner, m_input_mesh_obj_watertight, m_mesh_facet_owner, m_mesh_facet_patch,
+        m_mesh_facet_neighbor1, m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets, m_mesh_patch_owner,
+        m_mesh_patch_materials,
         // Clump template name mapping
         m_template_number_name_map,
         // Clump template info (mass, sphere components, materials etc.)
@@ -1911,8 +1869,9 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
         // Meshed objects' initial stats
         cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_input_mesh_obj_convex,
-        m_input_mesh_obj_never_winner, m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facet_neighbor1,
-        m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets, m_mesh_patch_owner, m_mesh_patch_materials,
+        m_input_mesh_obj_never_winner, m_input_mesh_obj_watertight, m_mesh_facet_owner, m_mesh_facet_patch,
+        m_mesh_facet_neighbor1, m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets, m_mesh_patch_owner,
+        m_mesh_patch_materials,
         // Clump template info (mass, sphere components, materials etc.)
         flattened_clump_templates,
         // Analytical obj physics properties

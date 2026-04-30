@@ -92,12 +92,15 @@ class DEMKinematicThread {
     DeviceArray<float3> relPosNode1_buffer = DeviceArray<float3>(&m_approxDeviceBytesUsed);
     DeviceArray<float3> relPosNode2_buffer = DeviceArray<float3>(&m_approxDeviceBytesUsed);
     DeviceArray<float3> relPosNode3_buffer = DeviceArray<float3>(&m_approxDeviceBytesUsed);
+    // Buffer for the per-triangle max tri-tri penetration received from dT (allocated on dT's device)
+    DeviceArray<float> maxTriTriPenetration_buffer = DeviceArray<float>(&m_approxDeviceBytesUsed);
     // Vel of entities
     DeviceArray<float> absVel_buffer = DeviceArray<float>(&m_approxDeviceBytesUsed);
     // Angular velocity magnitude of entities
     DeviceArray<float> absAngVel_buffer = DeviceArray<float>(&m_approxDeviceBytesUsed);
-    // Per-owner dT feedback flags for cylindrical periodic branch selection.
-    DeviceArray<unsigned int> ownerCylGhostActive_buffer = DeviceArray<unsigned int>(&m_approxDeviceBytesUsed);
+
+    // kT's own per-triangle max tri-tri penetration array (working copy on kT's device)
+    DeviceArray<float> maxTriTriPenetration = DeviceArray<float>(&m_approxDeviceBytesUsed);
 
     // kT's copy of family map
     // std::unordered_map<unsigned int, family_t> familyUserImplMap;
@@ -153,8 +156,6 @@ class DEMKinematicThread {
     DualArray<oriQ_t> oriQx = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<oriQ_t> oriQy = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<oriQ_t> oriQz = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    DualArray<unsigned int> ownerCylGhostActive =
-        DualArray<unsigned int>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // marginSizes include both the velocity-induced margin and family-prescribed margin.
     DeviceArray<float> marginSizeSphere = DeviceArray<float>(&m_approxDeviceBytesUsed);
@@ -435,6 +436,7 @@ class DEMKinematicThread {
                       float expand_factor,
                       float approx_max_vel,
                       double max_tritri_penetration,
+                      float triTriContactRejectionRatio,
                       float expand_safety_param,
                       float expand_safety_adder,
                       bool use_angvel_margin,

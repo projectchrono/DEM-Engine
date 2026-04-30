@@ -74,23 +74,6 @@ class DEMSolver {
         m_user_add_bounding_box = inst;
         m_bounding_box_material = mat;
     }
-    /// @brief Enable cylindrical periodicity for particles (clump owners).
-    /// @param axis Rotation axis: SPATIAL_DIR::X/Y/Z. Use SPATIAL_DIR::NONE to disable.
-    /// @param start_angle Start angle in radians.
-    /// @param end_angle End angle in radians.
-    /// @param min_radius Minimum radial distance from axis (values <= 0 clamp to DEME_TINY_FLOAT).
-    void SetCylindricalPeriodicity(SPATIAL_DIR axis, float start_angle, float end_angle, float min_radius = 0.f);
-    /// @brief Enable cylindrical periodicity for particles (clump owners).
-    /// @param axis Rotation axis as "X", "Y", or "Z" (case-insensitive).
-    /// @param start_angle Start angle in radians.
-    /// @param end_angle End angle in radians.
-    /// @param min_radius Minimum radial distance from axis (values <= 0 clamp to DEME_TINY_FLOAT).
-    void SetCylindricalPeriodicity(const std::string& axis, float start_angle, float end_angle, float min_radius = 0.f);
-    /// @brief Enable/disable cylindrical-periodic diagnostic counters.
-    /// @details This switch controls per-owner diagnostic counters/flags only. Cylindrical-periodic
-    /// correctness safeguards remain active regardless of this setting.
-    void SetCylPeriodicDiagnosticCounters(bool enable);
-
     /// Set gravitational pull.
     void SetGravitationalAcceleration(float3 g) { G = g; }
     void SetGravitationalAcceleration(const std::vector<float>& g) {
@@ -265,6 +248,13 @@ class DEMSolver {
         m_max_tritri_penetration = max_margin;
     }
 
+    /// @brief Set the ratio threshold used to reject suspicious triangle-triangle contacts. A contact is rejected when
+    /// the penetration depth exceeds this fraction of the distance from the contact point to a mesh's geometric center
+    /// (checked for both meshes involved). Set to a larger value to be more permissive, or a smaller value to be more
+    /// aggressive in rejecting back-face false contacts. A negative value disables this guard entirely.
+    /// @param ratio The rejection ratio threshold.
+    void SetTriTriContactRejectionRatio(float ratio) { m_triTriContactRejectionRatio = ratio; }
+
     /// @brief Used to force the solver to error out when there are too many spheres in a bin. A huge number can be used
     /// to discourage this error type.
     /// @param max_sph Max number of spheres in a bin.
@@ -398,6 +388,26 @@ class DEMSolver {
     /// @details Set this to true if you later will call MarkPersistentContact series of methods.
     void SetPersistentContact(bool use = true);
 
+    /// @brief Set whether to use the simple patch ID-based triangle combination instead of the default
+    /// index-flooding-based approach.
+    /// @param use If true, all triangles that share the same patch ID pair are combined into a single patch contact
+    /// (the simple RefBranch-style approach). If false (default), the more complex connected-component flooding method
+    /// is used to identify islands of touching triangles and combine them into patch contacts.
+    /// @details The simple approach is faster and may be preferable when the patch ID assignment already captures the
+    /// desired contact grouping (e.g., all triangles in a mesh share one patch ID by default). The flooding approach
+    /// can produce multiple patch contacts per patch-ID pair when the touching region is geometrically disconnected.
+    void SetSimplePatchCombination(bool use = true);
+
+    /// @brief Declare that all meshed particles in the simulation have a low polygon count (e.g., boxes, tetrahedra).
+    /// @param use If true (default when called), the per-triangle maxTriTriPenetration array will NOT be computed,
+    /// transferred to kT, or used to inflate contact-detection margins. Default is false (feature is active).
+    /// @details Toggle this on only when you are confident that mesh-mesh contacts are always SAT-traceable, i.e. no
+    /// triangle from one mesh will ever be completely submerged inside another mesh (separated from it), which is far
+    /// more likely with low-poly meshes (12-triangle box, 4-facet tetrahedron, etc.). When toggled on, the arrays are
+    /// still allocated so memory remains valid; only the compute and data-transfer steps are skipped. This toggle can
+    /// be changed on the fly after initialization.
+    void SetMeshParticlesLowPoly(bool use = true);
+
     /// @brief Load a clump type into the API-level cache.
     /// @return the shared ptr to the clump type just loaded.
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
@@ -465,6 +475,11 @@ class DEMSolver {
     }
     /// A simplified version of LoadClumpType: it just loads a one-sphere clump template
     std::shared_ptr<DEMClumpTemplate> LoadSphereType(float mass,
+                                                     float radius,
+                                                     const std::shared_ptr<DEMMaterial>& material);
+    /// A simplified version of LoadClumpType: it just loads a one-sphere clump template, with explicit MOI supplied
+    std::shared_ptr<DEMClumpTemplate> LoadSphereType(float mass,
+                                                     float moi,
                                                      float radius,
                                                      const std::shared_ptr<DEMMaterial>& material);
 
@@ -535,22 +550,6 @@ class DEMSolver {
     /// @param n The number of consecutive owners.
     /// @return The family number.
     std::vector<unsigned int> GetOwnerFamily(bodyID_t ownerID, bodyID_t n = 1) const;
-    /// @brief Get cylindrical wrap count of n consecutive owners.
-    std::vector<int> GetOwnerCylWrapK(bodyID_t ownerID, bodyID_t n = 1) const;
-    /// @brief Get cylindrical wrap offset since the last kT update, for n consecutive owners.
-    std::vector<int> GetOwnerCylWrapOffset(bodyID_t ownerID, bodyID_t n = 1) const;
-    /// @brief Get per-owner bound radius for n consecutive owners.
-    std::vector<float> GetOwnerBoundRadius(bodyID_t ownerID, bodyID_t n = 1) const;
-    /// @brief Get per-owner ghost-active flag for n consecutive owners.
-    std::vector<unsigned int> GetOwnerCylGhostActive(bodyID_t ownerID, bodyID_t n = 1) const;
-    /// @brief Get per-owner count of periodic candidates skipped due to image-branch mismatch.
-    std::vector<unsigned int> GetOwnerCylSkipCount(bodyID_t ownerID, bodyID_t n = 1) const;
-    /// @brief Get per-owner count of force-relevant periodic skips.
-    std::vector<unsigned int> GetOwnerCylSkipPotentialCount(bodyID_t ownerID, bodyID_t n = 1) const;
-    /// @brief Get per-owner contact counts split by real/ghost(+)/ghost(-).
-    void GetOwnerContactGhostCounts(std::vector<int>& real_cnt,
-                                    std::vector<int>& ghost_pos_cnt,
-                                    std::vector<int>& ghost_neg_cnt) const;
     /// @brief Request an immediate contact detection update (forces kT to refresh contacts next cycle).
     void RequestContactUpdate();
     /// @brief Enable per-triangle P/V/PxV tracking for the specified mesh owners.
@@ -1148,8 +1147,12 @@ class DEMSolver {
     /// @param ownerIDs The IDs of the owners.
     /// @param points Fill this vector of float3 with the XYZ components of the contact points.
     /// @param forces Fill this vector of float3 with the XYZ components of the forces.
-    /// @param torques Fill this vector of float3 with the XYZ components of the torques (in local frame).
-    /// @param torque_in_local If true, output torque in this body's local ref frame.
+    /// @param torques Fill this vector of float3 with the XYZ components of the torques. Note this torque should be
+    /// considered `extra torque'. The user should understand that the `force' should also generate torque, as long as
+    /// the contact point is not CoM. The `torque' is different from that, and only arises as a result of some
+    /// torque-generating contact force model.
+    /// @param torque_in_local If true, output torque in this body's local ref frame. Otherwise, output torque in the
+    /// global ref frame. Note the force is always in the global ref frame.
     /// @return Number of force pairs.
     size_t GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
                                  std::vector<float3>& points,
@@ -1157,11 +1160,11 @@ class DEMSolver {
                                  std::vector<float3>& torques,
                                  bool torque_in_local = false);
 
-    /// @brief Set the wildcard values of some mesh patches.
-    /// @param geoID The ID of the starting (first) patch that needs to be modified.
+    /// @brief Set the wildcard values of some mesh triangles.
+    /// @param geoID The ID of the starting (first) triangle that needs to be modified.
     /// @param name The name of the wildcard.
-    /// @param vals A vector of values that will be assigned to the patchs starting from geoID.
-    void SetPatchWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals);
+    /// @param vals A vector of values that will be assigned to the triangles starting from geoID.
+    void SetTriWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals);
     /// @brief Set the wildcard values of some spheres.
     /// @param geoID The ID of the starting (first) sphere that needs to be modified.
     /// @param name The name of the wildcard.
@@ -1227,7 +1230,7 @@ class DEMSolver {
     /// @param name Wildcard's name.
     /// @param n The number of triangles to query following the ID of the first one.
     /// @return Vector of values of the wildcards.
-    std::vector<float> GetPatchWildcardValue(bodyID_t geoID, const std::string& name, size_t n);
+    std::vector<float> GetTriWildcardValue(bodyID_t geoID, const std::string& name, size_t n);
     /// @brief Get the geometry wildcard's values of a series of spheres.
     /// @param geoID The ID of the first sphere.
     /// @param name Wildcard's name.
@@ -1765,6 +1768,8 @@ class DEMSolver {
     // User-instructed maximum tri-tri penetration margin (to prevent super large margins)
     double m_max_tritri_penetration = DEME_HUGE_FLOAT;
 
+    // Ratio threshold for rejecting suspicious tri-tri contacts based on penetration depth vs center-contact distance.
+    float m_triTriContactRejectionRatio = 0.8f;
     // The number of user-estimated (max) number of owners that will be present in the simulation. If 0, then the arrays
     // will just be resized at intialization based on the input size.
     size_t m_instructed_num_owners = 0;
@@ -1773,19 +1778,13 @@ class DEMSolver {
     bool sys_initialized = false;
     // Smallest sphere radius (used to let the user know whether the expand factor is sufficient)
     float m_smallest_radius = DEME_HUGE_FLOAT;
-    // Largest sphere radius (for periodic ghost broadphase)
-    float m_largest_radius = 0.f;
-    // Largest triangle radius (for periodic ghost broadphase)
-    float m_largest_tri_radius = 0.f;
-    // Max family extra margin (for periodic ghost broadphase)
-    float m_max_family_extra_margin = 0.f;
 
     // The number of dT steps before it waits for a kT update. The default value means every dT step will wait for a
     // newly produced contact-pair info (from kT) before proceeding.
-    int m_suggestedFutureDrift = 40;
+    int m_suggestedFutureDrift = 12;
 
     // This is an unused variable which is supposed to be related to m_suggestedFutureDrift...
-    int m_updateFreq = 20;
+    int m_updateFreq = 6;
 
     // The extra libs that the kernels need to include.
     std::string kernel_includes = "#include <curand_kernel.h>\n";
@@ -1798,23 +1797,6 @@ class DEMSolver {
     // Along which direction the size of the simulation world representable with our integer-based voxels needs to be
     // exactly the same as user-instructed simulation domain size?
     SPATIAL_DIR m_box_dir_length_is_exact = SPATIAL_DIR::NONE;
-
-    // Cylindrical periodicity (particles only)
-    bool m_use_cyl_periodic = false;
-    SPATIAL_DIR m_cyl_periodic_axis = SPATIAL_DIR::NONE;
-    float m_cyl_periodic_start = 0.f;
-    float m_cyl_periodic_span = 0.f;
-    float m_cyl_periodic_min_radius = 0.f;
-    float3 m_cyl_periodic_axis_vec = make_float3(0.f, 0.f, 0.f);
-    float3 m_cyl_periodic_u = make_float3(0.f, 0.f, 0.f);
-    float3 m_cyl_periodic_v = make_float3(0.f, 0.f, 0.f);
-    float3 m_cyl_periodic_start_normal = make_float3(0.f, 0.f, 0.f);
-    float3 m_cyl_periodic_end_normal = make_float3(0.f, 0.f, 0.f);
-    float m_cyl_periodic_cos_span = 1.f;
-    float m_cyl_periodic_sin_span = 0.f;
-    float m_cyl_periodic_cos_half_span = 1.f;
-    float m_cyl_periodic_sin_half_span = 0.f;
-    bool m_cyl_periodic_diag = false;
 
     // If we should ensure that when kernel jitification fails, the line number reported reflexes where error happens
     bool ensure_kernel_line_num = false;
@@ -2081,6 +2063,8 @@ class DEMSolver {
     std::vector<unsigned int> m_input_mesh_obj_family;
     std::vector<notStupidBool_t> m_input_mesh_obj_convex;
     std::vector<notStupidBool_t> m_input_mesh_obj_never_winner;
+    // 1 if the mesh is watertight (closed/manifold), 0 otherwise. Populated via DEMMesh::IsWatertight() at load time.
+    std::vector<notStupidBool_t> m_input_mesh_obj_watertight;
 
     // Processed unique family prescription info
     std::vector<familyPrescription_t> m_unique_family_prescription;

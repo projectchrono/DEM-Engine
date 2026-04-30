@@ -31,10 +31,11 @@ int main() {
     // If not, meshes will not have contacts with each other or analytical boundaries (but still have contacts with
     // clumps).
     DEMSim.SetMeshUniversalContact(true);
+    // DEMSim.SetSimplePatchCombination(true);
 
     // Special material: has a cohesion param
-    auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.3}, {"Crr", 0.01}});
-    auto mat_type_2 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.4}, {"CoR", 0.4}, {"mu", 0.3}, {"Crr", 0.01}});
+    auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.3}, {"Crr", 0.0}});
+    auto mat_type_2 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.4}, {"CoR", 0.4}, {"mu", 0.3}, {"Crr", 0.0}});
     // If you don't have this line, then CoR between thw 2 materials will take average when they are in contact
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_1, mat_type_2, 0.6);
 
@@ -93,12 +94,13 @@ int main() {
             float3 angvel2 = tracker2->AngVelGlobal();
 
             // Test getting all contact force pairs concerning different trackers
-            std::vector<float3> forces_mesh, points_mesh;
+            std::vector<float3> forces_mesh, torques_mesh, points_mesh;
             // GetOwnerContactForces is another way to query the contact forces, if you don't want to write them to
             // files. If a contact involves at least one of the owner IDs provided as the first arg of
             // GetOwnerContactForces, it will be outputted. Note if a contact involves two IDs of the user-provided
             // list, then the force for that contact will be given as the force experienced by whichever owner that
-            // appears earlier in the ID list. DEMSim.GetOwnerContactForces({ID1, ID2}, points_mesh, forces_mesh);
+            // appears earlier in the ID list.
+            DEMSim.GetOwnerContactForces({ID1, ID2}, points_mesh, forces_mesh, torques_mesh);
 
             std::cout << "----------------------------------------" << std::endl;
             std::cout << "Particle 1 Z coord is " << pos1.z << std::endl;
@@ -108,6 +110,10 @@ int main() {
             if (points_mesh.size() > 0) {
                 std::cout << "Two meshes collide, one contact is at (" << points_mesh[0].x << ", " << points_mesh[0].y
                           << ", " << points_mesh[0].z << ")." << std::endl;
+                std::cout << "The contact force is (" << forces_mesh[0].x << ", " << forces_mesh[0].y << ", "
+                          << forces_mesh[0].z << ")." << std::endl;
+                std::cout << "The contact torque is (" << torques_mesh[0].x << ", " << torques_mesh[0].y << ", "
+                          << torques_mesh[0].z << "). We expect this torque to be 0 since Crr is 0." << std::endl;
             }
             DEMSim.ShowMemStats();
             std::cout << "----------------------------------------" << std::endl;

@@ -511,7 +511,10 @@ PYBIND11_MODULE(DEME, obj) {
              "Instruct the solver that there is no need to record the contact force (and contact point location etc.) "
              "in an array.",
              py::arg("flag") = true)
-        .def("LoadSphereType", &deme::DEMSolver::LoadSphereType)
+        .def("LoadSphereType", py::overload_cast<float, float, const std::shared_ptr<deme::DEMMaterial>&>(
+                                   &deme::DEMSolver::LoadSphereType))
+        .def("LoadSphereType", py::overload_cast<float, float, float, const std::shared_ptr<deme::DEMMaterial>&>(
+                                   &deme::DEMSolver::LoadSphereType))
         .def("EnsureKernelErrMsgLineNum", &deme::DEMSolver::EnsureKernelErrMsgLineNum,
              "If true, each jitification string substitution will do a one-liner to one-liner replacement, so that if "
              "the kernel compilation fails, the error meessage line number will reflex the actual spot where that "
@@ -611,6 +614,12 @@ PYBIND11_MODULE(DEME, obj) {
              "Set whether the solver should expect the user to mark certain contacts as persistent across kT updates. "
              "Set this to true if you later will call MarkPersistentContact series of methods.",
              py::arg("use") = true)
+        .def("SetMeshParticlesLowPoly", &deme::DEMSolver::SetMeshParticlesLowPoly,
+             "Declare that all meshed particles have a low polygon count (e.g. box, tetrahedron). When enabled, the "
+             "per-triangle maxTriTriPenetration array is neither computed, transferred to kT, nor used to inflate "
+             "contact-detection margins, saving compute time. Toggle this on only when you are confident that no "
+             "triangle from one mesh will ever be completely submerged inside another mesh.",
+             py::arg("use") = true)
 
         .def("SetExpandSafetyType", &deme::DEMSolver::SetExpandSafetyType,
              "A string. If 'auto': the solver automatically derives.")
@@ -640,6 +649,10 @@ PYBIND11_MODULE(DEME, obj) {
         .def("SetMaxTriTriPenetration", &deme::DEMSolver::SetMaxTriTriPenetration,
              "Set the maximum allowed triangle-triangle penetration used as the margin added in kT contact detection. "
              "This value caps the penetration margin added to prevent excessively large values.")
+        .def("SetTriTriContactRejectionRatio", &deme::DEMSolver::SetTriTriContactRejectionRatio,
+             "Set the ratio threshold for rejecting suspicious tri-tri contacts. A contact is rejected when the "
+             "penetration depth exceeds this fraction of the contact-point-to-mesh-center distance for either mesh "
+             "involved. A negative value disables the guard entirely.")
         .def("GetAvgSphContacts", &deme::DEMSolver::GetAvgSphContacts,
              "Get the current number of contacts each sphere has")
         .def("UseAdaptiveBinSize", &deme::DEMSolver::UseAdaptiveBinSize,
@@ -711,7 +724,8 @@ PYBIND11_MODULE(DEME, obj) {
         .def("EnableGeometryWildcardOutput", &deme::DEMSolver::EnableGeometryWildcardOutput,
              "Enable or disable geometry wildcard output.", py::arg("enable") = true)
         .def("SetVerbosity", static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetVerbosity),
-             "Set the verbosity level of the solver.")
+             "Set the verbosity level of the solver. Select from 'QUIET', 'ERROR', 'WARNING', 'INFO', 'METRIC' or "
+             "'DEBUG'. Recommend 'INFO'.")
         .def("EnableStoreNormals", &deme::DEMSolver::EnableStoreNormals,
              "Let the solver store the contact normal information for every contact (or disable it).",
              py::arg("enable") = true)
@@ -1072,8 +1086,8 @@ PYBIND11_MODULE(DEME, obj) {
              "Get all contact forces and torque that concern a list of owners.", py::arg("ownerIDs"), py::arg("points"),
              py::arg("forces"), py::arg("torques"), py::arg("torque_in_local") = false)
 
-        .def("SetPatchWildcardValue", &deme::DEMSolver::SetPatchWildcardValue,
-             "Set the wildcard values of some patches.")
+        .def("SetTriWildcardValue", &deme::DEMSolver::SetTriWildcardValue,
+             "Set the wildcard values of some mesh triangles.")
         .def("SetSphereWildcardValue", &deme::DEMSolver::SetSphereWildcardValue,
              "Set the wildcard values of some spheres.")
         .def("SetAnalWildcardValue", &deme::DEMSolver::SetAnalWildcardValue,
@@ -1101,8 +1115,8 @@ PYBIND11_MODULE(DEME, obj) {
         .def("GetFamilyOwnerWildcardValue", &deme::DEMSolver::GetFamilyOwnerWildcardValue,
              "Get the owner wildcard's values of all entities in family N.")
 
-        .def("GetPatchWildcardValue", &deme::DEMSolver::GetPatchWildcardValue,
-             "Get the geometry wildcard's values of a series of mesh patches (convex components).")
+        .def("GetTriWildcardValue", &deme::DEMSolver::GetTriWildcardValue,
+             "Get the geometry wildcard's values of a series of mesh triangles.")
         .def("GetSphereWildcardValue", &deme::DEMSolver::GetSphereWildcardValue,
              "Get the geometry wildcard's values of a series of spheres.")
         .def("GetAnalWildcardValue", &deme::DEMSolver::GetAnalWildcardValue,

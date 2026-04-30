@@ -893,6 +893,11 @@ __device__ __forceinline__ Scalar satSeparationOnAxis(const Vec& axis,
  * @param depth Output: penetration depth (max distance of submerged vertices)
  * @param area Output: area of the clipping polygon
  * @param centroid Output: centroid of the clipping polygon
+ * @param minPenetrationFullySubmerged Output: shallowest vertex penetration depth, but ONLY non-zero when all 3
+ *        incident vertices are submerged (i.e., the incident triangle is completely below the reference plane). When
+ *        fewer than 3 vertices are submerged this is set to 0. This value is used by kT margin sizing: a triangle
+ *        that is fully submerged in the reference plane direction cannot be detected by SAT, so its shallowest
+ *        vertex depth tells us the minimum extra margin we must add to keep the contact traceable.
  * @return true if there is contact (at least one vertex submerged), false otherwise
  */
 template <typename T1, typename T2>
@@ -901,11 +906,14 @@ __device__ bool projectTriangleOntoTriangle(const T1* incTri,
                                             const T1& refNormal,
                                             T2& depth,
                                             T2& area,
-                                            T1& centroid) {
+                                            T1& centroid,
+                                            T2& minPenetrationFullySubmerged) {
     // Compute signed distances of incident triangle vertices to reference plane
     area = T2(0.0);
+    minPenetrationFullySubmerged = T2(0.0);
     T2 incDists[3];
     T2 maxPenetration = 0.0;
+    T2 minPenetration = T2(DEME_HUGE_FLOAT);
     int8_t numSubmerged = 0;
 #pragma unroll
     for (int8_t i = 0; i < 3; ++i) {
@@ -915,7 +923,14 @@ __device__ bool projectTriangleOntoTriangle(const T1* incTri,
             T2 pen = -incDists[i];
             if (pen > maxPenetration)
                 maxPenetration = pen;
+            if (pen < minPenetration)
+                minPenetration = pen;
         }
+    }
+    // The shallowest penetration is only meaningful when ALL vertices are submerged: that is the only case where the
+    // incident triangle is completely buried and cannot be found by SAT on its own.
+    if (numSubmerged == 3) {
+        minPenetrationFullySubmerged = minPenetration;
     }
 
     // If no vertices are submerged, no contact
@@ -1481,14 +1496,23 @@ __device__ bool checkTriangleTriangleOverlap(
     const T1& A2,
     const T1& B2,
     const T1& C2,
-    T1& normal,         ///< contact normal (B2A direction)
-    T2& depth,          ///< penetration (positive if in contact)
-    T2& projectedArea,  ///< projected area of clipping polygon (optional output)
-    T1& point) {        ///< contact point
+    T1& normal,              ///< contact normal (B2A direction)
+    T2& depth,               ///< penetration (positive if in contact)
+    T2& projectedArea,       ///< projected area of clipping polygon (optional output)
+    T1& point,               ///< contact point
+    T2& minDepthSelected) {  ///< shallowest vertex penetration from the SELECTED projection direction only.
+                             ///< Non-zero only when the incident triangle in that chosen direction is fully submerged
+                             ///< (all 3 vertices below the reference plane). We use the selected direction's min depth
+                             ///< for both triangles' margin competition via atomicMax, because depth and minDepth must
+                             ///< come from the same projection to remain physically consistent. Any contact partner
+                             ///< may contribute a larger value through a different contact pair, handled atomically.
     // Triangle A vertices (tri1)
     const T1 triA[3] = {A1, B1, C1};
     // Triangle B vertices (tri2)
     const T1 triB[3] = {A2, B2, C2};
+
+    // Initialise to 0; set non-zero below only when the selected projection's incident triangle is fully submerged.
+    minDepthSelected = T2(0.0);
 
     // Compute face normal for triangle A first; triangle B normal is only needed if B->A projection hits.
     T1 nA = normalize(cross(B1 - A1, C1 - A1));
@@ -1500,10 +1524,11 @@ __device__ bool checkTriangleTriangleOverlap(
     // and clip using Sutherland-Hodgman algorithm
     // ========================================================================
 
-    // Project triangle B onto triangle A's plane and clip against A
-    T2 depthBA, areaBA;
+    // Project triangle B onto triangle A's plane and clip against A.
+    // minBA is non-zero only if all of triB is fully submerged below triA's plane.
+    T2 depthBA, areaBA, minBA;
     T1 centroidBA;
-    const bool contactBA = projectTriangleOntoTriangle<T1, T2>(triB, triA, nA, depthBA, areaBA, centroidBA);
+    const bool contactBA = projectTriangleOntoTriangle<T1, T2>(triB, triA, nA, depthBA, areaBA, centroidBA, minBA);
 
     if (!contactBA) {
         // No contact detected, Provide separation info
@@ -1526,11 +1551,12 @@ __device__ bool checkTriangleTriangleOverlap(
         return false;
     }
 
-    // Project triangle A onto triangle B's plane and clip against B
+    // Project triangle A onto triangle B's plane and clip against B.
+    // minAB is non-zero only if all of triA is fully submerged below triB's plane.
     T1 nB = normalize(cross(B2 - A2, C2 - A2));
-    T2 depthAB, areaAB;
+    T2 depthAB, areaAB, minAB;
     T1 centroidAB;
-    const bool contactAB = projectTriangleOntoTriangle<T1, T2>(triA, triB, nB, depthAB, areaAB, centroidAB);
+    const bool contactAB = projectTriangleOntoTriangle<T1, T2>(triA, triB, nB, depthAB, areaAB, centroidAB, minAB);
 
     if (!contactAB) {
         // No contact detected, Provide separation info
@@ -1558,19 +1584,23 @@ __device__ bool checkTriangleTriangleOverlap(
     // smaller one projected onto the larger one: nearly 0 area (depending on numerical stability, may actually be 0);
     // Larger one projected onto the smaller one: almost covers the entire smaller surface. We always want them both
     // have non-0 projection area, and then select the shorter projection distance one. This is good for stability.
+    // The min depth (for kT margin sizing) comes from the selected projection direction so that depth and minDepth
+    // remain physically consistent: both triangles share this contact and thus share the same penetration metrics.
     if (depthBA < depthAB) {
-        // Use B->A projection results
+        // Use B->A projection results; minBA belongs to this direction.
         depth = depthBA;
         projectedArea = areaBA;
         normal = -1.0 * nA;  // Pay attention to direction
+        minDepthSelected = minBA;
 
         // Contact point: centroid on A's plane, moved back by half depth
         point = centroidBA - nA * (depth * 0.5);
     } else {
-        // Use A->B projection results
+        // Use A->B projection results; minAB belongs to this direction.
         depth = depthAB;
         projectedArea = areaAB;
         normal = nB;
+        minDepthSelected = minAB;
 
         // Contact point: centroid on B's plane, moved back by half depth
         point = centroidAB - nB * (depth * 0.5);
