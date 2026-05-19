@@ -483,8 +483,7 @@ PYBIND11_MODULE(DEME, obj) {
              "the initial value of all contact wildcard arrays is automatically 0")
         .def("SetPerOwnerWildcards", &deme::DEMForceModel::SetPerOwnerWildcards,
              " Set the names for the extra quantities that will be associated with each owner. For example, you can "
-             "use this to associate a cohesion parameter to each particle. Only float is supported.")
-        ;
+             "use this to associate a cohesion parameter to each particle. Only float is supported.");
 
     py::class_<deme::DEMSolver>(obj, "DEMSolver")
         .def(py::init<unsigned int>(), py::arg("nGPUs") = 2)
@@ -1064,7 +1063,6 @@ PYBIND11_MODULE(DEME, obj) {
              "Get all contact forces and torque that concern a list of owners.", py::arg("ownerIDs"), py::arg("points"),
              py::arg("forces"), py::arg("torques"), py::arg("torque_in_local") = false)
 
-
         .def("SetOwnerWildcardValue",
              static_cast<void (deme::DEMSolver::*)(deme::bodyID_t ownerID, const std::string& name,
                                                    const std::vector<float>& vals)>(
@@ -1086,7 +1084,6 @@ PYBIND11_MODULE(DEME, obj) {
              "Get the owner wildcard's values of all entities.")
         .def("GetFamilyOwnerWildcardValue", &deme::DEMSolver::GetFamilyOwnerWildcardValue,
              "Get the owner wildcard's values of all entities in family N.")
-
 
         .def("SyncMemoryTransfer", &deme::DEMSolver::SyncMemoryTransfer,
              "If the user used async-ed version of a tracker's get/set methods (to get a speed boost in many piecemeal "

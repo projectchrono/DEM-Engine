@@ -321,7 +321,6 @@ class DEMTracker {
     /// @param wc Wildcard values as a vector (must have same length as the number of tracked owners).
     void SetOwnerWildcardValues(const std::string& name, const std::vector<float>& wc);
 
-
     /// @brief Get all contact forces that concern this track object, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
     /// experiences.
