@@ -640,29 +640,6 @@ class DEMSolver {
     /// @param ownerID The ownerID of the mesh.
     /// @return A vector of float3 representing the global coordinates of the mesh nodes.
     std::vector<float3> GetMeshNodesGlobal(bodyID_t ownerID);
-    /// @brief Handover helper: get a mesh owner's triangle-geometry ID range in dT wildcard arrays.
-    /// @param ownerID Mesh owner ID.
-    /// @param geoID_begin First triangle geometry ID for this mesh.
-    /// @param n_triangles Number of triangles in this mesh.
-    /// @return true when ownerID is a valid mesh and the range is resolved.
-    bool GetMeshTriangleGeoRange(bodyID_t ownerID, bodyID_t& geoID_begin, size_t& n_triangles);
-    /// @brief Handover helper: fetch per-triangle P, V and PxV wildcard arrays for a mesh owner.
-    /// @details This expects the force model to define and maintain geometry wildcards with matching names.
-    /// @param ownerID Mesh owner ID.
-    /// @param triP Output per-triangle P values.
-    /// @param triV Output per-triangle V values.
-    /// @param triPxV Output per-triangle PxV values.
-    /// @param nameP Wildcard name for P (default "P").
-    /// @param nameV Wildcard name for V (default "V").
-    /// @param namePxV Wildcard name for PxV (default "PxV").
-    /// @return true when all arrays are fetched successfully.
-    bool GetMeshTrianglePVHandover(bodyID_t ownerID,
-                                   std::vector<float>& triP,
-                                   std::vector<float>& triV,
-                                   std::vector<float>& triPxV,
-                                   const std::string& nameP = "P",
-                                   const std::string& nameV = "V",
-                                   const std::string& namePxV = "PxV");
 
     /// @brief Get all clump--clump contact ID pairs in the simulation system. Note all GetContact-like methods reports
     /// potential contacts (not necessarily confirmed contacts), meaning they are similar to what
@@ -1068,9 +1045,6 @@ class DEMSolver {
     void SetContactWildcards(const std::set<std::string>& wildcards);
     /// @brief Set the names for the extra quantities that will be associated with each owner.
     void SetOwnerWildcards(const std::set<std::string>& wildcards);
-    /// @brief Set the names for the extra quantities that will be associated with each geometry entity (such as sphere,
-    /// triangle).
-    void SetGeometryWildcards(const std::set<std::string>& wildcards);
 
     /// @brief Change the value of contact wildcards to val if either of the contact geometries is in family N.
     /// @param N Family number. If one contact geometry is in N, this contact wildcard is modified.
@@ -1160,22 +1134,6 @@ class DEMSolver {
                                  std::vector<float3>& torques,
                                  bool torque_in_local = false);
 
-    /// @brief Set the wildcard values of some mesh triangles.
-    /// @param geoID The ID of the starting (first) triangle that needs to be modified.
-    /// @param name The name of the wildcard.
-    /// @param vals A vector of values that will be assigned to the triangles starting from geoID.
-    void SetTriWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals);
-    /// @brief Set the wildcard values of some spheres.
-    /// @param geoID The ID of the starting (first) sphere that needs to be modified.
-    /// @param name The name of the wildcard.
-    /// @param vals A vector of values that will be assigned to the spheres starting from geoID.
-    void SetSphereWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals);
-    /// @brief Set the wildcard values of some analytical components.
-    /// @param geoID The ID of the starting (first) analytical component that needs to be modified.
-    /// @param name The name of the wildcard.
-    /// @param vals A vector of values that will be assigned to the analytical components starting from geoID.
-    void SetAnalWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals);
-
     /// @brief Set the wildcard values of some owners.
     /// @param ownerID The ID of the starting (first) owner that needs to be modified.
     /// @param name The name of the wildcard.
@@ -1224,25 +1182,6 @@ class DEMSolver {
     std::vector<float> GetAllOwnerWildcardValue(const std::string& name);
     /// @brief Get the owner wildcard's values of all entities in family N.
     std::vector<float> GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name);
-
-    /// @brief Get the geometry wildcard's values of a series of triangles.
-    /// @param geoID The ID of the first triangle.
-    /// @param name Wildcard's name.
-    /// @param n The number of triangles to query following the ID of the first one.
-    /// @return Vector of values of the wildcards.
-    std::vector<float> GetTriWildcardValue(bodyID_t geoID, const std::string& name, size_t n);
-    /// @brief Get the geometry wildcard's values of a series of spheres.
-    /// @param geoID The ID of the first sphere.
-    /// @param name Wildcard's name.
-    /// @param n The number of spheres to query following the ID of the first one.
-    /// @return Vector of values of the wildcards.
-    std::vector<float> GetSphereWildcardValue(bodyID_t geoID, const std::string& name, size_t n);
-    /// @brief Get the geometry wildcard's values of a series of analytical entities.
-    /// @param geoID The ID of the first analytical entity.
-    /// @param name Wildcard's name.
-    /// @param n The number of analytical entities to query following the ID of the first one.
-    /// @return Vector of values of the wildcards.
-    std::vector<float> GetAnalWildcardValue(bodyID_t geoID, const std::string& name, size_t n);
 
     /// @brief If the user used async-ed version of a tracker's get/set methods (to get a speed boost in many piecemeal
     /// accesses of a long array), this method should be called to mark the end of to-host transactions. But usually,
@@ -1564,8 +1503,6 @@ class DEMSolver {
     void EnableOwnerWildcardOutput(bool enable = true) { m_is_out_owner_wildcards = enable; }
     /// Enable/disable outputting contact wildcard values to the contact file.
     void EnableContactWildcardOutput(bool enable = true) { m_is_out_cnt_wildcards = enable; }
-    /// Enable/disable outputting geometry wildcard values to the contact file.
-    void EnableGeometryWildcardOutput(bool enable = true) { m_is_out_geo_wildcards = enable; }
 
     /// @brief Let the solver store the contact normal information for every contact (or disable it).
     void EnableStoreNormals(bool enable = true);
@@ -1580,7 +1517,7 @@ class DEMSolver {
     void SetOutputFormat(const std::string& format);
     /// @brief Specify the information that needs to go into the clump or sphere output files.
     /// @param content A list of "XYZ", "QUAT", "ABSV", "VEL", "ANG_VEL", "ABS_ACC", "ACC", "ANG_ACC", "FAMILY", "MAT",
-    /// "OWNER_WILDCARD" and/or "GEO_WILDCARD".
+    /// and/or "OWNER_WILDCARD".
     void SetOutputContent(const std::vector<std::string>& content);
     /// @brief Specify the file format of contact pairs.
     /// @param format Choice among "CSV", "BINARY".
@@ -1694,7 +1631,6 @@ class DEMSolver {
     // If the solver should output wildcards to file
     bool m_is_out_owner_wildcards = false;
     bool m_is_out_cnt_wildcards = false;
-    bool m_is_out_geo_wildcards = false;
     mutable std::thread m_output_thread;
 
     // User-instructed simulation `world' size. Note it is an approximate of the true size and we will generate a world
@@ -1948,8 +1884,6 @@ class DEMSolver {
 
     // A map that records the numbering for user-defined owner wildcards
     std::unordered_map<std::string, unsigned int> m_owner_wc_num;
-    // A map that records the numbering for user-defined geometry wildcards
-    std::unordered_map<std::string, unsigned int> m_geo_wc_num;
     // A map that records the numbering for user-defined per-contact wildcards
     std::unordered_map<std::string, unsigned int> m_cnt_wc_num;
 

@@ -7,8 +7,8 @@
 // This demo lets a rod with some electric charges stick into a pile of granular
 // material that is also charged. The electrostatic force shows its effect. The
 // electric charges are even moving during the simulation. This is done through
-// `Geometry Wildcard', where the amount of charges is associated with each
-// sphere component (of clumps) and triangles (of meshes). Then a custom force
+// owner wildcards, where the amount of charges is associated with each
+// owner. Then a custom force
 // model is used to derive the electrostatic force in addition to contact forces.
 //
 // NOTE: If you want to create your own force model, it's probably a good idea
@@ -52,9 +52,8 @@ int main() {
     DEMSim.SetMaterialPropertyPair("mu", mat_type_rod, mat_type_terrain, 0.7);
     // We can specify the force model using a string.
     // This force model is the standard Hertzian--Mindlin model, plus an electrostatic force, based on something
-    // called a `geometry wildcard'. This is an extra property that we can associate with each geometry entity,
-    // such as triangle and sphere. We use this value to derive the electrostatic force. But first, we need to
-    // declare in the force model that a geometry wildcard is in use...
+    // called an owner wildcard. This is an extra property that we can associate with each owner.
+    // We use this value to derive the electrostatic force.
     auto my_force_model = DEMSim.DefineContactForceModel(force_model());
     // auto my_force_model = DEMSim.ReadContactForceModel("ForceModelWithElectrostatic.cu");
 
@@ -65,7 +64,7 @@ int main() {
     // Use variable name `Q' for the amount of electrc charge.
     // NOTE! If you call it Q here, then you can refer to this wildcard array using variable names Q_A amd Q_B in
     // your custom force model.
-    my_force_model->SetPerGeometryWildcards({"Q"});
+    my_force_model->SetPerOwnerWildcards({"Q"});
 
     float init_charge = 2e-8;  // Coulomb as the unit...
     float cone_speed = 0.1;
@@ -108,10 +107,8 @@ int main() {
     auto particles = DEMSim.AddClumps(my_template, input_xyz);
     std::cout << "Total num of particles: " << particles->GetNumClumps() << std::endl;
     std::cout << "Total num of spheres: " << particles->GetNumSpheres() << std::endl;
-    // Add electric charge Q to each sphere. It is important to add it to each sphere, not each clump. This
-    // is because the contact pairs are resolved between geometries, not clumps. Using clumps leads to
-    // double-count or triple-count or...
-    particles->AddGeometryWildcard("Q", std::vector<float>(particles->GetNumSpheres(), init_charge));
+    // Add electric charge Q to each owner.
+    particles->AddOwnerWildcard("Q", init_charge);
 
     // Load in the cone used for this penetration test
     auto rod_body = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/cyl_r1_h2.obj"), mat_type_rod);
@@ -128,8 +125,7 @@ int main() {
     rod_body->SetFamily(1);
     // Just fix it: We will manually impose its motion later.
     DEMSim.SetFamilyFixed(1);
-    // We can set the geometry wildcard Q here. But we'll instead show how to modify that using a tracker.
-    // rod_body->AddGeometryWildcard("Q", std::vector<float>(num_tri, init_charge));
+    // We can set the owner wildcard Q here. But we'll instead show how to modify that using a tracker.
 
     // Track the rod
     auto rod_tracker = DEMSim.Track(rod_body);
@@ -190,9 +186,9 @@ int main() {
 
     DEMSim.EnableContactBetweenFamilies(0, 1);
 
-    // We demonstrate using trackers to set a geometry wildcard. Q is now set for each triangle facet, and it's
+    // We demonstrate using trackers to set an owner wildcard. Q is now set for the rod owner, and it's
     // the opposite charge to the particles. So the rod should attract the particles.
-    rod_tracker->SetGeometryWildcardValues("Q", std::vector<float>(num_tri, -10. * init_charge));
+    rod_tracker->SetOwnerWildcardValue("Q", -10. * init_charge);
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_end; t += step_size, step_count++) {
@@ -376,23 +372,22 @@ std::string force_model() {
             const float k = 8.99e9;
             const double ABdist2 = dot(bodyAPos - bodyBPos, bodyAPos - bodyBPos);
             // If Q_A and Q_B are the same sign, then the force pushes A away from B, so B2A is the direction.
-            force += k * Q_A[AGeo] * Q_B[BGeo] / ABdist2 * (B2A);
+            force += k * Q_A[AOwner] * Q_B[BOwner] / ABdist2 * (B2A);
             // Fun part: we can modify the electric charge on the fly. But we have to use atomic, since multiple contacts
             // can modify the same Q.
             // But this is not recommend unless you understand what you are doing, and there are a lot of details related to it.
-            // For example, although the charges transfer between geometries, the geometries within one clump cannot
-            // re-distribute elec charges among them, since no contact among geometries in one clump. Still, you could write
-            // your own subroutine to further modify those geometry and/or own wildcards in your script, or within the force
-            // model. 
+            // You could write your own subroutine to further modify those wildcards in your script, or within the force
+            // model.
             // On the other hand, if you do not need to modify the wildcards, you just need to use them for calculating
             // the force, then that is probably easier and with less strings attached to it. I can see this being more
             // useful.
             if (overlapDepth > 0) {  // Exchange the elec charge only in physical contact
-                float avg_Q = (Q_A[AGeo] + Q_B[BGeo]) / 2.;
-                float A_change_dir = (abs(avg_Q - Q_A[AGeo]) > 1e-11) ? (avg_Q - Q_A[AGeo]) / abs(avg_Q - Q_A[AGeo]) : 0.;
+                float avg_Q = (Q_A[AOwner] + Q_B[BOwner]) / 2.;
+                float A_change_dir =
+                    (abs(avg_Q - Q_A[AOwner]) > 1e-11) ? (avg_Q - Q_A[AOwner]) / abs(avg_Q - Q_A[AOwner]) : 0.;
                 // Modify the charge they carry... the rate is 1e-8 per second
-                atomicAdd(Q_A + AGeo, A_change_dir * 1e-8 * ts);
-                atomicAdd(Q_B + BGeo, -A_change_dir * 1e-8 * ts);
+                atomicAdd(Q_A + AOwner, A_change_dir * 1e-8 * ts);
+                atomicAdd(Q_B + BOwner, -A_change_dir * 1e-8 * ts);
             }
         }
     )V0G0N";

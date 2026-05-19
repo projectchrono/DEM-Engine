@@ -346,15 +346,6 @@ PYBIND11_MODULE(DEME, obj) {
              static_cast<std::vector<float> (deme::DEMTracker::*)(const std::string&)>(
                  &deme::DEMTracker::GetOwnerWildcardValues),
              "Get the owner wildcard values for all the owners entities tracked by this tracker.", py::arg("name"))
-        .def("GetGeometryWildcardValues",
-             static_cast<std::vector<float> (deme::DEMTracker::*)(const std::string&)>(
-                 &deme::DEMTracker::GetGeometryWildcardValues),
-             "Get the geometry wildcard values for all the geometry entities tracked by this tracker.", py::arg("name"))
-        .def("GetGeometryWildcardValue",
-             static_cast<float (deme::DEMTracker::*)(const std::string&, size_t)>(
-                 &deme::DEMTracker::GetGeometryWildcardValue),
-             "Get the geometry wildcard values for a geometry entity tracked by this tracker.", py::arg("name"),
-             py::arg("offset"))
 
         .def("SetPos", static_cast<void (deme::DEMTracker::*)(float3, size_t)>(&deme::DEMTracker::SetPos),
              "Set the position of this tracked object.", py::arg("pos"), py::arg("offset") = 0)
@@ -426,11 +417,6 @@ PYBIND11_MODULE(DEME, obj) {
              py::arg("offset") = 0)
         .def("SetOwnerWildcardValues", &deme::DEMTracker::SetOwnerWildcardValues,
              "Set a wildcard value of the owner this tracker is tracking.", py::arg("name"), py::arg("wc"))
-        .def("SetGeometryWildcardValue", &deme::DEMTracker::SetGeometryWildcardValue,
-             "Set a wildcard value of the geometry entity this tracker is tracking.", py::arg("name"), py::arg("wc"),
-             py::arg("offset") = 0)
-        .def("SetGeometryWildcardValues", &deme::DEMTracker::SetGeometryWildcardValues,
-             "Set a wildcard value of the geometry entities this tracker is tracking.", py::arg("name"), py::arg("wc"))
 
         .def(
             "GetContactForcesAndLocalTorque",
@@ -498,10 +484,7 @@ PYBIND11_MODULE(DEME, obj) {
         .def("SetPerOwnerWildcards", &deme::DEMForceModel::SetPerOwnerWildcards,
              " Set the names for the extra quantities that will be associated with each owner. For example, you can "
              "use this to associate a cohesion parameter to each particle. Only float is supported.")
-        .def("SetPerGeometryWildcards", &deme::DEMForceModel::SetPerGeometryWildcards,
-             "Set the names for the extra quantities that will be associated with each geometry. For example, you can "
-             "use this to associate certain electric charges to each particle's each component which represents a "
-             "distribution of the charges. Only float is supported.");
+        ;
 
     py::class_<deme::DEMSolver>(obj, "DEMSolver")
         .def(py::init<unsigned int>(), py::arg("nGPUs") = 2)
@@ -721,8 +704,6 @@ PYBIND11_MODULE(DEME, obj) {
              "Enable or disable owner wildcard output.", py::arg("enable") = true)
         .def("EnableContactWildcardOutput", &deme::DEMSolver::EnableContactWildcardOutput,
              "Enable or disable contact wildcard output.", py::arg("enable") = true)
-        .def("EnableGeometryWildcardOutput", &deme::DEMSolver::EnableGeometryWildcardOutput,
-             "Enable or disable geometry wildcard output.", py::arg("enable") = true)
         .def("SetVerbosity", static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetVerbosity),
              "Set the verbosity level of the solver. Select from 'QUIET', 'ERROR', 'WARNING', 'INFO', 'METRIC' or "
              "'DEBUG'. Recommend 'INFO'.")
@@ -1039,9 +1020,6 @@ PYBIND11_MODULE(DEME, obj) {
              "Set the names for the extra quantities that will be associated with each contact pair.")
         .def("SetOwnerWildcards", &deme::DEMSolver::SetOwnerWildcards,
              "Set the names for the extra quantities that will be associated with each owner.")
-        .def("SetGeometryWildcards", &deme::DEMSolver::SetGeometryWildcards,
-             "Set the names for the extra quantities that will be associated with each geometry entity (such as "
-             "sphere, triangle).")
 
         .def("SetFamilyContactWildcardValueEither", &deme::DEMSolver::SetFamilyContactWildcardValueEither,
              "Change the value of contact wildcards to val if either of the contact geometries is in family N.")
@@ -1086,12 +1064,6 @@ PYBIND11_MODULE(DEME, obj) {
              "Get all contact forces and torque that concern a list of owners.", py::arg("ownerIDs"), py::arg("points"),
              py::arg("forces"), py::arg("torques"), py::arg("torque_in_local") = false)
 
-        .def("SetTriWildcardValue", &deme::DEMSolver::SetTriWildcardValue,
-             "Set the wildcard values of some mesh triangles.")
-        .def("SetSphereWildcardValue", &deme::DEMSolver::SetSphereWildcardValue,
-             "Set the wildcard values of some spheres.")
-        .def("SetAnalWildcardValue", &deme::DEMSolver::SetAnalWildcardValue,
-             "Set the wildcard values of some analytical components.")
 
         .def("SetOwnerWildcardValue",
              static_cast<void (deme::DEMSolver::*)(deme::bodyID_t ownerID, const std::string& name,
@@ -1115,12 +1087,6 @@ PYBIND11_MODULE(DEME, obj) {
         .def("GetFamilyOwnerWildcardValue", &deme::DEMSolver::GetFamilyOwnerWildcardValue,
              "Get the owner wildcard's values of all entities in family N.")
 
-        .def("GetTriWildcardValue", &deme::DEMSolver::GetTriWildcardValue,
-             "Get the geometry wildcard's values of a series of mesh triangles.")
-        .def("GetSphereWildcardValue", &deme::DEMSolver::GetSphereWildcardValue,
-             "Get the geometry wildcard's values of a series of spheres.")
-        .def("GetAnalWildcardValue", &deme::DEMSolver::GetAnalWildcardValue,
-             "Get the geometry wildcard's values of a series of analytical entities.")
 
         .def("SyncMemoryTransfer", &deme::DEMSolver::SyncMemoryTransfer,
              "If the user used async-ed version of a tracker's get/set methods (to get a speed boost in many piecemeal "
@@ -1320,12 +1286,6 @@ PYBIND11_MODULE(DEME, obj) {
                  &deme::DEMClumpBatch::AddOwnerWildcard))
         .def("AddOwnerWildcard", static_cast<void (deme::DEMClumpBatch::*)(const std::string&, float)>(
                                      &deme::DEMClumpBatch::AddOwnerWildcard))
-        .def("SetGeometryWildcards", &deme::DEMClumpBatch::SetGeometryWildcards)
-        .def("AddGeometryWildcard",
-             static_cast<void (deme::DEMClumpBatch::*)(const std::string&, const std::vector<float>&)>(
-                 &deme::DEMClumpBatch::AddGeometryWildcard))
-        .def("AddGeometryWildcard", static_cast<void (deme::DEMClumpBatch::*)(const std::string&, float)>(
-                                        &deme::DEMClumpBatch::AddGeometryWildcard))
         .def("GetNumContacts", &deme::DEMClumpBatch::GetNumContacts);
 
     py::class_<deme::DEMExternObj, deme::DEMInitializer, std::shared_ptr<deme::DEMExternObj>>(obj, "DEMExternObj")
@@ -1417,12 +1377,6 @@ PYBIND11_MODULE(DEME, obj) {
         .def("Scale",
              static_cast<void (deme::DEMMeshConnected::*)(const std::vector<float>&)>(&deme::DEMMeshConnected::Scale))
         .def("ClearWildcards", &deme::DEMMeshConnected::ClearWildcards)
-        .def("SetGeometryWildcards", &deme::DEMMeshConnected::SetGeometryWildcards)
-        .def("AddGeometryWildcard",
-             static_cast<void (deme::DEMMeshConnected::*)(const std::string&, const std::vector<float>&)>(
-                 &deme::DEMMeshConnected::AddGeometryWildcard))
-        .def("AddGeometryWildcard", static_cast<void (deme::DEMMeshConnected::*)(const std::string&, float)>(
-                                        &deme::DEMMeshConnected::AddGeometryWildcard))
         .def("GetCoordsVertices", &deme::DEMMeshConnected::GetCoordsVerticesAsVectorOfVectors)
         //.def("GetCoordsUV", &deme::DEMMeshConnected::GetCoordsUVPython)
         //.def("GetCoordsColors", &deme::DEMMeshConnected::GetCoordsColorsPython)
@@ -1464,7 +1418,6 @@ PYBIND11_MODULE(DEME, obj) {
         .value("FAMILY", deme::OUTPUT_CONTENT::FAMILY)
         .value("MAT", deme::OUTPUT_CONTENT::MAT)
         .value("OWNER_WILDCARD", deme::OUTPUT_CONTENT::OWNER_WILDCARD)
-        .value("GEO_WILDCARD", deme::OUTPUT_CONTENT::GEO_WILDCARD)
         .value("EXP_FACTOR", deme::OUTPUT_CONTENT::EXP_FACTOR)
         .export_values();
 

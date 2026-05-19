@@ -50,7 +50,7 @@ if (overlapDepth > 0) {
     const double Gconst = 6.674e-11 * 86400 * 86400 / 1.496e+11 / 1.496e+11 / 1.496e+11;
     const double ABdist2 = dot(bodyAPos - bodyBPos, bodyAPos - bodyBPos);
     // To A, gravity pulls it towards B, so -B2A direction
-    force += Gconst * my_mass_A[AGeo] * my_mass_B[BGeo] / ABdist2 * (-B2A);
+    force += Gconst * my_mass_A[AOwner] * my_mass_B[BOwner] / ABdist2 * (-B2A);
     // Note that this G force is applied at the contact point which is in general out of the sphere (for non-touching
     // spheres the contact point is in between them), but the vector of the force still goes through the center of the
     // sphere so the effect is the same.

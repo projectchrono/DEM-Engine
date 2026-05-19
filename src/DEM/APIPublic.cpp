@@ -421,9 +421,6 @@ void DEMSolver::SetOutputContent(const std::vector<std::string>& content) {
             case ("OWNER_WILDCARD"_):
                 m_out_content = m_out_content | OUTPUT_CONTENT::OWNER_WILDCARD;
                 break;
-            case ("GEO_WILDCARD"_):
-                m_out_content = m_out_content | OUTPUT_CONTENT::GEO_WILDCARD;
-                break;
             default:
                 DEME_ERROR("Instruction %s is unknown in SetOutputContent call.", content[i].c_str());
         }
@@ -1003,45 +1000,6 @@ std::vector<float> DEMSolver::GetFamilyOwnerWildcardValue(unsigned int N, const 
     return res;
 }
 
-std::vector<float> DEMSolver::GetTriWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
-    assertSysInit("GetTriWildcardValue");
-    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
-        DEME_ERROR(
-            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerGeometryWildcards in the force model first.",
-            name.c_str());
-    }
-    std::vector<float> res;
-    dT->getTriWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
-    return res;
-}
-
-std::vector<float> DEMSolver::GetSphereWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
-    assertSysInit("GetSphereWildcardValue");
-    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
-        DEME_ERROR(
-            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerGeometryWildcards in the force model first.",
-            name.c_str());
-    }
-    std::vector<float> res;
-    dT->getSphereWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
-    return res;
-}
-
-std::vector<float> DEMSolver::GetAnalWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
-    assertSysInit("GetAnalWildcardValue");
-    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
-        DEME_ERROR(
-            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerGeometryWildcards in the force model first.",
-            name.c_str());
-    }
-    std::vector<float> res;
-    dT->getAnalWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
-    return res;
-}
-
 size_t DEMSolver::GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
                                         std::vector<float3>& points,
                                         std::vector<float3>& forces) {
@@ -1179,53 +1137,6 @@ std::vector<float3> DEMSolver::GetMeshNodesGlobal(bodyID_t ownerID) {
         applyFrameTransformLocalToGlobal<float3, float3, float4>(pnt, mesh_pos, mesh_oriQ);
     }
     return nodes;
-}
-
-bool DEMSolver::GetMeshTriangleGeoRange(bodyID_t ownerID, bodyID_t& geoID_begin, size_t& n_triangles) {
-    assertSysInit("GetMeshTriangleGeoRange");
-    if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
-        return false;
-    }
-
-    geoID_begin = 0;
-    n_triangles = 0;
-    for (const auto& mesh : m_meshes) {
-        if (mesh->owner == ownerID) {
-            // Geometry wildcards for meshes are per-triangle.
-            n_triangles = mesh->GetNumTriangles();
-            return true;
-        }
-        geoID_begin += mesh->GetNumTriangles();
-    }
-    return false;
-}
-
-bool DEMSolver::GetMeshTrianglePVHandover(bodyID_t ownerID,
-                                          std::vector<float>& triP,
-                                          std::vector<float>& triV,
-                                          std::vector<float>& triPxV,
-                                          const std::string& nameP,
-                                          const std::string& nameV,
-                                          const std::string& namePxV) {
-    assertSysInit("GetMeshTrianglePVHandover");
-
-    bodyID_t geo_begin = 0;
-    size_t n_tri = 0;
-    if (!GetMeshTriangleGeoRange(ownerID, geo_begin, n_tri)) {
-        return false;
-    }
-    if (m_geo_wc_num.find(nameP) == m_geo_wc_num.end() || m_geo_wc_num.find(nameV) == m_geo_wc_num.end() ||
-        m_geo_wc_num.find(namePxV) == m_geo_wc_num.end()) {
-        return false;
-    }
-
-    triP.clear();
-    triV.clear();
-    triPxV.clear();
-    dT->getTriWildcardValue(triP, geo_begin, m_geo_wc_num.at(nameP), n_tri);
-    dT->getTriWildcardValue(triV, geo_begin, m_geo_wc_num.at(nameV), n_tri);
-    dT->getTriWildcardValue(triPxV, geo_begin, m_geo_wc_num.at(namePxV), n_tri);
-    return triP.size() == n_tri && triV.size() == n_tri && triPxV.size() == n_tri;
 }
 
 double DEMSolver::GetSimTime() const {
@@ -1999,39 +1910,6 @@ void DEMSolver::CorrectFamilyQuaternion(unsigned int ID, const std::string& q_fo
     m_input_family_prescription.push_back(preInfo);
 }
 
-void DEMSolver::SetTriWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals) {
-    assertSysInit("SetTriWildcardValue");
-    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
-        DEME_ERROR(
-            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerGeometryWildcards in the force model first.",
-            name.c_str());
-    }
-    dT->setTriWildcardValue(geoID, m_geo_wc_num.at(name), vals);
-}
-
-void DEMSolver::SetSphereWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals) {
-    assertSysInit("SetSphereWildcardValue");
-    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
-        DEME_ERROR(
-            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerGeometryWildcards in the force model first.",
-            name.c_str());
-    }
-    dT->setSphWildcardValue(geoID, m_geo_wc_num.at(name), vals);
-}
-
-void DEMSolver::SetAnalWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals) {
-    assertSysInit("SetAnalWildcardValue");
-    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
-        DEME_ERROR(
-            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerGeometryWildcards in the force model first.",
-            name.c_str());
-    }
-    dT->setAnalWildcardValue(geoID, m_geo_wc_num.at(name), vals);
-}
-
 void DEMSolver::SetOwnerWildcardValue(bodyID_t ownerID, const std::string& name, const std::vector<float>& vals) {
     assertSysInit("SetOwnerWildcardValue");
     if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
@@ -2110,10 +1988,6 @@ void DEMSolver::SetContactWildcards(const std::set<std::string>& wildcards) {
 
 void DEMSolver::SetOwnerWildcards(const std::set<std::string>& wildcards) {
     m_force_model->SetPerOwnerWildcards(wildcards);
-}
-
-void DEMSolver::SetGeometryWildcards(const std::set<std::string>& wildcards) {
-    m_force_model->SetPerGeometryWildcards(wildcards);
 }
 
 void DEMSolver::DisableFamilyOutput(unsigned int ID) {
