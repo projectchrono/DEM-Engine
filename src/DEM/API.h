@@ -11,6 +11,7 @@
 #include <cfloat>
 #include <functional>
 #include <thread>
+#include <unordered_set>
 
 #include "kT.h"
 #include "dT.h"
@@ -32,6 +33,30 @@ namespace deme {
 // class ThreadManager;
 class DEMInspector;
 class DEMTracker;
+
+/// Template-level rigid-group definition for combining owner templates with fixed relative poses.
+class DEMCombinedTemplate {
+  public:
+    OWNER_TYPE member_type = OWNER_TYPE::CLUMP;
+    size_t master_member = 0;
+    std::vector<std::shared_ptr<DEMClumpTemplate>> clump_templates;
+    std::vector<std::shared_ptr<DEMMesh>> mesh_templates;
+    std::vector<float3> rel_pos;
+    std::vector<float4> rel_oriQ;
+    unsigned int load_order = 0;
+};
+
+/// Runtime instance metadata of a combined template instantiation.
+class DEMCombinedInstance {
+  public:
+    std::shared_ptr<DEMCombinedTemplate> type;
+    std::vector<std::shared_ptr<DEMTrackedObj>> member_tracked_objs;
+    std::vector<unsigned int> member_internal_families;
+    std::vector<bodyID_t> member_owner_ids;
+    bodyID_t master_owner_id = NULL_BODYID;
+    bool owners_resolved = false;
+    unsigned int load_order = 0;
+};
 
 //////////////////////////////////////////////////////////////
 // TODO LIST: 1. Variable ts size (MAX_VEL flavor uses tracked max cp vel)
@@ -847,6 +872,32 @@ class DEMSolver {
     /// @return A shared pointer to the instantiated mesh.
     std::shared_ptr<DEMMesh> AddMeshFromTemplate(const std::shared_ptr<DEMMesh>& mesh_template,
                                                  const float3& init_pos = make_float3(0));
+
+    /// @brief Load a combined clump template (same-type only) with fixed member-relative poses.
+    std::shared_ptr<DEMCombinedTemplate> LoadCombinedClumpType(
+        const std::vector<std::shared_ptr<DEMClumpTemplate>>& component_templates,
+        const std::vector<float3>& component_rel_pos,
+        const std::vector<float4>& component_rel_oriQ = std::vector<float4>(),
+        size_t master_component = 0);
+    /// @brief Load a combined mesh template (same-type only) with fixed member-relative poses.
+    std::shared_ptr<DEMCombinedTemplate> LoadCombinedMeshType(
+        const std::vector<std::shared_ptr<DEMMesh>>& component_templates,
+        const std::vector<float3>& component_rel_pos,
+        const std::vector<float4>& component_rel_oriQ = std::vector<float4>(),
+        size_t master_component = 0);
+    /// @brief Instantiate a combined template at a user-specified pose.
+    std::shared_ptr<DEMCombinedInstance> AddCombinedFromTemplate(
+        const std::shared_ptr<DEMCombinedTemplate>& combined_template,
+        const float3& init_pos = make_float3(0),
+        const float4& init_oriQ = make_float4(0, 0, 0, 1));
+    /// @brief Query combined-instance owner IDs and fixed member-relative poses.
+    bool GetCombinedInstanceInfo(size_t combined_instance_id,
+                                 bodyID_t& master_owner_id,
+                                 std::vector<bodyID_t>& member_owner_ids,
+                                 std::vector<float3>& member_rel_pos,
+                                 std::vector<float4>& member_rel_oriQ);
+    /// @brief Number of combined instances instantiated from combined templates.
+    size_t GetNumCombinedInstances() const { return m_combined_instances.size(); }
 
     /// @brief Create a DEMTracker to allow direct control/modification/query to this external object/batch of
     /// clumps/triangle mesh object.
@@ -1832,6 +1883,8 @@ class DEMSolver {
     size_t nClumpTemplateLoad = 0;
     // Number of mesh templates loaded. Never decreases.
     size_t nMeshTemplateLoad = 0;
+    // Number of combined templates loaded. Never decreases.
+    size_t nCombinedTemplateLoad = 0;
     // Number of materials loaded. Never decreases.
     size_t nMaterialsLoad = 0;
 
@@ -1949,6 +2002,8 @@ class DEMSolver {
 
     // Cached mesh templates (not yet instantiated in simulation)
     std::vector<std::shared_ptr<DEMMesh>> m_mesh_templates;
+    // Cached combined templates (template-level only).
+    std::vector<std::shared_ptr<DEMCombinedTemplate>> m_combined_templates;
 
     // Shared pointers to a batch of clumps loaded into the system. Through this returned handle, the user can further
     // specify the vel, ori etc. of this batch of clumps.
@@ -1959,6 +2014,8 @@ class DEMSolver {
 
     // Shared pointers to meshed objects cached at the API system
     std::vector<std::shared_ptr<DEMMesh>> cached_mesh_objs;
+    // Combined template instances.
+    std::vector<std::shared_ptr<DEMCombinedInstance>> m_combined_instances;
 
     // User-input prescribed motion
     std::vector<familyPrescription_t> m_input_family_prescription;
@@ -2209,6 +2266,12 @@ class DEMSolver {
     void cacheTrackedTrianglePVWindow();
     /// Fold the just-finished dynamics call's P*V into active wear models, and apply geometry updates if due.
     void updateMeshWearModels(double call_start_time, double call_end_time);
+    /// Resolve owner IDs for combined instances once owner numbering is available.
+    void resolveCombinedOwners();
+    /// Apply one per-step rigid-group correction/aggregation pass.
+    void enforceCombinedRigidGroupsOneStep();
+    /// Pick an available family number for internal no-contact masking.
+    unsigned int pickAvailableFamilyCode(const std::unordered_set<unsigned int>& avoid) const;
     /// Apply one bounded pending-wear chunk of one mesh owner to its node positions.
     /// @return true if any pending wear depth was consumed in this call.
     bool applyMeshWearModel(bodyID_t ownerID, MeshWearModelState& model);
