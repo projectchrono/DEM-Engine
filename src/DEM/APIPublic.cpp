@@ -47,7 +47,7 @@ inline float4 quatConjugate(const float4& q) {
 
 inline float4 quatNormalizeSafe(const float4& q) {
     const float n2 = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
-    if (!(n2 > DEME_TINY_FLOAT) || !std::isfinite(n2)) {
+    if (n2 <= DEME_TINY_FLOAT || !std::isfinite(n2)) {
         return make_float4(0, 0, 0, 1);
     }
     const float inv = 1.f / std::sqrt(n2);
@@ -3639,8 +3639,9 @@ void DEMSolver::enforceCombinedRigidGroupsOneStep() {
             continue;
         }
 
-        float3 add_force = make_float3(0);
-        float3 add_torque = make_float3(0);
+        float3 accumulated_member_force = make_float3(0);
+        float3 accumulated_member_torque = make_float3(0);
+        std::vector<bodyID_t> one_member(1, NULL_BODYID);
 
         for (size_t i = 0; i < n_members; i++) {
             if (i == master_idx) {
@@ -3653,7 +3654,8 @@ void DEMSolver::enforceCombinedRigidGroupsOneStep() {
 
             const float3 member_pos = GetOwnerPosition(member, 1).at(0);
             std::vector<float3> points, forces, torques;
-            GetOwnerContactForces(std::vector<bodyID_t>{member}, points, forces, torques, false);
+            one_member[0] = member;
+            GetOwnerContactForces(one_member, points, forces, torques, false);
             float3 member_force = make_float3(0);
             float3 member_torque = make_float3(0);
             for (size_t k = 0; k < forces.size(); k++) {
@@ -3661,20 +3663,20 @@ void DEMSolver::enforceCombinedRigidGroupsOneStep() {
                 const float3 local_arm = points[k] - member_pos;
                 member_torque += cross(local_arm, forces[k]) + torques[k];
             }
-            add_force += member_force;
-            add_torque += member_torque + cross(member_pos - master_pos, member_force);
+            accumulated_member_force += member_force;
+            accumulated_member_torque += member_torque + cross(member_pos - master_pos, member_force);
         }
 
-        AddOwnerNextStepAcc(master, std::vector<float3>{add_force / master_mass});
+        AddOwnerNextStepAcc(master, std::vector<float3>{accumulated_member_force / master_mass});
         float3 ang_acc = make_float3(0);
         if (master_moi.x > DEME_TINY_FLOAT) {
-            ang_acc.x = add_torque.x / master_moi.x;
+            ang_acc.x = accumulated_member_torque.x / master_moi.x;
         }
         if (master_moi.y > DEME_TINY_FLOAT) {
-            ang_acc.y = add_torque.y / master_moi.y;
+            ang_acc.y = accumulated_member_torque.y / master_moi.y;
         }
         if (master_moi.z > DEME_TINY_FLOAT) {
-            ang_acc.z = add_torque.z / master_moi.z;
+            ang_acc.z = accumulated_member_torque.z / master_moi.z;
         }
         AddOwnerNextStepAngAcc(master, std::vector<float3>{ang_acc});
 
@@ -3828,14 +3830,14 @@ void DEMSolver::DoDynamics(double thisCallDuration) {
     } else {
         double remaining = thisCallDuration;
         while (remaining > 0.0) {
-            double h = m_ts_size;
-            if (!(h > 0.0)) {
-                h = dT->simParams->dyn.h;
+            double timestep = m_ts_size;
+            if (!(timestep > 0.0)) {
+                timestep = dT->simParams->dyn.h;
             }
-            if (!(h > 0.0)) {
-                h = remaining;
+            if (!(timestep > 0.0)) {
+                timestep = remaining;
             }
-            const double chunk = std::min(remaining, h);
+            const double chunk = std::min(remaining, timestep);
             run_one_chunk(chunk);
             resetWorkerThreads();
             enforceCombinedRigidGroupsOneStep();
