@@ -50,8 +50,7 @@ int main() {
     // Those 2 following lines are needed.
     my_force_model->SetMustHaveMatProp({"E", "nu", "CoR"});
     my_force_model->SetMustPairwiseMatProp({"CoR"});
-    // Gravitational pull will be calcuated using this extra quatity that we associate with each owner.
-    // Now, why don't we use the mass property in the clump templates? Since that is at clump level, and if
+    // Gravitational pull will be calculated using this extra quantity that we associate with each owner.
     // In the force model script ForceModelWithGravity.cu, you can now use my_mass_A and my_mass_B to refer
     // to this wildcard and use it in force calculations.
     my_force_model->SetPerOwnerWildcards({"my_mass"});

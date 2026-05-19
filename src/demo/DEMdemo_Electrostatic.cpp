@@ -7,9 +7,9 @@
 // This demo lets a rod with some electric charges stick into a pile of granular
 // material that is also charged. The electrostatic force shows its effect. The
 // electric charges are even moving during the simulation. This is done through
-// owner wildcards, where the amount of charges is associated with each
-// owner. Then a custom force
-// model is used to derive the electrostatic force in addition to contact forces.
+// owner wildcards, where the amount of charge is associated with each owner.
+// Then a custom force model is used to derive the electrostatic force in
+// addition to contact forces.
 //
 // NOTE: If you want to create your own force model, it's probably a good idea
 // to understand the default model in the file FullHertzianForceModel.cu
