@@ -3174,12 +3174,8 @@ void DEMSolver::UpdateStepSize(double ts) {
     // We for now store ts as float on devices...
     dT->simParams->dyn.h = ts;
     kT->simParams->dyn.h = ts;
-    DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
-    dT->simParams.syncMemberToDeviceAsync<float>(offsetof(DEMSimParams, dyn) + offsetof(DEMSimParamsDynamic, h),
-                                                 dT->streamInfo.stream);
-    DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
-    kT->simParams.syncMemberToDeviceAsync<float>(offsetof(DEMSimParams, dyn) + offsetof(DEMSimParamsDynamic, h),
-                                                 kT->streamInfo.stream);
+    dT->simParams.toDevice();
+    kT->simParams.toDevice();
 }
 
 bool DEMSolver::findOwnerTriangleRange(bodyID_t ownerID, size_t& tri_start, size_t& tri_count) {
@@ -3547,8 +3543,8 @@ void DEMSolver::updateMeshWearModels(double call_start_time, double call_end_tim
 
 void DEMSolver::resolveCombinedOwners(size_t nExistOwners) {
     // Combined-member owner IDs are only meaningful after Initialize/Update assigned owner numbering.
-    // This method resolves cached member initializer handles to stable owner IDs exactly once per combined instance, then
-    // triggers a runtime metadata refresh for kT/dT if anything new was resolved.
+    // This method resolves cached member initializer handles to stable owner IDs exactly once per combined instance,
+    // then triggers a runtime metadata refresh for kT/dT if anything new was resolved.
     if (!sys_initialized) {
         return;
     }

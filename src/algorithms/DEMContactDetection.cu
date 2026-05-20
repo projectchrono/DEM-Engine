@@ -277,12 +277,12 @@ DEME_KERNEL void markContactsByCombinedOwnerMask(const bodyID_t* idA,
                                                  const bodyID_t* ownerTriMesh,
                                                  const bodyID_t* ownerAnalBody,
                                                  const bodyID_t* ownerCombinedMaster,
-                                                  notStupidBool_t* keepFlags,
-                                                  size_t n,
-                                                  bodyID_t nSpheresGM,
-                                                  bodyID_t nTriGM,
-                                                  objID_t nAnalGM,
-                                                  bodyID_t nOwnerBodies) {
+                                                 notStupidBool_t* keepFlags,
+                                                 size_t n,
+                                                 bodyID_t nSpheresGM,
+                                                 bodyID_t nTriGM,
+                                                 objID_t nAnalGM,
+                                                 bodyID_t nOwnerBodies) {
     // For each primitive contact candidate, decide whether this pair should be retained.
     // Retain rule:
     //   - default keep
@@ -1278,8 +1278,7 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
         // displayDeviceArray<contact_t>(granData->contactTypePrimitive, *scratchPad.numPrimitiveContacts);
 
         if (simParams->nCombinedOwners > 0 && !simParams->allowIntraCombinedOwnerContacts &&
-            granData->ownerCombinedMaster != nullptr &&
-            *scratchPad.numPrimitiveContacts > 0) {
+            granData->ownerCombinedMaster != nullptr && *scratchPad.numPrimitiveContacts > 0) {
             // Optional combined-owner internal-contact suppression.
             // This path is activated only when at least one combined member exists, so non-combined runs
             // keep their original memory/compute behavior. It is bypassed when
