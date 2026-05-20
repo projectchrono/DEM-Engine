@@ -51,9 +51,8 @@ std::pair<bodyID_t, bodyID_t> normalizePair(bodyID_t a, bodyID_t b) {
 
 bool containsPair(const std::vector<std::pair<bodyID_t, bodyID_t>>& contacts, bodyID_t a, bodyID_t b) {
     const auto target = normalizePair(a, b);
-    return std::any_of(contacts.begin(), contacts.end(), [&target](const auto& pair) {
-        return normalizePair(pair.first, pair.second) == target;
-    });
+    return std::any_of(contacts.begin(), contacts.end(),
+                       [&target](const auto& pair) { return normalizePair(pair.first, pair.second) == target; });
 }
 
 struct ScenarioResult {
@@ -91,7 +90,7 @@ ScenarioResult runScenario(bool allow_intra_combined_contacts) {
     }
 
     DEMSim.SetInitTimeStep(kStepSize);
-    DEMSim.Initialize();
+    DEMSim.Initialize(true);  // dry-run to establish contacts
 
     for (const auto& tracker : trackers) {
         result.tracker_owner_ids.push_back(tracker->GetOwnerID());
