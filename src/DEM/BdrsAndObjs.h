@@ -844,7 +844,8 @@ class DEMCombinedTemplate {
 class DEMCombinedInstance {
   public:
     std::shared_ptr<DEMCombinedTemplate> type;
-    std::vector<std::shared_ptr<DEMTrackedObj>> member_tracked_objs;
+    // Cached member initializer handles (clump batches or meshes) that this combined instance instantiated.
+    std::vector<std::shared_ptr<DEMInitializer>> member_objs;
     std::vector<bodyID_t> member_owner_ids;
     std::vector<float> member_mass;
     std::vector<float3> member_moi;

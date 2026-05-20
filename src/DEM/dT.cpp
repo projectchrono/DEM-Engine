@@ -540,6 +540,7 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->nOwnerWildcards = owner_wildcards.size();
     simParams->nGeoWildcards = geo_wildcards.size();
     simParams->nCombinedOwners = 0;
+    simParams->allowIntraCombinedOwnerContacts = 0;
 
     m_contact_wildcard_names = contact_wildcards;
     m_owner_wildcard_names = owner_wildcards;

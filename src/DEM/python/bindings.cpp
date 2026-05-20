@@ -703,6 +703,9 @@ PYBIND11_MODULE(DEME, obj) {
              "Enable or disable owner wildcard output.", py::arg("enable") = true)
         .def("EnableContactWildcardOutput", &deme::DEMSolver::EnableContactWildcardOutput,
              "Enable or disable contact wildcard output.", py::arg("enable") = true)
+        .def("SetAllowIntraCombinedOwnerContacts", &deme::DEMSolver::SetAllowIntraCombinedOwnerContacts,
+             "Allow or suppress contacts among owners belonging to the same combined owner group.",
+             py::arg("allow") = true)
         .def("SetVerbosity", static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetVerbosity),
              "Set the verbosity level of the solver. Select from 'QUIET', 'ERROR', 'WARNING', 'INFO', 'METRIC' or "
              "'DEBUG'. Recommend 'INFO'.")

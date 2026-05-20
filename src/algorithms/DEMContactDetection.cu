@@ -1277,11 +1277,13 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
         // displayDeviceArray<bodyID_t>(granData->idPrimitiveB, *scratchPad.numPrimitiveContacts);
         // displayDeviceArray<contact_t>(granData->contactTypePrimitive, *scratchPad.numPrimitiveContacts);
 
-        if (simParams->nCombinedOwners > 0 && granData->ownerCombinedMaster != nullptr &&
+        if (simParams->nCombinedOwners > 0 && !simParams->allowIntraCombinedOwnerContacts &&
+            granData->ownerCombinedMaster != nullptr &&
             *scratchPad.numPrimitiveContacts > 0) {
             // Optional combined-owner internal-contact suppression.
             // This path is activated only when at least one combined member exists, so non-combined runs
-            // keep their original memory/compute behavior.
+            // keep their original memory/compute behavior. It is bypassed when
+            // allowIntraCombinedOwnerContacts == 1.
             const size_t numTotalCnts = *scratchPad.numPrimitiveContacts;
             const size_t blocks_needed = (numTotalCnts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
             notStupidBool_t* keepFlags = (notStupidBool_t*)scratchPad.allocateTempVector(

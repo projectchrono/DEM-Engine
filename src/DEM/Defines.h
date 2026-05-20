@@ -337,6 +337,8 @@ struct DEMSimParams {
 
     // Number of owners currently participating in combined-owner rigid groups.
     bodyID_t nCombinedOwners = 0;
+    // If 1, contact detection keeps contacts among owners that share the same combined master.
+    notStupidBool_t allowIntraCombinedOwnerContacts = 0;
 };
 
 // A struct that holds pointers to data arrays that dT uses

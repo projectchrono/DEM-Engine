@@ -865,6 +865,9 @@ class DEMSolver {
         const std::shared_ptr<DEMCombinedTemplate>& combined_template,
         const float3& init_pos = make_float3(0),
         const float4& init_oriQ = make_float4(0, 0, 0, 1));
+    /// @brief Allow/disallow contact generation among owners that belong to the same combined owner group.
+    /// @details Default is false (contacts within one combined group are suppressed).
+    void SetAllowIntraCombinedOwnerContacts(bool allow = true);
     /// @brief Query combined-instance owner IDs and fixed member-relative poses.
     bool GetCombinedInstanceInfo(size_t combined_instance_id,
                                  bodyID_t& master_owner_id,
@@ -872,7 +875,7 @@ class DEMSolver {
                                  std::vector<float3>& member_rel_pos,
                                  std::vector<float4>& member_rel_oriQ);
     /// @brief Number of combined instances instantiated from combined templates.
-    size_t GetNumCombinedInstances() const { return m_combined_instances.size(); }
+    size_t GetNumCombinedInstances() const { return cached_combined_instances.size(); }
 
     /// @brief Create a DEMTracker to allow direct control/modification/query to this external object/batch of
     /// clumps/triangle mesh object.
@@ -899,6 +902,21 @@ class DEMSolver {
     /// @details C++ users do not have to use this method. Using Track is enough. This method is for Python wrapper.
     std::shared_ptr<DEMTracker> PythonTrack(const std::shared_ptr<DEMInitializer>& obj) {
         return Track<DEMInitializer>(obj);
+    }
+    /// @brief Create one tracker per owner-member instantiated by a combined instance.
+    std::vector<std::shared_ptr<DEMTracker>> Track(const std::shared_ptr<DEMCombinedInstance>& combined_inst) {
+        std::vector<std::shared_ptr<DEMTracker>> trackers;
+        if (!combined_inst) {
+            return trackers;
+        }
+        trackers.reserve(combined_inst->member_objs.size());
+        for (const auto& member_obj : combined_inst->member_objs) {
+            if (!member_obj) {
+                continue;
+            }
+            trackers.push_back(Track<DEMInitializer>(member_obj));
+        }
+        return trackers;
     }
 
     /// Create a inspector object that can help query some statistical info of the clumps in the simulation
@@ -1990,14 +2008,9 @@ class DEMSolver {
     // Shared pointers to meshed objects cached at the API system
     std::vector<std::shared_ptr<DEMMesh>> cached_mesh_objs;
     // Combined template instances.
-    std::vector<std::shared_ptr<DEMCombinedInstance>> m_combined_instances;
-    // Flattened runtime metadata for combined-owner device paths.
-    std::vector<bodyID_t> m_owner_combined_master;
-    std::vector<float3> m_owner_combined_rel_pos;
-    std::vector<float4> m_owner_combined_rel_oriQ;
-    std::vector<float> m_owner_combined_master_mass;
-    std::vector<float3> m_owner_combined_master_moi;
+    std::vector<std::shared_ptr<DEMCombinedInstance>> cached_combined_instances;
     bool m_combined_runtime_dirty = true;
+    bool m_allow_intra_combined_owner_contacts = false;
 
     // User-input prescribed motion
     std::vector<familyPrescription_t> m_input_family_prescription;
@@ -2249,7 +2262,7 @@ class DEMSolver {
     /// Fold the just-finished dynamics call's P*V into active wear models, and apply geometry updates if due.
     void updateMeshWearModels(double call_start_time, double call_end_time);
     /// Resolve owner IDs for combined instances once owner numbering is available.
-    void resolveCombinedOwners();
+    void resolveCombinedOwners(size_t nExistOwners = 0);
     /// Refresh flattened combined-owner runtime metadata in worker arrays.
     void refreshCombinedRuntimeResources();
     /// Apply one bounded pending-wear chunk of one mesh owner to its node positions.
