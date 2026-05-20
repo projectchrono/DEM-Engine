@@ -828,6 +828,33 @@ class DEMMesh : public DEMInitializer {
 // Backward compatibility alias
 using DEMMeshConnected = DEMMesh;
 
+// Template-level rigid-group definition for combining owner templates with fixed relative poses.
+class DEMCombinedTemplate {
+  public:
+    OWNER_TYPE member_type = OWNER_TYPE::CLUMP;
+    size_t master_member = 0;
+    std::vector<std::shared_ptr<DEMClumpTemplate>> clump_templates;
+    std::vector<std::shared_ptr<DEMMesh>> mesh_templates;
+    std::vector<float3> rel_pos;
+    std::vector<float4> rel_oriQ;
+    unsigned int load_order = 0;
+};
+
+// Runtime instance metadata of a combined template instantiation.
+class DEMCombinedInstance {
+  public:
+    std::shared_ptr<DEMCombinedTemplate> type;
+    std::vector<std::shared_ptr<DEMTrackedObj>> member_tracked_objs;
+    std::vector<bodyID_t> member_owner_ids;
+    std::vector<float> member_mass;
+    std::vector<float3> member_moi;
+    float master_equiv_mass = 0.f;
+    float3 master_equiv_moi = make_float3(0);
+    bodyID_t master_owner_id = NULL_BODYID;
+    bool owners_resolved = false;
+    unsigned int load_order = 0;
+};
+
 /*
 /// GPU-side struct that holds external object component info. Only component, not their parents, so this is the
 /// equivalent of clump templates. External objects themselves (and their position, velocity etc.) are not stored with

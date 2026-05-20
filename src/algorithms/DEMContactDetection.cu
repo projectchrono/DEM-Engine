@@ -1270,13 +1270,14 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
             *scratchPad.numPrimitiveContacts > 0) {
             const size_t numTotalCnts = *scratchPad.numPrimitiveContacts;
             const size_t blocks_needed = (numTotalCnts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-            notStupidBool_t* keepFlags =
-                (notStupidBool_t*)scratchPad.allocateTempVector("combined_keep_flags", numTotalCnts * sizeof(notStupidBool_t));
+            notStupidBool_t* keepFlags = (notStupidBool_t*)scratchPad.allocateTempVector(
+                "combined_keep_flags", numTotalCnts * sizeof(notStupidBool_t));
 
             markContactsByCombinedOwnerMask<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
-                granData->idPrimitiveA, granData->idPrimitiveB, granData->contactTypePrimitive, granData->ownerClumpBody,
-                granData->ownerTriMesh, granData->ownerAnalBody, granData->ownerCombinedMaster, keepFlags, numTotalCnts,
-                simParams->nSpheresGM, simParams->nTriGM, simParams->nAnalGM);
+                granData->idPrimitiveA, granData->idPrimitiveB, granData->contactTypePrimitive,
+                granData->ownerClumpBody, granData->ownerTriMesh, granData->ownerAnalBody,
+                granData->ownerCombinedMaster, keepFlags, numTotalCnts, simParams->nSpheresGM, simParams->nTriGM,
+                simParams->nAnalGM);
 
             scratchPad.allocateDualStruct("numCombinedKeptCnts");
             cubDEMSum<notStupidBool_t, size_t>(keepFlags, scratchPad.getDualStructDevice("numCombinedKeptCnts"),
@@ -1295,15 +1296,15 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 notStupidBool_t* keptPersist =
                     (notStupidBool_t*)scratchPad.allocateTempVector("combined_kept_persist", persist_bytes);
 
-                cubDEMSelectFlagged<bodyID_t, notStupidBool_t>(
-                    granData->idPrimitiveA, keptA, keepFlags, scratchPad.getDualStructDevice("numCombinedKeptCnts"),
-                    numTotalCnts, this_stream, scratchPad);
-                cubDEMSelectFlagged<bodyID_t, notStupidBool_t>(
-                    granData->idPrimitiveB, keptB, keepFlags, scratchPad.getDualStructDevice("numCombinedKeptCnts"),
-                    numTotalCnts, this_stream, scratchPad);
-                cubDEMSelectFlagged<contact_t, notStupidBool_t>(
-                    granData->contactTypePrimitive, keptType, keepFlags,
-                    scratchPad.getDualStructDevice("numCombinedKeptCnts"), numTotalCnts, this_stream, scratchPad);
+                cubDEMSelectFlagged<bodyID_t, notStupidBool_t>(granData->idPrimitiveA, keptA, keepFlags,
+                                                               scratchPad.getDualStructDevice("numCombinedKeptCnts"),
+                                                               numTotalCnts, this_stream, scratchPad);
+                cubDEMSelectFlagged<bodyID_t, notStupidBool_t>(granData->idPrimitiveB, keptB, keepFlags,
+                                                               scratchPad.getDualStructDevice("numCombinedKeptCnts"),
+                                                               numTotalCnts, this_stream, scratchPad);
+                cubDEMSelectFlagged<contact_t, notStupidBool_t>(granData->contactTypePrimitive, keptType, keepFlags,
+                                                                scratchPad.getDualStructDevice("numCombinedKeptCnts"),
+                                                                numTotalCnts, this_stream, scratchPad);
                 cubDEMSelectFlagged<notStupidBool_t, notStupidBool_t>(
                     granData->contactPersistency, keptPersist, keepFlags,
                     scratchPad.getDualStructDevice("numCombinedKeptCnts"), numTotalCnts, this_stream, scratchPad);

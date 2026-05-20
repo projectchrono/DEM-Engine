@@ -231,8 +231,8 @@ DEME_KERNEL void reimposeCombinedOwners(deme::DEMSimParams* simParams, deme::DEM
     mY += (double)simParams->LBFY;
     mZ += (double)simParams->LBFZ;
 
-    float4 qMaster = make_float4(granData->oriQx[master], granData->oriQy[master], granData->oriQz[master],
-                                 granData->oriQw[master]);
+    float4 qMaster =
+        make_float4(granData->oriQx[master], granData->oriQy[master], granData->oriQz[master], granData->oriQw[master]);
     const float3 relLocal = granData->ownerCombinedRelPos[owner];
     float3 relWorld = relLocal;
     applyOriQToVector3(relWorld, qMaster);
@@ -243,9 +243,9 @@ DEME_KERNEL void reimposeCombinedOwners(deme::DEMSimParams* simParams, deme::DEM
     X -= (double)simParams->LBFX;
     Y -= (double)simParams->LBFY;
     Z -= (double)simParams->LBFZ;
-    positionToVoxelID<deme::voxelID_t, deme::subVoxelPos_t, double>(
-        granData->voxelID[owner], granData->locX[owner], granData->locY[owner], granData->locZ[owner], X, Y, Z,
-        _nvXp2_, _nvYp2_, _voxelSize_, _l_);
+    positionToVoxelID<deme::voxelID_t, deme::subVoxelPos_t, double>(granData->voxelID[owner], granData->locX[owner],
+                                                                    granData->locY[owner], granData->locZ[owner], X, Y,
+                                                                    Z, _nvXp2_, _nvYp2_, _voxelSize_, _l_);
 
     float4 qRel = granData->ownerCombinedRelOriQ[owner];
     float qW, qX, qY, qZ;

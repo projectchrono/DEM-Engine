@@ -2518,7 +2518,8 @@ std::shared_ptr<DEMCombinedTemplate> DEMSolver::LoadCombinedClumpType(
         DEME_ERROR("LoadCombinedClumpType requires at least one component template.");
     }
     if (component_templates.size() != component_rel_pos.size()) {
-        DEME_ERROR("LoadCombinedClumpType requires component template and relative-position arrays to have equal size.");
+        DEME_ERROR(
+            "LoadCombinedClumpType requires component template and relative-position arrays to have equal size.");
     }
     if (!component_rel_oriQ.empty() && component_rel_oriQ.size() != component_templates.size()) {
         DEME_ERROR("LoadCombinedClumpType requires relative-orientation array size to match component count.");
@@ -2623,9 +2624,9 @@ std::shared_ptr<DEMCombinedInstance> DEMSolver::AddCombinedFromTemplate(
         DEME_ERROR("AddCombinedFromTemplate received a null combined template handle.");
     }
 
-    const size_t n_members =
-        (combined_template->member_type == OWNER_TYPE::CLUMP) ? combined_template->clump_templates.size()
-                                                              : combined_template->mesh_templates.size();
+    const size_t n_members = (combined_template->member_type == OWNER_TYPE::CLUMP)
+                                 ? combined_template->clump_templates.size()
+                                 : combined_template->mesh_templates.size();
     if (n_members == 0) {
         DEME_ERROR("AddCombinedFromTemplate encountered a combined template with zero components.");
     }
@@ -3586,8 +3587,8 @@ void DEMSolver::refreshCombinedRuntimeResources() {
             continue;
         }
 
-        const float safe_mass = (inst->master_equiv_mass > DEME_TINY_FLOAT) ? inst->master_equiv_mass
-                                                                             : DEFAULT_COMBINED_MASTER_MASS;
+        const float safe_mass =
+            (inst->master_equiv_mass > DEME_TINY_FLOAT) ? inst->master_equiv_mass : DEFAULT_COMBINED_MASTER_MASS;
         m_owner_combined_master_mass[master] = safe_mass;
         m_owner_combined_master_moi[master] = inst->master_equiv_moi;
 
@@ -3605,12 +3606,12 @@ void DEMSolver::refreshCombinedRuntimeResources() {
         }
     }
 
-    dT->ownerCombinedMaster.setVal(0, m_owner_combined_master);
-    dT->ownerCombinedRelPos.setVal(0, m_owner_combined_rel_pos);
-    dT->ownerCombinedRelOriQ.setVal(0, m_owner_combined_rel_oriQ);
-    dT->ownerCombinedMasterMass.setVal(0, m_owner_combined_master_mass);
-    dT->ownerCombinedMasterMOI.setVal(0, m_owner_combined_master_moi);
-    kT->ownerCombinedMaster.setVal(0, m_owner_combined_master);
+    dT->ownerCombinedMaster.setVal(m_owner_combined_master, 0);
+    dT->ownerCombinedRelPos.setVal(m_owner_combined_rel_pos, 0);
+    dT->ownerCombinedRelOriQ.setVal(m_owner_combined_rel_oriQ, 0);
+    dT->ownerCombinedMasterMass.setVal(m_owner_combined_master_mass, 0);
+    dT->ownerCombinedMasterMOI.setVal(m_owner_combined_master_moi, 0);
+    kT->ownerCombinedMaster.setVal(m_owner_combined_master, 0);
 
     dT->ownerCombinedMaster.toDevice();
     dT->ownerCombinedRelPos.toDevice();
@@ -3737,14 +3738,21 @@ void DEMSolver::DoDynamics(double thisCallDuration) {
     }
     resolveCombinedOwners();
     const double sim_time_start = dT->getSimTime();
+
+    // Tell dT how long this call is
     dT->setCycleDuration(thisCallDuration);
+
     dT->startThread();
     kT->startThread();
+
+    // Wait till dT is done
     {
         std::unique_lock<std::mutex> lock(dTMain_InteractionManager->mainCanProceed);
         while (!dTMain_InteractionManager->userCallDone) {
             dTMain_InteractionManager->cv_mainCanProceed.wait(lock);
         }
+        // Reset to make ready for next user call, don't forget it. We don't do a `deep' reset using resetUserCallStat,
+        // since that's only used when kT and dT sync.
         dTMain_InteractionManager->userCallDone = false;
     }
 
