@@ -848,19 +848,41 @@ class DEMSolver {
     std::shared_ptr<DEMMesh> AddMeshFromTemplate(const std::shared_ptr<DEMMesh>& mesh_template,
                                                  const float3& init_pos = make_float3(0));
 
-    /// @brief Load a combined clump template (same-type only) with fixed member-relative poses.
+    /// @brief Load a rigid combined-clump template with fixed member-relative transforms.
+    /// @details All components must be clump templates. The combined template stores member poses in a
+    /// master-member-relative frame so the whole group can later be instantiated at arbitrary global pose.
+    /// If `component_rel_oriQ` is empty, identity orientation is assumed for all members.
+    /// @param component_templates Member clump templates in this combined group.
+    /// @param component_rel_pos Member positions in the user-provided template frame.
+    /// @param component_rel_oriQ Member orientations in the user-provided template frame (optional).
+    /// @param master_component Index of the member chosen as the master reference frame.
+    /// @return A combined template handle that can be instantiated via AddCombinedFromTemplate.
     std::shared_ptr<DEMCombinedTemplate> LoadCombinedClumpType(
         const std::vector<std::shared_ptr<DEMClumpTemplate>>& component_templates,
         const std::vector<float3>& component_rel_pos,
         const std::vector<float4>& component_rel_oriQ = std::vector<float4>(),
         size_t master_component = 0);
-    /// @brief Load a combined mesh template (same-type only) with fixed member-relative poses.
+    /// @brief Load a rigid combined-mesh template with fixed member-relative transforms.
+    /// @details All components must be mesh templates. The combined template stores member poses in a
+    /// master-member-relative frame so the whole group can later be instantiated at arbitrary global pose.
+    /// If `component_rel_oriQ` is empty, identity orientation is assumed for all members.
+    /// @param component_templates Member mesh templates in this combined group.
+    /// @param component_rel_pos Member positions in the user-provided template frame.
+    /// @param component_rel_oriQ Member orientations in the user-provided template frame (optional).
+    /// @param master_component Index of the member chosen as the master reference frame.
+    /// @return A combined template handle that can be instantiated via AddCombinedFromTemplate.
     std::shared_ptr<DEMCombinedTemplate> LoadCombinedMeshType(
         const std::vector<std::shared_ptr<DEMMesh>>& component_templates,
         const std::vector<float3>& component_rel_pos,
         const std::vector<float4>& component_rel_oriQ = std::vector<float4>(),
         size_t master_component = 0);
-    /// @brief Instantiate a combined template at a user-specified pose.
+    /// @brief Instantiate a combined template at a user-specified global pose.
+    /// @details Creates one owner per combined member and records combined-group runtime metadata
+    /// used for combined-owner contact/kinematics policies.
+    /// @param combined_template A handle returned by LoadCombinedClumpType or LoadCombinedMeshType.
+    /// @param init_pos Global position of the combined master frame.
+    /// @param init_oriQ Global orientation of the combined master frame.
+    /// @return A combined-instance handle that references all instantiated member owners.
     std::shared_ptr<DEMCombinedInstance> AddCombinedFromTemplate(
         const std::shared_ptr<DEMCombinedTemplate>& combined_template,
         const float3& init_pos = make_float3(0),
@@ -868,13 +890,22 @@ class DEMSolver {
     /// @brief Allow/disallow contact generation among owners that belong to the same combined owner group.
     /// @details Default is false (contacts within one combined group are suppressed).
     void SetAllowIntraCombinedOwnerContacts(bool allow = true);
-    /// @brief Query combined-instance owner IDs and fixed member-relative poses.
+    /// @brief Query resolved owner IDs and fixed relative transforms for one combined instance.
+    /// @details Returns `false` if the index is invalid or owner IDs are not resolved yet
+    /// (e.g., before Initialize/Update assigns owner numbering).
+    /// @param combined_instance_id Zero-based index in the combined-instance cache.
+    /// @param master_owner_id Output master owner ID of this combined group.
+    /// @param member_owner_ids Output owner IDs for all members (same order as template components).
+    /// @param member_rel_pos Output fixed member-relative positions in master frame.
+    /// @param member_rel_oriQ Output fixed member-relative orientations in master frame.
+    /// @return True if metadata is available and outputs are populated.
     bool GetCombinedInstanceInfo(size_t combined_instance_id,
                                  bodyID_t& master_owner_id,
                                  std::vector<bodyID_t>& member_owner_ids,
                                  std::vector<float3>& member_rel_pos,
                                  std::vector<float4>& member_rel_oriQ);
-    /// @brief Number of combined instances instantiated from combined templates.
+    /// @brief Number of combined instances currently cached.
+    /// @details This count is pre-initialization setup metadata and is cleared by cache-clearing workflows.
     size_t GetNumCombinedInstances() const { return cached_combined_instances.size(); }
 
     /// @brief Create a DEMTracker to allow direct control/modification/query to this external object/batch of
@@ -903,7 +934,9 @@ class DEMSolver {
     std::shared_ptr<DEMTracker> PythonTrack(const std::shared_ptr<DEMInitializer>& obj) {
         return Track<DEMInitializer>(obj);
     }
-    /// @brief Create one tracker per owner-member instantiated by a combined instance.
+    /// @brief Create one tracker per member owner instantiated by a combined instance.
+    /// @details Returned trackers preserve member order from the combined template. Null member handles
+    /// (if any) are skipped.
     std::vector<std::shared_ptr<DEMTracker>> Track(const std::shared_ptr<DEMCombinedInstance>& combined_inst) {
         std::vector<std::shared_ptr<DEMTracker>> trackers;
         if (!combined_inst) {
