@@ -41,19 +41,6 @@ inline bool hasPendingWear(const std::vector<float>& pending_depth) {
     return false;
 }
 
-inline float4 quatConjugate(const float4& q) {
-    return make_float4(-q.x, -q.y, -q.z, q.w);
-}
-
-inline float4 quatNormalizeSafe(const float4& q) {
-    const float n2 = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
-    if (n2 <= DEME_TINY_FLOAT || !std::isfinite(n2)) {
-        return make_float4(0, 0, 0, 1);
-    }
-    const float inv = 1.f / std::sqrt(n2);
-    return make_float4(q.x * inv, q.y * inv, q.z * inv, q.w * inv);
-}
-
 inline bool computeClumpUnionMassPropsApprox(const DEMClumpTemplate& clump,
                                              double& volume,
                                              float3& center,
@@ -2570,6 +2557,7 @@ std::shared_ptr<DEMCombinedTemplate> DEMSolver::LoadCombinedClumpType(
     ptr->load_order = m_combined_templates.size();
     m_combined_templates.push_back(ptr);
     nCombinedTemplateLoad++;
+    m_combined_runtime_dirty = true;
     return m_combined_templates.back();
 }
 
@@ -2622,6 +2610,7 @@ std::shared_ptr<DEMCombinedTemplate> DEMSolver::LoadCombinedMeshType(
     ptr->load_order = m_combined_templates.size();
     m_combined_templates.push_back(ptr);
     nCombinedTemplateLoad++;
+    m_combined_runtime_dirty = true;
     return m_combined_templates.back();
 }
 
@@ -2651,37 +2640,13 @@ std::shared_ptr<DEMCombinedInstance> DEMSolver::AddCombinedFromTemplate(
     auto inst = std::make_shared<DEMCombinedInstance>();
     inst->type = combined_template;
     inst->load_order = m_combined_instances.size();
-
-    std::unordered_set<unsigned int> used_families;
-    used_families.insert(RESERVED_FAMILY_NUM);
-    for (const auto& b : cached_input_clump_batches) {
-        for (auto fam : b->families) {
-            used_families.insert(fam);
-        }
-    }
-    for (const auto& m : cached_mesh_objs) {
-        used_families.insert(m->family_code);
-    }
-    for (const auto& o : cached_extern_objs) {
-        used_families.insert(o->family_code);
-    }
-    for (const auto& pair : m_input_no_contact_pairs) {
-        used_families.insert(pair.ID1);
-        used_families.insert(pair.ID2);
-    }
-    for (const auto& old_inst : m_combined_instances) {
-        for (auto fam : old_inst->member_internal_families) {
-            used_families.insert(fam);
-        }
-    }
-
     const float4 init_q = quatNormalizeSafe(init_oriQ);
+    inst->member_mass.resize(n_members, 0.f);
+    inst->member_moi.resize(n_members, make_float3(0));
+    inst->master_equiv_mass = 0.f;
+    inst->master_equiv_moi = make_float3(0);
 
     for (size_t i = 0; i < n_members; i++) {
-        const unsigned int fam = pickAvailableFamilyCode(used_families);
-        used_families.insert(fam);
-        inst->member_internal_families.push_back(fam);
-
         float3 world_pos = combined_template->rel_pos[i];
         applyFrameTransformLocalToGlobal(world_pos, init_pos, init_q);
         const float4 world_q = quatNormalizeSafe(hostHamiltonProduct(init_q, combined_template->rel_oriQ[i]));
@@ -2690,29 +2655,28 @@ std::shared_ptr<DEMCombinedInstance> DEMSolver::AddCombinedFromTemplate(
             auto clump_type = combined_template->clump_templates[i];
             auto batch = AddClumps(clump_type, world_pos);
             batch->SetOriQ(world_q);
-            batch->SetFamilies(fam);
             auto tracker = Track(batch);
             inst->member_tracked_objs.push_back(tracker->obj);
+            inst->member_mass[i] = clump_type->GetMass();
+            inst->member_moi[i] = clump_type->GetMOI();
         } else if (combined_template->member_type == OWNER_TYPE::MESH) {
             DEMMesh mesh = *(combined_template->mesh_templates[i]);
             mesh.SetInitPos(world_pos);
             mesh.SetInitQuat(world_q);
-            mesh.SetFamily(fam);
             auto mesh_inst = AddMesh(mesh);
             auto tracker = Track(mesh_inst);
             inst->member_tracked_objs.push_back(tracker->obj);
+            inst->member_mass[i] = mesh.mass;
+            inst->member_moi[i] = mesh.MOI;
         } else {
             DEME_ERROR("AddCombinedFromTemplate only supports same-type CLUMP or MESH templates.");
         }
-    }
-
-    for (size_t i = 0; i < inst->member_internal_families.size(); i++) {
-        for (size_t j = i + 1; j < inst->member_internal_families.size(); j++) {
-            DisableContactBetweenFamilies(inst->member_internal_families[i], inst->member_internal_families[j]);
-        }
+        inst->master_equiv_mass += inst->member_mass[i];
+        inst->master_equiv_moi += inst->member_moi[i];
     }
 
     m_combined_instances.push_back(inst);
+    m_combined_runtime_dirty = true;
     return m_combined_instances.back();
 }
 
@@ -2724,6 +2688,7 @@ bool DEMSolver::GetCombinedInstanceInfo(size_t combined_instance_id,
     if (combined_instance_id >= m_combined_instances.size()) {
         return false;
     }
+    m_combined_runtime_dirty = true;
     resolveCombinedOwners();
     const auto& inst = m_combined_instances[combined_instance_id];
     if (!inst->owners_resolved) {
@@ -3025,6 +2990,7 @@ void DEMSolver::Initialize(bool dry_run) {
     //// TODO: Give a warning if sys_initialized is true and the system is re-initialized: in that case, the user should
     /// know what they are doing
     sys_initialized = true;
+    m_combined_runtime_dirty = true;
     resolveCombinedOwners();
 
     if (dry_run) {
@@ -3567,20 +3533,6 @@ void DEMSolver::updateMeshWearModels(double call_start_time, double call_end_tim
     }
 }
 
-unsigned int DEMSolver::pickAvailableFamilyCode(const std::unordered_set<unsigned int>& avoid) const {
-    const unsigned int max_family = std::numeric_limits<family_t>::max();
-    for (unsigned int fam = 0; fam <= max_family; fam++) {
-        if (fam == RESERVED_FAMILY_NUM) {
-            continue;
-        }
-        if (avoid.find(fam) == avoid.end()) {
-            return fam;
-        }
-    }
-    DEME_ERROR("No available family code remains for combined-template internal masking.");
-    return RESERVED_FAMILY_NUM;
-}
-
 void DEMSolver::resolveCombinedOwners() {
     if (!sys_initialized) {
         return;
@@ -3605,102 +3557,73 @@ void DEMSolver::resolveCombinedOwners() {
         }
         inst->master_owner_id = inst->member_owner_ids[inst->type->master_member];
         inst->owners_resolved = true;
+        m_combined_runtime_dirty = true;
     }
+    refreshCombinedRuntimeResources();
 }
 
-void DEMSolver::enforceCombinedRigidGroupsOneStep() {
-    if (!sys_initialized || m_combined_instances.empty()) {
+void DEMSolver::refreshCombinedRuntimeResources() {
+    if (!sys_initialized || !m_combined_runtime_dirty) {
         return;
     }
+    m_owner_combined_master.assign(nOwnerBodies, NULL_BODYID);
+    m_owner_combined_rel_pos.assign(nOwnerBodies, make_float3(0));
+    m_owner_combined_rel_oriQ.assign(nOwnerBodies, make_float4(0, 0, 0, 1));
+    m_owner_combined_master_mass.assign(nOwnerBodies, 0.f);
+    m_owner_combined_master_moi.assign(nOwnerBodies, make_float3(0));
 
-    resolveCombinedOwners();
+    bodyID_t n_combined_owners = 0;
     for (const auto& inst : m_combined_instances) {
         if (!inst || !inst->owners_resolved || !inst->type) {
             continue;
         }
         const size_t n_members = inst->member_owner_ids.size();
-        if (n_members == 0 || inst->type->master_member >= n_members) {
+        if (n_members == 0 || inst->type->master_member >= n_members || inst->master_owner_id == NULL_BODYID) {
             continue;
         }
-
         const bodyID_t master = inst->master_owner_id;
-        const size_t master_idx = inst->type->master_member;
-        if (master == NULL_BODYID) {
+        if (master >= nOwnerBodies) {
             continue;
         }
 
-        const float3 master_pos = GetOwnerPosition(master, 1).at(0);
-        const float4 master_q = quatNormalizeSafe(GetOwnerOriQ(master, 1).at(0));
-        const float3 master_vel = GetOwnerVelocity(master, 1).at(0);
-        const float3 master_omg = GetOwnerAngVel(master, 1).at(0);
-        const float master_mass = GetOwnerMass(master, 1).at(0);
-        const float3 master_moi = GetOwnerMOI(master, 1).at(0);
-        if (!(master_mass > DEME_TINY_FLOAT)) {
-            continue;
-        }
-
-        float3 accumulated_member_force = make_float3(0);
-        float3 accumulated_member_torque = make_float3(0);
-        std::vector<bodyID_t> one_member(1, NULL_BODYID);
+        const float safe_mass = (inst->master_equiv_mass > DEME_TINY_FLOAT) ? inst->master_equiv_mass : 1.f;
+        m_owner_combined_master_mass[master] = safe_mass;
+        m_owner_combined_master_moi[master] = inst->master_equiv_moi;
 
         for (size_t i = 0; i < n_members; i++) {
-            if (i == master_idx) {
-                continue;
-            }
             const bodyID_t member = inst->member_owner_ids[i];
-            if (member == NULL_BODYID) {
+            if (member == NULL_BODYID || member >= nOwnerBodies) {
                 continue;
             }
-
-            const float3 member_pos = GetOwnerPosition(member, 1).at(0);
-            std::vector<float3> points, forces, torques;
-            one_member[0] = member;
-            GetOwnerContactForces(one_member, points, forces, torques, false);
-            float3 member_force = make_float3(0);
-            float3 member_torque = make_float3(0);
-            for (size_t k = 0; k < forces.size(); k++) {
-                member_force += forces[k];
-                const float3 local_arm = points[k] - member_pos;
-                member_torque += cross(local_arm, forces[k]) + torques[k];
+            m_owner_combined_master[member] = master;
+            if (member != master) {
+                m_owner_combined_rel_pos[member] = inst->type->rel_pos[i];
+                m_owner_combined_rel_oriQ[member] = inst->type->rel_oriQ[i];
+                n_combined_owners++;
             }
-            accumulated_member_force += member_force;
-            accumulated_member_torque += member_torque + cross(member_pos - master_pos, member_force);
-        }
-
-        AddOwnerNextStepAcc(master, std::vector<float3>{accumulated_member_force / master_mass});
-        float3 ang_acc = make_float3(0);
-        if (master_moi.x > DEME_TINY_FLOAT) {
-            ang_acc.x = accumulated_member_torque.x / master_moi.x;
-        }
-        if (master_moi.y > DEME_TINY_FLOAT) {
-            ang_acc.y = accumulated_member_torque.y / master_moi.y;
-        }
-        if (master_moi.z > DEME_TINY_FLOAT) {
-            ang_acc.z = accumulated_member_torque.z / master_moi.z;
-        }
-        AddOwnerNextStepAngAcc(master, std::vector<float3>{ang_acc});
-
-        for (size_t i = 0; i < n_members; i++) {
-            if (i == master_idx) {
-                continue;
-            }
-            const bodyID_t member = inst->member_owner_ids[i];
-            if (member == NULL_BODYID) {
-                continue;
-            }
-            float3 rel_world = inst->type->rel_pos[i];
-            applyOriQToVector3(rel_world, master_q);
-            const float3 tgt_pos = master_pos + rel_world;
-            const float4 tgt_q = quatNormalizeSafe(hostHamiltonProduct(master_q, inst->type->rel_oriQ[i]));
-            const float3 tgt_vel = master_vel + cross(master_omg, rel_world);
-            const float3 tgt_omg = master_omg;
-
-            SetOwnerPosition(member, std::vector<float3>{tgt_pos});
-            SetOwnerOriQ(member, std::vector<float4>{tgt_q});
-            SetOwnerVelocity(member, std::vector<float3>{tgt_vel});
-            SetOwnerAngVel(member, std::vector<float3>{tgt_omg});
         }
     }
+
+    dT->ownerCombinedMaster.setVal(0, m_owner_combined_master);
+    dT->ownerCombinedRelPos.setVal(0, m_owner_combined_rel_pos);
+    dT->ownerCombinedRelOriQ.setVal(0, m_owner_combined_rel_oriQ);
+    dT->ownerCombinedMasterMass.setVal(0, m_owner_combined_master_mass);
+    dT->ownerCombinedMasterMOI.setVal(0, m_owner_combined_master_moi);
+    kT->ownerCombinedMaster.setVal(0, m_owner_combined_master);
+
+    dT->ownerCombinedMaster.toDevice();
+    dT->ownerCombinedRelPos.toDevice();
+    dT->ownerCombinedRelOriQ.toDevice();
+    dT->ownerCombinedMasterMass.toDevice();
+    dT->ownerCombinedMasterMOI.toDevice();
+    kT->ownerCombinedMaster.toDevice();
+
+    dT->simParams->nCombinedOwners = n_combined_owners;
+    kT->simParams->nCombinedOwners = n_combined_owners;
+    dT->simParams.toDevice();
+    kT->simParams.toDevice();
+
+    m_combined_runtime_dirty = false;
 }
 
 void DEMSolver::Update() {
@@ -3773,6 +3696,7 @@ void DEMSolver::Update() {
 
     // After Initialize or Update, we should clear host-side initialization object cache
     ClearCache();
+    m_combined_runtime_dirty = true;
     resolveCombinedOwners();
 }
 
@@ -3812,37 +3736,15 @@ void DEMSolver::DoDynamics(double thisCallDuration) {
     }
     resolveCombinedOwners();
     const double sim_time_start = dT->getSimTime();
-
-    auto run_one_chunk = [&](double duration) {
-        dT->setCycleDuration(duration);
-        dT->startThread();
-        kT->startThread();
+    dT->setCycleDuration(thisCallDuration);
+    dT->startThread();
+    kT->startThread();
+    {
         std::unique_lock<std::mutex> lock(dTMain_InteractionManager->mainCanProceed);
         while (!dTMain_InteractionManager->userCallDone) {
             dTMain_InteractionManager->cv_mainCanProceed.wait(lock);
         }
         dTMain_InteractionManager->userCallDone = false;
-    };
-
-    const bool use_stepwise_rigid = (!m_combined_instances.empty() && thisCallDuration > 0.0);
-    if (!use_stepwise_rigid) {
-        run_one_chunk(thisCallDuration);
-    } else {
-        double remaining = thisCallDuration;
-        while (remaining > 0.0) {
-            double timestep = m_ts_size;
-            if (!(timestep > 0.0)) {
-                timestep = dT->simParams->dyn.h;
-            }
-            if (!(timestep > 0.0)) {
-                timestep = remaining;
-            }
-            const double chunk = std::min(remaining, timestep);
-            run_one_chunk(chunk);
-            resetWorkerThreads();
-            enforceCombinedRigidGroupsOneStep();
-            remaining -= chunk;
-        }
     }
 
     const double sim_time_end = dT->getSimTime();

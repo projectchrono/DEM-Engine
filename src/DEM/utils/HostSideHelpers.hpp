@@ -427,6 +427,19 @@ inline float4 hostHamiltonProduct(const float4& Q1, const float4& Q2) {
     return Q;
 }
 
+inline float4 quatConjugate(const float4& q) {
+    return make_float4(-q.x, -q.y, -q.z, q.w);
+}
+
+inline float4 quatNormalizeSafe(const float4& q) {
+    const float n2 = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
+    if (n2 <= DEME_TINY_FLOAT || !std::isfinite(n2)) {
+        return make_float4(0, 0, 0, 1);
+    }
+    const float inv = 1.f / std::sqrt(n2);
+    return make_float4(q.x * inv, q.y * inv, q.z * inv, q.w * inv);
+}
+
 /// Rotate a quaternion about an unit axis by an angle
 inline float4 RotateQuat(const float4& quat, const float3& axis, const float& theta) {
     // Rotation to quaternion first

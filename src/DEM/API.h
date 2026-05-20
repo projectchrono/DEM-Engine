@@ -11,7 +11,6 @@
 #include <cfloat>
 #include <functional>
 #include <thread>
-#include <unordered_set>
 
 #include "kT.h"
 #include "dT.h"
@@ -51,8 +50,11 @@ class DEMCombinedInstance {
   public:
     std::shared_ptr<DEMCombinedTemplate> type;
     std::vector<std::shared_ptr<DEMTrackedObj>> member_tracked_objs;
-    std::vector<unsigned int> member_internal_families;
     std::vector<bodyID_t> member_owner_ids;
+    std::vector<float> member_mass;
+    std::vector<float3> member_moi;
+    float master_equiv_mass = 0.f;
+    float3 master_equiv_moi = make_float3(0);
     bodyID_t master_owner_id = NULL_BODYID;
     bool owners_resolved = false;
     unsigned int load_order = 0;
@@ -2016,6 +2018,13 @@ class DEMSolver {
     std::vector<std::shared_ptr<DEMMesh>> cached_mesh_objs;
     // Combined template instances.
     std::vector<std::shared_ptr<DEMCombinedInstance>> m_combined_instances;
+    // Flattened runtime metadata for combined-owner device paths.
+    std::vector<bodyID_t> m_owner_combined_master;
+    std::vector<float3> m_owner_combined_rel_pos;
+    std::vector<float4> m_owner_combined_rel_oriQ;
+    std::vector<float> m_owner_combined_master_mass;
+    std::vector<float3> m_owner_combined_master_moi;
+    bool m_combined_runtime_dirty = true;
 
     // User-input prescribed motion
     std::vector<familyPrescription_t> m_input_family_prescription;
@@ -2268,10 +2277,8 @@ class DEMSolver {
     void updateMeshWearModels(double call_start_time, double call_end_time);
     /// Resolve owner IDs for combined instances once owner numbering is available.
     void resolveCombinedOwners();
-    /// Apply one per-step rigid-group correction/aggregation pass.
-    void enforceCombinedRigidGroupsOneStep();
-    /// Pick an available family number for internal no-contact masking.
-    unsigned int pickAvailableFamilyCode(const std::unordered_set<unsigned int>& avoid) const;
+    /// Refresh flattened combined-owner runtime metadata in worker arrays.
+    void refreshCombinedRuntimeResources();
     /// Apply one bounded pending-wear chunk of one mesh owner to its node positions.
     /// @return true if any pending wear depth was consumed in this call.
     bool applyMeshWearModel(bodyID_t ownerID, MeshWearModelState& model);

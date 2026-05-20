@@ -334,6 +334,9 @@ struct DEMSimParams {
     // user knows that meshed particles have a low polygon count (e.g. box with 12 triangles, tetrahedron with 4) and
     // mesh-mesh contacts are always SAT-traceable, i.e. no triangle can be completely submerged inside another mesh.
     bool meshParticlesLowPoly = false;
+
+    // Number of owners currently participating in combined-owner rigid groups.
+    bodyID_t nCombinedOwners = 0;
 };
 
 // A struct that holds pointers to data arrays that dT uses
@@ -391,6 +394,14 @@ struct DEMDataDT {
     notStupidBool_t* familyMasks;
     // Extra margin size
     float* familyExtraMarginSize;
+    // Combined-owner mapping (owner -> master owner, NULL_BODYID when not in a combined group)
+    bodyID_t* ownerCombinedMaster = nullptr;
+    // Member-fixed transforms in master frame (indexed by owner; ignored for non-members and masters)
+    float3* ownerCombinedRelPos = nullptr;
+    float4* ownerCombinedRelOriQ = nullptr;
+    // Per-master equivalent mass/MOI for combined-group integration.
+    float* ownerCombinedMasterMass = nullptr;
+    float3* ownerCombinedMasterMOI = nullptr;
 
     // Some dT's own work array pointers
     float3* contactForces;
@@ -492,6 +503,8 @@ struct DEMDataKT {
     notStupidBool_t* familyMasks;
     // Extra margin size
     float* familyExtraMarginSize;
+    // Combined-owner mapping (owner -> master owner, NULL_BODYID when not in a combined group)
+    bodyID_t* ownerCombinedMaster = nullptr;
 
     // The offset info that indexes into the template arrays
     bodyID_t* ownerClumpBody;
