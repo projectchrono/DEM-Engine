@@ -157,6 +157,7 @@ DEME_KERNEL void aggregateCombinedOwnersAcc(deme::DEMSimParams* simParams, deme:
     }
 
     const deme::bodyID_t master = granData->ownerCombinedMaster[owner];
+    // Master owners are intentionally skipped in this pass: only non-master members contribute to master.
     if (master == deme::NULL_BODYID || master == owner || master >= simParams->nOwnerBodies) {
         return;
     }
@@ -228,6 +229,7 @@ DEME_KERNEL void reimposeCombinedOwners(deme::DEMSimParams* simParams, deme::DEM
     }
 
     const deme::bodyID_t master = granData->ownerCombinedMaster[owner];
+    // Master owners are intentionally skipped in this pass: only non-master members are re-imposed.
     if (master == deme::NULL_BODYID || master == owner || master >= simParams->nOwnerBodies) {
         return;
     }

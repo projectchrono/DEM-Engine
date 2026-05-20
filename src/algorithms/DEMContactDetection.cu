@@ -277,11 +277,12 @@ DEME_KERNEL void markContactsByCombinedOwnerMask(const bodyID_t* idA,
                                                  const bodyID_t* ownerTriMesh,
                                                  const bodyID_t* ownerAnalBody,
                                                  const bodyID_t* ownerCombinedMaster,
-                                                 notStupidBool_t* keepFlags,
-                                                 size_t n,
-                                                 bodyID_t nSpheresGM,
+                                                  notStupidBool_t* keepFlags,
+                                                  size_t n,
+                                                  bodyID_t nSpheresGM,
                                                   bodyID_t nTriGM,
-                                                  objID_t nAnalGM) {
+                                                  objID_t nAnalGM,
+                                                  bodyID_t nOwnerBodies) {
     // For each primitive contact candidate, decide whether this pair should be retained.
     // Retain rule:
     //   - default keep
@@ -324,6 +325,10 @@ DEME_KERNEL void markContactsByCombinedOwnerMask(const bodyID_t* idA,
     }
     const bodyID_t masterA = ownerCombinedMaster[ownerA];
     const bodyID_t masterB = ownerCombinedMaster[ownerB];
+    if (masterA >= nOwnerBodies || masterB >= nOwnerBodies) {
+        keepFlags[i] = 1;
+        return;
+    }
     keepFlags[i] = (masterA != NULL_BODYID && masterA == masterB) ? 0 : 1;
 }
 
@@ -1286,7 +1291,7 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 granData->idPrimitiveA, granData->idPrimitiveB, granData->contactTypePrimitive,
                 granData->ownerClumpBody, granData->ownerTriMesh, granData->ownerAnalBody,
                 granData->ownerCombinedMaster, keepFlags, numTotalCnts, simParams->nSpheresGM, simParams->nTriGM,
-                simParams->nAnalGM);
+                simParams->nAnalGM, simParams->nOwnerBodies);
 
             scratchPad.allocateDualStruct("numCombinedKeptCnts");
             cubDEMSum<notStupidBool_t, size_t>(keepFlags, scratchPad.getDualStructDevice("numCombinedKeptCnts"),

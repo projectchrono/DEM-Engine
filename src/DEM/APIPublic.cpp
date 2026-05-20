@@ -3763,6 +3763,8 @@ void DEMSolver::DoDynamics(double thisCallDuration) {
     if (m_combined_runtime_dirty) {
         DEME_ERROR(
             "Combined-owner runtime metadata is marked dirty before DoDynamics.\n"
+            "This usually happens after combined-template/instance edits (for example LoadCombined*Type or "
+            "AddCombinedFromTemplate) without a follow-up Initialize/Update.\n"
             "Call Initialize or Update after modifying combined templates/instances before advancing dynamics.");
     }
     const double sim_time_start = dT->getSimTime();
