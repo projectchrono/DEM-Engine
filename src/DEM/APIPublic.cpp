@@ -2688,7 +2688,6 @@ bool DEMSolver::GetCombinedInstanceInfo(size_t combined_instance_id,
     if (combined_instance_id >= m_combined_instances.size()) {
         return false;
     }
-    m_combined_runtime_dirty = true;
     resolveCombinedOwners();
     const auto& inst = m_combined_instances[combined_instance_id];
     if (!inst->owners_resolved) {
@@ -3573,6 +3572,7 @@ void DEMSolver::refreshCombinedRuntimeResources() {
     m_owner_combined_master_moi.assign(nOwnerBodies, make_float3(0));
 
     bodyID_t n_combined_owners = 0;
+    constexpr float DEFAULT_COMBINED_MASTER_MASS = 1.f;
     for (const auto& inst : m_combined_instances) {
         if (!inst || !inst->owners_resolved || !inst->type) {
             continue;
@@ -3586,7 +3586,8 @@ void DEMSolver::refreshCombinedRuntimeResources() {
             continue;
         }
 
-        const float safe_mass = (inst->master_equiv_mass > DEME_TINY_FLOAT) ? inst->master_equiv_mass : 1.f;
+        const float safe_mass = (inst->master_equiv_mass > DEME_TINY_FLOAT) ? inst->master_equiv_mass
+                                                                             : DEFAULT_COMBINED_MASTER_MASS;
         m_owner_combined_master_mass[master] = safe_mass;
         m_owner_combined_master_moi[master] = inst->master_equiv_moi;
 

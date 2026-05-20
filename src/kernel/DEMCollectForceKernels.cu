@@ -176,7 +176,7 @@ DEME_KERNEL void aggregateCombinedOwnersAcc(deme::DEMSimParams* simParams, deme:
     if (granData->ownerCombinedMasterMOI != nullptr) {
         masterMOI = granData->ownerCombinedMasterMOI[master];
     }
-    if (!(masterMass > DEME_TINY_FLOAT) || !isfinite(masterMass)) {
+    if (masterMass <= DEME_TINY_FLOAT || !isfinite(masterMass)) {
         myOwner = master;
         {
             _massAcqStrat_;
