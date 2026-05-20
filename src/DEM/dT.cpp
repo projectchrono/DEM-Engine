@@ -3251,6 +3251,8 @@ void DEMDynamicThread::calculateForces() {
         }
 
         if (simParams->nCombinedOwners > 0) {
+            // Optional combined-owner aggregation pass:
+            // fold member contributions into master accelerations before integration.
             const size_t blocks_needed_for_owners =
                 (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
             collect_force_kernels->kernel("aggregateCombinedOwnersAcc")
@@ -3274,6 +3276,8 @@ inline void DEMDynamicThread::integrateOwnerMotions() {
         .launch(&simParams, &granData, (double)simParams->dyn.timeElapsed);
 
     if (simParams->nCombinedOwners > 0) {
+        // Optional combined-owner rigid re-imposition pass:
+        // overwrite member states from integrated masters + fixed relative transforms.
         const size_t blocks_needed_for_owners =
             (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
         collect_force_kernels->kernel("reimposeCombinedOwners")

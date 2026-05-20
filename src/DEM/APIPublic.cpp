@@ -2641,6 +2641,7 @@ std::shared_ptr<DEMCombinedInstance> DEMSolver::AddCombinedFromTemplate(
     auto inst = std::make_shared<DEMCombinedInstance>();
     inst->type = combined_template;
     inst->load_order = m_combined_instances.size();
+    // Normalize caller pose once; each component pose is then built by master-frame composition.
     const float4 init_q = quatNormalizeSafe(init_oriQ);
     inst->member_mass.resize(n_members, 0.f);
     inst->member_moi.resize(n_members, make_float3(0));
@@ -2658,6 +2659,7 @@ std::shared_ptr<DEMCombinedInstance> DEMSolver::AddCombinedFromTemplate(
             batch->SetOriQ(world_q);
             auto tracker = Track(batch);
             inst->member_tracked_objs.push_back(tracker->obj);
+            // v1 policy: preserve component mass/MOI exactly as loaded.
             inst->member_mass[i] = clump_type->GetMass();
             inst->member_moi[i] = clump_type->GetMOI();
         } else if (combined_template->member_type == OWNER_TYPE::MESH) {
@@ -2672,6 +2674,7 @@ std::shared_ptr<DEMCombinedInstance> DEMSolver::AddCombinedFromTemplate(
         } else {
             DEME_ERROR("AddCombinedFromTemplate only supports same-type CLUMP or MESH templates.");
         }
+        // v1 policy: equivalent master properties are precomputed at instantiation and cached.
         inst->master_equiv_mass += inst->member_mass[i];
         inst->master_equiv_moi += inst->member_moi[i];
     }
@@ -2689,6 +2692,7 @@ bool DEMSolver::GetCombinedInstanceInfo(size_t combined_instance_id,
     if (combined_instance_id >= m_combined_instances.size()) {
         return false;
     }
+    // Ensure owner IDs are resolved (and runtime mapping refreshed if needed) before returning metadata.
     resolveCombinedOwners();
     const auto& inst = m_combined_instances[combined_instance_id];
     if (!inst->owners_resolved) {
@@ -3534,6 +3538,9 @@ void DEMSolver::updateMeshWearModels(double call_start_time, double call_end_tim
 }
 
 void DEMSolver::resolveCombinedOwners() {
+    // Combined-member owner IDs are only meaningful after Initialize/Update assigned owner numbering.
+    // This method resolves tracker handles to stable owner IDs exactly once per combined instance, then
+    // triggers a runtime metadata refresh for kT/dT if anything new was resolved.
     if (!sys_initialized) {
         return;
     }
@@ -3555,17 +3562,23 @@ void DEMSolver::resolveCombinedOwners() {
         if (!ok || !inst->type || inst->type->master_member >= n_members) {
             continue;
         }
+        // Master is one of the existing component owners in v1 (no geometry-level conversion, no extra owner object).
         inst->master_owner_id = inst->member_owner_ids[inst->type->master_member];
         inst->owners_resolved = true;
         m_combined_runtime_dirty = true;
     }
+    // If no new instance was resolved, this call is a no-op due to m_combined_runtime_dirty check.
     refreshCombinedRuntimeResources();
 }
 
 void DEMSolver::refreshCombinedRuntimeResources() {
+    // Refresh flattened combined-owner runtime arrays that device-side code consumes every step.
+    // This is intentionally host-driven and batched (Initialize/Update/getter resolution),
+    // not re-built inside high-frequency DoDynamics calls.
     if (!sys_initialized || !m_combined_runtime_dirty) {
         return;
     }
+    // Reset per-owner mapping to the "not in a combined group" default state.
     m_owner_combined_master.assign(nOwnerBodies, NULL_BODYID);
     m_owner_combined_rel_pos.assign(nOwnerBodies, make_float3(0));
     m_owner_combined_rel_oriQ.assign(nOwnerBodies, make_float4(0, 0, 0, 1));
@@ -3587,6 +3600,8 @@ void DEMSolver::refreshCombinedRuntimeResources() {
             continue;
         }
 
+        // Cache equivalent group mass/MOI on the master owner slot for device-side aggregation.
+        // Fallback mass is only defensive (invalid metadata); normal path uses precomputed equivalent mass.
         const float safe_mass =
             (inst->master_equiv_mass > DEME_TINY_FLOAT) ? inst->master_equiv_mass : DEFAULT_COMBINED_MASTER_MASS;
         m_owner_combined_master_mass[master] = safe_mass;
@@ -3597,8 +3612,10 @@ void DEMSolver::refreshCombinedRuntimeResources() {
             if (member == NULL_BODYID || member >= nOwnerBodies) {
                 continue;
             }
+            // Membership map: every member points to its master; this is the key used by contact suppression.
             m_owner_combined_master[member] = master;
             if (member != master) {
+                // Only non-master members need fixed transforms for rigid re-imposition.
                 m_owner_combined_rel_pos[member] = inst->type->rel_pos[i];
                 m_owner_combined_rel_oriQ[member] = inst->type->rel_oriQ[i];
                 n_combined_owners++;
@@ -3606,6 +3623,7 @@ void DEMSolver::refreshCombinedRuntimeResources() {
         }
     }
 
+    // Push refreshed arrays to both workers; kT only needs membership mapping for suppression.
     dT->ownerCombinedMaster.setVal(m_owner_combined_master, 0);
     dT->ownerCombinedRelPos.setVal(m_owner_combined_rel_pos, 0);
     dT->ownerCombinedRelOriQ.setVal(m_owner_combined_rel_oriQ, 0);
@@ -3620,6 +3638,7 @@ void DEMSolver::refreshCombinedRuntimeResources() {
     dT->ownerCombinedMasterMOI.toDevice();
     kT->ownerCombinedMaster.toDevice();
 
+    // Enable/disable combined-specific device logic by count. Zero count means no extra overhead in kernels.
     dT->simParams->nCombinedOwners = n_combined_owners;
     kT->simParams->nCombinedOwners = n_combined_owners;
     dT->simParams.toDevice();
@@ -3736,7 +3755,16 @@ void DEMSolver::DoDynamics(double thisCallDuration) {
     if (!sys_initialized) {
         Initialize();
     }
-    resolveCombinedOwners();
+    // IMPORTANT:
+    // We intentionally do NOT call resolveCombinedOwners() here.
+    // Combined runtime metadata is refreshed during Initialize/Update (and explicit combined-info queries).
+    // This avoids host-side resolution overhead in high-frequency DoDynamics loops.
+    // User contract: if combined templates/instances are modified, call Initialize or Update before running dynamics.
+    if (m_combined_runtime_dirty) {
+        DEME_ERROR(
+            "Combined-owner runtime metadata is marked dirty before DoDynamics.\n"
+            "Call Initialize or Update after modifying combined templates/instances before advancing dynamics.");
+    }
     const double sim_time_start = dT->getSimTime();
 
     // Tell dT how long this call is

@@ -148,6 +148,9 @@ DEME_KERNEL void forceToAcc(deme::DEMSimParams* simParams, deme::DEMDataDT* gran
 }
 
 DEME_KERNEL void aggregateCombinedOwnersAcc(deme::DEMSimParams* simParams, deme::DEMDataDT* granData, size_t nOwners) {
+    // Device-side aggregation pass:
+    // each non-master member contributes its already-accumulated linear/angular accelerations to its master.
+    // Contributions are mass/MOI weighted so that master-side integration follows the equivalent-group properties.
     deme::bodyID_t owner = blockIdx.x * blockDim.x + threadIdx.x;
     if (owner >= nOwners || simParams->nCombinedOwners == 0 || granData->ownerCombinedMaster == nullptr) {
         return;
@@ -177,6 +180,7 @@ DEME_KERNEL void aggregateCombinedOwnersAcc(deme::DEMSimParams* simParams, deme:
         masterMOI = granData->ownerCombinedMasterMOI[master];
     }
     if (masterMass <= DEME_TINY_FLOAT || !isfinite(masterMass)) {
+        // Defensive fallback: if equivalent master properties are unavailable, fall back to master's own properties.
         myOwner = master;
         {
             _massAcqStrat_;
@@ -187,6 +191,7 @@ DEME_KERNEL void aggregateCombinedOwnersAcc(deme::DEMSimParams* simParams, deme:
     }
 
     if (memberMass > DEME_TINY_FLOAT && masterMass > DEME_TINY_FLOAT) {
+        // Convert member acceleration contribution to master acceleration space.
         const float ratio_m = memberMass / masterMass;
         atomicAdd(granData->aX + master, granData->aX[owner] * ratio_m);
         atomicAdd(granData->aY + master, granData->aY[owner] * ratio_m);
@@ -212,6 +217,10 @@ DEME_KERNEL void aggregateCombinedOwnersAcc(deme::DEMSimParams* simParams, deme:
 }
 
 DEME_KERNEL void reimposeCombinedOwners(deme::DEMSimParams* simParams, deme::DEMDataDT* granData, size_t nOwners) {
+    // Device-side rigid re-imposition pass:
+    // after integrating masters, overwrite each member's state from
+    //   master state + fixed member transform in master frame.
+    // This enforces rigid relative motion without host/device synchronization.
     deme::bodyID_t owner = blockIdx.x * blockDim.x + threadIdx.x;
     if (owner >= nOwners || simParams->nCombinedOwners == 0 || granData->ownerCombinedMaster == nullptr ||
         granData->ownerCombinedRelPos == nullptr || granData->ownerCombinedRelOriQ == nullptr) {
@@ -271,6 +280,7 @@ DEME_KERNEL void reimposeCombinedOwners(deme::DEMSimParams* simParams, deme::DEM
     applyOriQToVector3(wMasterWorld, qMaster);
 
     float3 vMaster = make_float3(granData->vX[master], granData->vY[master], granData->vZ[master]);
+    // Rigid-body kinematics for member linear velocity: v = v_master + omega_master x r.
     float3 vMember = vMaster + cross(wMasterWorld, relWorld);
     granData->vX[owner] = vMember.x;
     granData->vY[owner] = vMember.y;

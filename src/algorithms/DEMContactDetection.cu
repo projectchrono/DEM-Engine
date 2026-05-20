@@ -280,8 +280,13 @@ DEME_KERNEL void markContactsByCombinedOwnerMask(const bodyID_t* idA,
                                                  notStupidBool_t* keepFlags,
                                                  size_t n,
                                                  bodyID_t nSpheresGM,
-                                                 bodyID_t nTriGM,
-                                                 objID_t nAnalGM) {
+                                                  bodyID_t nTriGM,
+                                                  objID_t nAnalGM) {
+    // For each primitive contact candidate, decide whether this pair should be retained.
+    // Retain rule:
+    //   - default keep
+    //   - drop only when both owners belong to the same combined master group
+    // This suppression is independent of family-code policies and therefore robust to family changes.
     contactPairs_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) {
         return;
@@ -313,6 +318,7 @@ DEME_KERNEL void markContactsByCombinedOwnerMask(const bodyID_t* idA,
         ownerB = ownerAnalBody[primB];
     }
     if (ownerA == NULL_BODYID || ownerB == NULL_BODYID) {
+        // If owner decoding fails for any reason, keep contact to avoid accidental under-detection.
         keepFlags[i] = 1;
         return;
     }
@@ -1268,6 +1274,9 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
 
         if (simParams->nCombinedOwners > 0 && granData->ownerCombinedMaster != nullptr &&
             *scratchPad.numPrimitiveContacts > 0) {
+            // Optional combined-owner internal-contact suppression.
+            // This path is activated only when at least one combined member exists, so non-combined runs
+            // keep their original memory/compute behavior.
             const size_t numTotalCnts = *scratchPad.numPrimitiveContacts;
             const size_t blocks_needed = (numTotalCnts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
             notStupidBool_t* keepFlags = (notStupidBool_t*)scratchPad.allocateTempVector(
@@ -1286,6 +1295,8 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
             const size_t numKept = *scratchPad.getDualStructHost("numCombinedKeptCnts");
 
             if (numKept < numTotalCnts) {
+                // Compact filtered contact arrays in-place via temporary kept arrays.
+                // This preserves external contacts and removes only intra-group pairs.
                 const size_t alloc_kept = DEME_MAX((size_t)1, numKept);
                 const size_t ids_bytes = alloc_kept * sizeof(bodyID_t);
                 const size_t type_bytes = alloc_kept * sizeof(contact_t);
