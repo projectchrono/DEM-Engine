@@ -270,6 +270,68 @@ inline void sortABTypePersistencyByType(bodyID_t* idA,
     scratchPad.finishUsingTempVector("sortType_idx_sorted");
 }
 
+DEME_KERNEL void markContactsByCombinedOwnerMask(const bodyID_t* idA,
+                                                 const bodyID_t* idB,
+                                                 const contact_t* type,
+                                                 const bodyID_t* ownerClumpBody,
+                                                 const bodyID_t* ownerTriMesh,
+                                                 const bodyID_t* ownerAnalBody,
+                                                 const bodyID_t* ownerCombinedMaster,
+                                                 notStupidBool_t* keepFlags,
+                                                 size_t n,
+                                                 bodyID_t nSpheresGM,
+                                                 bodyID_t nTriGM,
+                                                 objID_t nAnalGM,
+                                                 bodyID_t nOwnerBodies) {
+    // For each primitive contact candidate, decide whether this pair should be retained.
+    // Retain rule:
+    //   - default keep
+    //   - drop only when both owners belong to the same combined master group
+    // This suppression is independent of family-code policies and therefore robust to family changes.
+    contactPairs_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) {
+        return;
+    }
+    const contact_t thisType = type[i];
+    if (!isSupportedContactType(thisType) || ownerCombinedMaster == nullptr) {
+        keepFlags[i] = 1;
+        return;
+    }
+
+    const geoType_t typeA = decodeTypeA(thisType);
+    const geoType_t typeB = decodeTypeB(thisType);
+    const bodyID_t primA = idA[i];
+    const bodyID_t primB = idB[i];
+    bodyID_t ownerA = NULL_BODYID;
+    bodyID_t ownerB = NULL_BODYID;
+    if (typeA == GEO_T_SPHERE && primA < nSpheresGM) {
+        ownerA = ownerClumpBody[primA];
+    } else if (typeA == GEO_T_TRIANGLE && primA < nTriGM) {
+        ownerA = ownerTriMesh[primA];
+    } else if (typeA == GEO_T_ANALYTICAL && primA < nAnalGM) {
+        ownerA = ownerAnalBody[primA];
+    }
+    if (typeB == GEO_T_SPHERE && primB < nSpheresGM) {
+        ownerB = ownerClumpBody[primB];
+    } else if (typeB == GEO_T_TRIANGLE && primB < nTriGM) {
+        ownerB = ownerTriMesh[primB];
+    } else if (typeB == GEO_T_ANALYTICAL && primB < nAnalGM) {
+        ownerB = ownerAnalBody[primB];
+    }
+    if (ownerA == NULL_BODYID || ownerB == NULL_BODYID) {
+        // If owner decoding fails for any reason, keep contact to avoid accidental under-detection.
+        keepFlags[i] = 1;
+        return;
+    }
+    const bodyID_t masterA = ownerCombinedMaster[ownerA];
+    const bodyID_t masterB = ownerCombinedMaster[ownerB];
+    if (masterA >= nOwnerBodies || masterB >= nOwnerBodies) {
+        keepFlags[i] = 1;
+        return;
+    }
+    keepFlags[i] = (masterA != NULL_BODYID && masterA == masterB) ? 0 : 1;
+}
+
 void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kernels,
                       std::shared_ptr<JitHelper::CachedProgram>& bin_triangle_kernels,
                       std::shared_ptr<JitHelper::CachedProgram>& sphere_contact_kernels,
@@ -1214,6 +1276,77 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
         // displayDeviceArray<bodyID_t>(granData->idPrimitiveA, *scratchPad.numPrimitiveContacts);
         // displayDeviceArray<bodyID_t>(granData->idPrimitiveB, *scratchPad.numPrimitiveContacts);
         // displayDeviceArray<contact_t>(granData->contactTypePrimitive, *scratchPad.numPrimitiveContacts);
+
+        if (simParams->nCombinedOwners > 0 && !simParams->allowIntraCombinedOwnerContacts &&
+            granData->ownerCombinedMaster != nullptr && *scratchPad.numPrimitiveContacts > 0) {
+            // Optional combined-owner internal-contact suppression.
+            // This path is activated only when at least one combined member exists, so non-combined runs
+            // keep their original memory/compute behavior. It is bypassed when
+            // allowIntraCombinedOwnerContacts == 1.
+            const size_t numTotalCnts = *scratchPad.numPrimitiveContacts;
+            const size_t blocks_needed = (numTotalCnts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+            notStupidBool_t* keepFlags = (notStupidBool_t*)scratchPad.allocateTempVector(
+                "combined_keep_flags", numTotalCnts * sizeof(notStupidBool_t));
+
+            markContactsByCombinedOwnerMask<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+                granData->idPrimitiveA, granData->idPrimitiveB, granData->contactTypePrimitive,
+                granData->ownerClumpBody, granData->ownerTriMesh, granData->ownerAnalBody,
+                granData->ownerCombinedMaster, keepFlags, numTotalCnts, simParams->nSpheresGM, simParams->nTriGM,
+                simParams->nAnalGM, simParams->nOwnerBodies);
+
+            scratchPad.allocateDualStruct("numCombinedKeptCnts");
+            cubDEMSum<notStupidBool_t, size_t>(keepFlags, scratchPad.getDualStructDevice("numCombinedKeptCnts"),
+                                               numTotalCnts, this_stream, scratchPad);
+            scratchPad.syncDualStructDeviceToHost("numCombinedKeptCnts");
+            const size_t numKept = *scratchPad.getDualStructHost("numCombinedKeptCnts");
+
+            if (numKept < numTotalCnts) {
+                // Compact filtered contact arrays in-place via temporary kept arrays.
+                // This preserves external contacts and removes only intra-group pairs.
+                const size_t alloc_kept = DEME_MAX((size_t)1, numKept);
+                const size_t ids_bytes = alloc_kept * sizeof(bodyID_t);
+                const size_t type_bytes = alloc_kept * sizeof(contact_t);
+                const size_t persist_bytes = alloc_kept * sizeof(notStupidBool_t);
+                bodyID_t* keptA = (bodyID_t*)scratchPad.allocateTempVector("combined_kept_idA", ids_bytes);
+                bodyID_t* keptB = (bodyID_t*)scratchPad.allocateTempVector("combined_kept_idB", ids_bytes);
+                contact_t* keptType = (contact_t*)scratchPad.allocateTempVector("combined_kept_type", type_bytes);
+                notStupidBool_t* keptPersist =
+                    (notStupidBool_t*)scratchPad.allocateTempVector("combined_kept_persist", persist_bytes);
+
+                cubDEMSelectFlagged<bodyID_t, notStupidBool_t>(granData->idPrimitiveA, keptA, keepFlags,
+                                                               scratchPad.getDualStructDevice("numCombinedKeptCnts"),
+                                                               numTotalCnts, this_stream, scratchPad);
+                cubDEMSelectFlagged<bodyID_t, notStupidBool_t>(granData->idPrimitiveB, keptB, keepFlags,
+                                                               scratchPad.getDualStructDevice("numCombinedKeptCnts"),
+                                                               numTotalCnts, this_stream, scratchPad);
+                cubDEMSelectFlagged<contact_t, notStupidBool_t>(granData->contactTypePrimitive, keptType, keepFlags,
+                                                                scratchPad.getDualStructDevice("numCombinedKeptCnts"),
+                                                                numTotalCnts, this_stream, scratchPad);
+                cubDEMSelectFlagged<notStupidBool_t, notStupidBool_t>(
+                    granData->contactPersistency, keptPersist, keepFlags,
+                    scratchPad.getDualStructDevice("numCombinedKeptCnts"), numTotalCnts, this_stream, scratchPad);
+
+                if (numKept > 0) {
+                    DEME_GPU_CALL(cudaMemcpyAsync(granData->idPrimitiveA, keptA, ids_bytes, cudaMemcpyDeviceToDevice,
+                                                  this_stream));
+                    DEME_GPU_CALL(cudaMemcpyAsync(granData->idPrimitiveB, keptB, ids_bytes, cudaMemcpyDeviceToDevice,
+                                                  this_stream));
+                    DEME_GPU_CALL(cudaMemcpyAsync(granData->contactTypePrimitive, keptType, type_bytes,
+                                                  cudaMemcpyDeviceToDevice, this_stream));
+                    DEME_GPU_CALL(cudaMemcpyAsync(granData->contactPersistency, keptPersist, persist_bytes,
+                                                  cudaMemcpyDeviceToDevice, this_stream));
+                }
+
+                scratchPad.finishUsingTempVector("combined_kept_idA");
+                scratchPad.finishUsingTempVector("combined_kept_idB");
+                scratchPad.finishUsingTempVector("combined_kept_type");
+                scratchPad.finishUsingTempVector("combined_kept_persist");
+                *scratchPad.numPrimitiveContacts = numKept;
+            }
+
+            scratchPad.finishUsingDualStruct("numCombinedKeptCnts");
+            scratchPad.finishUsingTempVector("combined_keep_flags");
+        }
 
         // -----------------------------------------------------------------------------------------------------------
         // We need to now do some sanity checks. If primitive contacts are already sorted by idA, we just use them (they

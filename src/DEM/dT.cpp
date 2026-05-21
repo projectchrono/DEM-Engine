@@ -87,6 +87,11 @@ void DEMDynamicThread::packDataPointers() {
 
     familyMaskMatrix.bindDevicePointer(&(granData->familyMasks));
     familyExtraMarginSize.bindDevicePointer(&(granData->familyExtraMarginSize));
+    ownerCombinedMaster.bindDevicePointer(&(granData->ownerCombinedMaster));
+    ownerCombinedRelPos.bindDevicePointer(&(granData->ownerCombinedRelPos));
+    ownerCombinedRelOriQ.bindDevicePointer(&(granData->ownerCombinedRelOriQ));
+    ownerCombinedMasterMass.bindDevicePointer(&(granData->ownerCombinedMasterMass));
+    ownerCombinedMasterMOI.bindDevicePointer(&(granData->ownerCombinedMasterMOI));
 
     contactForces.bindDevicePointer(&(granData->contactForces));
     contactTorque_convToForce.bindDevicePointer(&(granData->contactTorque_convToForce));
@@ -260,6 +265,11 @@ void DEMDynamicThread::migrateDataToDevice() {
 
     familyMaskMatrix.toDeviceAsync(streamInfo.stream);
     familyExtraMarginSize.toDeviceAsync(streamInfo.stream);
+    ownerCombinedMaster.toDeviceAsync(streamInfo.stream);
+    ownerCombinedRelPos.toDeviceAsync(streamInfo.stream);
+    ownerCombinedRelOriQ.toDeviceAsync(streamInfo.stream);
+    ownerCombinedMasterMass.toDeviceAsync(streamInfo.stream);
+    ownerCombinedMasterMOI.toDeviceAsync(streamInfo.stream);
 
     contactForces.toDeviceAsync(streamInfo.stream);
     contactNormals.toDeviceAsync(streamInfo.stream);
@@ -529,6 +539,8 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->nContactWildcards = contact_wildcards.size();
     simParams->nOwnerWildcards = owner_wildcards.size();
     simParams->nGeoWildcards = geo_wildcards.size();
+    simParams->nCombinedOwners = 0;
+    simParams->allowIntraCombinedOwnerContacts = 0;
 
     m_contact_wildcard_names = contact_wildcards;
     m_owner_wildcard_names = owner_wildcards;
@@ -654,6 +666,11 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
 
     // Resize the family mask `matrix' (in fact it is flattened)
     DEME_DUAL_ARRAY_RESIZE(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
+    DEME_DUAL_ARRAY_RESIZE(ownerCombinedMaster, nOwnerBodies, NULL_BODYID);
+    DEME_DUAL_ARRAY_RESIZE(ownerCombinedRelPos, nOwnerBodies, make_float3(0));
+    DEME_DUAL_ARRAY_RESIZE(ownerCombinedRelOriQ, nOwnerBodies, make_float4(0, 0, 0, 1));
+    DEME_DUAL_ARRAY_RESIZE(ownerCombinedMasterMass, nOwnerBodies, 0.f);
+    DEME_DUAL_ARRAY_RESIZE(ownerCombinedMasterMOI, nOwnerBodies, make_float3(0));
 
     // Resize to the number of geometries
     DEME_DUAL_ARRAY_RESIZE(ownerClumpBody, nSpheresGM, 0);
@@ -3233,6 +3250,17 @@ void DEMDynamicThread::calculateForces() {
             // std::cout << nContactPairs << std::endl;
             timers.StopGpuTimer("Optional force reduction", streamInfo.stream);
         }
+
+        if (simParams->nCombinedOwners > 0) {
+            // Optional combined-owner aggregation pass:
+            // fold member contributions into master accelerations before integration.
+            const size_t blocks_needed_for_owners =
+                (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+            collect_force_kernels->kernel("aggregateCombinedOwnersAcc")
+                .instantiate()
+                .configure(dim3(blocks_needed_for_owners), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+                .launch(&simParams, &granData, simParams->nOwnerBodies);
+        }
     }
 
     finalizeTrianglePVWindowStep();
@@ -3247,6 +3275,17 @@ inline void DEMDynamicThread::integrateOwnerMotions() {
         .instantiate()
         .configure(dim3(blocks_needed_for_clumps), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
         .launch(&simParams, &granData, (double)simParams->dyn.timeElapsed);
+
+    if (simParams->nCombinedOwners > 0) {
+        // Optional combined-owner rigid re-imposition pass:
+        // overwrite member states from integrated masters + fixed relative transforms.
+        const size_t blocks_needed_for_owners =
+            (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+        collect_force_kernels->kernel("reimposeCombinedOwners")
+            .instantiate()
+            .configure(dim3(blocks_needed_for_owners), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+            .launch(&simParams, &granData, simParams->nOwnerBodies);
+    }
 
     // Cylindrical-periodic wildcard rotation is intentionally disabled here.
     // Contact-history vectors are already transformed in the force kernels (base <-> active image).
@@ -4714,6 +4753,8 @@ void DEMDynamicThread::prewarmKernels() {
     }
     if (collect_force_kernels) {
         collect_force_kernels->kernel("forceToAcc").instantiate();
+        collect_force_kernels->kernel("aggregateCombinedOwnersAcc").instantiate();
+        collect_force_kernels->kernel("reimposeCombinedOwners").instantiate();
     }
     if (integrator_kernels) {
         integrator_kernels->kernel("integrateOwners").instantiate();

@@ -2294,6 +2294,7 @@ void DEMSolver::ClearCache() {
     deallocate_array(cached_input_clump_batches);
     deallocate_array(cached_extern_objs);
     deallocate_array(cached_mesh_objs);
+    deallocate_array(cached_combined_instances);
 
     // m_input_no_contact_pairs can be removed, if the system is initialized. After initialization, family mask can be
     // directly transferred to workers on user call.
@@ -2506,6 +2507,211 @@ std::shared_ptr<DEMMesh> DEMSolver::AddMeshFromTemplate(const std::shared_ptr<DE
 
     // Add the mesh instance to the simulation
     return AddMesh(mesh);
+}
+
+std::shared_ptr<DEMCombinedTemplate> DEMSolver::LoadCombinedClumpType(
+    const std::vector<std::shared_ptr<DEMClumpTemplate>>& component_templates,
+    const std::vector<float3>& component_rel_pos,
+    const std::vector<float4>& component_rel_oriQ,
+    size_t master_component) {
+    assertSysNotInit("LoadCombinedClumpType");
+    if (component_templates.empty()) {
+        DEME_ERROR("LoadCombinedClumpType requires at least one component template.");
+    }
+    if (component_templates.size() != component_rel_pos.size()) {
+        DEME_ERROR(
+            "LoadCombinedClumpType requires component template and relative-position arrays to have equal size.");
+    }
+    if (!component_rel_oriQ.empty() && component_rel_oriQ.size() != component_templates.size()) {
+        DEME_ERROR("LoadCombinedClumpType requires relative-orientation array size to match component count.");
+    }
+    if (master_component >= component_templates.size()) {
+        DEME_ERROR("LoadCombinedClumpType master component index %zu is out of range [0, %zu).", master_component,
+                   component_templates.size());
+    }
+
+    auto ptr = std::make_shared<DEMCombinedTemplate>();
+    ptr->member_type = OWNER_TYPE::CLUMP;
+    ptr->master_member = master_component;
+    ptr->clump_templates = component_templates;
+    ptr->rel_pos.resize(component_templates.size());
+    ptr->rel_oriQ.resize(component_templates.size(), make_float4(0, 0, 0, 1));
+    if (!component_rel_oriQ.empty()) {
+        ptr->rel_oriQ = component_rel_oriQ;
+    }
+    for (size_t i = 0; i < ptr->rel_oriQ.size(); i++) {
+        ptr->rel_oriQ[i] = quatNormalizeSafe(ptr->rel_oriQ[i]);
+    }
+
+    const float3 master_pos = component_rel_pos[master_component];
+    const float4 master_q = ptr->rel_oriQ[master_component];
+    const float4 master_q_conj = quatConjugate(master_q);
+    for (size_t i = 0; i < component_rel_pos.size(); i++) {
+        float3 rel = component_rel_pos[i];
+        rel -= master_pos;
+        applyOriQToVector3(rel, master_q_conj);
+        ptr->rel_pos[i] = rel;
+        ptr->rel_oriQ[i] = quatNormalizeSafe(hostHamiltonProduct(master_q_conj, ptr->rel_oriQ[i]));
+    }
+    ptr->rel_pos[master_component] = make_float3(0);
+    ptr->rel_oriQ[master_component] = make_float4(0, 0, 0, 1);
+
+    ptr->load_order = m_combined_templates.size();
+    m_combined_templates.push_back(ptr);
+    nCombinedTemplateLoad++;
+    m_combined_runtime_dirty = true;
+    return m_combined_templates.back();
+}
+
+std::shared_ptr<DEMCombinedTemplate> DEMSolver::LoadCombinedMeshType(
+    const std::vector<std::shared_ptr<DEMMesh>>& component_templates,
+    const std::vector<float3>& component_rel_pos,
+    const std::vector<float4>& component_rel_oriQ,
+    size_t master_component) {
+    assertSysNotInit("LoadCombinedMeshType");
+    if (component_templates.empty()) {
+        DEME_ERROR("LoadCombinedMeshType requires at least one component template.");
+    }
+    if (component_templates.size() != component_rel_pos.size()) {
+        DEME_ERROR("LoadCombinedMeshType requires component template and relative-position arrays to have equal size.");
+    }
+    if (!component_rel_oriQ.empty() && component_rel_oriQ.size() != component_templates.size()) {
+        DEME_ERROR("LoadCombinedMeshType requires relative-orientation array size to match component count.");
+    }
+    if (master_component >= component_templates.size()) {
+        DEME_ERROR("LoadCombinedMeshType master component index %zu is out of range [0, %zu).", master_component,
+                   component_templates.size());
+    }
+
+    auto ptr = std::make_shared<DEMCombinedTemplate>();
+    ptr->member_type = OWNER_TYPE::MESH;
+    ptr->master_member = master_component;
+    ptr->mesh_templates = component_templates;
+    ptr->rel_pos.resize(component_templates.size());
+    ptr->rel_oriQ.resize(component_templates.size(), make_float4(0, 0, 0, 1));
+    if (!component_rel_oriQ.empty()) {
+        ptr->rel_oriQ = component_rel_oriQ;
+    }
+    for (size_t i = 0; i < ptr->rel_oriQ.size(); i++) {
+        ptr->rel_oriQ[i] = quatNormalizeSafe(ptr->rel_oriQ[i]);
+    }
+
+    const float3 master_pos = component_rel_pos[master_component];
+    const float4 master_q = ptr->rel_oriQ[master_component];
+    const float4 master_q_conj = quatConjugate(master_q);
+    for (size_t i = 0; i < component_rel_pos.size(); i++) {
+        float3 rel = component_rel_pos[i];
+        rel -= master_pos;
+        applyOriQToVector3(rel, master_q_conj);
+        ptr->rel_pos[i] = rel;
+        ptr->rel_oriQ[i] = quatNormalizeSafe(hostHamiltonProduct(master_q_conj, ptr->rel_oriQ[i]));
+    }
+    ptr->rel_pos[master_component] = make_float3(0);
+    ptr->rel_oriQ[master_component] = make_float4(0, 0, 0, 1);
+
+    ptr->load_order = m_combined_templates.size();
+    m_combined_templates.push_back(ptr);
+    nCombinedTemplateLoad++;
+    m_combined_runtime_dirty = true;
+    return m_combined_templates.back();
+}
+
+std::shared_ptr<DEMCombinedInstance> DEMSolver::AddCombinedFromTemplate(
+    const std::shared_ptr<DEMCombinedTemplate>& combined_template,
+    const float3& init_pos,
+    const float4& init_oriQ) {
+    assertSysNotInit("AddCombinedFromTemplate");
+    if (!combined_template) {
+        DEME_ERROR("AddCombinedFromTemplate received a null combined template handle.");
+    }
+
+    const size_t n_members = (combined_template->member_type == OWNER_TYPE::CLUMP)
+                                 ? combined_template->clump_templates.size()
+                                 : combined_template->mesh_templates.size();
+    if (n_members == 0) {
+        DEME_ERROR("AddCombinedFromTemplate encountered a combined template with zero components.");
+    }
+    if (combined_template->rel_pos.size() != n_members || combined_template->rel_oriQ.size() != n_members) {
+        DEME_ERROR("AddCombinedFromTemplate found inconsistent fixed-transform arrays in the combined template.");
+    }
+    if (combined_template->master_member >= n_members) {
+        DEME_ERROR("AddCombinedFromTemplate master component index %zu is out of range [0, %zu).",
+                   combined_template->master_member, n_members);
+    }
+
+    auto inst = std::make_shared<DEMCombinedInstance>();
+    inst->type = combined_template;
+    inst->load_order = cached_combined_instances.size();
+    // Normalize caller pose once; each component pose is then built by master-frame composition.
+    const float4 init_q = quatNormalizeSafe(init_oriQ);
+    inst->member_mass.resize(n_members, 0.f);
+    inst->member_moi.resize(n_members, make_float3(0));
+    inst->master_equiv_mass = 0.f;
+    inst->master_equiv_moi = make_float3(0);
+
+    for (size_t i = 0; i < n_members; i++) {
+        float3 world_pos = combined_template->rel_pos[i];
+        applyFrameTransformLocalToGlobal(world_pos, init_pos, init_q);
+        const float4 world_q = quatNormalizeSafe(hostHamiltonProduct(init_q, combined_template->rel_oriQ[i]));
+
+        if (combined_template->member_type == OWNER_TYPE::CLUMP) {
+            auto clump_type = combined_template->clump_templates[i];
+            auto batch = AddClumps(clump_type, world_pos);
+            batch->SetOriQ(world_q);
+            inst->member_objs.push_back(batch);
+            // v1 policy: preserve component mass/MOI exactly as loaded.
+            inst->member_mass[i] = clump_type->GetMass();
+            inst->member_moi[i] = clump_type->GetMOI();
+        } else if (combined_template->member_type == OWNER_TYPE::MESH) {
+            DEMMesh mesh = *(combined_template->mesh_templates[i]);
+            mesh.SetInitPos(world_pos);
+            mesh.SetInitQuat(world_q);
+            auto mesh_inst = AddMesh(mesh);
+            inst->member_objs.push_back(mesh_inst);
+            inst->member_mass[i] = mesh.mass;
+            inst->member_moi[i] = mesh.MOI;
+        } else {
+            DEME_ERROR("AddCombinedFromTemplate only supports same-type CLUMP or MESH templates.");
+        }
+        // v1 policy: equivalent master properties are precomputed at instantiation and cached.
+        inst->master_equiv_mass += inst->member_mass[i];
+        inst->master_equiv_moi += inst->member_moi[i];
+    }
+
+    cached_combined_instances.push_back(inst);
+    m_combined_runtime_dirty = true;
+    return cached_combined_instances.back();
+}
+
+void DEMSolver::SetAllowIntraCombinedOwnerContacts(bool allow) {
+    m_allow_intra_combined_owner_contacts = allow;
+    if (sys_initialized) {
+        dT->simParams->allowIntraCombinedOwnerContacts = allow ? 1 : 0;
+        kT->simParams->allowIntraCombinedOwnerContacts = allow ? 1 : 0;
+        dT->simParams.toDevice();
+        kT->simParams.toDevice();
+    }
+}
+
+bool DEMSolver::GetCombinedInstanceInfo(size_t combined_instance_id,
+                                        bodyID_t& master_owner_id,
+                                        std::vector<bodyID_t>& member_owner_ids,
+                                        std::vector<float3>& member_rel_pos,
+                                        std::vector<float4>& member_rel_oriQ) {
+    if (combined_instance_id >= cached_combined_instances.size()) {
+        return false;
+    }
+    // Ensure owner IDs are resolved (and runtime mapping refreshed if needed) before returning metadata.
+    resolveCombinedOwners();
+    const auto& inst = cached_combined_instances[combined_instance_id];
+    if (!inst->owners_resolved) {
+        return false;
+    }
+    master_owner_id = inst->master_owner_id;
+    member_owner_ids = inst->member_owner_ids;
+    member_rel_pos = inst->type->rel_pos;
+    member_rel_oriQ = inst->type->rel_oriQ;
+    return true;
 }
 
 std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity) {
@@ -2791,12 +2997,13 @@ void DEMSolver::Initialize(bool dry_run) {
     // Initialization is critical
     dT->announceCritical();
 
-    // Always clear cache after init
-    ClearCache();
-
     //// TODO: Give a warning if sys_initialized is true and the system is re-initialized: in that case, the user should
     /// know what they are doing
     sys_initialized = true;
+    m_combined_runtime_dirty = true;
+    resolveCombinedOwners(0);
+    // Always clear cache after init completes, including combined instance cache.
+    ClearCache();
 
     if (dry_run) {
         // Do a dry-run: It establishes contact pairs. It helps to locate obvious problems at the start (like, too many
@@ -2967,12 +3174,8 @@ void DEMSolver::UpdateStepSize(double ts) {
     // We for now store ts as float on devices...
     dT->simParams->dyn.h = ts;
     kT->simParams->dyn.h = ts;
-    DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
-    dT->simParams.syncMemberToDeviceAsync<float>(offsetof(DEMSimParams, dyn) + offsetof(DEMSimParamsDynamic, h),
-                                                 dT->streamInfo.stream);
-    DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
-    kT->simParams.syncMemberToDeviceAsync<float>(offsetof(DEMSimParams, dyn) + offsetof(DEMSimParamsDynamic, h),
-                                                 kT->streamInfo.stream);
+    dT->simParams.toDevice();
+    kT->simParams.toDevice();
 }
 
 bool DEMSolver::findOwnerTriangleRange(bodyID_t ownerID, size_t& tri_start, size_t& tri_count) {
@@ -3338,6 +3541,143 @@ void DEMSolver::updateMeshWearModels(double call_start_time, double call_end_tim
     }
 }
 
+void DEMSolver::resolveCombinedOwners(size_t nExistOwners) {
+    // Combined-member owner IDs are only meaningful after Initialize/Update assigned owner numbering.
+    // This method resolves cached member initializer handles to stable owner IDs exactly once per combined instance,
+    // then triggers a runtime metadata refresh for kT/dT if anything new was resolved.
+    if (!sys_initialized) {
+        return;
+    }
+    std::vector<size_t> prescans_batch_size;
+    prescans_batch_size.push_back(0);
+    for (const auto& a_batch : cached_input_clump_batches) {
+        prescans_batch_size.push_back(prescans_batch_size.back() + a_batch->GetNumClumps());
+    }
+
+    for (auto& inst : cached_combined_instances) {
+        if (!inst || inst->owners_resolved) {
+            continue;
+        }
+        const size_t n_members = inst->member_objs.size();
+        inst->member_owner_ids.resize(n_members, NULL_BODYID);
+        bool ok = true;
+        for (size_t i = 0; i < n_members; i++) {
+            const auto& member_obj = inst->member_objs[i];
+            if (!member_obj) {
+                ok = false;
+                break;
+            }
+            if (member_obj->obj_type == OWNER_TYPE::CLUMP) {
+                const size_t load_order = member_obj->load_order;
+                if (load_order >= cached_input_clump_batches.size()) {
+                    ok = false;
+                    break;
+                }
+                inst->member_owner_ids[i] = static_cast<bodyID_t>(nExistOwners + prescans_batch_size[load_order]);
+            } else if (member_obj->obj_type == OWNER_TYPE::MESH) {
+                const size_t load_order = member_obj->load_order;
+                if (load_order >= cached_mesh_objs.size()) {
+                    ok = false;
+                    break;
+                }
+                const size_t owner_id =
+                    nExistOwners + cached_extern_objs.size() + prescans_batch_size.back() + load_order;
+                inst->member_owner_ids[i] = static_cast<bodyID_t>(owner_id);
+            } else {
+                ok = false;
+                break;
+            }
+        }
+        if (!ok || !inst->type || inst->type->master_member >= n_members) {
+            continue;
+        }
+        // Master is one of the existing component owners in v1 (no geometry-level conversion, no extra owner object).
+        inst->master_owner_id = inst->member_owner_ids[inst->type->master_member];
+        inst->owners_resolved = true;
+        m_combined_runtime_dirty = true;
+    }
+    // If no new instance was resolved, this call is a no-op due to m_combined_runtime_dirty check.
+    refreshCombinedRuntimeResources();
+}
+
+void DEMSolver::refreshCombinedRuntimeResources() {
+    // Refresh flattened combined-owner runtime arrays that device-side code consumes every step.
+    // This is intentionally host-driven and batched (Initialize/Update/getter resolution),
+    // not re-built inside high-frequency DoDynamics calls.
+    if (!sys_initialized || !m_combined_runtime_dirty) {
+        return;
+    }
+    // Reset per-owner mapping to the "not in a combined group" default state.
+    std::vector<bodyID_t> owner_combined_master(nOwnerBodies, NULL_BODYID);
+    std::vector<float3> owner_combined_rel_pos(nOwnerBodies, make_float3(0));
+    std::vector<float4> owner_combined_rel_oriQ(nOwnerBodies, make_float4(0, 0, 0, 1));
+    std::vector<float> owner_combined_master_mass(nOwnerBodies, 0.f);
+    std::vector<float3> owner_combined_master_moi(nOwnerBodies, make_float3(0));
+
+    bodyID_t n_combined_owners = 0;
+    constexpr float DEFAULT_COMBINED_MASTER_MASS = 1.f;
+    for (const auto& inst : cached_combined_instances) {
+        if (!inst || !inst->owners_resolved || !inst->type) {
+            continue;
+        }
+        const size_t n_members = inst->member_owner_ids.size();
+        if (n_members == 0 || inst->type->master_member >= n_members || inst->master_owner_id == NULL_BODYID) {
+            continue;
+        }
+        const bodyID_t master = inst->master_owner_id;
+        if (master >= nOwnerBodies) {
+            continue;
+        }
+
+        // Cache equivalent group mass/MOI on the master owner slot for device-side aggregation.
+        // Fallback mass is only defensive (invalid metadata); normal path uses precomputed equivalent mass.
+        const float safe_mass =
+            (inst->master_equiv_mass > DEME_TINY_FLOAT) ? inst->master_equiv_mass : DEFAULT_COMBINED_MASTER_MASS;
+        owner_combined_master_mass[master] = safe_mass;
+        owner_combined_master_moi[master] = inst->master_equiv_moi;
+
+        for (size_t i = 0; i < n_members; i++) {
+            const bodyID_t member = inst->member_owner_ids[i];
+            if (member == NULL_BODYID || member >= nOwnerBodies) {
+                continue;
+            }
+            // Membership map: every member points to its master; this is the key used by contact suppression.
+            owner_combined_master[member] = master;
+            if (member != master) {
+                // Only non-master members need fixed transforms for rigid re-imposition.
+                owner_combined_rel_pos[member] = inst->type->rel_pos[i];
+                owner_combined_rel_oriQ[member] = inst->type->rel_oriQ[i];
+                n_combined_owners++;
+            }
+        }
+    }
+
+    // Push refreshed arrays to both workers; kT only needs membership mapping for suppression.
+    dT->ownerCombinedMaster.setVal(owner_combined_master, 0);
+    dT->ownerCombinedRelPos.setVal(owner_combined_rel_pos, 0);
+    dT->ownerCombinedRelOriQ.setVal(owner_combined_rel_oriQ, 0);
+    dT->ownerCombinedMasterMass.setVal(owner_combined_master_mass, 0);
+    dT->ownerCombinedMasterMOI.setVal(owner_combined_master_moi, 0);
+    kT->ownerCombinedMaster.setVal(owner_combined_master, 0);
+
+    dT->ownerCombinedMaster.toDevice();
+    dT->ownerCombinedRelPos.toDevice();
+    dT->ownerCombinedRelOriQ.toDevice();
+    dT->ownerCombinedMasterMass.toDevice();
+    dT->ownerCombinedMasterMOI.toDevice();
+    kT->ownerCombinedMaster.toDevice();
+
+    // Enable/disable combined-specific device logic by count. Zero count means no extra overhead in kernels.
+    dT->simParams->nCombinedOwners = n_combined_owners;
+    kT->simParams->nCombinedOwners = n_combined_owners;
+    dT->simParams->allowIntraCombinedOwnerContacts = m_allow_intra_combined_owner_contacts ? 1 : 0;
+    kT->simParams->allowIntraCombinedOwnerContacts = m_allow_intra_combined_owner_contacts ? 1 : 0;
+    dT->simParams.toDevice();
+    kT->simParams.toDevice();
+
+    m_combined_runtime_dirty = false;
+}
+
 void DEMSolver::Update() {
     if (!sys_initialized) {
         DEME_ERROR(std::string(
@@ -3406,7 +3746,9 @@ void DEMSolver::Update() {
             nLastTimeMatNum, m_loaded_materials.size(), nLastTimeFamilyPreNum, m_input_family_prescription.size());
     }
 
-    // After Initialize or Update, we should clear host-side initialization object cache
+    m_combined_runtime_dirty = true;
+    resolveCombinedOwners(nOwners_old);
+    // After Update, clear host-side initialization object cache (including combined instance cache).
     ClearCache();
 }
 
@@ -3443,6 +3785,17 @@ void DEMSolver::PurgeFamily(unsigned int family_num) {}
 void DEMSolver::DoDynamics(double thisCallDuration) {
     if (!sys_initialized) {
         Initialize();
+    }
+    // IMPORTANT:
+    // We intentionally do NOT call resolveCombinedOwners() here.
+    // Combined runtime metadata is refreshed only during Initialize/Update.
+    // Because combined instances are cache-only and are destroyed after Initialize/Update, re-configuring combined
+    // groups during DoDynamics is unsupported by design.
+    if (m_combined_runtime_dirty) {
+        DEME_ERROR(
+            "Combined-owner runtime metadata is marked dirty before DoDynamics.\n"
+            "Combined templates/instances are cache-only setup data and must be resolved by Initialize or Update "
+            "before dynamics.\nCall Initialize or Update after combined-owner edits before advancing dynamics.");
     }
     const double sim_time_start = dT->getSimTime();
 

@@ -146,3 +146,152 @@ DEME_KERNEL void forceToAcc(deme::DEMSimParams* simParams, deme::DEMDataDT* gran
         }
     }
 }
+
+DEME_KERNEL void aggregateCombinedOwnersAcc(deme::DEMSimParams* simParams, deme::DEMDataDT* granData, size_t nOwners) {
+    // Device-side aggregation pass:
+    // each non-master member contributes its already-accumulated linear/angular accelerations to its master.
+    // Contributions are mass/MOI weighted so that master-side integration follows the equivalent-group properties.
+    deme::bodyID_t owner = blockIdx.x * blockDim.x + threadIdx.x;
+    if (owner >= nOwners || simParams->nCombinedOwners == 0 || granData->ownerCombinedMaster == nullptr) {
+        return;
+    }
+
+    const deme::bodyID_t master = granData->ownerCombinedMaster[owner];
+    // Master owners are intentionally skipped in this pass: only non-master members contribute to master.
+    if (master == deme::NULL_BODYID || master == owner || master >= simParams->nOwnerBodies) {
+        return;
+    }
+
+    float myMass;
+    float3 myMOI;
+    deme::bodyID_t myOwner = owner;
+    {
+        _massAcqStrat_;
+        _moiAcqStrat_;
+    }
+    const float memberMass = myMass;
+    const float3 memberMOI = myMOI;
+
+    float masterMass = 0.f;
+    float3 masterMOI = make_float3(0);
+    if (granData->ownerCombinedMasterMass != nullptr) {
+        masterMass = granData->ownerCombinedMasterMass[master];
+    }
+    if (granData->ownerCombinedMasterMOI != nullptr) {
+        masterMOI = granData->ownerCombinedMasterMOI[master];
+    }
+    if (masterMass <= DEME_TINY_FLOAT || !isfinite(masterMass)) {
+        // Defensive fallback: if equivalent master properties are unavailable, fall back to master's own properties.
+        myOwner = master;
+        {
+            _massAcqStrat_;
+            _moiAcqStrat_;
+        }
+        masterMass = myMass;
+        masterMOI = myMOI;
+    }
+
+    if (memberMass > DEME_TINY_FLOAT && masterMass > DEME_TINY_FLOAT) {
+        // Convert member acceleration contribution to master acceleration space.
+        const float ratio_m = memberMass / masterMass;
+        atomicAdd(granData->aX + master, granData->aX[owner] * ratio_m);
+        atomicAdd(granData->aY + master, granData->aY[owner] * ratio_m);
+        atomicAdd(granData->aZ + master, granData->aZ[owner] * ratio_m);
+    }
+
+    if (memberMOI.x > DEME_TINY_FLOAT && masterMOI.x > DEME_TINY_FLOAT) {
+        atomicAdd(granData->alphaX + master, granData->alphaX[owner] * (memberMOI.x / masterMOI.x));
+    }
+    if (memberMOI.y > DEME_TINY_FLOAT && masterMOI.y > DEME_TINY_FLOAT) {
+        atomicAdd(granData->alphaY + master, granData->alphaY[owner] * (memberMOI.y / masterMOI.y));
+    }
+    if (memberMOI.z > DEME_TINY_FLOAT && masterMOI.z > DEME_TINY_FLOAT) {
+        atomicAdd(granData->alphaZ + master, granData->alphaZ[owner] * (memberMOI.z / masterMOI.z));
+    }
+
+    granData->aX[owner] = 0.f;
+    granData->aY[owner] = 0.f;
+    granData->aZ[owner] = 0.f;
+    granData->alphaX[owner] = 0.f;
+    granData->alphaY[owner] = 0.f;
+    granData->alphaZ[owner] = 0.f;
+}
+
+DEME_KERNEL void reimposeCombinedOwners(deme::DEMSimParams* simParams, deme::DEMDataDT* granData, size_t nOwners) {
+    // Device-side rigid re-imposition pass:
+    // after integrating masters, overwrite each member's state from
+    //   master state + fixed member transform in master frame.
+    // This enforces rigid relative motion without host/device synchronization.
+    deme::bodyID_t owner = blockIdx.x * blockDim.x + threadIdx.x;
+    if (owner >= nOwners || simParams->nCombinedOwners == 0 || granData->ownerCombinedMaster == nullptr ||
+        granData->ownerCombinedRelPos == nullptr || granData->ownerCombinedRelOriQ == nullptr) {
+        return;
+    }
+
+    const deme::bodyID_t master = granData->ownerCombinedMaster[owner];
+    // Master owners are intentionally skipped in this pass: only non-master members are re-imposed.
+    if (master == deme::NULL_BODYID || master == owner || master >= simParams->nOwnerBodies) {
+        return;
+    }
+
+    double mX, mY, mZ;
+    voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
+        mX, mY, mZ, granData->voxelID[master], granData->locX[master], granData->locY[master], granData->locZ[master],
+        _nvXp2_, _nvYp2_, _voxelSize_, _l_);
+    mX += (double)simParams->LBFX;
+    mY += (double)simParams->LBFY;
+    mZ += (double)simParams->LBFZ;
+
+    float4 qMaster =
+        make_float4(granData->oriQx[master], granData->oriQy[master], granData->oriQz[master], granData->oriQw[master]);
+    const float3 relLocal = granData->ownerCombinedRelPos[owner];
+    float3 relWorld = relLocal;
+    applyOriQToVector3(relWorld, qMaster);
+
+    double X = mX + (double)relWorld.x;
+    double Y = mY + (double)relWorld.y;
+    double Z = mZ + (double)relWorld.z;
+    X -= (double)simParams->LBFX;
+    Y -= (double)simParams->LBFY;
+    Z -= (double)simParams->LBFZ;
+    positionToVoxelID<deme::voxelID_t, deme::subVoxelPos_t, double>(granData->voxelID[owner], granData->locX[owner],
+                                                                    granData->locY[owner], granData->locZ[owner], X, Y,
+                                                                    Z, _nvXp2_, _nvYp2_, _voxelSize_, _l_);
+
+    float4 qRel = granData->ownerCombinedRelOriQ[owner];
+    float qW, qX, qY, qZ;
+    HamiltonProduct(qW, qX, qY, qZ, qMaster.w, qMaster.x, qMaster.y, qMaster.z, qRel.w, qRel.x, qRel.y, qRel.z);
+    const float qn = sqrtf(qW * qW + qX * qX + qY * qY + qZ * qZ);
+    if (qn > DEME_TINY_FLOAT && isfinite(qn)) {
+        const float inv_qn = 1.f / qn;
+        qW *= inv_qn;
+        qX *= inv_qn;
+        qY *= inv_qn;
+        qZ *= inv_qn;
+    } else {
+        qW = 1.f;
+        qX = qY = qZ = 0.f;
+    }
+    granData->oriQw[owner] = qW;
+    granData->oriQx[owner] = qX;
+    granData->oriQy[owner] = qY;
+    granData->oriQz[owner] = qZ;
+
+    float3 wMasterLocal = make_float3(granData->omgBarX[master], granData->omgBarY[master], granData->omgBarZ[master]);
+    float3 wMasterWorld = wMasterLocal;
+    applyOriQToVector3(wMasterWorld, qMaster);
+
+    float3 vMaster = make_float3(granData->vX[master], granData->vY[master], granData->vZ[master]);
+    // Rigid-body kinematics for member linear velocity: v = v_master + omega_master x r.
+    float3 vMember = vMaster + cross(wMasterWorld, relWorld);
+    granData->vX[owner] = vMember.x;
+    granData->vY[owner] = vMember.y;
+    granData->vZ[owner] = vMember.z;
+
+    float4 qMemberConj = make_float4(-qX, -qY, -qZ, qW);
+    float3 wMemberLocal = wMasterWorld;
+    applyOriQToVector3(wMemberLocal, qMemberConj);
+    granData->omgBarX[owner] = wMemberLocal.x;
+    granData->omgBarY[owner] = wMemberLocal.y;
+    granData->omgBarZ[owner] = wMemberLocal.z;
+}

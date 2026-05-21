@@ -497,6 +497,45 @@ PYBIND11_MODULE(DEME, obj) {
                                    &deme::DEMSolver::LoadSphereType))
         .def("LoadSphereType", py::overload_cast<float, float, float, const std::shared_ptr<deme::DEMMaterial>&>(
                                    &deme::DEMSolver::LoadSphereType))
+        .def("LoadCombinedClumpType",
+             static_cast<std::shared_ptr<deme::DEMCombinedTemplate> (deme::DEMSolver::*)(
+                 const std::vector<std::shared_ptr<deme::DEMClumpTemplate>>&,
+                 const std::vector<float3>&,
+                 const std::vector<float4>&,
+                 size_t)>(&deme::DEMSolver::LoadCombinedClumpType),
+             "Load a rigid combined-clump template with fixed member-relative transforms.",
+             py::arg("component_templates"), py::arg("component_rel_pos"),
+             py::arg("component_rel_oriQ") = std::vector<float4>(), py::arg("master_component") = 0)
+        .def("LoadCombinedMeshType",
+             static_cast<std::shared_ptr<deme::DEMCombinedTemplate> (deme::DEMSolver::*)(
+                 const std::vector<std::shared_ptr<deme::DEMMesh>>&,
+                 const std::vector<float3>&,
+                 const std::vector<float4>&,
+                 size_t)>(&deme::DEMSolver::LoadCombinedMeshType),
+             "Load a rigid combined-mesh template with fixed member-relative transforms.",
+             py::arg("component_templates"), py::arg("component_rel_pos"),
+             py::arg("component_rel_oriQ") = std::vector<float4>(), py::arg("master_component") = 0)
+        .def("AddCombinedFromTemplate",
+             static_cast<std::shared_ptr<deme::DEMCombinedInstance> (deme::DEMSolver::*)(
+                  const std::shared_ptr<deme::DEMCombinedTemplate>&, const float3&, const float4&)>(
+                  &deme::DEMSolver::AddCombinedFromTemplate),
+             "Instantiate a combined template at a user-specified global pose.", py::arg("combined_template"),
+             py::arg("init_pos") = deme::make_float3(0), py::arg("init_oriQ") = deme::make_float4(0, 0, 0, 1))
+        .def("GetNumCombinedInstances", &deme::DEMSolver::GetNumCombinedInstances,
+             "Return the number of combined instances currently cached.")
+        .def("GetCombinedInstanceInfo",
+             [](deme::DEMSolver& self, size_t combined_instance_id) {
+                 deme::bodyID_t master_owner_id = deme::NULL_BODYID;
+                 std::vector<deme::bodyID_t> member_owner_ids;
+                 std::vector<float3> member_rel_pos;
+                 std::vector<float4> member_rel_oriQ;
+                 const bool ok = self.GetCombinedInstanceInfo(combined_instance_id, master_owner_id, member_owner_ids,
+                                                              member_rel_pos, member_rel_oriQ);
+                 return py::make_tuple(ok, master_owner_id, member_owner_ids, member_rel_pos, member_rel_oriQ);
+             },
+             "Query combined-instance metadata; returns (ok, master_owner_id, member_owner_ids, member_rel_pos, "
+             "member_rel_oriQ).",
+             py::arg("combined_instance_id"))
         .def("EnsureKernelErrMsgLineNum", &deme::DEMSolver::EnsureKernelErrMsgLineNum,
              "If true, each jitification string substitution will do a one-liner to one-liner replacement, so that if "
              "the kernel compilation fails, the error meessage line number will reflex the actual spot where that "
@@ -703,6 +742,9 @@ PYBIND11_MODULE(DEME, obj) {
              "Enable or disable owner wildcard output.", py::arg("enable") = true)
         .def("EnableContactWildcardOutput", &deme::DEMSolver::EnableContactWildcardOutput,
              "Enable or disable contact wildcard output.", py::arg("enable") = true)
+        .def("SetAllowIntraCombinedOwnerContacts", &deme::DEMSolver::SetAllowIntraCombinedOwnerContacts,
+             "Allow or suppress contacts among owners belonging to the same combined owner group.",
+             py::arg("allow") = true)
         .def("SetVerbosity", static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetVerbosity),
              "Set the verbosity level of the solver. Select from 'QUIET', 'ERROR', 'WARNING', 'INFO', 'METRIC' or "
              "'DEBUG'. Recommend 'INFO'.")
@@ -732,9 +774,28 @@ PYBIND11_MODULE(DEME, obj) {
              "Set the Box Domain Dimension", py::arg("x"), py::arg("y"), py::arg("z"), py::arg("dir_exact") = "none")
         .def("InstructBoxDomainDimension",
              static_cast<void (deme::DEMSolver::*)(const std::pair<float, float>&, const std::pair<float, float>&,
-                                                   const std::pair<float, float>&, const std::string& dir_exact)>(
-                 &deme::DEMSolver::InstructBoxDomainDimension),
+                                                    const std::pair<float, float>&, const std::string& dir_exact)>(
+                  &deme::DEMSolver::InstructBoxDomainDimension),
              "Set the span of the Box Domain", py::arg("x"), py::arg("y"), py::arg("z"), py::arg("dir_exact") = "none")
+        .def("LoadMeshType",
+             static_cast<std::shared_ptr<deme::DEMMesh> (deme::DEMSolver::*)(
+                 const std::string&, const std::shared_ptr<deme::DEMMaterial>&, bool, bool)>(&deme::DEMSolver::LoadMeshType),
+             "Load a mesh template into cache so it can be instantiated repeatedly.",
+             py::arg("filename"), py::arg("mat"), py::arg("load_normals") = true, py::arg("load_uv") = false)
+        .def("LoadMeshType",
+             static_cast<std::shared_ptr<deme::DEMMesh> (deme::DEMSolver::*)(const std::string&, bool, bool)>(
+                 &deme::DEMSolver::LoadMeshType),
+             "Load a mesh template into cache (without explicitly assigning material here).",
+             py::arg("filename"), py::arg("load_normals") = true, py::arg("load_uv") = false)
+        .def("LoadMeshType",
+             static_cast<std::shared_ptr<deme::DEMMesh> (deme::DEMSolver::*)(deme::DEMMesh&)>(
+                 &deme::DEMSolver::LoadMeshType),
+             "Load a user-constructed mesh object as a reusable template.", py::arg("mesh"))
+        .def("AddMeshFromTemplate",
+             static_cast<std::shared_ptr<deme::DEMMesh> (deme::DEMSolver::*)(
+                 const std::shared_ptr<deme::DEMMesh>&, const float3&)>(&deme::DEMSolver::AddMeshFromTemplate),
+             "Instantiate a mesh from a cached template at the requested initial position.",
+             py::arg("mesh_template"), py::arg("init_pos") = deme::make_float3(0))
         .def("InstructBoxDomainBoundingBC", &deme::DEMSolver::InstructBoxDomainBoundingBC,
              "Instruct if and how we should add boundaries to the simulation world upon initialization. Choose between "
              "`none', `all' (add 6 boundary planes) and `top_open' (add 5 boundary planes and leave the z-directon top "
@@ -748,8 +809,13 @@ PYBIND11_MODULE(DEME, obj) {
                  &deme::DEMSolver::AddBCPlane),
              "Add an analytical plane to the simulation.")
         .def("Track", (&deme::DEMSolver::PythonTrack),
-             "Create a DEMTracker to allow direct control/modification/query to this external object/batch of "
-             "clumps/triangle mesh object.")
+              "Create a DEMTracker to allow direct control/modification/query to this external object/batch of "
+              "clumps/triangle mesh object.")
+        .def("Track",
+             static_cast<std::vector<std::shared_ptr<deme::DEMTracker>> (deme::DEMSolver::*)(
+                 const std::shared_ptr<deme::DEMCombinedInstance>&)>(&deme::DEMSolver::Track),
+             "Create one tracker per member owner instantiated by a combined instance.",
+             py::arg("combined_inst"))
         .def("AddWavefrontMeshObject",
              static_cast<std::shared_ptr<deme::DEMMeshConnected> (deme::DEMSolver::*)(
                  const std::string&, const std::shared_ptr<deme::DEMMaterial>&, bool, bool)>(
@@ -1252,6 +1318,12 @@ PYBIND11_MODULE(DEME, obj) {
                  &deme::DEMClumpTemplate::Move))
         .def("Scale", &deme::DEMClumpTemplate::Scale)
         .def("AssignName", &deme::DEMClumpTemplate::AssignName);
+
+    py::class_<deme::DEMCombinedTemplate, std::shared_ptr<deme::DEMCombinedTemplate>>(obj, "DEMCombinedTemplate")
+        .def(py::init<>());
+
+    py::class_<deme::DEMCombinedInstance, std::shared_ptr<deme::DEMCombinedInstance>>(obj, "DEMCombinedInstance")
+        .def(py::init<>());
 
     py::class_<deme::DEMClumpBatch, deme::DEMInitializer, std::shared_ptr<deme::DEMClumpBatch>>(obj, "DEMClumpBatch")
         .def(py::init<size_t&>())
