@@ -1329,7 +1329,17 @@ PYBIND11_MODULE(DEME, obj) {
         .def(py::init<>());
 
     py::class_<deme::DEMCombinedInstances, std::shared_ptr<deme::DEMCombinedInstances>>(obj, "DEMCombinedInstances")
-        .def(py::init<>());
+        .def(py::init<>())
+        .def("GetNumOwners", &deme::DEMCombinedInstances::GetNumOwners,
+             "Get total number of member owners in this combined batch.")
+        .def("AddOwnerWildcard",
+             static_cast<void (deme::DEMCombinedInstances::*)(const std::string&, const std::vector<float>&)>(
+                 &deme::DEMCombinedInstances::AddOwnerWildcard),
+             "Add an owner wildcard to all member owners with per-owner values.", py::arg("name"), py::arg("vals"))
+        .def("AddOwnerWildcard",
+             static_cast<void (deme::DEMCombinedInstances::*)(const std::string&, float)>(
+                 &deme::DEMCombinedInstances::AddOwnerWildcard),
+             "Add an owner wildcard to all member owners with a uniform value.", py::arg("name"), py::arg("val"));
 
     py::class_<deme::DEMClumpBatch, deme::DEMInitializer, std::shared_ptr<deme::DEMClumpBatch>>(obj, "DEMClumpBatch")
         .def(py::init<size_t&>())

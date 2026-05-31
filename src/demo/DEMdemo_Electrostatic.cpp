@@ -11,6 +11,13 @@
 // Then a custom force model is used to derive the electrostatic force in
 // addition to contact forces.
 //
+// This demo uses the "combined owner" approach: each particle is represented by
+// 6 spheres (from spiky_sphere.csv), and each sphere is its own owner in a
+// combined group. This gives each sphere its own electric charge wildcard (Q),
+// enabling fine-grained charge distribution across the particle's shape. This
+// is in contrast to the old approach where 6 component spheres shared a single
+// owner (and thus a single charge value).
+//
 // NOTE: If you want to create your own force model, it's probably a good idea
 // to understand the default model in the file FullHertzianForceModel.cu
 // (Hertzian--Mindlin), how the normal and tangential forces are calculated,
@@ -82,19 +89,35 @@ int main() {
     walls->AddPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_terrain);
     walls->AddPlane(make_float3(0, 0, world_size / 2. - world_size / 20.), make_float3(0, 0, -1), mat_type_terrain);
 
-    // Define the terrain particle templates
-    // Calculate its mass and MOI
+    // Define the terrain particle templates using combined owners.
+    // Each sphere from the spiky_sphere.csv file becomes its own owner in a combined group.
+    // This way, each sphere has its own electric charge wildcard, giving fine charge distribution.
     float terrain_density = 2.6e3;
-    double clump_vol = 4. / 3. * math_PI;
-    float mass = terrain_density * clump_vol;
-    float3 MOI = make_float3(2. / 5.) * mass;
-    // Then load it to system
-    std::shared_ptr<DEMClumpTemplate> my_template =
-        DEMSim.LoadClumpType(mass, MOI, GetDEMEDataFile("clumps/spiky_sphere.csv"), mat_type_terrain);
-    my_template->SetVolume(clump_vol);
-    // Decide the scalings of the templates we just created (so that they are... like particles, not rocks)
     double scale = 0.01;
-    my_template->Scale(scale);
+
+    // The spiky_sphere.csv defines 6 component spheres. We create individual sphere templates for each,
+    // then combine them into a single combined-owner template. Each sphere is an independent owner with
+    // its own charge Q, rather than being mere shape components of a single owner.
+    // Sphere data from spiky_sphere.csv: x, y, z, r
+    std::vector<float3> sphere_positions = {make_float3(0, 0, 0), make_float3(0, -0.5, 0.5),
+                                            make_float3(0.65, 0.2, 0.55), make_float3(-0.45, 0.25, 0.65),
+                                            make_float3(0, 0.7, 0.2), make_float3(0.5, 0.2, -0.5)};
+    std::vector<float> sphere_radii = {0.9f, 0.5f, 0.25f, 0.45f, 0.35f, 0.35f};
+
+    // Scale relative positions and radii
+    std::vector<float3> scaled_positions(6);
+    std::vector<std::shared_ptr<DEMClumpTemplate>> component_templates(6);
+    for (int i = 0; i < 6; i++) {
+        scaled_positions[i] = sphere_positions[i] * (float)scale;
+        float r = sphere_radii[i] * (float)scale;
+        float vol = 4. / 3. * math_PI * r * r * r;
+        float m = terrain_density * vol;
+        float3 moi = make_float3(2. / 5. * m * r * r);
+        component_templates[i] = DEMSim.LoadSphereType(m, r, mat_type_terrain);
+    }
+
+    // Create combined template: 6 spheres as 6 owners combined rigidly
+    auto combined_type = DEMSim.LoadCombinedClumpType(component_templates, scaled_positions, {}, 0);
 
     // Sampler to sample
     GridSampler sampler(scale * 2.4);
@@ -102,10 +125,11 @@ int main() {
     float3 fill_center = make_float3(0, 0, bottom + fill_height / 2);
     const float fill_radius = soil_bin_diameter / 2. - scale * 3.;
     auto input_xyz = sampler.SampleCylinderZ(fill_center, fill_radius, fill_height / 2 - scale * 2.);
-    auto particles = DEMSim.AddClumps(my_template, input_xyz);
-    std::cout << "Total num of particles: " << particles->GetNumClumps() << std::endl;
-    std::cout << "Total num of spheres: " << particles->GetNumSpheres() << std::endl;
-    // Add electric charge Q to each owner.
+    auto particles = DEMSim.AddCombinedFromTemplate(combined_type, input_xyz);
+    std::cout << "Total num of combined particles: " << input_xyz.size() << std::endl;
+    std::cout << "Total num of member owners: " << particles->GetNumOwners() << std::endl;
+    // Add electric charge Q to each member owner. With combined owners, each of the 6 spheres
+    // per particle gets its own charge, enabling fine-grained electrostatic distribution.
     particles->AddOwnerWildcard("Q", init_charge);
 
     // Load in the cone used for this penetration test

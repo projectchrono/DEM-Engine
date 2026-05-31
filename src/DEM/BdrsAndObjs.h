@@ -859,6 +859,38 @@ class DEMCombinedInstances {
     bool owners_resolved = false;
     // Number of instantiations in this batch.
     size_t n_instances = 0;
+
+    /// Get total number of member owners in this combined batch (n_instances * members_per_instance).
+    size_t GetNumOwners() const { return member_objs.size(); }
+
+    /// Add an owner wildcard to all member owners in this combined batch with the same value.
+    /// Each member owner gets its own wildcard entry, enabling fine per-owner control.
+    void AddOwnerWildcard(const std::string& name, float val) {
+        for (auto& obj : member_objs) {
+            auto batch = std::dynamic_pointer_cast<DEMClumpBatch>(obj);
+            if (batch) {
+                batch->AddOwnerWildcard(name, val);
+            }
+        }
+    }
+
+    /// Add an owner wildcard to all member owners in this combined batch with per-owner values.
+    /// The input array must have the same size as GetNumOwners() (n_instances * members_per_instance).
+    void AddOwnerWildcard(const std::string& name, const std::vector<float>& vals) {
+        if (vals.size() != member_objs.size()) {
+            DEME_ERROR(
+                "Input owner wildcard array in a DEMCombinedInstances::AddOwnerWildcard call must have the same "
+                "size as the number of member owners.\nHere, the input array has length %zu but this combined "
+                "batch has %zu member owners.",
+                vals.size(), member_objs.size());
+        }
+        for (size_t i = 0; i < member_objs.size(); i++) {
+            auto batch = std::dynamic_pointer_cast<DEMClumpBatch>(member_objs[i]);
+            if (batch) {
+                batch->AddOwnerWildcard(name, vals[i]);
+            }
+        }
+    }
 };
 
 /*
