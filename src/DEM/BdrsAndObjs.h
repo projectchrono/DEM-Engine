@@ -868,9 +868,12 @@ class DEMCombinedInstances {
     void AddOwnerWildcard(const std::string& name, float val) {
         for (auto& obj : member_objs) {
             auto batch = std::dynamic_pointer_cast<DEMClumpBatch>(obj);
-            if (batch) {
-                batch->AddOwnerWildcard(name, val);
+            if (!batch) {
+                DEME_ERROR(
+                    "DEMCombinedInstances::AddOwnerWildcard encountered a member that is not a clump batch.\n"
+                    "Owner wildcards are only supported for combined clump owners.");
             }
+            batch->AddOwnerWildcard(name, val);
         }
     }
 
@@ -886,9 +889,12 @@ class DEMCombinedInstances {
         }
         for (size_t i = 0; i < member_objs.size(); i++) {
             auto batch = std::dynamic_pointer_cast<DEMClumpBatch>(member_objs[i]);
-            if (batch) {
-                batch->AddOwnerWildcard(name, vals[i]);
+            if (!batch) {
+                DEME_ERROR(
+                    "DEMCombinedInstances::AddOwnerWildcard encountered a member that is not a clump batch.\n"
+                    "Owner wildcards are only supported for combined clump owners.");
             }
+            batch->AddOwnerWildcard(name, vals[i]);
         }
     }
 };
