@@ -877,16 +877,24 @@ class DEMSolver {
         const std::vector<float4>& component_rel_oriQ = std::vector<float4>(),
         size_t master_component = 0);
     /// @brief Instantiate a combined template at a user-specified global pose.
-    /// @details Creates one owner per combined member and records combined-group runtime metadata
+    /// @details Creates n_instances * n_members owners and records combined-group runtime metadata
     /// used for combined-owner contact/kinematics policies.
     /// @param combined_template A handle returned by LoadCombinedClumpType or LoadCombinedMeshType.
-    /// @param init_pos Global position of the combined master frame.
-    /// @param init_oriQ Global orientation of the combined master frame.
-    /// @return A combined-instance handle that references all instantiated member owners.
-    std::shared_ptr<DEMCombinedInstance> AddCombinedFromTemplate(
+    /// @param init_pos A vector of global positions for each instantiation in the batch.
+    /// @param init_oriQ A vector of global orientations for each instantiation in the batch.
+    /// @return A combined-instances handle that references all instantiated member owners in the batch.
+    std::shared_ptr<DEMCombinedInstances> AddCombinedFromTemplate(
         const std::shared_ptr<DEMCombinedTemplate>& combined_template,
-        const float3& init_pos = make_float3(0),
-        const float4& init_oriQ = make_float4(0, 0, 0, 1));
+        const std::vector<float3>& init_pos,
+        const std::vector<float4>& init_oriQ = std::vector<float4>());
+    /// @brief Single-pose convenience overload of AddCombinedFromTemplate.
+    std::shared_ptr<DEMCombinedInstances> AddCombinedFromTemplate(
+        const std::shared_ptr<DEMCombinedTemplate>& combined_template,
+        const float3& init_pos,
+        const float4& init_oriQ = make_float4(0, 0, 0, 1)) {
+        return AddCombinedFromTemplate(combined_template, std::vector<float3>(1, init_pos),
+                                       std::vector<float4>(1, init_oriQ));
+    }
     /// @brief Allow/disallow contact generation among owners that belong to the same combined owner group.
     /// @details Default is false (contacts within one combined group are suppressed).
     void SetAllowIntraCombinedOwnerContacts(bool allow = true);
@@ -934,22 +942,21 @@ class DEMSolver {
     std::shared_ptr<DEMTracker> PythonTrack(const std::shared_ptr<DEMInitializer>& obj) {
         return Track<DEMInitializer>(obj);
     }
-    /// @brief Create one tracker per member owner instantiated by a combined instance.
-    /// @details Returned trackers preserve member order from the combined template. Null member handles
-    /// (if any) are skipped.
-    std::vector<std::shared_ptr<DEMTracker>> Track(const std::shared_ptr<DEMCombinedInstance>& combined_inst) {
-        std::vector<std::shared_ptr<DEMTracker>> trackers;
-        if (!combined_inst) {
-            return trackers;
+    /// @brief Create a single tracker that tracks all member owners in a combined-instances batch.
+    /// @details The tracker references all owners instantiated by the batch. Since AddCombinedFromTemplate
+    /// creates owners in consecutive memory, a single tracker with an offset range covers them all.
+    /// Use the offset parameter in tracker query methods to access individual owners.
+    std::shared_ptr<DEMTracker> Track(const std::shared_ptr<DEMCombinedInstances>& combined_inst) {
+        if (!combined_inst || combined_inst->member_objs.empty()) {
+            DEME_ERROR("Track received a null or empty combined-instances handle.");
         }
-        trackers.reserve(combined_inst->member_objs.size());
-        for (const auto& member_obj : combined_inst->member_objs) {
-            if (!member_obj) {
-                continue;
-            }
-            trackers.push_back(Track<DEMInitializer>(member_obj));
+        // All member_objs were added consecutively. The first member_obj's load_order and obj_type
+        // define the tracker base; the tracker spans all owners across all member_objs.
+        const auto& first_obj = combined_inst->member_objs.front();
+        if (!first_obj) {
+            DEME_ERROR("Track encountered a null member object in combined-instances handle.");
         }
-        return trackers;
+        return Track<DEMInitializer>(first_obj);
     }
 
     /// Create a inspector object that can help query some statistical info of the clumps in the simulation
@@ -2041,7 +2048,7 @@ class DEMSolver {
     // Shared pointers to meshed objects cached at the API system
     std::vector<std::shared_ptr<DEMMesh>> cached_mesh_objs;
     // Combined template instances.
-    std::vector<std::shared_ptr<DEMCombinedInstance>> cached_combined_instances;
+    std::vector<std::shared_ptr<DEMCombinedInstances>> cached_combined_instances;
     bool m_combined_runtime_dirty = true;
     bool m_allow_intra_combined_owner_contacts = false;
 
