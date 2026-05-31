@@ -1379,6 +1379,13 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
             default:
                 DEME_ERROR(std::string("A DEM tracked object has an unknown type."));
         }
+        // Apply overrides for CombinedInstances tracking where the tracker must span all member owners.
+        if (tracked_obj->nSpanOwnersOverride > 0) {
+            tracked_obj->nSpanOwners = tracked_obj->nSpanOwnersOverride;
+        }
+        if (tracked_obj->nGeosOverride > 0) {
+            tracked_obj->nGeos = tracked_obj->nGeosOverride;
+        }
     }
     nTrackersProcessed = tracked_objs.size();
     DEME_DEBUG_PRINTF("Total number of trackers on the record: %u", nTrackersProcessed);

@@ -956,7 +956,32 @@ class DEMSolver {
         if (!first_obj) {
             DEME_ERROR("Track encountered a null member object in combined-instances handle.");
         }
-        return Track<DEMInitializer>(first_obj);
+        auto tracker = Track<DEMInitializer>(first_obj);
+
+        // Override nSpanOwners to cover all owners in this CombinedInstances, not just the first member's batch.
+        // member_objs.size() == n_instances * n_members, each contributing one owner.
+        tracker->obj->nSpanOwnersOverride = combined_inst->member_objs.size();
+
+        // Compute total geometric entities across all members for nGeos override.
+        size_t total_geos = 0;
+        const auto& templ = combined_inst->type;
+        if (templ->member_type == OWNER_TYPE::CLUMP) {
+            for (size_t i = 0; i < templ->clump_templates.size(); i++) {
+                total_geos += templ->clump_templates[i]->nComp;
+            }
+            // Multiply by number of instances
+            total_geos *= combined_inst->n_instances;
+        } else if (templ->member_type == OWNER_TYPE::MESH) {
+            for (size_t i = 0; i < templ->mesh_templates.size(); i++) {
+                total_geos += templ->mesh_templates[i]->GetNumTriangles();
+            }
+            total_geos *= combined_inst->n_instances;
+        }
+        if (total_geos > 0) {
+            tracker->obj->nGeosOverride = total_geos;
+        }
+
+        return tracker;
     }
 
     /// Create a inspector object that can help query some statistical info of the clumps in the simulation
