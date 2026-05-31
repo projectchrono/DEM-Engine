@@ -888,6 +888,7 @@ class DEMClumpTemplate {
 // small, and is mainly there for the purpose of pyDEME entry point.
 class DEMInitializer {
   public:
+    virtual ~DEMInitializer() = default;
     // The type of a clump batch is CLUMP (it is used by tracker objs)
     OWNER_TYPE obj_type;
     // Its offset when this obj got loaded into the API-level user raw-input array
