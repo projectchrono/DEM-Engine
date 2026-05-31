@@ -2616,13 +2616,28 @@ std::shared_ptr<DEMCombinedTemplate> DEMSolver::LoadCombinedMeshType(
     return m_combined_templates.back();
 }
 
-std::shared_ptr<DEMCombinedInstance> DEMSolver::AddCombinedFromTemplate(
+std::shared_ptr<DEMCombinedInstances> DEMSolver::AddCombinedFromTemplate(
     const std::shared_ptr<DEMCombinedTemplate>& combined_template,
-    const float3& init_pos,
-    const float4& init_oriQ) {
+    const std::vector<float3>& init_pos,
+    const std::vector<float4>& init_oriQ) {
     assertSysNotInit("AddCombinedFromTemplate");
     if (!combined_template) {
         DEME_ERROR("AddCombinedFromTemplate received a null combined template handle.");
+    }
+    if (init_pos.empty()) {
+        DEME_ERROR("AddCombinedFromTemplate received an empty position vector.");
+    }
+
+    const size_t n_instances = init_pos.size();
+    // If orientations not supplied, default to identity quaternion for each instance.
+    std::vector<float4> oriQ_vec = init_oriQ;
+    if (oriQ_vec.empty()) {
+        oriQ_vec.assign(n_instances, make_float4(0, 0, 0, 1));
+    }
+    if (oriQ_vec.size() != n_instances) {
+        DEME_ERROR(
+            "AddCombinedFromTemplate: init_pos and init_oriQ must have the same length (got %zu and %zu).",
+            n_instances, oriQ_vec.size());
     }
 
     const size_t n_members = (combined_template->member_type == OWNER_TYPE::CLUMP)
@@ -2639,43 +2654,47 @@ std::shared_ptr<DEMCombinedInstance> DEMSolver::AddCombinedFromTemplate(
                    combined_template->master_member, n_members);
     }
 
-    auto inst = std::make_shared<DEMCombinedInstance>();
+    auto inst = std::make_shared<DEMCombinedInstances>();
     inst->type = combined_template;
-    inst->load_order = cached_combined_instances.size();
-    // Normalize caller pose once; each component pose is then built by master-frame composition.
-    const float4 init_q = quatNormalizeSafe(init_oriQ);
-    inst->member_mass.resize(n_members, 0.f);
-    inst->member_moi.resize(n_members, make_float3(0));
-    inst->master_equiv_mass = 0.f;
-    inst->master_equiv_moi = make_float3(0);
+    inst->n_instances = n_instances;
+    const size_t total_members = n_instances * n_members;
+    inst->member_mass.resize(total_members, 0.f);
+    inst->member_moi.resize(total_members, make_float3(0));
+    inst->master_equiv_mass.resize(n_instances, 0.f);
+    inst->master_equiv_moi.resize(n_instances, make_float3(0));
+    inst->master_owner_ids.resize(n_instances, NULL_BODYID);
+    inst->member_objs.reserve(total_members);
 
-    for (size_t i = 0; i < n_members; i++) {
-        float3 world_pos = combined_template->rel_pos[i];
-        applyFrameTransformLocalToGlobal(world_pos, init_pos, init_q);
-        const float4 world_q = quatNormalizeSafe(hostHamiltonProduct(init_q, combined_template->rel_oriQ[i]));
+    for (size_t k = 0; k < n_instances; k++) {
+        const float4 init_q = quatNormalizeSafe(oriQ_vec[k]);
 
-        if (combined_template->member_type == OWNER_TYPE::CLUMP) {
-            auto clump_type = combined_template->clump_templates[i];
-            auto batch = AddClumps(clump_type, world_pos);
-            batch->SetOriQ(world_q);
-            inst->member_objs.push_back(batch);
-            // v1 policy: preserve component mass/MOI exactly as loaded.
-            inst->member_mass[i] = clump_type->GetMass();
-            inst->member_moi[i] = clump_type->GetMOI();
-        } else if (combined_template->member_type == OWNER_TYPE::MESH) {
-            DEMMesh mesh = *(combined_template->mesh_templates[i]);
-            mesh.SetInitPos(world_pos);
-            mesh.SetInitQuat(world_q);
-            auto mesh_inst = AddMesh(mesh);
-            inst->member_objs.push_back(mesh_inst);
-            inst->member_mass[i] = mesh.mass;
-            inst->member_moi[i] = mesh.MOI;
-        } else {
-            DEME_ERROR("AddCombinedFromTemplate only supports same-type CLUMP or MESH templates.");
+        for (size_t i = 0; i < n_members; i++) {
+            const size_t flat_idx = k * n_members + i;
+            float3 world_pos = combined_template->rel_pos[i];
+            applyFrameTransformLocalToGlobal(world_pos, init_pos[k], init_q);
+            const float4 world_q = quatNormalizeSafe(hostHamiltonProduct(init_q, combined_template->rel_oriQ[i]));
+
+            if (combined_template->member_type == OWNER_TYPE::CLUMP) {
+                auto clump_type = combined_template->clump_templates[i];
+                auto batch = AddClumps(clump_type, world_pos);
+                batch->SetOriQ(world_q);
+                inst->member_objs.push_back(batch);
+                inst->member_mass[flat_idx] = clump_type->GetMass();
+                inst->member_moi[flat_idx] = clump_type->GetMOI();
+            } else if (combined_template->member_type == OWNER_TYPE::MESH) {
+                DEMMesh mesh = *(combined_template->mesh_templates[i]);
+                mesh.SetInitPos(world_pos);
+                mesh.SetInitQuat(world_q);
+                auto mesh_inst = AddMesh(mesh);
+                inst->member_objs.push_back(mesh_inst);
+                inst->member_mass[flat_idx] = mesh.mass;
+                inst->member_moi[flat_idx] = mesh.MOI;
+            } else {
+                DEME_ERROR("AddCombinedFromTemplate only supports same-type CLUMP or MESH templates.");
+            }
+            inst->master_equiv_mass[k] += inst->member_mass[flat_idx];
+            inst->master_equiv_moi[k] += inst->member_moi[flat_idx];
         }
-        // v1 policy: equivalent master properties are precomputed at instantiation and cached.
-        inst->master_equiv_mass += inst->member_mass[i];
-        inst->master_equiv_moi += inst->member_moi[i];
     }
 
     cached_combined_instances.push_back(inst);
@@ -2704,11 +2723,19 @@ bool DEMSolver::GetCombinedInstanceInfo(size_t combined_instance_id,
     // Ensure owner IDs are resolved (and runtime mapping refreshed if needed) before returning metadata.
     resolveCombinedOwners();
     const auto& inst = cached_combined_instances[combined_instance_id];
-    if (!inst->owners_resolved) {
+    if (!inst->owners_resolved || inst->n_instances == 0) {
         return false;
     }
-    master_owner_id = inst->master_owner_id;
-    member_owner_ids = inst->member_owner_ids;
+    // Return info for the first instantiation in this batch entry.
+    master_owner_id = inst->master_owner_ids[0];
+    const size_t n_members_per_inst = (inst->type->member_type == OWNER_TYPE::CLUMP)
+                                          ? inst->type->clump_templates.size()
+                                          : inst->type->mesh_templates.size();
+    if (n_members_per_inst > inst->member_owner_ids.size()) {
+        return false;
+    }
+    member_owner_ids.assign(inst->member_owner_ids.begin(),
+                            inst->member_owner_ids.begin() + static_cast<ptrdiff_t>(n_members_per_inst));
     member_rel_pos = inst->type->rel_pos;
     member_rel_oriQ = inst->type->rel_oriQ;
     return true;
@@ -3558,10 +3585,13 @@ void DEMSolver::resolveCombinedOwners(size_t nExistOwners) {
         if (!inst || inst->owners_resolved) {
             continue;
         }
-        const size_t n_members = inst->member_objs.size();
-        inst->member_owner_ids.resize(n_members, NULL_BODYID);
+        const size_t total_members = inst->member_objs.size();
+        const size_t n_members_per_inst = (inst->type->member_type == OWNER_TYPE::CLUMP)
+                                              ? inst->type->clump_templates.size()
+                                              : inst->type->mesh_templates.size();
+        inst->member_owner_ids.resize(total_members, NULL_BODYID);
         bool ok = true;
-        for (size_t i = 0; i < n_members; i++) {
+        for (size_t i = 0; i < total_members; i++) {
             const auto& member_obj = inst->member_objs[i];
             if (!member_obj) {
                 ok = false;
@@ -3588,11 +3618,13 @@ void DEMSolver::resolveCombinedOwners(size_t nExistOwners) {
                 break;
             }
         }
-        if (!ok || !inst->type || inst->type->master_member >= n_members) {
+        if (!ok || !inst->type || inst->type->master_member >= n_members_per_inst) {
             continue;
         }
-        // Master is one of the existing component owners in v1 (no geometry-level conversion, no extra owner object).
-        inst->master_owner_id = inst->member_owner_ids[inst->type->master_member];
+        // Resolve master owner IDs for each instantiation in the batch.
+        for (size_t k = 0; k < inst->n_instances; k++) {
+            inst->master_owner_ids[k] = inst->member_owner_ids[k * n_members_per_inst + inst->type->master_member];
+        }
         inst->owners_resolved = true;
         m_combined_runtime_dirty = true;
     }
@@ -3620,34 +3652,40 @@ void DEMSolver::refreshCombinedRuntimeResources() {
         if (!inst || !inst->owners_resolved || !inst->type) {
             continue;
         }
-        const size_t n_members = inst->member_owner_ids.size();
-        if (n_members == 0 || inst->type->master_member >= n_members || inst->master_owner_id == NULL_BODYID) {
-            continue;
-        }
-        const bodyID_t master = inst->master_owner_id;
-        if (master >= nOwnerBodies) {
+        const size_t total_members = inst->member_owner_ids.size();
+        const size_t n_members_per_inst = (inst->type->member_type == OWNER_TYPE::CLUMP)
+                                              ? inst->type->clump_templates.size()
+                                              : inst->type->mesh_templates.size();
+        if (total_members == 0 || n_members_per_inst == 0 || inst->type->master_member >= n_members_per_inst) {
             continue;
         }
 
-        // Cache equivalent group mass/MOI on the master owner slot for device-side aggregation.
-        // Fallback mass is only defensive (invalid metadata); normal path uses precomputed equivalent mass.
-        const float safe_mass =
-            (inst->master_equiv_mass > DEME_TINY_FLOAT) ? inst->master_equiv_mass : DEFAULT_COMBINED_MASTER_MASS;
-        owner_combined_master_mass[master] = safe_mass;
-        owner_combined_master_moi[master] = inst->master_equiv_moi;
-
-        for (size_t i = 0; i < n_members; i++) {
-            const bodyID_t member = inst->member_owner_ids[i];
-            if (member == NULL_BODYID || member >= nOwnerBodies) {
+        for (size_t k = 0; k < inst->n_instances; k++) {
+            const bodyID_t master = inst->master_owner_ids[k];
+            if (master == NULL_BODYID || master >= nOwnerBodies) {
                 continue;
             }
-            // Membership map: every member points to its master; this is the key used by contact suppression.
-            owner_combined_master[member] = master;
-            if (member != master) {
-                // Only non-master members need fixed transforms for rigid re-imposition.
-                owner_combined_rel_pos[member] = inst->type->rel_pos[i];
-                owner_combined_rel_oriQ[member] = inst->type->rel_oriQ[i];
-                n_combined_owners++;
+
+            // Cache equivalent group mass/MOI on the master owner slot for device-side aggregation.
+            const float safe_mass = (inst->master_equiv_mass[k] > DEME_TINY_FLOAT) ? inst->master_equiv_mass[k]
+                                                                                    : DEFAULT_COMBINED_MASTER_MASS;
+            owner_combined_master_mass[master] = safe_mass;
+            owner_combined_master_moi[master] = inst->master_equiv_moi[k];
+
+            for (size_t i = 0; i < n_members_per_inst; i++) {
+                const size_t flat_idx = k * n_members_per_inst + i;
+                const bodyID_t member = inst->member_owner_ids[flat_idx];
+                if (member == NULL_BODYID || member >= nOwnerBodies) {
+                    continue;
+                }
+                // Membership map: every member points to its master; this is the key used by contact suppression.
+                owner_combined_master[member] = master;
+                if (member != master) {
+                    // Only non-master members need fixed transforms for rigid re-imposition.
+                    owner_combined_rel_pos[member] = inst->type->rel_pos[i];
+                    owner_combined_rel_oriQ[member] = inst->type->rel_oriQ[i];
+                    n_combined_owners++;
+                }
             }
         }
     }

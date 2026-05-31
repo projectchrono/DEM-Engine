@@ -512,11 +512,19 @@ PYBIND11_MODULE(DEME, obj) {
              py::arg("component_templates"), py::arg("component_rel_pos"),
              py::arg("component_rel_oriQ") = std::vector<float4>(), py::arg("master_component") = 0)
         .def("AddCombinedFromTemplate",
-             static_cast<std::shared_ptr<deme::DEMCombinedInstance> (deme::DEMSolver::*)(
+             static_cast<std::shared_ptr<deme::DEMCombinedInstances> (deme::DEMSolver::*)(
+                 const std::shared_ptr<deme::DEMCombinedTemplate>&, const std::vector<float3>&,
+                 const std::vector<float4>&)>(&deme::DEMSolver::AddCombinedFromTemplate),
+             "Instantiate a combined template at one or more user-specified global poses (batch).",
+             py::arg("combined_template"), py::arg("init_pos"),
+             py::arg("init_oriQ") = std::vector<float4>())
+        .def("AddCombinedFromTemplate",
+             static_cast<std::shared_ptr<deme::DEMCombinedInstances> (deme::DEMSolver::*)(
                  const std::shared_ptr<deme::DEMCombinedTemplate>&, const float3&, const float4&)>(
                  &deme::DEMSolver::AddCombinedFromTemplate),
-             "Instantiate a combined template at a user-specified global pose.", py::arg("combined_template"),
-             py::arg("init_pos") = deme::make_float3(0), py::arg("init_oriQ") = deme::make_float4(0, 0, 0, 1))
+             "Instantiate a combined template at a single user-specified global pose.",
+             py::arg("combined_template"), py::arg("init_pos") = deme::make_float3(0),
+             py::arg("init_oriQ") = deme::make_float4(0, 0, 0, 1))
         .def("GetNumCombinedInstances", &deme::DEMSolver::GetNumCombinedInstances,
              "Return the number of combined instances currently cached.")
         .def(
@@ -810,9 +818,10 @@ PYBIND11_MODULE(DEME, obj) {
              "Create a DEMTracker to allow direct control/modification/query to this external object/batch of "
              "clumps/triangle mesh object.")
         .def("Track",
-             static_cast<std::vector<std::shared_ptr<deme::DEMTracker>> (deme::DEMSolver::*)(
-                 const std::shared_ptr<deme::DEMCombinedInstance>&)>(&deme::DEMSolver::Track),
-             "Create one tracker per member owner instantiated by a combined instance.", py::arg("combined_inst"))
+             static_cast<std::shared_ptr<deme::DEMTracker> (deme::DEMSolver::*)(
+                 const std::shared_ptr<deme::DEMCombinedInstances>&)>(&deme::DEMSolver::Track),
+             "Create a single tracker that tracks all member owners in a combined-instances batch.",
+             py::arg("combined_inst"))
         .def("AddWavefrontMeshObject",
              static_cast<std::shared_ptr<deme::DEMMeshConnected> (deme::DEMSolver::*)(
                  const std::string&, const std::shared_ptr<deme::DEMMaterial>&, bool, bool)>(
@@ -1319,7 +1328,7 @@ PYBIND11_MODULE(DEME, obj) {
     py::class_<deme::DEMCombinedTemplate, std::shared_ptr<deme::DEMCombinedTemplate>>(obj, "DEMCombinedTemplate")
         .def(py::init<>());
 
-    py::class_<deme::DEMCombinedInstance, std::shared_ptr<deme::DEMCombinedInstance>>(obj, "DEMCombinedInstance")
+    py::class_<deme::DEMCombinedInstances, std::shared_ptr<deme::DEMCombinedInstances>>(obj, "DEMCombinedInstances")
         .def(py::init<>());
 
     py::class_<deme::DEMClumpBatch, deme::DEMInitializer, std::shared_ptr<deme::DEMClumpBatch>>(obj, "DEMClumpBatch")

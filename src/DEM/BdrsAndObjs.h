@@ -840,20 +840,25 @@ class DEMCombinedTemplate {
     unsigned int load_order = 0;
 };
 
-// Runtime instance metadata of a combined template instantiation.
-class DEMCombinedInstance {
+// Runtime metadata for a batch of combined template instantiations.
+// Each element in the per-instance vectors corresponds to one instantiation request (one pose from the input batch).
+// Within each instantiation, there are n_members owners (matching the template's component count).
+class DEMCombinedInstances {
   public:
     std::shared_ptr<DEMCombinedTemplate> type;
-    // Cached member initializer handles (clump batches or meshes) that this combined instance instantiated.
+    // Cached member initializer handles (clump batches or meshes) that this batch instantiated.
+    // Flattened: for n instantiations of a template with t members, this has n*t entries.
     std::vector<std::shared_ptr<DEMInitializer>> member_objs;
     std::vector<bodyID_t> member_owner_ids;
     std::vector<float> member_mass;
     std::vector<float3> member_moi;
-    float master_equiv_mass = 0.f;
-    float3 master_equiv_moi = make_float3(0);
-    bodyID_t master_owner_id = NULL_BODYID;
+    // Per-instantiation equivalent mass/MOI (one per pose in the batch).
+    std::vector<float> master_equiv_mass;
+    std::vector<float3> master_equiv_moi;
+    std::vector<bodyID_t> master_owner_ids;
     bool owners_resolved = false;
-    unsigned int load_order = 0;
+    // Number of instantiations in this batch.
+    size_t n_instances = 0;
 };
 
 /*
