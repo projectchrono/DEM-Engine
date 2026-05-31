@@ -142,7 +142,7 @@ if (overlapDepth > 0) {
     const float k = 8.99e9;
     const double ABdist2 = dot(bodyAPos - bodyBPos, bodyAPos - bodyBPos);
     // If Q_A and Q_B are the same sign, then the force pushes A away from B, so B2A is the direction.
-    force += k * Q_A[AOwner] * Q_B[BOwner] / ABdist2 * (B2A);
+    force += k * Q[AOwner] * Q[BOwner] / ABdist2 * (B2A);
     // Fun part: we can modify the electric charge on the fly. But we have to use atomic, since multiple contacts
     // can modify the same Q.
     // But this is not recommend unless you understand what you are doing, and there are a lot of details related to it.
@@ -151,10 +151,10 @@ if (overlapDepth > 0) {
     // the force, then that is probably easier and with less strings attached to it. I can see this being more
     // useful.
     if (overlapDepth > 0) {  // Exchange the elec charge only in physical contact
-        float avg_Q = (Q_A[AOwner] + Q_B[BOwner]) / 2.;
-        float A_change_dir = (abs(avg_Q - Q_A[AOwner]) > 1e-11) ? (avg_Q - Q_A[AOwner]) / abs(avg_Q - Q_A[AOwner]) : 0.;
+        float avg_Q = (Q[AOwner] + Q[BOwner]) / 2.;
+        float A_change_dir = (abs(avg_Q - Q[AOwner]) > 1e-11) ? (avg_Q - Q[AOwner]) / abs(avg_Q - Q[AOwner]) : 0.;
         // Modify the charge they carry... the rate is 1e-8 per second
-        atomicAdd(Q_A + AOwner, A_change_dir * 1e-8 * ts);
-        atomicAdd(Q_B + BOwner, -A_change_dir * 1e-8 * ts);
+        atomicAdd(Q + AOwner, A_change_dir * 1e-8 * ts);
+        atomicAdd(Q + BOwner, -A_change_dir * 1e-8 * ts);
     }
 }
