@@ -99,9 +99,9 @@ int main() {
     // then combine them into a single combined-owner template. Each sphere is an independent owner with
     // its own charge Q, rather than being mere shape components of a single owner.
     // Sphere data from spiky_sphere.csv: x, y, z, r
-    std::vector<float3> sphere_positions = {make_float3(0, 0, 0), make_float3(0, -0.5, 0.5),
+    std::vector<float3> sphere_positions = {make_float3(0, 0, 0),         make_float3(0, -0.5, 0.5),
                                             make_float3(0.65, 0.2, 0.55), make_float3(-0.45, 0.25, 0.65),
-                                            make_float3(0, 0.7, 0.2), make_float3(0.5, 0.2, -0.5)};
+                                            make_float3(0, 0.7, 0.2),     make_float3(0.5, 0.2, -0.5)};
     std::vector<float> sphere_radii = {0.9f, 0.5f, 0.25f, 0.45f, 0.35f, 0.35f};
 
     // Scale relative positions and radii

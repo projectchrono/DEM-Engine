@@ -847,7 +847,8 @@ class DEMCombinedInstances {
   public:
     std::shared_ptr<DEMCombinedTemplate> type;
     // Cached member initializer handles (clump batches or meshes) that this batch instantiated.
-    // Flattened: for n instantiations of a template with t members, this has n*t entries.
+    // Flattened: for n instantiations of a template with t members, this has n*t entries. It's like [0, 1, .., t, 0, 1,
+    // ..t, ..,t], pattern repeating n times.
     std::vector<std::shared_ptr<DEMInitializer>> member_objs;
     std::vector<bodyID_t> member_owner_ids;
     std::vector<float> member_mass;

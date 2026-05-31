@@ -516,15 +516,13 @@ PYBIND11_MODULE(DEME, obj) {
                  const std::shared_ptr<deme::DEMCombinedTemplate>&, const std::vector<float3>&,
                  const std::vector<float4>&)>(&deme::DEMSolver::AddCombinedFromTemplate),
              "Instantiate a combined template at one or more user-specified global poses (batch).",
-             py::arg("combined_template"), py::arg("init_pos"),
-             py::arg("init_oriQ") = std::vector<float4>())
+             py::arg("combined_template"), py::arg("init_pos"), py::arg("init_oriQ") = std::vector<float4>())
         .def("AddCombinedFromTemplate",
              static_cast<std::shared_ptr<deme::DEMCombinedInstances> (deme::DEMSolver::*)(
                  const std::shared_ptr<deme::DEMCombinedTemplate>&, const float3&, const float4&)>(
                  &deme::DEMSolver::AddCombinedFromTemplate),
-             "Instantiate a combined template at a single user-specified global pose.",
-             py::arg("combined_template"), py::arg("init_pos") = deme::make_float3(0),
-             py::arg("init_oriQ") = deme::make_float4(0, 0, 0, 1))
+             "Instantiate a combined template at a single user-specified global pose.", py::arg("combined_template"),
+             py::arg("init_pos") = deme::make_float3(0), py::arg("init_oriQ") = deme::make_float4(0, 0, 0, 1))
         .def("GetNumCombinedInstances", &deme::DEMSolver::GetNumCombinedInstances,
              "Return the number of combined instances currently cached.")
         .def(
