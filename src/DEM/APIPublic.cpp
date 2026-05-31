@@ -2635,9 +2635,8 @@ std::shared_ptr<DEMCombinedInstances> DEMSolver::AddCombinedFromTemplate(
         oriQ_vec.assign(n_instances, make_float4(0, 0, 0, 1));
     }
     if (oriQ_vec.size() != n_instances) {
-        DEME_ERROR(
-            "AddCombinedFromTemplate: init_pos and init_oriQ must have the same length (got %zu and %zu).",
-            n_instances, oriQ_vec.size());
+        DEME_ERROR("AddCombinedFromTemplate: init_pos and init_oriQ must have the same length (got %zu and %zu).",
+                   n_instances, oriQ_vec.size());
     }
 
     const size_t n_members = (combined_template->member_type == OWNER_TYPE::CLUMP)
@@ -2665,6 +2664,8 @@ std::shared_ptr<DEMCombinedInstances> DEMSolver::AddCombinedFromTemplate(
     inst->master_owner_ids.resize(n_instances, NULL_BODYID);
     inst->member_objs.reserve(total_members);
 
+    // Outer: combined template instances; inner: template members.
+    // This way, one combined owner's member owners are together in memory.
     for (size_t k = 0; k < n_instances; k++) {
         const float4 init_q = quatNormalizeSafe(oriQ_vec[k]);
 
@@ -3668,7 +3669,7 @@ void DEMSolver::refreshCombinedRuntimeResources() {
 
             // Cache equivalent group mass/MOI on the master owner slot for device-side aggregation.
             const float safe_mass = (inst->master_equiv_mass[k] > DEME_TINY_FLOAT) ? inst->master_equiv_mass[k]
-                                                                                    : DEFAULT_COMBINED_MASTER_MASS;
+                                                                                   : DEFAULT_COMBINED_MASTER_MASS;
             owner_combined_master_mass[master] = safe_mass;
             owner_combined_master_moi[master] = inst->master_equiv_moi[k];
 

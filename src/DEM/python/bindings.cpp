@@ -516,15 +516,13 @@ PYBIND11_MODULE(DEME, obj) {
                  const std::shared_ptr<deme::DEMCombinedTemplate>&, const std::vector<float3>&,
                  const std::vector<float4>&)>(&deme::DEMSolver::AddCombinedFromTemplate),
              "Instantiate a combined template at one or more user-specified global poses (batch).",
-             py::arg("combined_template"), py::arg("init_pos"),
-             py::arg("init_oriQ") = std::vector<float4>())
+             py::arg("combined_template"), py::arg("init_pos"), py::arg("init_oriQ") = std::vector<float4>())
         .def("AddCombinedFromTemplate",
              static_cast<std::shared_ptr<deme::DEMCombinedInstances> (deme::DEMSolver::*)(
                  const std::shared_ptr<deme::DEMCombinedTemplate>&, const float3&, const float4&)>(
                  &deme::DEMSolver::AddCombinedFromTemplate),
-             "Instantiate a combined template at a single user-specified global pose.",
-             py::arg("combined_template"), py::arg("init_pos") = deme::make_float3(0),
-             py::arg("init_oriQ") = deme::make_float4(0, 0, 0, 1))
+             "Instantiate a combined template at a single user-specified global pose.", py::arg("combined_template"),
+             py::arg("init_pos") = deme::make_float3(0), py::arg("init_oriQ") = deme::make_float4(0, 0, 0, 1))
         .def("GetNumCombinedInstances", &deme::DEMSolver::GetNumCombinedInstances,
              "Return the number of combined instances currently cached.")
         .def(
@@ -1329,7 +1327,17 @@ PYBIND11_MODULE(DEME, obj) {
         .def(py::init<>());
 
     py::class_<deme::DEMCombinedInstances, std::shared_ptr<deme::DEMCombinedInstances>>(obj, "DEMCombinedInstances")
-        .def(py::init<>());
+        .def(py::init<>())
+        .def("GetNumOwners", &deme::DEMCombinedInstances::GetNumOwners,
+             "Get total number of member owners in this combined batch.")
+        .def("AddOwnerWildcard",
+             static_cast<void (deme::DEMCombinedInstances::*)(const std::string&, const std::vector<float>&)>(
+                 &deme::DEMCombinedInstances::AddOwnerWildcard),
+             "Add an owner wildcard to all member owners with per-owner values.", py::arg("name"), py::arg("vals"))
+        .def("AddOwnerWildcard",
+             static_cast<void (deme::DEMCombinedInstances::*)(const std::string&, float)>(
+                 &deme::DEMCombinedInstances::AddOwnerWildcard),
+             "Add an owner wildcard to all member owners with a uniform value.", py::arg("name"), py::arg("val"));
 
     py::class_<deme::DEMClumpBatch, deme::DEMInitializer, std::shared_ptr<deme::DEMClumpBatch>>(obj, "DEMClumpBatch")
         .def(py::init<size_t&>())
