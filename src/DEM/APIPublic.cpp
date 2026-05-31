@@ -2731,6 +2731,9 @@ bool DEMSolver::GetCombinedInstanceInfo(size_t combined_instance_id,
     const size_t n_members_per_inst = (inst->type->member_type == OWNER_TYPE::CLUMP)
                                           ? inst->type->clump_templates.size()
                                           : inst->type->mesh_templates.size();
+    if (n_members_per_inst > inst->member_owner_ids.size()) {
+        return false;
+    }
     member_owner_ids.assign(inst->member_owner_ids.begin(),
                             inst->member_owner_ids.begin() + static_cast<ptrdiff_t>(n_members_per_inst));
     member_rel_pos = inst->type->rel_pos;
