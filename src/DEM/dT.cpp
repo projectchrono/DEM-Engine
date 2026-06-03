@@ -3241,9 +3241,9 @@ void DEMDynamicThread::calculateForces() {
         // std::cout << "===========================" << std::endl;
         timers.StopGpuTimer("Calculate contact forces", streamInfo.stream);
 
+        timers.StartGpuTimer("Optional force reduction", streamInfo.stream);
         if (!solverFlags.useForceCollectInPlace) {
             DEME_NVTX_RANGE("dT::collectForces");
-            timers.StartGpuTimer("Optional force reduction", streamInfo.stream);
             // Reflect those body-wise forces on their owner clumps
             size_t blocks_needed_for_contacts =
                 (nContactPairs + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
@@ -3255,12 +3255,12 @@ void DEMDynamicThread::calculateForces() {
             // displayDeviceArray<float>(granData->aZ, simParams->nOwnerBodies);
             // displayDeviceFloat3(granData->contactForces, nContactPairs);
             // std::cout << nContactPairs << std::endl;
-            timers.StopGpuTimer("Optional force reduction", streamInfo.stream);
         }
 
         if (simParams->nCombinedOwners > 0) {
             // Optional combined-owner aggregation pass:
             // fold member contributions into master accelerations before integration.
+            DEME_NVTX_RANGE("dT::combinedOwnerAggregation");
             const size_t blocks_needed_for_owners =
                 (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
             collect_force_kernels->kernel("aggregateCombinedOwnersAcc")
@@ -3268,6 +3268,7 @@ void DEMDynamicThread::calculateForces() {
                 .configure(dim3(blocks_needed_for_owners), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
                 .launch(&simParams, &granData, simParams->nOwnerBodies);
         }
+        timers.StopGpuTimer("Optional force reduction", streamInfo.stream);
     }
 
     finalizeTrianglePVWindowStep();
@@ -3286,11 +3287,12 @@ inline void DEMDynamicThread::integrateOwnerMotions() {
     if (simParams->nCombinedOwners > 0) {
         // Optional combined-owner rigid re-imposition pass:
         // overwrite member states from integrated masters + fixed relative transforms.
+        constexpr unsigned int COMBINED_OWNER_REIMPOSITION_BLOCK = 512;
         const size_t blocks_needed_for_owners =
-            (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+            (simParams->nOwnerBodies + COMBINED_OWNER_REIMPOSITION_BLOCK - 1) / COMBINED_OWNER_REIMPOSITION_BLOCK;
         collect_force_kernels->kernel("reimposeCombinedOwners")
             .instantiate()
-            .configure(dim3(blocks_needed_for_owners), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+            .configure(dim3(blocks_needed_for_owners), dim3(COMBINED_OWNER_REIMPOSITION_BLOCK), 0, streamInfo.stream)
             .launch(&simParams, &granData, simParams->nOwnerBodies);
     }
 

@@ -147,7 +147,9 @@ DEME_KERNEL void forceToAcc(deme::DEMSimParams* simParams, deme::DEMDataDT* gran
     }
 }
 
-DEME_KERNEL void aggregateCombinedOwnersAcc(deme::DEMSimParams* simParams, deme::DEMDataDT* granData, size_t nOwners) {
+DEME_KERNEL void aggregateCombinedOwnersAcc(deme::DEMSimParams* simParams,
+                                            deme::DEMDataDT* granData,
+                                            deme::bodyID_t nOwners) {
     // Device-side aggregation pass:
     // each non-master member contributes its already-accumulated linear/angular accelerations to its master.
     // Contributions are mass/MOI weighted so that master-side integration follows the equivalent-group properties.
@@ -217,7 +219,9 @@ DEME_KERNEL void aggregateCombinedOwnersAcc(deme::DEMSimParams* simParams, deme:
     granData->alphaZ[owner] = 0.f;
 }
 
-DEME_KERNEL void reimposeCombinedOwners(deme::DEMSimParams* simParams, deme::DEMDataDT* granData, size_t nOwners) {
+DEME_KERNEL void reimposeCombinedOwners(deme::DEMSimParams* simParams,
+                                        deme::DEMDataDT* granData,
+                                        deme::bodyID_t nOwners) {
     // Device-side rigid re-imposition pass:
     // after integrating masters, overwrite each member's state from
     //   master state + fixed member transform in master frame.
