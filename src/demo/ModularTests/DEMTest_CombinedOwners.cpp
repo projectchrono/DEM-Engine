@@ -36,12 +36,20 @@ constexpr float kMass = 1.0f;
 constexpr float kMemberSpacing = 0.75f;  // < 2 * kRadius, so internal contact exists if allowed
 constexpr float kStepSize = 1e-5f;
 constexpr float kPosTol = 1e-5f;
+constexpr float kVelTol = 1e-5f;
+constexpr float kQuatTol = 1e-5f;
 const float3 kInitPos = make_float3(1.0f, -0.5f, 0.25f);
 const float3 kInitPos2 = make_float3(5.0f, 0.0f, 0.0f);
 const float4 kIdentityQ = make_float4(0, 0, 0, 1);
 
 bool approxEqual(const float3& a, const float3& b, float tol = kPosTol) {
     return std::abs(a.x - b.x) < tol && std::abs(a.y - b.y) < tol && std::abs(a.z - b.z) < tol;
+}
+
+bool approxEqualQuat(const float4& a, const float4& b, float tol = kQuatTol) {
+    const float direct = std::abs(a.x - b.x) + std::abs(a.y - b.y) + std::abs(a.z - b.z) + std::abs(a.w - b.w);
+    const float negated = std::abs(a.x + b.x) + std::abs(a.y + b.y) + std::abs(a.z + b.z) + std::abs(a.w + b.w);
+    return direct < tol || negated < tol;
 }
 
 std::pair<bodyID_t, bodyID_t> normalizePair(bodyID_t a, bodyID_t b) {
@@ -65,6 +73,14 @@ struct ScenarioResult {
     std::vector<float3> tracker_positions;
     std::vector<bodyID_t> tracker_owner_ids;
     std::vector<std::pair<bodyID_t, bodyID_t>> contacts;
+};
+
+struct MotionResult {
+    std::vector<float3> initial_positions;
+    std::vector<float3> final_positions;
+    std::vector<float3> final_velocities;
+    std::vector<float3> final_ang_velocities;
+    std::vector<float4> final_orientations;
 };
 
 ScenarioResult runScenario(bool allow_intra_combined_contacts, bool use_batch = false) {
@@ -115,6 +131,42 @@ ScenarioResult runScenario(bool allow_intra_combined_contacts, bool use_batch = 
     return result;
 }
 
+MotionResult runMemberAccelerationScenario(bool angular) {
+    MotionResult result;
+
+    DEMSolver DEMSim;
+    DEMSim.SetVerbosity("ERROR");
+    DEMSim.InstructBoxDomainDimension(10, 10, 10);
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, 0));
+    DEMSim.SetCDUpdateFreq(1);
+
+    auto mat = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
+    auto sphere = DEMSim.LoadSphereType(kMass, kRadius, mat);
+
+    std::vector<std::shared_ptr<DEMClumpTemplate>> component_templates = {sphere, sphere};
+    std::vector<float3> component_rel_pos = {make_float3(0, 0, 0), make_float3(kMemberSpacing, 0, 0)};
+    auto combined_type = DEMSim.LoadCombinedClumpType(component_templates, component_rel_pos, {}, 0);
+    auto combined_inst = DEMSim.AddCombinedFromTemplate(combined_type, kInitPos, kIdentityQ);
+    auto tracker = DEMSim.Track(combined_inst);
+
+    DEMSim.SetInitTimeStep(kStepSize);
+    DEMSim.Initialize();
+
+    result.initial_positions = tracker->Positions();
+    if (angular) {
+        tracker->AddAngAcc(make_float3(0, 0, 2.0e6f), 1);
+    } else {
+        tracker->AddAcc(make_float3(1000.f, -2000.f, 500.f), 1);
+    }
+    DEMSim.DoDynamicsThenSync(kStepSize);
+
+    result.final_positions = tracker->Positions();
+    result.final_velocities = tracker->Velocities();
+    result.final_ang_velocities = tracker->AngularVelocitiesGlobal();
+    result.final_orientations = tracker->OrientationQuaternions();
+    return result;
+}
+
 void printContacts(const std::vector<std::pair<bodyID_t, bodyID_t>>& contacts) {
     if (contacts.empty()) {
         std::cout << "none";
@@ -140,6 +192,8 @@ int main() {
     const auto suppressed = runScenario(false);
     const auto allowed = runScenario(true);
     const auto batch = runScenario(false, true);
+    const auto linear_acc = runMemberAccelerationScenario(false);
+    const auto angular_acc = runMemberAccelerationScenario(true);
 
     std::cout << "\n--- Test 1: Combined instance is cached pre-initialize ---" << std::endl;
     std::cout << "Combined count before init (suppressed case): " << suppressed.combined_count_before_init << std::endl;
@@ -232,6 +286,58 @@ int main() {
                           << batch.tracker_positions[i].y << ", " << batch.tracker_positions[i].z << ")" << std::endl;
             }
         }
+        test_failures++;
+    }
+
+    std::cout << "\n--- Test 8: AddAcc on one combined member preserves rigid linear motion ---" << std::endl;
+    bool linear_motion_ok = false;
+    if (linear_acc.initial_positions.size() >= 2 && linear_acc.final_positions.size() >= 2 &&
+        linear_acc.final_velocities.size() >= 2) {
+        const float3 initial_rel = linear_acc.initial_positions[1] - linear_acc.initial_positions[0];
+        const float3 final_rel = linear_acc.final_positions[1] - linear_acc.final_positions[0];
+        const float3 displacement_0 = linear_acc.final_positions[0] - linear_acc.initial_positions[0];
+        const float3 displacement_1 = linear_acc.final_positions[1] - linear_acc.initial_positions[1];
+        std::cout << "Final vel[0]: (" << linear_acc.final_velocities[0].x << ", " << linear_acc.final_velocities[0].y
+                  << ", " << linear_acc.final_velocities[0].z << ")" << std::endl;
+        std::cout << "Final vel[1]: (" << linear_acc.final_velocities[1].x << ", " << linear_acc.final_velocities[1].y
+                  << ", " << linear_acc.final_velocities[1].z << ")" << std::endl;
+        linear_motion_ok = approxEqual(final_rel, initial_rel) && approxEqual(displacement_0, displacement_1) &&
+                           approxEqual(linear_acc.final_velocities[0], linear_acc.final_velocities[1], kVelTol) &&
+                           length(linear_acc.final_velocities[0]) > kVelTol;
+    }
+    if (linear_motion_ok) {
+        std::cout << "✓ PASS: AddAcc on one member moves the combined owner as one rigid body" << std::endl;
+    } else {
+        std::cout << "✗ FAIL: AddAcc on one member introduced relative linear motion" << std::endl;
+        test_failures++;
+    }
+
+    std::cout << "\n--- Test 9: AddAngAcc on one combined member preserves rigid rotational motion ---" << std::endl;
+    bool angular_motion_ok = false;
+    if (angular_acc.initial_positions.size() >= 2 && angular_acc.final_positions.size() >= 2 &&
+        angular_acc.final_velocities.size() >= 2 && angular_acc.final_ang_velocities.size() >= 2 &&
+        angular_acc.final_orientations.size() >= 2) {
+        const float3 initial_rel = angular_acc.initial_positions[1] - angular_acc.initial_positions[0];
+        const float3 final_rel = angular_acc.final_positions[1] - angular_acc.final_positions[0];
+        const float3 expected_member_vel =
+            angular_acc.final_velocities[0] + cross(angular_acc.final_ang_velocities[0], final_rel);
+        std::cout << "Final ang vel[0]: (" << angular_acc.final_ang_velocities[0].x << ", "
+                  << angular_acc.final_ang_velocities[0].y << ", " << angular_acc.final_ang_velocities[0].z << ")"
+                  << std::endl;
+        std::cout << "Final ang vel[1]: (" << angular_acc.final_ang_velocities[1].x << ", "
+                  << angular_acc.final_ang_velocities[1].y << ", " << angular_acc.final_ang_velocities[1].z << ")"
+                  << std::endl;
+        angular_motion_ok =
+            std::abs(length(final_rel) - length(initial_rel)) < kPosTol &&
+            approxEqualQuat(angular_acc.final_orientations[0], angular_acc.final_orientations[1]) &&
+            approxEqual(angular_acc.final_ang_velocities[0], angular_acc.final_ang_velocities[1], kVelTol) &&
+            approxEqual(angular_acc.final_velocities[1], expected_member_vel, kVelTol) &&
+            length(angular_acc.final_ang_velocities[0]) > kVelTol;
+    }
+    if (angular_motion_ok) {
+        std::cout << "✓ PASS: AddAngAcc on one member rotates the combined owner as one rigid body" << std::endl;
+    } else {
+        std::cout << "✗ FAIL: AddAngAcc on one member introduced non-rigid rotational motion" << std::endl;
         test_failures++;
     }
 
