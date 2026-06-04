@@ -156,7 +156,7 @@ MotionResult runMemberAccelerationScenario(bool angular) {
     if (angular) {
         tracker->AddAngAcc(make_float3(0, 0, 2.0e6f), 1);
     } else {
-        tracker->AddAcc(make_float3(1000.f, -2000.f, 500.f), 1);
+        tracker->AddAcc(make_float3(1000.f, 0, 0), 1);
     }
     DEMSim.DoDynamicsThenSync(kStepSize);
 
@@ -289,7 +289,7 @@ int main() {
         test_failures++;
     }
 
-    std::cout << "\n--- Test 8: AddAcc on one combined member preserves rigid linear motion ---" << std::endl;
+    std::cout << "\n--- Test 8: Axial AddAcc on one combined member preserves pure translation ---" << std::endl;
     bool linear_motion_ok = false;
     if (linear_acc.initial_positions.size() >= 2 && linear_acc.final_positions.size() >= 2 &&
         linear_acc.final_velocities.size() >= 2) {
@@ -306,9 +306,9 @@ int main() {
                            length(linear_acc.final_velocities[0]) > kVelTol;
     }
     if (linear_motion_ok) {
-        std::cout << "✓ PASS: AddAcc on one member moves the combined owner as one rigid body" << std::endl;
+        std::cout << "✓ PASS: Axial AddAcc on one member moves the combined owner in pure translation" << std::endl;
     } else {
-        std::cout << "✗ FAIL: AddAcc on one member introduced relative linear motion" << std::endl;
+        std::cout << "✗ FAIL: Axial AddAcc on one member did not produce pure rigid translation" << std::endl;
         test_failures++;
     }
 

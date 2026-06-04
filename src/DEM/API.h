@@ -1613,9 +1613,6 @@ class DEMSolver {
     /// Enable/disable outputting contact wildcard values to the contact file.
     void EnableContactWildcardOutput(bool enable = true) { m_is_out_cnt_wildcards = enable; }
 
-    /// @brief Let the solver store the contact normal information for every contact (or disable it).
-    void EnableStoreNormals(bool enable = true);
-
     /// @brief Set the verbosity level of the solver.
     /// @param verbose "QUIET", "ERROR", "WARNING", "INFO", "METRIC" or "DEBUG". Recommend "INFO".
     void SetVerbosity(const std::string& verbose);
@@ -1732,7 +1729,7 @@ class DEMSolver {
     // The output file content for contact pairs
     unsigned int m_cnt_out_content = CNT_OUTPUT_CONTENT::OWNER | CNT_OUTPUT_CONTENT::GEO_ID |
                                      CNT_OUTPUT_CONTENT::FORCE | CNT_OUTPUT_CONTENT::CNT_POINT |
-                                     CNT_OUTPUT_CONTENT::CNT_WILDCARD;
+                                     CNT_OUTPUT_CONTENT::NORMAL | CNT_OUTPUT_CONTENT::CNT_WILDCARD;
     // The output file format for meshes
     MESH_FORMAT m_mesh_out_format = MESH_FORMAT::VTK;
     // If PLY mesh output should include per-patch face colors

@@ -780,7 +780,9 @@ void DEMKinematicThread::migrateDataToDevice() {
     previous_contactPatchIsland.toDeviceAsync(streamInfo.stream);
     familyMaskMatrix.toDeviceAsync(streamInfo.stream);
     familyExtraMarginSize.toDeviceAsync(streamInfo.stream);
-    ownerCombinedMaster.toDeviceAsync(streamInfo.stream);
+    if (ownerCombinedMaster.size() > 0) {
+        ownerCombinedMaster.toDeviceAsync(streamInfo.stream);
+    }
 
     ownerClumpBody.toDeviceAsync(streamInfo.stream);
     clumpComponentOffset.toDeviceAsync(streamInfo.stream);
@@ -934,8 +936,6 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
 
     // Resize the family mask `matrix' (in fact it is flattened)
     DEME_DUAL_ARRAY_RESIZE(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
-    DEME_DUAL_ARRAY_RESIZE(ownerCombinedMaster, nOwnerBodies, NULL_BODYID);
-
     // Resize to the number of clumps
     DEME_DUAL_ARRAY_RESIZE(familyID, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(voxelID, nOwnerBodies, 0);

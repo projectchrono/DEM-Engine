@@ -751,9 +751,6 @@ PYBIND11_MODULE(DEME, obj) {
         .def("SetVerbosity", static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetVerbosity),
              "Set the verbosity level of the solver. Select from 'QUIET', 'ERROR', 'WARNING', 'INFO', 'METRIC' or "
              "'DEBUG'. Recommend 'INFO'.")
-        .def("EnableStoreNormals", &deme::DEMSolver::EnableStoreNormals,
-             "Let the solver store the contact normal information for every contact (or disable it).",
-             py::arg("enable") = true)
 
         .def("AddKernelInclude", &deme::DEMSolver::AddKernelInclude,
              "Add a library that the kernels will be compiled with (so that the user can use the provided methods in "

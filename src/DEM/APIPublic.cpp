@@ -7,6 +7,10 @@
 #include "API.h"
 #include "Defines.h"
 #include "utils/HostSideHelpers.hpp"
+#include "utils/ClumpMassProperties.hpp"
+#include "utils/CombinedOwnerUtils.hpp"
+#include "utils/MeshLoadUtils.hpp"
+#include "utils/MeshWearUtils.hpp"
 #include "AuxClasses.h"
 #include "../kernel/DEMHelperKernels.cuh"
 
@@ -16,209 +20,9 @@
 #include <chrono>
 #include <cstring>
 #include <cmath>
-#include <limits>
-#include <algorithm>
-#include <filesystem>
-#include <cctype>
 #include <unordered_set>
 
 namespace deme {
-
-namespace {
-
-inline double overlapDuration(double a0, double a1, double b0, double b1) {
-    const double lo = std::max(a0, b0);
-    const double hi = std::min(a1, b1);
-    return (hi > lo) ? (hi - lo) : 0.0;
-}
-
-inline bool hasPendingWear(const std::vector<float>& pending_depth) {
-    for (float d : pending_depth) {
-        if (d > 0.f && std::isfinite(d)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-inline bool computeClumpUnionMassPropsApprox(const DEMClumpTemplate& clump,
-                                             double& volume,
-                                             float3& center,
-                                             float3& inertia) {
-    volume = 0.0;
-    center = make_float3(0, 0, 0);
-    inertia = make_float3(0, 0, 0);
-    if (clump.nComp == 0 || clump.radii.size() != clump.nComp || clump.relPos.size() != clump.nComp) {
-        return false;
-    }
-
-    float3 bb_min = make_float3(std::numeric_limits<float>::infinity());
-    float3 bb_max = make_float3(-std::numeric_limits<float>::infinity());
-    for (size_t i = 0; i < clump.nComp; i++) {
-        const float r = clump.radii[i];
-        if (!(r > DEME_TINY_FLOAT) || !std::isfinite(r)) {
-            continue;
-        }
-        const float3 c = clump.relPos[i];
-        bb_min.x = std::min(bb_min.x, c.x - r);
-        bb_min.y = std::min(bb_min.y, c.y - r);
-        bb_min.z = std::min(bb_min.z, c.z - r);
-        bb_max.x = std::max(bb_max.x, c.x + r);
-        bb_max.y = std::max(bb_max.y, c.y + r);
-        bb_max.z = std::max(bb_max.z, c.z + r);
-    }
-
-    const double lx = static_cast<double>(bb_max.x) - bb_min.x;
-    const double ly = static_cast<double>(bb_max.y) - bb_min.y;
-    const double lz = static_cast<double>(bb_max.z) - bb_min.z;
-    if (!(lx > 0.0) || !(ly > 0.0) || !(lz > 0.0) || !std::isfinite(lx) || !std::isfinite(ly) || !std::isfinite(lz)) {
-        return false;
-    }
-
-    const double bbox_vol = lx * ly * lz;
-
-    auto radical_inverse = [](uint64_t n, uint32_t base) {
-        double inv_base = 1.0 / static_cast<double>(base);
-        double inv_bi = inv_base;
-        double val = 0.0;
-        while (n) {
-            const uint32_t d = static_cast<uint32_t>(n % base);
-            val += static_cast<double>(d) * inv_bi;
-            n /= base;
-            inv_bi *= inv_base;
-        }
-        return val;
-    };
-
-    struct RunningStat {
-        double mean = 0.0;
-        double m2 = 0.0;
-        size_t n = 0;
-        void add(double x) {
-            n++;
-            const double d = x - mean;
-            mean += d / static_cast<double>(n);
-            const double d2 = x - mean;
-            m2 += d * d2;
-        }
-        double var() const { return (n > 1) ? (m2 / static_cast<double>(n - 1)) : 0.0; }
-    };
-
-    // E[I], E[I x], E[I y], E[I z], E[I xx], E[I yy], E[I zz], E[I xy], E[I yz], E[I zx]
-    std::array<RunningStat, 10> stats;
-    constexpr double z99 = 2.576;            // 99% confidence interval factor
-    constexpr double target_rel_err = 0.01;  // 1% target relative error
-    constexpr size_t min_samples = 100000;
-    constexpr size_t max_samples = 4000000;
-    constexpr size_t check_stride = 10000;
-
-    bool converged = false;
-    size_t n_total = 0;
-    for (size_t i = 0; i < max_samples; i++) {
-        const uint64_t idx = static_cast<uint64_t>(i + 1);
-        const double u = radical_inverse(idx, 2);
-        const double v = radical_inverse(idx, 3);
-        const double w = radical_inverse(idx, 5);
-        const double x = static_cast<double>(bb_min.x) + u * lx;
-        const double y = static_cast<double>(bb_min.y) + v * ly;
-        const double z = static_cast<double>(bb_min.z) + w * lz;
-
-        bool inside = false;
-        for (size_t s = 0; s < clump.nComp; s++) {
-            const double dx = x - clump.relPos[s].x;
-            const double dy = y - clump.relPos[s].y;
-            const double dz = z - clump.relPos[s].z;
-            const double rr = static_cast<double>(clump.radii[s]) * clump.radii[s];
-            if (dx * dx + dy * dy + dz * dz <= rr) {
-                inside = true;
-                break;
-            }
-        }
-
-        const double I = inside ? 1.0 : 0.0;
-        stats[0].add(I);
-        stats[1].add(I * x);
-        stats[2].add(I * y);
-        stats[3].add(I * z);
-        stats[4].add(I * x * x);
-        stats[5].add(I * y * y);
-        stats[6].add(I * z * z);
-        stats[7].add(I * x * y);
-        stats[8].add(I * y * z);
-        stats[9].add(I * z * x);
-        n_total++;
-
-        if (n_total < min_samples || (n_total % check_stride) != 0) {
-            continue;
-        }
-        const double mean_I = stats[0].mean;
-        if (!(mean_I > 1e-14)) {
-            continue;
-        }
-        const double stderr_I = std::sqrt(std::max(0.0, stats[0].var()) / static_cast<double>(n_total));
-        const double rel_err_I = z99 * stderr_I / mean_I;
-
-        const double m2_sum = stats[4].mean + stats[5].mean + stats[6].mean;
-        double rel_err_m2 = 0.0;
-        if (m2_sum > 1e-14) {
-            const double var_sum =
-                std::max(0.0, stats[4].var()) + std::max(0.0, stats[5].var()) + std::max(0.0, stats[6].var());
-            const double stderr_sum = std::sqrt(var_sum / static_cast<double>(n_total));
-            rel_err_m2 = z99 * stderr_sum / m2_sum;
-        }
-
-        if (rel_err_I <= target_rel_err && rel_err_m2 <= target_rel_err) {
-            converged = true;
-            break;
-        }
-    }
-
-    const double inside_frac = stats[0].mean;
-    if (!(inside_frac > 0.0) || !std::isfinite(inside_frac)) {
-        return false;
-    }
-    volume = bbox_vol * inside_frac;
-    if (!(volume > 0.0) || !std::isfinite(volume)) {
-        return false;
-    }
-
-    const double cx = stats[1].mean / inside_frac;
-    const double cy = stats[2].mean / inside_frac;
-    const double cz = stats[3].mean / inside_frac;
-    center = make_float3(static_cast<float>(cx), static_cast<float>(cy), static_cast<float>(cz));
-
-    const double int_xx = bbox_vol * stats[4].mean;
-    const double int_yy = bbox_vol * stats[5].mean;
-    const double int_zz = bbox_vol * stats[6].mean;
-    const double int_xy = bbox_vol * stats[7].mean;
-    const double int_yz = bbox_vol * stats[8].mean;
-    const double int_zx = bbox_vol * stats[9].mean;
-
-    double Ixx = int_yy + int_zz;
-    double Iyy = int_xx + int_zz;
-    double Izz = int_xx + int_yy;
-    double Ixy = -int_xy;
-    double Iyz = -int_yz;
-    double Izx = -int_zx;
-
-    Ixx -= volume * (cy * cy + cz * cz);
-    Iyy -= volume * (cx * cx + cz * cz);
-    Izz -= volume * (cx * cx + cy * cy);
-    Ixy += volume * cx * cy;
-    Iyz += volume * cy * cz;
-    Izx += volume * cz * cx;
-
-    inertia = make_float3(static_cast<float>(Ixx), static_cast<float>(Iyy), static_cast<float>(Izz));
-    if (!converged) {
-        DEME_WARNING(
-            "Clump union mass/MOI estimator hit sample cap (%zu) before 99%%-confidence 1%%-error target; using best "
-            "estimate.",
-            n_total);
-    }
-    return std::isfinite(Ixx) && std::isfinite(Iyy) && std::isfinite(Izz) && Ixx > 0.0 && Iyy > 0.0 && Izz > 0.0;
-}
-
-}  // namespace
 
 DEMSolver::DEMSolver(unsigned int nGPUs) {
     dTkT_InteractionManager = new ThreadManager();
@@ -448,8 +252,6 @@ void DEMSolver::SetContactOutputContent(const std::vector<std::string>& content)
                 break;
             case ("NORMAL"_):
                 m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::NORMAL;
-                // Normal is special, only store when needed
-                EnableStoreNormals(true);
                 break;
             case ("TORQUE"_):
                 m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::TORQUE;
@@ -470,13 +272,6 @@ void DEMSolver::SetContactOutputContent(const std::vector<std::string>& content)
                 DEME_ERROR("Instruction %s is unknown in SetContactOutputContent call.", content[i].c_str());
         }
     }
-}
-
-void DEMSolver::EnableStoreNormals(bool enable) {
-    kT->simParams->storeNormal = enable;
-    dT->simParams->storeNormal = enable;
-    kT->simParams.toDevice();
-    dT->simParams.toDevice();
 }
 
 void DEMSolver::SetMeshUniversalContact(bool use) {
@@ -2394,23 +2189,6 @@ std::shared_ptr<DEMMesh> DEMSolver::AddShellMesh(DEMMesh& mesh, float shell_thic
     return AddMesh(mesh);
 }
 
-namespace {
-
-bool loadMeshByExtension(DEMMesh& mesh, const std::string& filename, bool load_normals, bool load_uv) {
-    std::string ext = std::filesystem::path(filename).extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return std::tolower(c); });
-    if (ext == ".stl") {
-        return mesh.LoadSTLMesh(filename, load_normals);
-    }
-    if (ext == ".ply") {
-        return mesh.LoadPLYMesh(filename, load_normals);
-    }
-    // Default to OBJ/Wavefront path
-    return mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
-}
-
-}  // namespace
-
 std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
                                                            const std::shared_ptr<DEMMaterial>& mat,
                                                            bool load_normals,
@@ -3640,6 +3418,31 @@ void DEMSolver::refreshCombinedRuntimeResources() {
     if (!sys_initialized || !m_combined_runtime_dirty) {
         return;
     }
+
+    const auto clear_combined_runtime_resources = [&]() {
+        dT->ownerCombinedMaster.free();
+        dT->ownerCombinedRelPos.free();
+        dT->ownerCombinedRelOriQ.free();
+        dT->ownerCombinedMasterMass.free();
+        dT->ownerCombinedMasterMOI.free();
+        kT->ownerCombinedMaster.free();
+        dT->granData.toDevice();
+        kT->granData.toDevice();
+
+        dT->simParams->nCombinedOwners = 0;
+        kT->simParams->nCombinedOwners = 0;
+        dT->simParams->allowIntraCombinedOwnerContacts = m_allow_intra_combined_owner_contacts ? 1 : 0;
+        kT->simParams->allowIntraCombinedOwnerContacts = m_allow_intra_combined_owner_contacts ? 1 : 0;
+        dT->simParams.toDevice();
+        kT->simParams.toDevice();
+    };
+
+    if (cached_combined_instances.empty()) {
+        clear_combined_runtime_resources();
+        m_combined_runtime_dirty = false;
+        return;
+    }
+
     // Reset per-owner mapping to the "not in a combined group" default state.
     std::vector<bodyID_t> owner_combined_master(nOwnerBodies, NULL_BODYID);
     std::vector<float3> owner_combined_rel_pos(nOwnerBodies, make_float3(0));
@@ -3671,7 +3474,6 @@ void DEMSolver::refreshCombinedRuntimeResources() {
             const float safe_mass = (inst->master_equiv_mass[k] > DEME_TINY_FLOAT) ? inst->master_equiv_mass[k]
                                                                                    : DEFAULT_COMBINED_MASTER_MASS;
             owner_combined_master_mass[master] = safe_mass;
-            owner_combined_master_moi[master] = inst->master_equiv_moi[k];
 
             for (size_t i = 0; i < n_members_per_inst; i++) {
                 const size_t flat_idx = k * n_members_per_inst + i;
@@ -3681,6 +3483,9 @@ void DEMSolver::refreshCombinedRuntimeResources() {
                 }
                 // Membership map: every member points to its master; this is the key used by contact suppression.
                 owner_combined_master[member] = master;
+                owner_combined_master_moi[master] +=
+                    rotateDiagonalMOIToFrame(inst->member_moi[flat_idx], inst->type->rel_oriQ[i]) +
+                    parallelAxisDiagonal(inst->member_mass[flat_idx], inst->type->rel_pos[i]);
                 if (member != master) {
                     // Only non-master members need fixed transforms for rigid re-imposition.
                     owner_combined_rel_pos[member] = inst->type->rel_pos[i];
@@ -3690,6 +3495,21 @@ void DEMSolver::refreshCombinedRuntimeResources() {
             }
         }
     }
+
+    if (n_combined_owners == 0) {
+        clear_combined_runtime_resources();
+        m_combined_runtime_dirty = false;
+        return;
+    }
+
+    dT->ownerCombinedMaster.resize(nOwnerBodies, NULL_BODYID);
+    dT->ownerCombinedRelPos.resize(nOwnerBodies, make_float3(0));
+    dT->ownerCombinedRelOriQ.resize(nOwnerBodies, make_float4(0, 0, 0, 1));
+    dT->ownerCombinedMasterMass.resize(nOwnerBodies, 0.f);
+    dT->ownerCombinedMasterMOI.resize(nOwnerBodies, make_float3(0));
+    kT->ownerCombinedMaster.resize(nOwnerBodies, NULL_BODYID);
+    dT->granData.toDevice();
+    kT->granData.toDevice();
 
     // Push refreshed arrays to both workers; kT only needs membership mapping for suppression.
     dT->ownerCombinedMaster.setVal(owner_combined_master, 0);

@@ -265,11 +265,13 @@ void DEMDynamicThread::migrateDataToDevice() {
 
     familyMaskMatrix.toDeviceAsync(streamInfo.stream);
     familyExtraMarginSize.toDeviceAsync(streamInfo.stream);
-    ownerCombinedMaster.toDeviceAsync(streamInfo.stream);
-    ownerCombinedRelPos.toDeviceAsync(streamInfo.stream);
-    ownerCombinedRelOriQ.toDeviceAsync(streamInfo.stream);
-    ownerCombinedMasterMass.toDeviceAsync(streamInfo.stream);
-    ownerCombinedMasterMOI.toDeviceAsync(streamInfo.stream);
+    if (ownerCombinedMaster.size() > 0) {
+        ownerCombinedMaster.toDeviceAsync(streamInfo.stream);
+        ownerCombinedRelPos.toDeviceAsync(streamInfo.stream);
+        ownerCombinedRelOriQ.toDeviceAsync(streamInfo.stream);
+        ownerCombinedMasterMass.toDeviceAsync(streamInfo.stream);
+        ownerCombinedMasterMOI.toDeviceAsync(streamInfo.stream);
+    }
 
     contactForces.toDeviceAsync(streamInfo.stream);
     contactNormals.toDeviceAsync(streamInfo.stream);
@@ -666,12 +668,6 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
 
     // Resize the family mask `matrix' (in fact it is flattened)
     DEME_DUAL_ARRAY_RESIZE(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
-    DEME_DUAL_ARRAY_RESIZE(ownerCombinedMaster, nOwnerBodies, NULL_BODYID);
-    DEME_DUAL_ARRAY_RESIZE(ownerCombinedRelPos, nOwnerBodies, make_float3(0));
-    DEME_DUAL_ARRAY_RESIZE(ownerCombinedRelOriQ, nOwnerBodies, make_float4(0, 0, 0, 1));
-    DEME_DUAL_ARRAY_RESIZE(ownerCombinedMasterMass, nOwnerBodies, 0.f);
-    DEME_DUAL_ARRAY_RESIZE(ownerCombinedMasterMOI, nOwnerBodies, make_float3(0));
-
     // Resize to the number of geometries
     DEME_DUAL_ARRAY_RESIZE(ownerClumpBody, nSpheresGM, 0);
     DEME_DUAL_ARRAY_RESIZE(sphereMaterialOffset, nSpheresGM, 0);
@@ -762,9 +758,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
             DEME_DUAL_ARRAY_RESIZE(contactTorque_convToForce, cnt_arr_size, make_float3(0));
             DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, cnt_arr_size, make_float3(0));
             DEME_DUAL_ARRAY_RESIZE(contactPointGeometryB, cnt_arr_size, make_float3(0));
-            if (simParams->storeNormal) {
-                DEME_DUAL_ARRAY_RESIZE(contactNormals, cnt_arr_size, make_float3(0));
-            }
+            DEME_DUAL_ARRAY_RESIZE(contactNormals, cnt_arr_size, make_float3(0));
         }
         // Allocate memory for each wildcard array
         contactWildcards.resize(simParams->nContactWildcards);
@@ -2574,9 +2568,7 @@ inline void DEMDynamicThread::contactPrimitivesArraysResize(size_t nContactPairs
         DEME_DUAL_ARRAY_RESIZE(contactTorque_convToForce, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryB, nContactPairs, make_float3(0));
-        if (simParams->storeNormal) {
-            DEME_DUAL_ARRAY_RESIZE(contactNormals, nContactPairs, make_float3(0));
-        }
+        DEME_DUAL_ARRAY_RESIZE(contactNormals, nContactPairs, make_float3(0));
     }
 
     // Re-packing pointers now is automatic

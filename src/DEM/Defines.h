@@ -303,8 +303,6 @@ struct DEMSimParams {
     float3 userBoxMax;
     // Stepping method
     TIME_INTEGRATOR stepping = TIME_INTEGRATOR::FORWARD_EULER;
-    // Whether needs to store the contact normal
-    bool storeNormal = false;
 
     // Number of wildcards (extra property) arrays associated with contacts and owners and geometries
     unsigned int nContactWildcards;

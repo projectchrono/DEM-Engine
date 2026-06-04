@@ -201,14 +201,28 @@ DEME_KERNEL void aggregateCombinedOwnersAcc(deme::DEMSimParams* simParams,
         atomicAdd(granData->aZ + master, granData->aZ[owner] * ratio_m);
     }
 
-    if (memberMOI.x > DEME_TINY_FLOAT && masterMOI.x > DEME_TINY_FLOAT) {
-        atomicAdd(granData->alphaX + master, granData->alphaX[owner] * (memberMOI.x / masterMOI.x));
-    }
-    if (memberMOI.y > DEME_TINY_FLOAT && masterMOI.y > DEME_TINY_FLOAT) {
-        atomicAdd(granData->alphaY + master, granData->alphaY[owner] * (memberMOI.y / masterMOI.y));
-    }
-    if (memberMOI.z > DEME_TINY_FLOAT && masterMOI.z > DEME_TINY_FLOAT) {
-        atomicAdd(granData->alphaZ + master, granData->alphaZ[owner] * (memberMOI.z / masterMOI.z));
+    if (masterMOI.x > DEME_TINY_FLOAT && masterMOI.y > DEME_TINY_FLOAT && masterMOI.z > DEME_TINY_FLOAT) {
+        float4 qMaster = make_float4(granData->oriQx[master], granData->oriQy[master], granData->oriQz[master],
+                                     granData->oriQw[master]);
+        float3 memberForceMaster =
+            memberMass * make_float3(granData->aX[owner], granData->aY[owner], granData->aZ[owner]);
+        applyOriQToVector3(memberForceMaster, make_float4(-qMaster.x, -qMaster.y, -qMaster.z, qMaster.w));
+
+        float3 torqueMaster = make_float3(0);
+        if (granData->ownerCombinedRelPos != nullptr) {
+            torqueMaster += cross(granData->ownerCombinedRelPos[owner], memberForceMaster);
+        }
+
+        float3 memberTorqueMaster =
+            memberMOI * make_float3(granData->alphaX[owner], granData->alphaY[owner], granData->alphaZ[owner]);
+        if (granData->ownerCombinedRelOriQ != nullptr) {
+            applyOriQToVector3(memberTorqueMaster, granData->ownerCombinedRelOriQ[owner]);
+        }
+        torqueMaster += memberTorqueMaster;
+
+        atomicAdd(granData->alphaX + master, torqueMaster.x / masterMOI.x);
+        atomicAdd(granData->alphaY + master, torqueMaster.y / masterMOI.y);
+        atomicAdd(granData->alphaZ + master, torqueMaster.z / masterMOI.z);
     }
 
     granData->aX[owner] = 0.f;
