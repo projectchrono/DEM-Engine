@@ -21,6 +21,8 @@ DEM-Engine is a performance-sensitive CUDA/C++ DEM solver with a Chrono-like pub
 - Follow `.clang-format` for C++/CUDA formatting. The repo uses Chromium style with 4-space indentation and a 120-column limit.
 - Match existing CMake style in the directory being edited. Do not modernize unrelated CMake while adding a target or option.
 - Keep includes, namespace use, and helper placement consistent with nearby files.
+- Include headers from this project with quotes (`"..."`), and include headers from other projects or the standard library
+  with angle brackets (`<...>`).
 - Prefer `DEME_ERROR`, `DEME_WARNING`, and existing diagnostic patterns over ad hoc exceptions or `std::cout` in library code.
 - Demos and modular tests may print concise PASS/FAIL information, but core library code should avoid noisy output unless controlled by existing verbosity mechanisms.
 

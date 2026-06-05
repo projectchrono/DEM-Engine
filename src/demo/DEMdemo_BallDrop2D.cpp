@@ -34,6 +34,7 @@ int main() {
     DEMSim.SetOutputFormat("CSV");
     DEMSim.SetOutputContent({"ABSV"});
     DEMSim.SetMeshOutputFormat("VTK");
+    // DEMSim.SetSimplePatchCombination(true);
 
     path out_dir = current_path();
     out_dir /= "DemoOutput_BallDrop2D";

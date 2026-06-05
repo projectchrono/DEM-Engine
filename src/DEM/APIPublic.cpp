@@ -3,14 +3,13 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#include <core/ApiVersion.h>
+#include "core/ApiVersion.h"
 #include "API.h"
 #include "Defines.h"
 #include "utils/HostSideHelpers.hpp"
 #include "utils/ClumpMassProperties.hpp"
 #include "utils/CombinedOwnerUtils.hpp"
-#include "utils/MeshLoadUtils.hpp"
-#include "utils/MeshWearUtils.hpp"
+#include "utils/MeshUtils.hpp"
 #include "AuxClasses.h"
 #include "../kernel/DEMHelperKernels.cuh"
 
