@@ -15,6 +15,9 @@ DEM-Engine is a performance-sensitive CUDA/C++ DEM solver with a Chrono-like pub
 - Keep CPU-side convenience separate from GPU hot paths. Public APIs can be friendly; kernels and per-step loops should be boring, direct, and allocation-free.
 - Prefer explicit names over cleverness. Names like `COMBINED_OWNER_REIMPOSITION_BLOCK` are good because they describe the kernel context and the tuning purpose.
 - Use comments to explain non-obvious physics, synchronization, ownership, or CUDA/JIT constraints. Do not narrate simple assignments.
+- When modifying or adding code, preserve existing explanatory comments whenever possible. Delete one only when the
+  corresponding code or explanation has become completely obsolete.
+- When adding code that uses a non-obvious coding trick or workaround, add a concise comment explaining why it is needed.
 
 ## Style
 
