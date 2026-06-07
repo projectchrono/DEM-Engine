@@ -398,6 +398,11 @@ class DEMSolver {
     /// can produce multiple patch contacts per patch-ID pair when the touching region is geometrically disconnected.
     void SetSimplePatchCombination(bool use = true);
 
+    /// @brief Set whether flooded patch-island IDs should be stabilized across contact-detection steps.
+    /// @param use If true (default), the flooding route remaps raw island labels by primitive-contact overlap with the
+    /// previous contact-detection step. If false, raw flooding representative labels are used directly.
+    void SetStablePatchIslandIDs(bool use = true);
+
     /// @brief Declare that all meshed particles in the simulation have a low polygon count (e.g., boxes, tetrahedra).
     /// @param use If true (default when called), the per-triangle maxTriTriPenetration array will NOT be computed,
     /// transferred to kT, or used to inflate contact-detection margins. Default is false (feature is active).

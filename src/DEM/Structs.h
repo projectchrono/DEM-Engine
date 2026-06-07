@@ -565,6 +565,9 @@ struct SolverFlags {
     // index-flooding-based approach. When true, all triangles sharing the same patch ID pair are combined into one
     // patch contact without the connected-component flooding step.
     bool useSimplePatchCombination = false;
+    // Whether the index-flooding patch-combination route remaps raw island labels to stable IDs across contact
+    // detection steps. This preserves contact history when the raw representative triangle changes.
+    bool useStablePatchIslandIDs = true;
 };
 
 class DEMMaterial {

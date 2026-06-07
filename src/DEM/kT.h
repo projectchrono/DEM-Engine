@@ -187,6 +187,10 @@ class DEMKinematicThread {
     DualArray<bodyID_t> previous_idPrimitiveB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<contact_t> previous_contactTypePrimitive =
         DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // Stable flooded-island ID per previous primitive contact. Used by the next contact detection step to preserve
+    // patch-contact identity when the raw flooded representative triangle changes.
+    DualArray<bodyID_t> previous_primitivePatchIsland =
+        DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Records if this primitive contact is persistent and serves as kT's work array on treating their persistency.
     DualArray<notStupidBool_t> contactPersistency =

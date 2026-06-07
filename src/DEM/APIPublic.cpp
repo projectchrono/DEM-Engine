@@ -288,6 +288,11 @@ void DEMSolver::SetSimplePatchCombination(bool use) {
     dT->solverFlags.useSimplePatchCombination = use;
 }
 
+void DEMSolver::SetStablePatchIslandIDs(bool use) {
+    kT->solverFlags.useStablePatchIslandIDs = use;
+    dT->solverFlags.useStablePatchIslandIDs = use;
+}
+
 void DEMSolver::SetMeshParticlesLowPoly(bool use) {
     kT->simParams->meshParticlesLowPoly = use;
     dT->simParams->meshParticlesLowPoly = use;

@@ -545,10 +545,11 @@ void DEMKinematicThread::workerThread() {
             contactDetection(bin_sphere_kernels, bin_triangle_kernels, sphere_contact_kernels, sphTri_contact_kernels,
                              granData, simParams, solverFlags, verbosity, idPrimitiveA, idPrimitiveB,
                              contactTypePrimitive, previous_idPrimitiveA, previous_idPrimitiveB,
-                             previous_contactTypePrimitive, contactPersistency, contactMapping, idPatchA, idPatchB,
-                             previous_idPatchA, previous_idPatchB, contactTypePatch, previous_contactTypePatch,
-                             contactPatchIsland, previous_contactPatchIsland, typeStartCountPatchMap, geomToPatchMap,
-                             streamInfo.stream, solverScratchSpace, timers, stateParams);
+                             previous_contactTypePrimitive, previous_primitivePatchIsland, contactPersistency,
+                             contactMapping, idPatchA, idPatchB, previous_idPatchA, previous_idPatchB, contactTypePatch,
+                             previous_contactTypePatch, contactPatchIsland, previous_contactPatchIsland,
+                             typeStartCountPatchMap, geomToPatchMap, streamInfo.stream, solverScratchSpace, timers,
+                             stateParams);
             CDAccumTimer.End();
 
             timers.GetTimer("Send to dT buffer").start();
@@ -1045,10 +1046,12 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
         DEME_DUAL_ARRAY_RESIZE(geomToPatchMap, cnt_arr_size, 0);
 
         if (!solverFlags.isHistoryless) {
-            // No need to resize prev_primitive ID arrays: used only when persistency is enabled and that is rare
-            // DEME_DUAL_ARRAY_RESIZE(previous_idPrimitiveA, cnt_arr_size, 0);
-            // DEME_DUAL_ARRAY_RESIZE(previous_idPrimitiveB, cnt_arr_size, 0);
-            // DEME_DUAL_ARRAY_RESIZE(previous_contactTypePrimitive, cnt_arr_size, NOT_A_CONTACT);
+            if (solverFlags.useStablePatchIslandIDs) {
+                DEME_DUAL_ARRAY_RESIZE(previous_idPrimitiveA, cnt_arr_size, 0);
+                DEME_DUAL_ARRAY_RESIZE(previous_idPrimitiveB, cnt_arr_size, 0);
+                DEME_DUAL_ARRAY_RESIZE(previous_contactTypePrimitive, cnt_arr_size, NOT_A_CONTACT);
+                DEME_DUAL_ARRAY_RESIZE(previous_primitivePatchIsland, cnt_arr_size, NULL_BODYID);
+            }
             DEME_DUAL_ARRAY_RESIZE(contactMapping, cnt_arr_size, NULL_MAPPING_PARTNER);
             DEME_DUAL_ARRAY_RESIZE(previous_idPatchA, cnt_arr_size, 0);
             DEME_DUAL_ARRAY_RESIZE(previous_idPatchB, cnt_arr_size, 0);

@@ -71,6 +71,19 @@ inline void patchArraysResize(size_t nPatchInvolvedContacts,
     granData.toDevice();
 }
 
+inline void primitiveHistoryArraysResize(size_t nContactPairs,
+                                         DualArray<bodyID_t>& previous_idPrimitiveA,
+                                         DualArray<bodyID_t>& previous_idPrimitiveB,
+                                         DualArray<contact_t>& previous_contactTypePrimitive,
+                                         DualArray<bodyID_t>& previous_primitivePatchIsland,
+                                         DualStruct<DEMDataKT>& granData) {
+    DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_idPrimitiveA, nContactPairs);
+    DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_idPrimitiveB, nContactPairs);
+    DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_contactTypePrimitive, nContactPairs);
+    DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_primitivePatchIsland, nContactPairs);
+    granData.toDevice();
+}
+
 inline void removeDuplicateContacts(DualStruct<DEMDataKT>& granData,
                                     bodyID_t* idA_sorted,
                                     bodyID_t* idB_sorted,
@@ -270,6 +283,133 @@ inline void sortABTypePersistencyByType(bodyID_t* idA,
     scratchPad.finishUsingTempVector("sortType_idx_sorted");
 }
 
+inline void stabilizeFloodedPatchIslandIDs(DualStruct<DEMDataKT>& granData,
+                                           DualArray<bodyID_t>& previous_primitivePatchIsland,
+                                           size_t numCurrentPrimitiveContacts,
+                                           size_t numCurrentPatchContacts,
+                                           size_t numPreviousPrimitiveContacts,
+                                           cudaStream_t& this_stream,
+                                           DEMSolverScratchData& scratchPad) {
+    if (numCurrentPrimitiveContacts == 0 || numCurrentPatchContacts == 0 || numPreviousPrimitiveContacts == 0 ||
+        previous_primitivePatchIsland.size() < numPreviousPrimitiveContacts) {
+        return;
+    }
+
+    const size_t prev_key_bytes = numPreviousPrimitiveContacts * sizeof(uint64_t);
+    uint64_t* prevKeyHi = (uint64_t*)scratchPad.allocateTempVector("stablePrevKeyHi", prev_key_bytes);
+    uint64_t* prevKeyLo = (uint64_t*)scratchPad.allocateTempVector("stablePrevKeyLo", prev_key_bytes);
+    uint64_t* prevKeyLoSorted = (uint64_t*)scratchPad.allocateTempVector("stablePrevKeyLoSorted", prev_key_bytes);
+    uint64_t* prevKeyHiByLo = (uint64_t*)scratchPad.allocateTempVector("stablePrevKeyHiByLo", prev_key_bytes);
+    uint64_t* prevKeyHiSorted = (uint64_t*)scratchPad.allocateTempVector("stablePrevKeyHiSorted", prev_key_bytes);
+    uint64_t* prevKeyLoSortedByHi =
+        (uint64_t*)scratchPad.allocateTempVector("stablePrevKeyLoSortedByHi", prev_key_bytes);
+
+    const size_t prev_idx_bytes = numPreviousPrimitiveContacts * sizeof(contactPairs_t);
+    contactPairs_t* prevIdx = (contactPairs_t*)scratchPad.allocateTempVector("stablePrevIdx", prev_idx_bytes);
+    contactPairs_t* prevIdxSorted =
+        (contactPairs_t*)scratchPad.allocateTempVector("stablePrevIdxSorted", prev_idx_bytes);
+    contactPairs_t* prevByLoIdx = (contactPairs_t*)scratchPad.allocateTempVector("stablePrevByLoIdx", prev_idx_bytes);
+    contactPairs_t* prevByLoIdxSorted =
+        (contactPairs_t*)scratchPad.allocateTempVector("stablePrevByLoIdxSorted", prev_idx_bytes);
+
+    bodyID_t* prevIslandByLo = (bodyID_t*)scratchPad.allocateTempVector(
+        "stablePrevIslandByLo", numPreviousPrimitiveContacts * sizeof(bodyID_t));
+    bodyID_t* prevIslandSorted = (bodyID_t*)scratchPad.allocateTempVector(
+        "stablePrevIslandSorted", numPreviousPrimitiveContacts * sizeof(bodyID_t));
+
+    size_t prev_blocks = (numPreviousPrimitiveContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    buildPrimitiveContactKeyParts<<<dim3(prev_blocks), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+        granData->previous_idPrimitiveA, granData->previous_idPrimitiveB, granData->previous_contactTypePrimitive,
+        prevKeyHi, prevKeyLo, numPreviousPrimitiveContacts);
+    lineNumbers<<<dim3(prev_blocks), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(prevIdx,
+                                                                                         numPreviousPrimitiveContacts);
+    cubDEMSortByKeys<uint64_t, contactPairs_t>(prevKeyLo, prevKeyLoSorted, prevIdx, prevIdxSorted,
+                                               numPreviousPrimitiveContacts, this_stream, scratchPad);
+    gatherByIndex<uint64_t><<<dim3(prev_blocks), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+        prevKeyHi, prevKeyHiByLo, prevIdxSorted, numPreviousPrimitiveContacts);
+    gatherByIndex<bodyID_t><<<dim3(prev_blocks), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+        previous_primitivePatchIsland.data(), prevIslandByLo, prevIdxSorted, numPreviousPrimitiveContacts);
+
+    lineNumbers<<<dim3(prev_blocks), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(prevByLoIdx,
+                                                                                         numPreviousPrimitiveContacts);
+    cubDEMSortByKeys<uint64_t, contactPairs_t>(prevKeyHiByLo, prevKeyHiSorted, prevByLoIdx, prevByLoIdxSorted,
+                                               numPreviousPrimitiveContacts, this_stream, scratchPad);
+    gatherByIndex<uint64_t><<<dim3(prev_blocks), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+        prevKeyLoSorted, prevKeyLoSortedByHi, prevByLoIdxSorted, numPreviousPrimitiveContacts);
+    gatherByIndex<bodyID_t><<<dim3(prev_blocks), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+        prevIslandByLo, prevIslandSorted, prevByLoIdxSorted, numPreviousPrimitiveContacts);
+
+    const size_t curr_vote_bytes = numCurrentPrimitiveContacts * sizeof(uint64_t);
+    uint64_t* voteKeysAll = (uint64_t*)scratchPad.allocateTempVector("stableVoteKeysAll", curr_vote_bytes);
+    uint64_t* voteKeys = (uint64_t*)scratchPad.allocateTempVector("stableVoteKeys", curr_vote_bytes);
+    notStupidBool_t* voteFlags = (notStupidBool_t*)scratchPad.allocateTempVector(
+        "stableVoteFlags", numCurrentPrimitiveContacts * sizeof(notStupidBool_t));
+    scratchPad.allocateDualStruct("numStableVotes");
+
+    size_t curr_blocks = (numCurrentPrimitiveContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    buildStableIslandVotes<<<dim3(curr_blocks), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+        granData->idPrimitiveA, granData->idPrimitiveB, granData->contactTypePrimitive, granData->geomToPatchMap,
+        prevKeyHiSorted, prevKeyLoSortedByHi, prevIslandSorted, voteKeysAll, voteFlags, numCurrentPrimitiveContacts,
+        numPreviousPrimitiveContacts);
+    cubDEMSelectFlagged<uint64_t, notStupidBool_t>(voteKeysAll, voteKeys, voteFlags,
+                                                   scratchPad.getDualStructDevice("numStableVotes"),
+                                                   numCurrentPrimitiveContacts, this_stream, scratchPad);
+    scratchPad.syncDualStructDeviceToHost("numStableVotes");
+    size_t numStableVotes = *scratchPad.getDualStructHost("numStableVotes");
+
+    if (numStableVotes > 0) {
+        uint64_t* voteKeysSorted =
+            (uint64_t*)scratchPad.allocateTempVector("stableVoteKeysSorted", numStableVotes * sizeof(uint64_t));
+        uint64_t* uniqueVoteKeys =
+            (uint64_t*)scratchPad.allocateTempVector("stableUniqueVoteKeys", numStableVotes * sizeof(uint64_t));
+        contactPairs_t* voteCounts =
+            (contactPairs_t*)scratchPad.allocateTempVector("stableVoteCounts", numStableVotes * sizeof(contactPairs_t));
+        scratchPad.allocateDualStruct("numUniqueStableVotes");
+        cubDEMSortKeys<uint64_t>(voteKeys, voteKeysSorted, numStableVotes, this_stream, scratchPad);
+        cubDEMRunLengthEncode<uint64_t, contactPairs_t>(voteKeysSorted, uniqueVoteKeys, voteCounts,
+                                                        scratchPad.getDualStructDevice("numUniqueStableVotes"),
+                                                        numStableVotes, this_stream, scratchPad);
+        scratchPad.syncDualStructDeviceToHost("numUniqueStableVotes");
+        size_t numUniqueStableVotes = *scratchPad.getDualStructHost("numUniqueStableVotes");
+
+        unsigned long long* bestPacked = (unsigned long long*)scratchPad.allocateTempVector(
+            "stableBestPacked", numCurrentPatchContacts * sizeof(unsigned long long));
+        DEME_GPU_CALL(
+            cudaMemsetAsync(bestPacked, 0, numCurrentPatchContacts * sizeof(unsigned long long), this_stream));
+        if (numUniqueStableVotes > 0) {
+            size_t unique_blocks = (numUniqueStableVotes + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+            scatterBestStableIslandVote<<<dim3(unique_blocks), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+                uniqueVoteKeys, voteCounts, bestPacked, numUniqueStableVotes);
+            size_t patch_blocks =
+                (numCurrentPatchContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+            applyBestStableIslandVotes<<<dim3(patch_blocks), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+                bestPacked, granData->contactPatchIsland, numCurrentPatchContacts);
+        }
+        scratchPad.finishUsingTempVector("stableBestPacked");
+        scratchPad.finishUsingTempVector("stableVoteKeysSorted");
+        scratchPad.finishUsingTempVector("stableUniqueVoteKeys");
+        scratchPad.finishUsingTempVector("stableVoteCounts");
+        scratchPad.finishUsingDualStruct("numUniqueStableVotes");
+    }
+
+    scratchPad.finishUsingDualStruct("numStableVotes");
+    scratchPad.finishUsingTempVector("stableVoteFlags");
+    scratchPad.finishUsingTempVector("stableVoteKeys");
+    scratchPad.finishUsingTempVector("stableVoteKeysAll");
+    scratchPad.finishUsingTempVector("stablePrevIslandSorted");
+    scratchPad.finishUsingTempVector("stablePrevIslandByLo");
+    scratchPad.finishUsingTempVector("stablePrevByLoIdxSorted");
+    scratchPad.finishUsingTempVector("stablePrevByLoIdx");
+    scratchPad.finishUsingTempVector("stablePrevIdxSorted");
+    scratchPad.finishUsingTempVector("stablePrevIdx");
+    scratchPad.finishUsingTempVector("stablePrevKeyLoSortedByHi");
+    scratchPad.finishUsingTempVector("stablePrevKeyHiSorted");
+    scratchPad.finishUsingTempVector("stablePrevKeyHiByLo");
+    scratchPad.finishUsingTempVector("stablePrevKeyLoSorted");
+    scratchPad.finishUsingTempVector("stablePrevKeyLo");
+    scratchPad.finishUsingTempVector("stablePrevKeyHi");
+}
+
 DEME_KERNEL void markContactsByCombinedOwnerMask(const bodyID_t* idA,
                                                  const bodyID_t* idB,
                                                  const contact_t* type,
@@ -346,6 +486,7 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                       DualArray<bodyID_t>& previous_idPrimitiveA,
                       DualArray<bodyID_t>& previous_idPrimitiveB,
                       DualArray<contact_t>& previous_contactTypePrimitive,
+                      DualArray<bodyID_t>& previous_primitivePatchIsland,
                       DualArray<notStupidBool_t>& contactPersistency,
                       DualArray<contactPairs_t>& contactMapping,
                       // NEW: Separate patch ID arrays and mapping
@@ -2022,6 +2163,12 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
 
                 *scratchPad.numContacts = numUniqueIslands;
 
+                if (solverFlags.useStablePatchIslandIDs) {
+                    stabilizeFloodedPatchIslandIDs(granData, previous_primitivePatchIsland, numTotalCnts,
+                                                   numUniqueIslands, *scratchPad.numPrevPrimitiveContacts, this_stream,
+                                                   scratchPad);
+                }
+
                 // Build per-type start/count map for patch contacts.
                 typeStartCountPatchMap_thisStep.SetAll({0, 0});
                 if (numUniqueIslands > 0) {
@@ -2286,11 +2433,21 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                         granData->contactMapping, curr_start, curr_count);
                 } else {
                     // Both steps have contacts of this type - perform mapping
-                    buildPatchContactMappingForType<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
-                                                      this_stream>>>(
-                        granData->idPatchA, granData->idPatchB, granData->contactPatchIsland,
-                        granData->previous_idPatchA, granData->previous_idPatchB, granData->previous_contactPatchIsland,
-                        granData->contactMapping, curr_start, curr_count, prev_start, prev_count);
+                    if (solverFlags.useStablePatchIslandIDs && !solverFlags.useSimplePatchCombination) {
+                        buildPatchContactMappingForTypeLinear<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK),
+                                                                0, this_stream>>>(
+                            granData->idPatchA, granData->idPatchB, granData->contactPatchIsland,
+                            granData->previous_idPatchA, granData->previous_idPatchB,
+                            granData->previous_contactPatchIsland, granData->contactMapping, curr_start, curr_count,
+                            prev_start, prev_count);
+                    } else {
+                        buildPatchContactMappingForType<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
+                                                          this_stream>>>(
+                            granData->idPatchA, granData->idPatchB, granData->contactPatchIsland,
+                            granData->previous_idPatchA, granData->previous_idPatchB,
+                            granData->previous_contactPatchIsland, granData->contactMapping, curr_start, curr_count,
+                            prev_start, prev_count);
+                    }
                 }
             }
 
@@ -2348,6 +2505,31 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
     // displayDeviceArray<bodyID_t>(granData->idPatchA, *scratchPad.numContacts);
     // displayDeviceArray<bodyID_t>(granData->idPatchB, *scratchPad.numContacts);
     // displayDeviceArray<contact_t>(granData->contactTypePatch, *scratchPad.numContacts);
+
+    if (solverFlags.useStablePatchIslandIDs && !solverFlags.useSimplePatchCombination &&
+        *scratchPad.numPrimitiveContacts > 0) {
+        if (*scratchPad.numPrimitiveContacts > previous_idPrimitiveA.size() ||
+            *scratchPad.numPrimitiveContacts > previous_primitivePatchIsland.size()) {
+            primitiveHistoryArraysResize(*scratchPad.numPrimitiveContacts, previous_idPrimitiveA, previous_idPrimitiveB,
+                                         previous_contactTypePrimitive, previous_primitivePatchIsland, granData);
+        }
+
+        const size_t primitive_id_arr_bytes = (*scratchPad.numPrimitiveContacts) * sizeof(bodyID_t);
+        const size_t primitive_type_arr_bytes = (*scratchPad.numPrimitiveContacts) * sizeof(contact_t);
+        int dev = 0;
+        DEME_GPU_CALL(cudaGetDevice(&dev));
+        xfer::XferList xt;
+        xt.add(granData->previous_idPrimitiveA, granData->idPrimitiveA, primitive_id_arr_bytes);
+        xt.add(granData->previous_idPrimitiveB, granData->idPrimitiveB, primitive_id_arr_bytes);
+        xt.add(granData->previous_contactTypePrimitive, granData->contactTypePrimitive, primitive_type_arr_bytes);
+        xt.run(dev, dev, this_stream);
+
+        const size_t blocks_needed =
+            (*scratchPad.numPrimitiveContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+        fillPrimitivePatchIslandLabels<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
+            granData->geomToPatchMap, granData->contactPatchIsland, previous_primitivePatchIsland.data(),
+            *scratchPad.numPrimitiveContacts);
+    }
 
     // Finally, don't forget to store the number of contacts for the next iteration, even if there is 0 contacts (in
     // that case, mapping will not be constructed, but we don't have to worry b/c in the next iteration, simply no work
