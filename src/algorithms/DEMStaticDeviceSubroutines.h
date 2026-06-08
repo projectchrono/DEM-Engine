@@ -292,6 +292,11 @@ void rearrangeContactWildcards(DEMDataDT* granData,
                                size_t nContactPairs,
                                cudaStream_t& this_stream);
 void markAliveContacts(float* wildcard, notStupidBool_t* sentry, size_t nContactPairs, cudaStream_t& this_stream);
+void markAliveContactTypes(const contact_t* previousContactTypes,
+                           const notStupidBool_t* sentry,
+                           unsigned int* typeFlags,
+                           size_t nContactPairs,
+                           cudaStream_t& this_stream);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Misc kernels declarations

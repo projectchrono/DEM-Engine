@@ -2602,6 +2602,16 @@ inline void DEMDynamicThread::unpackMyBuffer() {
     // Make a note on the contact number of the previous time step
     *solverScratchSpace.numPrevContacts = *solverScratchSpace.numContacts;
     *solverScratchSpace.numPrevPrimitiveContacts = *solverScratchSpace.numPrimitiveContacts;
+    if (DEME_GET_VERBOSITY() >= VERBOSITY_METRIC && *solverScratchSpace.numPrevContacts > 0) {
+        // Keep old patch-contact types for later lost-history diagnostics. The contactTypePatch array is overwritten
+        // below by the newly received kT contact-detection result.
+        if (*solverScratchSpace.numPrevContacts > previousContactTypePatchMetric.size()) {
+            DEME_DEVICE_ARRAY_RESIZE(previousContactTypePatchMetric, *solverScratchSpace.numPrevContacts);
+        }
+        DEME_GPU_CALL(cudaMemcpyAsync(previousContactTypePatchMetric.data(), granData->contactTypePatch,
+                                      *solverScratchSpace.numPrevContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice,
+                                      streamInfo.stream));
+    }
     // kT's batch of produce is made with this max drift in mind
     pSchedSupport->dynamicMaxFutureDrift = (pSchedSupport->kinematicMaxFutureDrift).load();
     // DEME_DEBUG_PRINTF("dynamicMaxFutureDrift is %u", (pSchedSupport->dynamicMaxFutureDrift).load());
@@ -2843,12 +2853,40 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
             solverScratchSpace.syncDualStructDeviceToHost("lostContact");
             lostContact = solverScratchSpace.getDualStructHost("lostContact");
             if (*lostContact && solverFlags.isAsync) {
+                // Summarize which old patch-contact types still had live history but were not mapped into the new
+                // contact array. This keeps the METRIC warning compact while naming the affected contact routes.
+                unsigned int* lostContactTypeFlags = (unsigned int*)solverScratchSpace.allocateTempVector(
+                    "lostContactTypeFlags", NUM_SUPPORTED_CONTACT_TYPES * sizeof(unsigned int));
+                DEME_GPU_CALL(cudaMemsetAsync(lostContactTypeFlags, 0,
+                                              NUM_SUPPORTED_CONTACT_TYPES * sizeof(unsigned int), streamInfo.stream));
+                markAliveContactTypes(previousContactTypePatchMetric.data(), contactSentry, lostContactTypeFlags,
+                                      *solverScratchSpace.numPrevContacts, streamInfo.stream);
+                unsigned int lostContactTypeFlagsHost[NUM_SUPPORTED_CONTACT_TYPES] = {};
+                DEME_GPU_CALL(cudaMemcpyAsync(lostContactTypeFlagsHost, lostContactTypeFlags,
+                                              NUM_SUPPORTED_CONTACT_TYPES * sizeof(unsigned int),
+                                              cudaMemcpyDeviceToHost, streamInfo.stream));
+                DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+                std::string lostContactTypeNames;
+                for (size_t i = 0; i < NUM_SUPPORTED_CONTACT_TYPES; i++) {
+                    if (lostContactTypeFlagsHost[i] == 0) {
+                        continue;
+                    }
+                    if (!lostContactTypeNames.empty()) {
+                        lostContactTypeNames += ", ";
+                    }
+                    lostContactTypeNames += contact_type_out_name_map.at(ALL_CONTACT_TYPES[i]);
+                }
+                if (lostContactTypeNames.empty()) {
+                    lostContactTypeNames = "unknown";
+                }
                 // This prints when verbosity higher than METRIC
                 DEME_STATUS(
                     "ALIVE_CONTACT_NOT_DETECTED",
                     "%zu contacts were active at time %.9g on dT, but they are not detected on kT, therefore being "
-                    "removed unexpectedly!",
-                    *lostContact, simParams->dyn.timeElapsed);
+                    "removed unexpectedly! Missing contact types: %s.",
+                    *lostContact, simParams->dyn.timeElapsed, lostContactTypeNames.c_str());
+                solverScratchSpace.finishUsingTempVector("lostContactTypeFlags");
                 DEME_DEBUG_PRINTF("New number of contacts: %zu", *solverScratchSpace.numContacts);
                 DEME_DEBUG_PRINTF("Old number of contacts: %zu", *solverScratchSpace.numPrevContacts);
                 DEME_DEBUG_PRINTF("New contact A:");

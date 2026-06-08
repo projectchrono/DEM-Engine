@@ -270,6 +270,8 @@ class DEMDynamicThread {
                                                             DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed)};
     DeviceArray<contactPairs_t> contactMapping_buffer[2] = {DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed),
                                                             DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed)};
+    // METRIC diagnostics need old patch-contact types after unpack replaces contactTypePatch with the new kT result.
+    DeviceArray<contact_t> previousContactTypePatchMetric = DeviceArray<contact_t>(&m_approxDeviceBytesUsed);
     int kt_write_buf = 0;  // which buffer kT writes to next
 
     // Permanent array for patch contact penetrations (output of patch-based force correction kernel)
