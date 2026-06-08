@@ -77,6 +77,9 @@ inline void primitiveHistoryArraysResize(size_t nContactPairs,
                                          DualArray<contact_t>& previous_contactTypePrimitive,
                                          DualArray<bodyID_t>& previous_primitivePatchIsland,
                                          DualStruct<DEMDataKT>& granData) {
+    // Resize the primitive-level history snapshot used by flooded-island stabilization. Unlike user-persistent
+    // primitive contacts, this snapshot stores every primitive contact's stable island label so the next kT step can
+    // recover patch-contact identity even if the raw flooded representative triangle changes.
     DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_idPrimitiveA, nContactPairs);
     DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_idPrimitiveB, nContactPairs);
     DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_contactTypePrimitive, nContactPairs);
@@ -290,6 +293,11 @@ inline void stabilizeFloodedPatchIslandIDs(DualStruct<DEMDataKT>& granData,
                                            size_t numPreviousPrimitiveContacts,
                                            cudaStream_t& this_stream,
                                            DEMSolverScratchData& scratchPad) {
+    // Remap raw flooded island labels to IDs that are stable across consecutive contact-detection steps. The approach
+    // is primitive-overlap voting: sort previous primitive contacts by (type, primitive A, primitive B), find matching
+    // previous primitive contacts for each current primitive contact, then let each current patch island inherit the
+    // previous stable label with the largest overlap. idPatchA/B are intentionally left untouched because force kernels
+    // still use them as mesh-defined patch/material/owner indices.
     if (numCurrentPrimitiveContacts == 0 || numCurrentPatchContacts == 0 || numPreviousPrimitiveContacts == 0 ||
         previous_primitivePatchIsland.size() < numPreviousPrimitiveContacts) {
         return;
@@ -339,6 +347,8 @@ inline void stabilizeFloodedPatchIslandIDs(DualStruct<DEMDataKT>& granData,
     gatherByIndex<bodyID_t><<<dim3(prev_blocks), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
         prevIslandByLo, prevIslandSorted, prevByLoIdxSorted, numPreviousPrimitiveContacts);
 
+    // Convert primitive matches into votes keyed by (current patch-contact index, previous stable island label). A CUB
+    // run-length encode then gives the overlap count for each candidate stable label per current island.
     const size_t curr_vote_bytes = numCurrentPrimitiveContacts * sizeof(uint64_t);
     uint64_t* voteKeysAll = (uint64_t*)scratchPad.allocateTempVector("stableVoteKeysAll", curr_vote_bytes);
     uint64_t* voteKeys = (uint64_t*)scratchPad.allocateTempVector("stableVoteKeys", curr_vote_bytes);
@@ -377,6 +387,8 @@ inline void stabilizeFloodedPatchIslandIDs(DualStruct<DEMDataKT>& granData,
         DEME_GPU_CALL(
             cudaMemsetAsync(bestPacked, 0, numCurrentPatchContacts * sizeof(unsigned long long), this_stream));
         if (numUniqueStableVotes > 0) {
+            // Pick the winning stable label per current island by atomic max on a packed (count, inverse-label) score.
+            // The inverse label makes equal-overlap ties deterministic by preferring the smaller previous label.
             size_t unique_blocks = (numUniqueStableVotes + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
             scatterBestStableIslandVote<<<dim3(unique_blocks), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
                 uniqueVoteKeys, voteCounts, bestPacked, numUniqueStableVotes);
@@ -2164,6 +2176,8 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 *scratchPad.numContacts = numUniqueIslands;
 
                 if (solverFlags.useStablePatchIslandIDs) {
+                    // The flooding result is already grouped by raw island labels. When enabled, rewrite only
+                    // contactPatchIsland to a previous-step stable label selected by primitive-overlap voting.
                     stabilizeFloodedPatchIslandIDs(granData, previous_primitivePatchIsland, numTotalCnts,
                                                    numUniqueIslands, *scratchPad.numPrevPrimitiveContacts, this_stream,
                                                    scratchPad);
@@ -2434,6 +2448,9 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                 } else {
                     // Both steps have contacts of this type - perform mapping
                     if (solverFlags.useStablePatchIslandIDs && !solverFlags.useSimplePatchCombination) {
+                        // Stable island IDs can change the secondary ordering within a patch pair, so the old binary
+                        // search precondition no longer holds. The stabilized route uses a direct per-type lookup by
+                        // (patch A, patch B, stable island) to preserve history without relying on array order.
                         buildPatchContactMappingForTypeLinear<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK),
                                                                 0, this_stream>>>(
                             granData->idPatchA, granData->idPatchB, granData->contactPatchIsland,
@@ -2508,6 +2525,8 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
 
     if (solverFlags.useStablePatchIslandIDs && !solverFlags.useSimplePatchCombination &&
         *scratchPad.numPrimitiveContacts > 0) {
+        // Snapshot current primitive contacts and their final stable patch-island label for the next kT step. This
+        // membership table is the overlap-voting source used by stabilizeFloodedPatchIslandIDs.
         if (*scratchPad.numPrimitiveContacts > previous_idPrimitiveA.size() ||
             *scratchPad.numPrimitiveContacts > previous_primitivePatchIsland.size()) {
             primitiveHistoryArraysResize(*scratchPad.numPrimitiveContacts, previous_idPrimitiveA, previous_idPrimitiveB,

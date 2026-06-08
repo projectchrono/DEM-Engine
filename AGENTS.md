@@ -18,6 +18,9 @@ DEM-Engine is a performance-sensitive CUDA/C++ DEM solver with a Chrono-like pub
 - When modifying or adding code, preserve existing explanatory comments whenever possible. Delete one only when the
   corresponding code or explanation has become completely obsolete.
 - When adding code that uses a non-obvious coding trick or workaround, add a concise comment explaining why it is needed.
+- Newly added functions and substantial code blocks should include accompanying comments that explain what they do and
+  the approach they use. Keep these comments practical: describe intent, data flow, or algorithmic strategy rather than
+  restating each assignment.
 
 ## Style
 

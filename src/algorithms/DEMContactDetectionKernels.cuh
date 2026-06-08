@@ -691,6 +691,8 @@ __global__ void buildPrimitiveContactKeyParts(const bodyID_t* idA,
                                               uint64_t* key_hi,
                                               uint64_t* key_lo,
                                               size_t n) {
+    // Build sortable primitive-contact identity keys. These keys are used by the host stabilizer to match current
+    // primitive contacts to previous primitive contacts independent of their position in the contact arrays.
     contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
         key_hi[myID] = (static_cast<uint64_t>(contactTypes[myID]) << 32) | static_cast<uint64_t>(idA[myID]);
@@ -709,6 +711,8 @@ __global__ void buildStableIslandVotes(const bodyID_t* curr_idA,
                                        notStupidBool_t* voteFlags,
                                        size_t numCurr,
                                        size_t numPrev) {
+    // For each current primitive contact, find the matching previous primitive contact and emit one candidate stable
+    // island vote for the current patch contact. Later reduction counts these votes to select the dominant old label.
     contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID >= numCurr) {
         return;
@@ -750,6 +754,8 @@ __global__ void scatterBestStableIslandVote(const uint64_t* uniqueVoteKeys,
                                             const contactPairs_t* counts,
                                             unsigned long long* bestPacked,
                                             size_t n) {
+    // Collapse per-(patch contact, previous stable label) vote counts into one best candidate per patch contact. The
+    // packed score allows an atomic max to compare both overlap count and deterministic tie-break label in one value.
     contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
         const uint64_t vote_key = uniqueVoteKeys[myID];
@@ -767,6 +773,8 @@ __global__ void scatterBestStableIslandVote(const uint64_t* uniqueVoteKeys,
 __global__ void applyBestStableIslandVotes(const unsigned long long* bestPacked,
                                            bodyID_t* contactPatchIsland,
                                            size_t nPatchContacts) {
+    // Apply the winning stable labels in-place. Patch contacts without a previous-step overlap keep the raw flooded
+    // label, which gives new islands deterministic first-step IDs without inventing a separate allocator.
     contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nPatchContacts) {
         const unsigned long long packed = bestPacked[myID];
@@ -782,6 +790,8 @@ __global__ void fillPrimitivePatchIslandLabels(const contactPairs_t* geomToPatch
                                                const bodyID_t* contactPatchIsland,
                                                bodyID_t* primitivePatchIsland,
                                                size_t nPrimitive) {
+    // Store primitive-contact membership in the finalized patch-island ID space. This is the per-primitive overlap
+    // table that the next contact-detection step will use for stable-ID voting.
     contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nPrimitive) {
         primitivePatchIsland[myID] = contactPatchIsland[geomToPatchMap[myID]];
@@ -948,6 +958,8 @@ __global__ void buildPatchContactMappingForTypeLinear(bodyID_t* curr_idPatchA,
                                                       contactPairs_t curr_count,
                                                       contactPairs_t prev_start,
                                                       contactPairs_t prev_count) {
+    // Map stabilized patch contacts to previous patch contacts by direct search within the same contact-type segment.
+    // The stabilized route may no longer be sorted by island label, so this avoids relying on binary-search ordering.
     contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < curr_count) {
         const contactPairs_t curr_idx = curr_start + myID;
