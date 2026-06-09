@@ -194,6 +194,7 @@ int main() {
         DEMSim.WriteSphereFile(out_dir / filename);
         DEMSim.WriteMeshFile(out_dir / meshname);
         DEMSim.ShowThreadCollaborationStats();
+        DEMSim.ShowMemStats();
 
         DEMSim.DoDynamics(frame_time);
     }
@@ -222,6 +223,7 @@ int main() {
             DEMSim.WriteSphereFile(out_dir / filename);
             DEMSim.WriteMeshFile(out_dir / meshname);
             DEMSim.ShowThreadCollaborationStats();
+            DEMSim.ShowMemStats();
         }
 
         // Means advance simulation by one time step
