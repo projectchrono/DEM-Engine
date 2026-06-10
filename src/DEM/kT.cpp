@@ -889,16 +889,17 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
             JitHelper::buildProgram("DEMContactKernels_SphereSphere",
                                     JitHelper::KERNEL_DIR / "DEMContactKernels_SphereSphere.cu", Subs, JitifyOptions)));
     }
-    // Then triangle--bin intersection-related kernels
-    {
+    // Mesh kernels are only needed when triangle geometry exists. Analytical
+    // walls/planes use the non-mesh contact path.
+    if (solverFlags.hasMeshes) {
         bin_triangle_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMBinTriangleKernels", JitHelper::KERNEL_DIR / "DEMBinTriangleKernels.cu", Subs, JitifyOptions)));
-    }
-    // Then sphere--triangle contact detection-related kernels
-    {
         sphTri_contact_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMContactKernels_SphereTriangle", JitHelper::KERNEL_DIR / "DEMContactKernels_SphereTriangle.cu", Subs,
             JitifyOptions)));
+    } else {
+        bin_triangle_kernels.reset();
+        sphTri_contact_kernels.reset();
     }
     // Then contact history mapping kernels
     {

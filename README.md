@@ -79,6 +79,52 @@ Then [Python scripts](https://github.com/projectchrono/DEM-Engine/tree/pyDEME_de
 
 If you use _pyDEME_ in conjunction with PyChrono, you should `import pyDEME` first, then PyChrono.
 
+### Persistent Jitify startup cache
+
+_DEME_ uses Jitify/NVRTC to compile CUDA kernels at solver initialization time.
+By default, _DEME_ keeps upstream Jitify header loading behavior.
+
+For workloads that start many fresh _DEME_ processes, users can opt in to a
+persistent header source cache. Set `DEME_PERSISTENT_JITIFY_CACHE` to any
+writable file path where _DEME_ should create and reuse the cache file. The file
+does not need to exist before the first run. For a simple per-user temporary
+cache path, set it to `1`, `true`, `on`, or `yes`.
+
+Automatic path:
+
+```
+export DEME_PERSISTENT_JITIFY_CACHE=1
+```
+
+Explicit path:
+
+```
+export DEME_PERSISTENT_JITIFY_CACHE="$HOME/.cache/deme/jitify_header_cache.bin"
+mkdir -p "$(dirname "$DEME_PERSISTENT_JITIFY_CACHE")"
+```
+
+The persistent cache follows the CUDA/toolchain setup, not the simulation
+setup. Changing material properties, geometry, particle counts, or timesteps
+does not invalidate it. If CUDA versions, include paths, or compiler options
+change, _DEME_ ignores the old cache file and fills it again during that run.
+Unset `DEME_PERSISTENT_JITIFY_CACHE`, or set it to `0`, `false`, `off`, or
+`no`, to use the default Jitify behavior. With the automatic path on Linux/WSL,
+_DEME_ uses `/tmp/deme_jitify_header_cache_$USER.bin`.
+
+Pros:
+- Can significantly reduce startup time for workflows that launch many fresh
+  _DEME_ processes with the same CUDA/toolchain configuration.
+- Keeps the default behavior unchanged unless the environment variable is set.
+- Safely falls back to rediscovering headers when the CUDA/toolchain setup
+  changes.
+
+Cons:
+- The first run still has to discover and save the header sources.
+- Users must choose a writable cache location and manage it like other local
+  build/runtime caches.
+- If CUDA headers or include paths change, the old file may no longer be useful;
+  deleting the cache file forces a clean rebuild.
+
 <h2 id="compilation">Compilation</h2>
 
 You can also build C++ _DEME_ from source. It allows for potentially more performance and more tailoring.
