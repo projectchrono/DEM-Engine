@@ -22,6 +22,8 @@ SET(DEMOS
 		DEMdemo_TestPack
 		DEMdemo_RotatingDrum
 		DEMdemo_Centrifuge
+		DEMdemo_AnalyticalCone
+		DEMdemo_AnalyticalConePour
 		DEMdemo_GameOfLife
 		DEMdemo_BallDrop
 		DEMdemo_BallDrop2D
@@ -90,4 +92,3 @@ FOREACH(PROGRAM ${DEMOS})
 		# install(TARGETS ${PROGRAM} DESTINATION ${DEME_INSTALL_DEMO})
 
 ENDFOREACH(PROGRAM)
-
