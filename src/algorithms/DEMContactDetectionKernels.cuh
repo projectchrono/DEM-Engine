@@ -958,8 +958,9 @@ __global__ void buildPatchContactMappingForTypeLinear(bodyID_t* curr_idPatchA,
                                                       contactPairs_t curr_count,
                                                       contactPairs_t prev_start,
                                                       contactPairs_t prev_count) {
-    // Map stabilized patch contacts to previous patch contacts by direct search within the same contact-type segment.
-    // The stabilized route may no longer be sorted by island label, so this avoids relying on binary-search ordering.
+    // Stable-label rewriting preserves the existing (patch A, patch B) ordering but may scramble island labels within
+    // one patch pair. Binary-search the pair range first, then scan only that usually-small range for the stable label.
+    // This avoids the previous all-to-all per-type scan, which became quadratic for large contact sets.
     contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < curr_count) {
         const contactPairs_t curr_idx = curr_start + myID;
@@ -967,10 +968,29 @@ __global__ void buildPatchContactMappingForTypeLinear(bodyID_t* curr_idPatchA,
         const bodyID_t curr_B = curr_idPatchB[curr_idx];
         const bodyID_t curr_L = curr_patchIsland[curr_idx];
         contactPairs_t my_partner = NULL_MAPPING_PARTNER;
-        for (contactPairs_t i = 0; i < prev_count; i++) {
+
+        contactPairs_t left = 0;
+        contactPairs_t right = prev_count;
+        while (left < right) {
+            const contactPairs_t mid = left + (right - left) / 2;
+            const contactPairs_t prev_idx = prev_start + mid;
+            const bodyID_t prev_A = prev_idPatchA[prev_idx];
+            const bodyID_t prev_B = prev_idPatchB[prev_idx];
+            if (prev_A < curr_A || (prev_A == curr_A && prev_B < curr_B)) {
+                left = mid + 1;
+            } else {
+                right = mid;
+            }
+        }
+
+        for (contactPairs_t i = left; i < prev_count; i++) {
             const contactPairs_t prev_idx = prev_start + i;
-            if (prev_idPatchA[prev_idx] == curr_A && prev_idPatchB[prev_idx] == curr_B &&
-                prev_patchIsland[prev_idx] == curr_L) {
+            const bodyID_t prev_A = prev_idPatchA[prev_idx];
+            const bodyID_t prev_B = prev_idPatchB[prev_idx];
+            if (prev_A != curr_A || prev_B != curr_B) {
+                break;
+            }
+            if (prev_patchIsland[prev_idx] == curr_L) {
                 my_partner = prev_idx;
                 break;
             }

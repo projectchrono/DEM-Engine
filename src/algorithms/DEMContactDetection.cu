@@ -367,6 +367,24 @@ inline void stabilizeFloodedPatchIslandIDs(DualStruct<DEMDataKT>& granData,
     scratchPad.syncDualStructDeviceToHost("numStableVotes");
     size_t numStableVotes = *scratchPad.getDualStructHost("numStableVotes");
 
+    // The vote-selection sync above guarantees that the previous-contact lookup tables and unfiltered vote arrays are
+    // no longer used on the stream. Return them to the scratch pool now so the later vote reduction can reuse their
+    // storage instead of increasing the stable-ID pass's simultaneous device-memory high-water mark.
+    scratchPad.finishUsingTempVector("stableVoteFlags");
+    scratchPad.finishUsingTempVector("stableVoteKeysAll");
+    scratchPad.finishUsingTempVector("stablePrevIslandSorted");
+    scratchPad.finishUsingTempVector("stablePrevIslandByLo");
+    scratchPad.finishUsingTempVector("stablePrevByLoIdxSorted");
+    scratchPad.finishUsingTempVector("stablePrevByLoIdx");
+    scratchPad.finishUsingTempVector("stablePrevIdxSorted");
+    scratchPad.finishUsingTempVector("stablePrevIdx");
+    scratchPad.finishUsingTempVector("stablePrevKeyLoSortedByHi");
+    scratchPad.finishUsingTempVector("stablePrevKeyHiSorted");
+    scratchPad.finishUsingTempVector("stablePrevKeyHiByLo");
+    scratchPad.finishUsingTempVector("stablePrevKeyLoSorted");
+    scratchPad.finishUsingTempVector("stablePrevKeyLo");
+    scratchPad.finishUsingTempVector("stablePrevKeyHi");
+
     if (numStableVotes > 0) {
         uint64_t* voteKeysSorted =
             (uint64_t*)scratchPad.allocateTempVector("stableVoteKeysSorted", numStableVotes * sizeof(uint64_t));
@@ -381,6 +399,11 @@ inline void stabilizeFloodedPatchIslandIDs(DualStruct<DEMDataKT>& granData,
                                                         numStableVotes, this_stream, scratchPad);
         scratchPad.syncDualStructDeviceToHost("numUniqueStableVotes");
         size_t numUniqueStableVotes = *scratchPad.getDualStructHost("numUniqueStableVotes");
+
+        // Sorting and run-length encoding are complete after the count sync, so their input arrays can be reused by
+        // the winning-vote application buffers below.
+        scratchPad.finishUsingTempVector("stableVoteKeys");
+        scratchPad.finishUsingTempVector("stableVoteKeysSorted");
 
         unsigned long long* bestPacked = (unsigned long long*)scratchPad.allocateTempVector(
             "stableBestPacked", numCurrentPatchContacts * sizeof(unsigned long long));
@@ -398,28 +421,14 @@ inline void stabilizeFloodedPatchIslandIDs(DualStruct<DEMDataKT>& granData,
                 bestPacked, granData->contactPatchIsland, numCurrentPatchContacts);
         }
         scratchPad.finishUsingTempVector("stableBestPacked");
-        scratchPad.finishUsingTempVector("stableVoteKeysSorted");
         scratchPad.finishUsingTempVector("stableUniqueVoteKeys");
         scratchPad.finishUsingTempVector("stableVoteCounts");
         scratchPad.finishUsingDualStruct("numUniqueStableVotes");
+    } else {
+        scratchPad.finishUsingTempVector("stableVoteKeys");
     }
 
     scratchPad.finishUsingDualStruct("numStableVotes");
-    scratchPad.finishUsingTempVector("stableVoteFlags");
-    scratchPad.finishUsingTempVector("stableVoteKeys");
-    scratchPad.finishUsingTempVector("stableVoteKeysAll");
-    scratchPad.finishUsingTempVector("stablePrevIslandSorted");
-    scratchPad.finishUsingTempVector("stablePrevIslandByLo");
-    scratchPad.finishUsingTempVector("stablePrevByLoIdxSorted");
-    scratchPad.finishUsingTempVector("stablePrevByLoIdx");
-    scratchPad.finishUsingTempVector("stablePrevIdxSorted");
-    scratchPad.finishUsingTempVector("stablePrevIdx");
-    scratchPad.finishUsingTempVector("stablePrevKeyLoSortedByHi");
-    scratchPad.finishUsingTempVector("stablePrevKeyHiSorted");
-    scratchPad.finishUsingTempVector("stablePrevKeyHiByLo");
-    scratchPad.finishUsingTempVector("stablePrevKeyLoSorted");
-    scratchPad.finishUsingTempVector("stablePrevKeyLo");
-    scratchPad.finishUsingTempVector("stablePrevKeyHi");
 }
 
 DEME_KERNEL void markContactsByCombinedOwnerMask(const bodyID_t* idA,
@@ -2010,7 +2019,6 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                                 break;
                             }
                         }
-                        scratchPad.finishUsingDualStruct("labelChanged");
                         finalActiveLabels = labelsIn;
 
                         scratchPad.finishUsingDualArray("activeTriLabelChanged");
