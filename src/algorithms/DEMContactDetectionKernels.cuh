@@ -344,7 +344,11 @@ __global__ void computeGroupWinners(const contact_t* groupTypes,
         forceSingleIsland[myID] = single_island ? 1 : 0;
 
         notStupidBool_t pickA = 0;
-        if (A_never && B_never) {
+        if (ctype == SPHERE_TRIANGLE_CONTACT) {
+            // SM patch identity is (sphere, mesh patch), and the sphere side always contains exactly one primitive.
+            // Force triangle side B to drive island flooding so reduction follows connected mesh triangles only.
+            pickA = 0;
+        } else if (A_never && B_never) {
             pickA = 0;  // deterministic: prefer B when both are never-winner
         } else if (A_never && !B_never) {
             pickA = 0;
@@ -720,7 +724,9 @@ __global__ void buildStableIslandVotes(const bodyID_t* curr_idA,
 
     voteFlags[myID] = 0;
     voteKeys[myID] = 0;
-    if (numPrev == 0) {
+    // Keep SS/SA outside flooded-island stabilization until sphere/clump-side patching gives them meaningful island
+    // identity beyond their already-unambiguous primitive-derived patch IDs.
+    if (numPrev == 0 || !usesStablePatchIslandHistory(curr_types[myID])) {
         return;
     }
 
@@ -788,13 +794,16 @@ __global__ void applyBestStableIslandVotes(const unsigned long long* bestPacked,
 
 __global__ void fillPrimitivePatchIslandLabels(const contactPairs_t* geomToPatchMap,
                                                const bodyID_t* contactPatchIsland,
+                                               const contact_t* primitiveContactTypes,
                                                bodyID_t* primitivePatchIsland,
                                                size_t nPrimitive) {
-    // Store primitive-contact membership in the finalized patch-island ID space. This is the per-primitive overlap
-    // table that the next contact-detection step will use for stable-ID voting.
+    // Store mesh-related primitive membership in the finalized patch-island ID space. SS/SA deliberately receive a
+    // null entry so future stable-ID voting cannot affect them unless usesStablePatchIslandHistory is extended.
     contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nPrimitive) {
-        primitivePatchIsland[myID] = contactPatchIsland[geomToPatchMap[myID]];
+        primitivePatchIsland[myID] = usesStablePatchIslandHistory(primitiveContactTypes[myID])
+                                         ? contactPatchIsland[geomToPatchMap[myID]]
+                                         : NULL_BODYID;
     }
 }
 
@@ -947,7 +956,7 @@ __global__ void buildPatchContactMappingForType(bodyID_t* curr_idPatchA,
     }
 }
 
-__global__ void buildPatchContactMappingForTypeLinear(bodyID_t* curr_idPatchA,
+__global__ void buildPatchContactMappingForStableType(bodyID_t* curr_idPatchA,
                                                       bodyID_t* curr_idPatchB,
                                                       bodyID_t* curr_patchIsland,
                                                       bodyID_t* prev_idPatchA,

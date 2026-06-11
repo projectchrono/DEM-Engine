@@ -2455,11 +2455,12 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                         granData->contactMapping, curr_start, curr_count);
                 } else {
                     // Both steps have contacts of this type - perform mapping
-                    if (solverFlags.useStablePatchIslandIDs && !solverFlags.useSimplePatchCombination) {
+                    if (solverFlags.useStablePatchIslandIDs && !solverFlags.useSimplePatchCombination &&
+                        usesStablePatchIslandHistory(thisType)) {
                         // Stable island IDs can change the secondary ordering within a patch pair, so the old binary
-                        // search precondition no longer holds. The stabilized route uses a direct per-type lookup by
-                        // (patch A, patch B, stable island) to preserve history without relying on array order.
-                        buildPatchContactMappingForTypeLinear<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK),
+                        // search precondition no longer holds. Only mesh-related types enter this route; SS/SA retain
+                        // their naturally unambiguous primitive-derived patch identity and ordinary sorted mapping.
+                        buildPatchContactMappingForStableType<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK),
                                                                 0, this_stream>>>(
                             granData->idPatchA, granData->idPatchB, granData->contactPatchIsland,
                             granData->previous_idPatchA, granData->previous_idPatchB,
@@ -2554,8 +2555,8 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
         const size_t blocks_needed =
             (*scratchPad.numPrimitiveContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
         fillPrimitivePatchIslandLabels<<<dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream>>>(
-            granData->geomToPatchMap, granData->contactPatchIsland, previous_primitivePatchIsland.data(),
-            *scratchPad.numPrimitiveContacts);
+            granData->geomToPatchMap, granData->contactPatchIsland, granData->contactTypePrimitive,
+            previous_primitivePatchIsland.data(), *scratchPad.numPrimitiveContacts);
     }
 
     // Finally, don't forget to store the number of contacts for the next iteration, even if there is 0 contacts (in
