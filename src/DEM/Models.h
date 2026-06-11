@@ -340,26 +340,6 @@ inline void equip_owner_wildcards(std::string& definition,
     }
 }
 
-// Sweep through all ingredients...
-inline void equip_geo_wildcards(std::string& definition,
-                                std::string& acquisition_A_sph,
-                                std::string& acquisition_A_patch,
-                                std::string& acquisition_B_sph,
-                                std::string& acquisition_B_patch,
-                                std::string& acquisition_B_anal,
-                                const std::set<std::string>& added_ingredients) {
-    unsigned int i = 0;
-    for (const auto& name : added_ingredients) {
-        definition += "float* " + name + "_A, *" + name + "_B;\n";
-        acquisition_A_sph += name + "_A = granData->sphereWildcards[" + std::to_string(i) + "];\n";
-        acquisition_A_patch += name + "_A = granData->triWildcards[" + std::to_string(i) + "];\n";
-        acquisition_B_sph += name + "_B = granData->sphereWildcards[" + std::to_string(i) + "];\n";
-        acquisition_B_patch += name + "_B = granData->triWildcards[" + std::to_string(i) + "];\n";
-        acquisition_B_anal += name + "_B = granData->analWildcards[" + std::to_string(i) + "];\n";
-        i++;
-    }
-}
-
 // Massage contact wildcards (by that I mean those contact history arrays)
 inline void equip_contact_wildcards(std::string& acquisition,
                                     std::string& write_back,

@@ -43,7 +43,10 @@ set(DEM_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/Models.h
 	${CMAKE_CURRENT_SOURCE_DIR}/VariableTypes.h
 	${CMAKE_CURRENT_SOURCE_DIR}/BdrsAndObjs.h
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/ClumpMassProperties.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/CombinedOwnerUtils.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/HostSideHelpers.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/MeshUtils.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/Samplers.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/AuxClasses.h
 )
@@ -53,7 +56,9 @@ set(DEM_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/dT.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/APIPublic.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/APIPrivate.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/MeshUtils.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/ClumpMassProperties.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/CombinedOwnerUtils.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/MeshUtils.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/AuxClasses.cpp
 )
 

@@ -179,7 +179,19 @@ int main() {
 
         // Also inspect how many contacts we have
         auto cnt_info = DEMSim.GetContactDetailedInfo(0.0f);
-        int num_cnts = cnt_info->GetContactType().size();
+        float3 avg_normal = make_float3(0.f);
+        int num_cnts = 0;
+        const auto& cnt_types = cnt_info->GetContactType();
+        const auto& cnt_normals = cnt_info->GetNormal();
+        for (size_t k = 0; k < cnt_types.size(); k++) {
+            if (cnt_types[k] == "MM") {
+                avg_normal += cnt_normals[k];
+                num_cnts++;
+            }
+        }
+        if (num_cnts > 0) {
+            avg_normal *= 1.0f / static_cast<float>(num_cnts);
+        }
 
         std::cout << "t=" << i * frame_time << "s"
                   << "  tip_x=" << tip_x << " m"
@@ -190,6 +202,12 @@ int main() {
             float inv_f = static_cast<float>(1.0 / force_mag);
             std::cout << "  F_dir=(" << cnt_force.x * inv_f << "," << cnt_force.y * inv_f << "," << cnt_force.z * inv_f
                       << ")";
+        }
+        const float normal_mag = length(avg_normal);
+        if (normal_mag > 1e-6f) {
+            const float inv_nm = 1.0f / normal_mag;
+            std::cout << "  contact_normal=(" << avg_normal.x * inv_nm << "," << avg_normal.y * inv_nm << ","
+                      << avg_normal.z * inv_nm << ")";
         }
         std::cout << std::endl;
     }

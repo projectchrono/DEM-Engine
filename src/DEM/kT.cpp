@@ -545,10 +545,11 @@ void DEMKinematicThread::workerThread() {
             contactDetection(bin_sphere_kernels, bin_triangle_kernels, sphere_contact_kernels, sphTri_contact_kernels,
                              granData, simParams, solverFlags, verbosity, idPrimitiveA, idPrimitiveB,
                              contactTypePrimitive, previous_idPrimitiveA, previous_idPrimitiveB,
-                             previous_contactTypePrimitive, contactPersistency, contactMapping, idPatchA, idPatchB,
-                             previous_idPatchA, previous_idPatchB, contactTypePatch, previous_contactTypePatch,
-                             contactPatchIsland, previous_contactPatchIsland, typeStartCountPatchMap, geomToPatchMap,
-                             streamInfo.stream, solverScratchSpace, timers, stateParams);
+                             previous_contactTypePrimitive, previous_primitivePatchIsland, contactPersistency,
+                             contactMapping, idPatchA, idPatchB, previous_idPatchA, previous_idPatchB, contactTypePatch,
+                             previous_contactTypePatch, contactPatchIsland, previous_contactPatchIsland,
+                             typeStartCountPatchMap, geomToPatchMap, streamInfo.stream, solverScratchSpace, timers,
+                             stateParams);
             CDAccumTimer.End();
 
             timers.GetTimer("Send to dT buffer").start();
@@ -721,6 +722,7 @@ void DEMKinematicThread::packDataPointers() {
 
     familyMaskMatrix.bindDevicePointer(&(granData->familyMasks));
     familyExtraMarginSize.bindDevicePointer(&(granData->familyExtraMarginSize));
+    ownerCombinedMaster.bindDevicePointer(&(granData->ownerCombinedMaster));
 
     // The offset info that indexes into the template arrays
     ownerClumpBody.bindDevicePointer(&(granData->ownerClumpBody));
@@ -779,6 +781,9 @@ void DEMKinematicThread::migrateDataToDevice() {
     previous_contactPatchIsland.toDeviceAsync(streamInfo.stream);
     familyMaskMatrix.toDeviceAsync(streamInfo.stream);
     familyExtraMarginSize.toDeviceAsync(streamInfo.stream);
+    if (ownerCombinedMaster.size() > 0) {
+        ownerCombinedMaster.toDeviceAsync(streamInfo.stream);
+    }
 
     ownerClumpBody.toDeviceAsync(streamInfo.stream);
     clumpComponentOffset.toDeviceAsync(streamInfo.stream);
@@ -896,6 +901,8 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
     simParams->nContactWildcards = contact_wildcards.size();
     simParams->nOwnerWildcards = owner_wildcards.size();
     simParams->nGeoWildcards = geo_wildcards.size();
+    simParams->nCombinedOwners = 0;
+    simParams->allowIntraCombinedOwnerContacts = 0;
 }
 
 void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
@@ -930,7 +937,6 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
 
     // Resize the family mask `matrix' (in fact it is flattened)
     DEME_DUAL_ARRAY_RESIZE(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
-
     // Resize to the number of clumps
     DEME_DUAL_ARRAY_RESIZE(familyID, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(voxelID, nOwnerBodies, 0);
@@ -1040,10 +1046,12 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
         DEME_DUAL_ARRAY_RESIZE(geomToPatchMap, cnt_arr_size, 0);
 
         if (!solverFlags.isHistoryless) {
-            // No need to resize prev_primitive ID arrays: used only when persistency is enabled and that is rare
-            // DEME_DUAL_ARRAY_RESIZE(previous_idPrimitiveA, cnt_arr_size, 0);
-            // DEME_DUAL_ARRAY_RESIZE(previous_idPrimitiveB, cnt_arr_size, 0);
-            // DEME_DUAL_ARRAY_RESIZE(previous_contactTypePrimitive, cnt_arr_size, NOT_A_CONTACT);
+            if (solverFlags.useStablePatchIslandIDs) {
+                DEME_DUAL_ARRAY_RESIZE(previous_idPrimitiveA, cnt_arr_size, 0);
+                DEME_DUAL_ARRAY_RESIZE(previous_idPrimitiveB, cnt_arr_size, 0);
+                DEME_DUAL_ARRAY_RESIZE(previous_contactTypePrimitive, cnt_arr_size, NOT_A_CONTACT);
+                DEME_DUAL_ARRAY_RESIZE(previous_primitivePatchIsland, cnt_arr_size, NULL_BODYID);
+            }
             DEME_DUAL_ARRAY_RESIZE(contactMapping, cnt_arr_size, NULL_MAPPING_PARTNER);
             DEME_DUAL_ARRAY_RESIZE(previous_idPatchA, cnt_arr_size, 0);
             DEME_DUAL_ARRAY_RESIZE(previous_idPatchB, cnt_arr_size, 0);

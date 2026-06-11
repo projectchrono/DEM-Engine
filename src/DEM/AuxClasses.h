@@ -237,15 +237,6 @@ class DEMTracker {
     /// @param name Name of the wildcard.
     /// @return All the values.
     std::vector<float> GetOwnerWildcardValues(const std::string& name);
-    /// @brief Get the geometry wildcard values for all the geometry entities tracked by this tracker.
-    /// @param name Name of the wildcard.
-    /// @return All the values.
-    std::vector<float> GetGeometryWildcardValues(const std::string& name);
-    /// @brief Get the geometry wildcard values for a geometry entity tracked by this tracker.
-    /// @param name Name of the wildcard.
-    /// @param offset The offset to this entity (where to start the modification). If first entity, input 0.
-    /// @return The value.
-    float GetGeometryWildcardValue(const std::string& name, size_t offset);
 
     /// @brief Set the position of this tracked object.
     void SetPos(float3 pos, size_t offset = 0);
@@ -329,16 +320,6 @@ class DEMTracker {
     /// @param name Name of the wildcard.
     /// @param wc Wildcard values as a vector (must have same length as the number of tracked owners).
     void SetOwnerWildcardValues(const std::string& name, const std::vector<float>& wc);
-
-    /// @brief Set a wildcard value of the geometry entity this tracker is tracking.
-    /// @param name Name of the wildcard.
-    /// @param wc Wildcard value.
-    /// @param offset The offset to this entity (where to start the modification). If first entity, input 0.
-    void SetGeometryWildcardValue(const std::string& name, float wc, size_t offset = 0);
-    /// @brief Set a wildcard value of the geometry entities this tracker is tracking.
-    /// @param name Name of the wildcard.
-    /// @param wc Wildcard values as a vector (must have same length as the number of tracked geometry entities).
-    void SetGeometryWildcardValues(const std::string& name, const std::vector<float>& wc);
 
     /// @brief Get all contact forces that concern this track object, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
@@ -447,9 +428,6 @@ class DEMForceModel {
     // Quatity names that we want to associate each owner with. An array will be allocated for storing this, and it
     // lives and die with its associated owner.
     std::set<std::string> m_owner_wildcards;
-    // Quatity names that we want to associate each owner with. An array will be allocated for storing this, and it
-    // lives and die with its associated geometry representation (most typically a sphere).
-    std::set<std::string> m_geo_wildcards;
 
   public:
     friend class DEMSolver;
@@ -487,10 +465,6 @@ class DEMForceModel {
     /// Set the names for the extra quantities that will be associated with each owner. For example, you can use this to
     /// associate a cohesion parameter to each particle. Only float is supported.
     void SetPerOwnerWildcards(const std::set<std::string>& wildcards);
-    /// Set the names for the extra quantities that will be associated with each geometry. For example, you can use this
-    /// to associate certain electric charges to each particle's each component which represents a distribution of the
-    /// charges. Only float is supported.
-    void SetPerGeometryWildcards(const std::set<std::string>& wildcards);
 };
 
 }  // END namespace deme

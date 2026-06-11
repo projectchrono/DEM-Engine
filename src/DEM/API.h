@@ -398,6 +398,11 @@ class DEMSolver {
     /// can produce multiple patch contacts per patch-ID pair when the touching region is geometrically disconnected.
     void SetSimplePatchCombination(bool use = true);
 
+    /// @brief Set whether flooded patch-island IDs should be stabilized across contact-detection steps.
+    /// @param use If true (default), the flooding route remaps raw island labels by primitive-contact overlap with the
+    /// previous contact-detection step. If false, raw flooding representative labels are used directly.
+    void SetStablePatchIslandIDs(bool use = true);
+
     /// @brief Declare that all meshed particles in the simulation have a low polygon count (e.g., boxes, tetrahedra).
     /// @param use If true (default when called), the per-triangle maxTriTriPenetration array will NOT be computed,
     /// transferred to kT, or used to inflate contact-detection margins. Default is false (feature is active).
@@ -640,29 +645,6 @@ class DEMSolver {
     /// @param ownerID The ownerID of the mesh.
     /// @return A vector of float3 representing the global coordinates of the mesh nodes.
     std::vector<float3> GetMeshNodesGlobal(bodyID_t ownerID);
-    /// @brief Handover helper: get a mesh owner's triangle-geometry ID range in dT wildcard arrays.
-    /// @param ownerID Mesh owner ID.
-    /// @param geoID_begin First triangle geometry ID for this mesh.
-    /// @param n_triangles Number of triangles in this mesh.
-    /// @return true when ownerID is a valid mesh and the range is resolved.
-    bool GetMeshTriangleGeoRange(bodyID_t ownerID, bodyID_t& geoID_begin, size_t& n_triangles);
-    /// @brief Handover helper: fetch per-triangle P, V and PxV wildcard arrays for a mesh owner.
-    /// @details This expects the force model to define and maintain geometry wildcards with matching names.
-    /// @param ownerID Mesh owner ID.
-    /// @param triP Output per-triangle P values.
-    /// @param triV Output per-triangle V values.
-    /// @param triPxV Output per-triangle PxV values.
-    /// @param nameP Wildcard name for P (default "P").
-    /// @param nameV Wildcard name for V (default "V").
-    /// @param namePxV Wildcard name for PxV (default "PxV").
-    /// @return true when all arrays are fetched successfully.
-    bool GetMeshTrianglePVHandover(bodyID_t ownerID,
-                                   std::vector<float>& triP,
-                                   std::vector<float>& triV,
-                                   std::vector<float>& triPxV,
-                                   const std::string& nameP = "P",
-                                   const std::string& nameV = "V",
-                                   const std::string& namePxV = "PxV");
 
     /// @brief Get all clump--clump contact ID pairs in the simulation system. Note all GetContact-like methods reports
     /// potential contacts (not necessarily confirmed contacts), meaning they are similar to what
@@ -871,6 +853,74 @@ class DEMSolver {
     std::shared_ptr<DEMMesh> AddMeshFromTemplate(const std::shared_ptr<DEMMesh>& mesh_template,
                                                  const float3& init_pos = make_float3(0));
 
+    /// @brief Load a rigid combined-clump template with fixed member-relative transforms.
+    /// @details All components must be clump templates. The combined template stores member poses in a
+    /// master-member-relative frame so the whole group can later be instantiated at arbitrary global pose.
+    /// If `component_rel_oriQ` is empty, identity orientation is assumed for all members.
+    /// @param component_templates Member clump templates in this combined group.
+    /// @param component_rel_pos Member positions in the user-provided template frame.
+    /// @param component_rel_oriQ Member orientations in the user-provided template frame (optional).
+    /// @param master_component Index of the member chosen as the master reference frame.
+    /// @return A combined template handle that can be instantiated via AddCombinedFromTemplate.
+    std::shared_ptr<DEMCombinedTemplate> LoadCombinedClumpType(
+        const std::vector<std::shared_ptr<DEMClumpTemplate>>& component_templates,
+        const std::vector<float3>& component_rel_pos,
+        const std::vector<float4>& component_rel_oriQ = std::vector<float4>(),
+        size_t master_component = 0);
+    /// @brief Load a rigid combined-mesh template with fixed member-relative transforms.
+    /// @details All components must be mesh templates. The combined template stores member poses in a
+    /// master-member-relative frame so the whole group can later be instantiated at arbitrary global pose.
+    /// If `component_rel_oriQ` is empty, identity orientation is assumed for all members.
+    /// @param component_templates Member mesh templates in this combined group.
+    /// @param component_rel_pos Member positions in the user-provided template frame.
+    /// @param component_rel_oriQ Member orientations in the user-provided template frame (optional).
+    /// @param master_component Index of the member chosen as the master reference frame.
+    /// @return A combined template handle that can be instantiated via AddCombinedFromTemplate.
+    std::shared_ptr<DEMCombinedTemplate> LoadCombinedMeshType(
+        const std::vector<std::shared_ptr<DEMMesh>>& component_templates,
+        const std::vector<float3>& component_rel_pos,
+        const std::vector<float4>& component_rel_oriQ = std::vector<float4>(),
+        size_t master_component = 0);
+    /// @brief Instantiate a combined template at a user-specified global pose.
+    /// @details Creates n_instances * n_members owners and records combined-group runtime metadata
+    /// used for combined-owner contact/kinematics policies.
+    /// @param combined_template A handle returned by LoadCombinedClumpType or LoadCombinedMeshType.
+    /// @param init_pos A vector of global positions for each instantiation in the batch.
+    /// @param init_oriQ A vector of global orientations for each instantiation in the batch.
+    /// @return A combined-instances handle that references all instantiated member owners in the batch.
+    std::shared_ptr<DEMCombinedInstances> AddCombinedFromTemplate(
+        const std::shared_ptr<DEMCombinedTemplate>& combined_template,
+        const std::vector<float3>& init_pos,
+        const std::vector<float4>& init_oriQ = std::vector<float4>());
+    /// @brief Single-pose convenience overload of AddCombinedFromTemplate.
+    std::shared_ptr<DEMCombinedInstances> AddCombinedFromTemplate(
+        const std::shared_ptr<DEMCombinedTemplate>& combined_template,
+        const float3& init_pos,
+        const float4& init_oriQ = make_float4(0, 0, 0, 1)) {
+        return AddCombinedFromTemplate(combined_template, std::vector<float3>(1, init_pos),
+                                       std::vector<float4>(1, init_oriQ));
+    }
+    /// @brief Allow/disallow contact generation among owners that belong to the same combined owner group.
+    /// @details Default is false (contacts within one combined group are suppressed).
+    void SetAllowIntraCombinedOwnerContacts(bool allow = true);
+    /// @brief Query resolved owner IDs and fixed relative transforms for one combined instance.
+    /// @details Returns `false` if the index is invalid or owner IDs are not resolved yet
+    /// (e.g., before Initialize/Update assigns owner numbering).
+    /// @param combined_instance_id Zero-based index in the combined-instance cache.
+    /// @param master_owner_id Output master owner ID of this combined group.
+    /// @param member_owner_ids Output owner IDs for all members (same order as template components).
+    /// @param member_rel_pos Output fixed member-relative positions in master frame.
+    /// @param member_rel_oriQ Output fixed member-relative orientations in master frame.
+    /// @return True if metadata is available and outputs are populated.
+    bool GetCombinedInstanceInfo(size_t combined_instance_id,
+                                 bodyID_t& master_owner_id,
+                                 std::vector<bodyID_t>& member_owner_ids,
+                                 std::vector<float3>& member_rel_pos,
+                                 std::vector<float4>& member_rel_oriQ);
+    /// @brief Number of combined instances currently cached.
+    /// @details This count is pre-initialization setup metadata and is cleared by cache-clearing workflows.
+    size_t GetNumCombinedInstances() const { return cached_combined_instances.size(); }
+
     /// @brief Create a DEMTracker to allow direct control/modification/query to this external object/batch of
     /// clumps/triangle mesh object.
     /// @details By default, it refers to the first clump in this batch. The user can refer to other clumps in this
@@ -896,6 +946,47 @@ class DEMSolver {
     /// @details C++ users do not have to use this method. Using Track is enough. This method is for Python wrapper.
     std::shared_ptr<DEMTracker> PythonTrack(const std::shared_ptr<DEMInitializer>& obj) {
         return Track<DEMInitializer>(obj);
+    }
+    /// @brief Create a single tracker that tracks all member owners in a combined-instances batch.
+    /// @details The tracker references all owners instantiated by the batch. Since AddCombinedFromTemplate
+    /// creates owners in consecutive memory, a single tracker with an offset range covers them all.
+    /// Use the offset parameter in tracker query methods to access individual owners.
+    std::shared_ptr<DEMTracker> Track(const std::shared_ptr<DEMCombinedInstances>& combined_inst) {
+        if (!combined_inst || combined_inst->member_objs.empty()) {
+            DEME_ERROR("Track received a null or empty combined-instances handle.");
+        }
+        // All member_objs were added consecutively. The first member_obj's load_order and obj_type
+        // define the tracker base; the tracker spans all owners across all member_objs.
+        const auto& first_obj = combined_inst->member_objs.front();
+        if (!first_obj) {
+            DEME_ERROR("Track encountered a null member object in combined-instances handle.");
+        }
+        auto tracker = Track<DEMInitializer>(first_obj);
+
+        // Override nSpanOwners to cover all owners in this CombinedInstances, not just the first member's batch.
+        // member_objs.size() == n_instances * n_members, each contributing one owner.
+        tracker->obj->nSpanOwnersOverride = combined_inst->member_objs.size();
+
+        // Compute total geometric entities across all members for nGeos override.
+        size_t total_geos = 0;
+        const auto& templ = combined_inst->type;
+        if (templ->member_type == OWNER_TYPE::CLUMP) {
+            for (size_t i = 0; i < templ->clump_templates.size(); i++) {
+                total_geos += templ->clump_templates[i]->nComp;
+            }
+            // Multiply by number of instances
+            total_geos *= combined_inst->n_instances;
+        } else if (templ->member_type == OWNER_TYPE::MESH) {
+            for (size_t i = 0; i < templ->mesh_templates.size(); i++) {
+                total_geos += templ->mesh_templates[i]->GetNumTriangles();
+            }
+            total_geos *= combined_inst->n_instances;
+        }
+        if (total_geos > 0) {
+            tracker->obj->nGeosOverride = total_geos;
+        }
+
+        return tracker;
     }
 
     /// Create a inspector object that can help query some statistical info of the clumps in the simulation
@@ -1068,9 +1159,6 @@ class DEMSolver {
     void SetContactWildcards(const std::set<std::string>& wildcards);
     /// @brief Set the names for the extra quantities that will be associated with each owner.
     void SetOwnerWildcards(const std::set<std::string>& wildcards);
-    /// @brief Set the names for the extra quantities that will be associated with each geometry entity (such as sphere,
-    /// triangle).
-    void SetGeometryWildcards(const std::set<std::string>& wildcards);
 
     /// @brief Change the value of contact wildcards to val if either of the contact geometries is in family N.
     /// @param N Family number. If one contact geometry is in N, this contact wildcard is modified.
@@ -1160,22 +1248,6 @@ class DEMSolver {
                                  std::vector<float3>& torques,
                                  bool torque_in_local = false);
 
-    /// @brief Set the wildcard values of some mesh triangles.
-    /// @param geoID The ID of the starting (first) triangle that needs to be modified.
-    /// @param name The name of the wildcard.
-    /// @param vals A vector of values that will be assigned to the triangles starting from geoID.
-    void SetTriWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals);
-    /// @brief Set the wildcard values of some spheres.
-    /// @param geoID The ID of the starting (first) sphere that needs to be modified.
-    /// @param name The name of the wildcard.
-    /// @param vals A vector of values that will be assigned to the spheres starting from geoID.
-    void SetSphereWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals);
-    /// @brief Set the wildcard values of some analytical components.
-    /// @param geoID The ID of the starting (first) analytical component that needs to be modified.
-    /// @param name The name of the wildcard.
-    /// @param vals A vector of values that will be assigned to the analytical components starting from geoID.
-    void SetAnalWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals);
-
     /// @brief Set the wildcard values of some owners.
     /// @param ownerID The ID of the starting (first) owner that needs to be modified.
     /// @param name The name of the wildcard.
@@ -1224,25 +1296,6 @@ class DEMSolver {
     std::vector<float> GetAllOwnerWildcardValue(const std::string& name);
     /// @brief Get the owner wildcard's values of all entities in family N.
     std::vector<float> GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name);
-
-    /// @brief Get the geometry wildcard's values of a series of triangles.
-    /// @param geoID The ID of the first triangle.
-    /// @param name Wildcard's name.
-    /// @param n The number of triangles to query following the ID of the first one.
-    /// @return Vector of values of the wildcards.
-    std::vector<float> GetTriWildcardValue(bodyID_t geoID, const std::string& name, size_t n);
-    /// @brief Get the geometry wildcard's values of a series of spheres.
-    /// @param geoID The ID of the first sphere.
-    /// @param name Wildcard's name.
-    /// @param n The number of spheres to query following the ID of the first one.
-    /// @return Vector of values of the wildcards.
-    std::vector<float> GetSphereWildcardValue(bodyID_t geoID, const std::string& name, size_t n);
-    /// @brief Get the geometry wildcard's values of a series of analytical entities.
-    /// @param geoID The ID of the first analytical entity.
-    /// @param name Wildcard's name.
-    /// @param n The number of analytical entities to query following the ID of the first one.
-    /// @return Vector of values of the wildcards.
-    std::vector<float> GetAnalWildcardValue(bodyID_t geoID, const std::string& name, size_t n);
 
     /// @brief If the user used async-ed version of a tracker's get/set methods (to get a speed boost in many piecemeal
     /// accesses of a long array), this method should be called to mark the end of to-host transactions. But usually,
@@ -1564,11 +1617,6 @@ class DEMSolver {
     void EnableOwnerWildcardOutput(bool enable = true) { m_is_out_owner_wildcards = enable; }
     /// Enable/disable outputting contact wildcard values to the contact file.
     void EnableContactWildcardOutput(bool enable = true) { m_is_out_cnt_wildcards = enable; }
-    /// Enable/disable outputting geometry wildcard values to the contact file.
-    void EnableGeometryWildcardOutput(bool enable = true) { m_is_out_geo_wildcards = enable; }
-
-    /// @brief Let the solver store the contact normal information for every contact (or disable it).
-    void EnableStoreNormals(bool enable = true);
 
     /// @brief Set the verbosity level of the solver.
     /// @param verbose "QUIET", "ERROR", "WARNING", "INFO", "METRIC" or "DEBUG". Recommend "INFO".
@@ -1580,7 +1628,7 @@ class DEMSolver {
     void SetOutputFormat(const std::string& format);
     /// @brief Specify the information that needs to go into the clump or sphere output files.
     /// @param content A list of "XYZ", "QUAT", "ABSV", "VEL", "ANG_VEL", "ABS_ACC", "ACC", "ANG_ACC", "FAMILY", "MAT",
-    /// "OWNER_WILDCARD" and/or "GEO_WILDCARD".
+    /// and/or "OWNER_WILDCARD".
     void SetOutputContent(const std::vector<std::string>& content);
     /// @brief Specify the file format of contact pairs.
     /// @param format Choice among "CSV", "BINARY".
@@ -1686,7 +1734,7 @@ class DEMSolver {
     // The output file content for contact pairs
     unsigned int m_cnt_out_content = CNT_OUTPUT_CONTENT::OWNER | CNT_OUTPUT_CONTENT::GEO_ID |
                                      CNT_OUTPUT_CONTENT::FORCE | CNT_OUTPUT_CONTENT::CNT_POINT |
-                                     CNT_OUTPUT_CONTENT::CNT_WILDCARD;
+                                     CNT_OUTPUT_CONTENT::NORMAL | CNT_OUTPUT_CONTENT::CNT_WILDCARD;
     // The output file format for meshes
     MESH_FORMAT m_mesh_out_format = MESH_FORMAT::VTK;
     // If PLY mesh output should include per-patch face colors
@@ -1694,7 +1742,6 @@ class DEMSolver {
     // If the solver should output wildcards to file
     bool m_is_out_owner_wildcards = false;
     bool m_is_out_cnt_wildcards = false;
-    bool m_is_out_geo_wildcards = false;
     mutable std::thread m_output_thread;
 
     // User-instructed simulation `world' size. Note it is an approximate of the true size and we will generate a world
@@ -1896,6 +1943,8 @@ class DEMSolver {
     size_t nClumpTemplateLoad = 0;
     // Number of mesh templates loaded. Never decreases.
     size_t nMeshTemplateLoad = 0;
+    // Number of combined templates loaded. Never decreases.
+    size_t nCombinedTemplateLoad = 0;
     // Number of materials loaded. Never decreases.
     size_t nMaterialsLoad = 0;
 
@@ -1948,8 +1997,6 @@ class DEMSolver {
 
     // A map that records the numbering for user-defined owner wildcards
     std::unordered_map<std::string, unsigned int> m_owner_wc_num;
-    // A map that records the numbering for user-defined geometry wildcards
-    std::unordered_map<std::string, unsigned int> m_geo_wc_num;
     // A map that records the numbering for user-defined per-contact wildcards
     std::unordered_map<std::string, unsigned int> m_cnt_wc_num;
 
@@ -2015,6 +2062,8 @@ class DEMSolver {
 
     // Cached mesh templates (not yet instantiated in simulation)
     std::vector<std::shared_ptr<DEMMesh>> m_mesh_templates;
+    // Cached combined templates (template-level only).
+    std::vector<std::shared_ptr<DEMCombinedTemplate>> m_combined_templates;
 
     // Shared pointers to a batch of clumps loaded into the system. Through this returned handle, the user can further
     // specify the vel, ori etc. of this batch of clumps.
@@ -2025,6 +2074,10 @@ class DEMSolver {
 
     // Shared pointers to meshed objects cached at the API system
     std::vector<std::shared_ptr<DEMMesh>> cached_mesh_objs;
+    // Combined template instances.
+    std::vector<std::shared_ptr<DEMCombinedInstances>> cached_combined_instances;
+    bool m_combined_runtime_dirty = true;
+    bool m_allow_intra_combined_owner_contacts = false;
 
     // User-input prescribed motion
     std::vector<familyPrescription_t> m_input_family_prescription;
@@ -2275,6 +2328,10 @@ class DEMSolver {
     void cacheTrackedTrianglePVWindow();
     /// Fold the just-finished dynamics call's P*V into active wear models, and apply geometry updates if due.
     void updateMeshWearModels(double call_start_time, double call_end_time);
+    /// Resolve owner IDs for combined instances once owner numbering is available.
+    void resolveCombinedOwners(size_t nExistOwners = 0);
+    /// Refresh flattened combined-owner runtime metadata in worker arrays.
+    void refreshCombinedRuntimeResources();
     /// Apply one bounded pending-wear chunk of one mesh owner to its node positions.
     /// @return true if any pending wear depth was consumed in this call.
     bool applyMeshWearModel(bodyID_t ownerID, MeshWearModelState& model);

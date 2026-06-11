@@ -87,6 +87,11 @@ void DEMDynamicThread::packDataPointers() {
 
     familyMaskMatrix.bindDevicePointer(&(granData->familyMasks));
     familyExtraMarginSize.bindDevicePointer(&(granData->familyExtraMarginSize));
+    ownerCombinedMaster.bindDevicePointer(&(granData->ownerCombinedMaster));
+    ownerCombinedRelPos.bindDevicePointer(&(granData->ownerCombinedRelPos));
+    ownerCombinedRelOriQ.bindDevicePointer(&(granData->ownerCombinedRelOriQ));
+    ownerCombinedMasterMass.bindDevicePointer(&(granData->ownerCombinedMasterMass));
+    ownerCombinedMasterMOI.bindDevicePointer(&(granData->ownerCombinedMasterMOI));
 
     contactForces.bindDevicePointer(&(granData->contactForces));
     contactTorque_convToForce.bindDevicePointer(&(granData->contactTorque_convToForce));
@@ -260,6 +265,13 @@ void DEMDynamicThread::migrateDataToDevice() {
 
     familyMaskMatrix.toDeviceAsync(streamInfo.stream);
     familyExtraMarginSize.toDeviceAsync(streamInfo.stream);
+    if (ownerCombinedMaster.size() > 0) {
+        ownerCombinedMaster.toDeviceAsync(streamInfo.stream);
+        ownerCombinedRelPos.toDeviceAsync(streamInfo.stream);
+        ownerCombinedRelOriQ.toDeviceAsync(streamInfo.stream);
+        ownerCombinedMasterMass.toDeviceAsync(streamInfo.stream);
+        ownerCombinedMasterMOI.toDeviceAsync(streamInfo.stream);
+    }
 
     contactForces.toDeviceAsync(streamInfo.stream);
     contactNormals.toDeviceAsync(streamInfo.stream);
@@ -529,6 +541,8 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->nContactWildcards = contact_wildcards.size();
     simParams->nOwnerWildcards = owner_wildcards.size();
     simParams->nGeoWildcards = geo_wildcards.size();
+    simParams->nCombinedOwners = 0;
+    simParams->allowIntraCombinedOwnerContacts = 0;
 
     m_contact_wildcard_names = contact_wildcards;
     m_owner_wildcard_names = owner_wildcards;
@@ -654,7 +668,6 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
 
     // Resize the family mask `matrix' (in fact it is flattened)
     DEME_DUAL_ARRAY_RESIZE(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
-
     // Resize to the number of geometries
     DEME_DUAL_ARRAY_RESIZE(ownerClumpBody, nSpheresGM, 0);
     DEME_DUAL_ARRAY_RESIZE(sphereMaterialOffset, nSpheresGM, 0);
@@ -745,9 +758,7 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
             DEME_DUAL_ARRAY_RESIZE(contactTorque_convToForce, cnt_arr_size, make_float3(0));
             DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, cnt_arr_size, make_float3(0));
             DEME_DUAL_ARRAY_RESIZE(contactPointGeometryB, cnt_arr_size, make_float3(0));
-            if (simParams->storeNormal) {
-                DEME_DUAL_ARRAY_RESIZE(contactNormals, cnt_arr_size, make_float3(0));
-            }
+            DEME_DUAL_ARRAY_RESIZE(contactNormals, cnt_arr_size, make_float3(0));
         }
         // Allocate memory for each wildcard array
         contactWildcards.resize(simParams->nContactWildcards);
@@ -1361,6 +1372,13 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
                 break;
             default:
                 DEME_ERROR(std::string("A DEM tracked object has an unknown type."));
+        }
+        // Apply overrides for CombinedInstances tracking where the tracker must span all member owners.
+        if (tracked_obj->nSpanOwnersOverride > 0) {
+            tracked_obj->nSpanOwners = tracked_obj->nSpanOwnersOverride;
+        }
+        if (tracked_obj->nGeosOverride > 0) {
+            tracked_obj->nGeos = tracked_obj->nGeosOverride;
         }
     }
     nTrackersProcessed = tracked_objs.size();
@@ -2550,9 +2568,7 @@ inline void DEMDynamicThread::contactPrimitivesArraysResize(size_t nContactPairs
         DEME_DUAL_ARRAY_RESIZE(contactTorque_convToForce, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryB, nContactPairs, make_float3(0));
-        if (simParams->storeNormal) {
-            DEME_DUAL_ARRAY_RESIZE(contactNormals, nContactPairs, make_float3(0));
-        }
+        DEME_DUAL_ARRAY_RESIZE(contactNormals, nContactPairs, make_float3(0));
     }
 
     // Re-packing pointers now is automatic
@@ -2586,6 +2602,16 @@ inline void DEMDynamicThread::unpackMyBuffer() {
     // Make a note on the contact number of the previous time step
     *solverScratchSpace.numPrevContacts = *solverScratchSpace.numContacts;
     *solverScratchSpace.numPrevPrimitiveContacts = *solverScratchSpace.numPrimitiveContacts;
+    if (DEME_GET_VERBOSITY() >= VERBOSITY_METRIC && *solverScratchSpace.numPrevContacts > 0) {
+        // Keep old patch-contact types for later lost-history diagnostics. The contactTypePatch array is overwritten
+        // below by the newly received kT contact-detection result.
+        if (*solverScratchSpace.numPrevContacts > previousContactTypePatchMetric.size()) {
+            DEME_DEVICE_ARRAY_RESIZE(previousContactTypePatchMetric, *solverScratchSpace.numPrevContacts);
+        }
+        DEME_GPU_CALL(cudaMemcpyAsync(previousContactTypePatchMetric.data(), granData->contactTypePatch,
+                                      *solverScratchSpace.numPrevContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice,
+                                      streamInfo.stream));
+    }
     // kT's batch of produce is made with this max drift in mind
     pSchedSupport->dynamicMaxFutureDrift = (pSchedSupport->kinematicMaxFutureDrift).load();
     // DEME_DEBUG_PRINTF("dynamicMaxFutureDrift is %u", (pSchedSupport->dynamicMaxFutureDrift).load());
@@ -2827,12 +2853,40 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
             solverScratchSpace.syncDualStructDeviceToHost("lostContact");
             lostContact = solverScratchSpace.getDualStructHost("lostContact");
             if (*lostContact && solverFlags.isAsync) {
+                // Summarize which old patch-contact types still had live history but were not mapped into the new
+                // contact array. This keeps the METRIC warning compact while naming the affected contact routes.
+                unsigned int* lostContactTypeFlags = (unsigned int*)solverScratchSpace.allocateTempVector(
+                    "lostContactTypeFlags", NUM_SUPPORTED_CONTACT_TYPES * sizeof(unsigned int));
+                DEME_GPU_CALL(cudaMemsetAsync(lostContactTypeFlags, 0,
+                                              NUM_SUPPORTED_CONTACT_TYPES * sizeof(unsigned int), streamInfo.stream));
+                markAliveContactTypes(previousContactTypePatchMetric.data(), contactSentry, lostContactTypeFlags,
+                                      *solverScratchSpace.numPrevContacts, streamInfo.stream);
+                unsigned int lostContactTypeFlagsHost[NUM_SUPPORTED_CONTACT_TYPES] = {};
+                DEME_GPU_CALL(cudaMemcpyAsync(lostContactTypeFlagsHost, lostContactTypeFlags,
+                                              NUM_SUPPORTED_CONTACT_TYPES * sizeof(unsigned int),
+                                              cudaMemcpyDeviceToHost, streamInfo.stream));
+                DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+                std::string lostContactTypeNames;
+                for (size_t i = 0; i < NUM_SUPPORTED_CONTACT_TYPES; i++) {
+                    if (lostContactTypeFlagsHost[i] == 0) {
+                        continue;
+                    }
+                    if (!lostContactTypeNames.empty()) {
+                        lostContactTypeNames += ", ";
+                    }
+                    lostContactTypeNames += contact_type_out_name_map.at(ALL_CONTACT_TYPES[i]);
+                }
+                if (lostContactTypeNames.empty()) {
+                    lostContactTypeNames = "unknown";
+                }
                 // This prints when verbosity higher than METRIC
                 DEME_STATUS(
                     "ALIVE_CONTACT_NOT_DETECTED",
                     "%zu contacts were active at time %.9g on dT, but they are not detected on kT, therefore being "
-                    "removed unexpectedly!",
-                    *lostContact, simParams->dyn.timeElapsed);
+                    "removed unexpectedly! Missing contact types: %s.",
+                    *lostContact, simParams->dyn.timeElapsed, lostContactTypeNames.c_str());
+                solverScratchSpace.finishUsingTempVector("lostContactTypeFlags");
                 DEME_DEBUG_PRINTF("New number of contacts: %zu", *solverScratchSpace.numContacts);
                 DEME_DEBUG_PRINTF("Old number of contacts: %zu", *solverScratchSpace.numPrevContacts);
                 DEME_DEBUG_PRINTF("New contact A:");
@@ -3235,6 +3289,21 @@ void DEMDynamicThread::calculateForces() {
         }
     }
 
+    if (simParams->nCombinedOwners > 0) {
+        // Optional combined-owner aggregation pass:
+        // fold member contributions into master accelerations before integration.
+        DEME_NVTX_RANGE("dT::combinedOwnerAggregation");
+        timers.StartGpuTimer("Optional force reduction", streamInfo.stream);
+        constexpr unsigned int COMBINED_OWNER_AGGREGATION_BLOCK = 512;
+        const size_t blocks_needed_for_owners =
+            (simParams->nOwnerBodies + COMBINED_OWNER_AGGREGATION_BLOCK - 1) / COMBINED_OWNER_AGGREGATION_BLOCK;
+        collect_force_kernels->kernel("aggregateCombinedOwnersAcc")
+            .instantiate()
+            .configure(dim3(blocks_needed_for_owners), dim3(COMBINED_OWNER_AGGREGATION_BLOCK), 0, streamInfo.stream)
+            .launch(&simParams, &granData, simParams->nOwnerBodies);
+        timers.StopGpuTimer("Optional force reduction", streamInfo.stream);
+    }
+
     finalizeTrianglePVWindowStep();
 }
 
@@ -3247,6 +3316,18 @@ inline void DEMDynamicThread::integrateOwnerMotions() {
         .instantiate()
         .configure(dim3(blocks_needed_for_clumps), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
         .launch(&simParams, &granData, (double)simParams->dyn.timeElapsed);
+
+    if (simParams->nCombinedOwners > 0) {
+        // Optional combined-owner rigid re-imposition pass:
+        // overwrite member states from integrated masters + fixed relative transforms.
+        constexpr unsigned int COMBINED_OWNER_REIMPOSITION_BLOCK = 512;
+        const size_t blocks_needed_for_owners =
+            (simParams->nOwnerBodies + COMBINED_OWNER_REIMPOSITION_BLOCK - 1) / COMBINED_OWNER_REIMPOSITION_BLOCK;
+        collect_force_kernels->kernel("reimposeCombinedOwners")
+            .instantiate()
+            .configure(dim3(blocks_needed_for_owners), dim3(COMBINED_OWNER_REIMPOSITION_BLOCK), 0, streamInfo.stream)
+            .launch(&simParams, &granData, simParams->nOwnerBodies);
+    }
 
     // Cylindrical-periodic wildcard rotation is intentionally disabled here.
     // Contact-history vectors are already transformed in the force kernels (base <-> active image).
@@ -4714,6 +4795,8 @@ void DEMDynamicThread::prewarmKernels() {
     }
     if (collect_force_kernels) {
         collect_force_kernels->kernel("forceToAcc").instantiate();
+        collect_force_kernels->kernel("aggregateCombinedOwnersAcc").instantiate();
+        collect_force_kernels->kernel("reimposeCombinedOwners").instantiate();
     }
     if (integrator_kernels) {
         integrator_kernels->kernel("integrateOwners").instantiate();

@@ -798,4 +798,48 @@ void markAliveContacts(float* wildcard, notStupidBool_t* sentry, size_t nContact
     }
 }
 
+__global__ void markAliveContactTypes_impl(const contact_t* previousContactTypes,
+                                           const notStupidBool_t* sentry,
+                                           unsigned int* typeFlags,
+                                           size_t nContactPairs) {
+    // Reduce remaining alive-but-unmapped sentry entries into a compact type set. The METRIC warning only needs
+    // presence by contact type, so each missing old contact atomically marks one fixed slot.
+    size_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID >= nContactPairs || sentry[myID] == 0) {
+        return;
+    }
+
+    switch (previousContactTypes[myID]) {
+        case SPHERE_SPHERE_CONTACT:
+            atomicExch(&typeFlags[0], 1u);
+            break;
+        case SPHERE_TRIANGLE_CONTACT:
+            atomicExch(&typeFlags[1], 1u);
+            break;
+        case SPHERE_ANALYTICAL_CONTACT:
+            atomicExch(&typeFlags[2], 1u);
+            break;
+        case TRIANGLE_TRIANGLE_CONTACT:
+            atomicExch(&typeFlags[3], 1u);
+            break;
+        case TRIANGLE_ANALYTICAL_CONTACT:
+            atomicExch(&typeFlags[4], 1u);
+            break;
+        default:
+            break;
+    }
+}
+
+void markAliveContactTypes(const contact_t* previousContactTypes,
+                           const notStupidBool_t* sentry,
+                           unsigned int* typeFlags,
+                           size_t nContactPairs,
+                           cudaStream_t& this_stream) {
+    size_t blocks_needed = (nContactPairs + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed > 0) {
+        markAliveContactTypes_impl<<<blocks_needed, DEME_MAX_THREADS_PER_BLOCK, 0, this_stream>>>(
+            previousContactTypes, sentry, typeFlags, nContactPairs);
+    }
+}
+
 }  // namespace deme

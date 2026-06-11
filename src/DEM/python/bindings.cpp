@@ -346,15 +346,6 @@ PYBIND11_MODULE(DEME, obj) {
              static_cast<std::vector<float> (deme::DEMTracker::*)(const std::string&)>(
                  &deme::DEMTracker::GetOwnerWildcardValues),
              "Get the owner wildcard values for all the owners entities tracked by this tracker.", py::arg("name"))
-        .def("GetGeometryWildcardValues",
-             static_cast<std::vector<float> (deme::DEMTracker::*)(const std::string&)>(
-                 &deme::DEMTracker::GetGeometryWildcardValues),
-             "Get the geometry wildcard values for all the geometry entities tracked by this tracker.", py::arg("name"))
-        .def("GetGeometryWildcardValue",
-             static_cast<float (deme::DEMTracker::*)(const std::string&, size_t)>(
-                 &deme::DEMTracker::GetGeometryWildcardValue),
-             "Get the geometry wildcard values for a geometry entity tracked by this tracker.", py::arg("name"),
-             py::arg("offset"))
 
         .def("SetPos", static_cast<void (deme::DEMTracker::*)(float3, size_t)>(&deme::DEMTracker::SetPos),
              "Set the position of this tracked object.", py::arg("pos"), py::arg("offset") = 0)
@@ -426,11 +417,6 @@ PYBIND11_MODULE(DEME, obj) {
              py::arg("offset") = 0)
         .def("SetOwnerWildcardValues", &deme::DEMTracker::SetOwnerWildcardValues,
              "Set a wildcard value of the owner this tracker is tracking.", py::arg("name"), py::arg("wc"))
-        .def("SetGeometryWildcardValue", &deme::DEMTracker::SetGeometryWildcardValue,
-             "Set a wildcard value of the geometry entity this tracker is tracking.", py::arg("name"), py::arg("wc"),
-             py::arg("offset") = 0)
-        .def("SetGeometryWildcardValues", &deme::DEMTracker::SetGeometryWildcardValues,
-             "Set a wildcard value of the geometry entities this tracker is tracking.", py::arg("name"), py::arg("wc"))
 
         .def(
             "GetContactForcesAndLocalTorque",
@@ -497,11 +483,7 @@ PYBIND11_MODULE(DEME, obj) {
              "the initial value of all contact wildcard arrays is automatically 0")
         .def("SetPerOwnerWildcards", &deme::DEMForceModel::SetPerOwnerWildcards,
              " Set the names for the extra quantities that will be associated with each owner. For example, you can "
-             "use this to associate a cohesion parameter to each particle. Only float is supported.")
-        .def("SetPerGeometryWildcards", &deme::DEMForceModel::SetPerGeometryWildcards,
-             "Set the names for the extra quantities that will be associated with each geometry. For example, you can "
-             "use this to associate certain electric charges to each particle's each component which represents a "
-             "distribution of the charges. Only float is supported.");
+             "use this to associate a cohesion parameter to each particle. Only float is supported.");
 
     py::class_<deme::DEMSolver>(obj, "DEMSolver")
         .def(py::init<unsigned int>(), py::arg("nGPUs") = 2)
@@ -515,6 +497,48 @@ PYBIND11_MODULE(DEME, obj) {
                                    &deme::DEMSolver::LoadSphereType))
         .def("LoadSphereType", py::overload_cast<float, float, float, const std::shared_ptr<deme::DEMMaterial>&>(
                                    &deme::DEMSolver::LoadSphereType))
+        .def("LoadCombinedClumpType",
+             static_cast<std::shared_ptr<deme::DEMCombinedTemplate> (deme::DEMSolver::*)(
+                 const std::vector<std::shared_ptr<deme::DEMClumpTemplate>>&, const std::vector<float3>&,
+                 const std::vector<float4>&, size_t)>(&deme::DEMSolver::LoadCombinedClumpType),
+             "Load a rigid combined-clump template with fixed member-relative transforms.",
+             py::arg("component_templates"), py::arg("component_rel_pos"),
+             py::arg("component_rel_oriQ") = std::vector<float4>(), py::arg("master_component") = 0)
+        .def("LoadCombinedMeshType",
+             static_cast<std::shared_ptr<deme::DEMCombinedTemplate> (deme::DEMSolver::*)(
+                 const std::vector<std::shared_ptr<deme::DEMMesh>>&, const std::vector<float3>&,
+                 const std::vector<float4>&, size_t)>(&deme::DEMSolver::LoadCombinedMeshType),
+             "Load a rigid combined-mesh template with fixed member-relative transforms.",
+             py::arg("component_templates"), py::arg("component_rel_pos"),
+             py::arg("component_rel_oriQ") = std::vector<float4>(), py::arg("master_component") = 0)
+        .def("AddCombinedFromTemplate",
+             static_cast<std::shared_ptr<deme::DEMCombinedInstances> (deme::DEMSolver::*)(
+                 const std::shared_ptr<deme::DEMCombinedTemplate>&, const std::vector<float3>&,
+                 const std::vector<float4>&)>(&deme::DEMSolver::AddCombinedFromTemplate),
+             "Instantiate a combined template at one or more user-specified global poses (batch).",
+             py::arg("combined_template"), py::arg("init_pos"), py::arg("init_oriQ") = std::vector<float4>())
+        .def("AddCombinedFromTemplate",
+             static_cast<std::shared_ptr<deme::DEMCombinedInstances> (deme::DEMSolver::*)(
+                 const std::shared_ptr<deme::DEMCombinedTemplate>&, const float3&, const float4&)>(
+                 &deme::DEMSolver::AddCombinedFromTemplate),
+             "Instantiate a combined template at a single user-specified global pose.", py::arg("combined_template"),
+             py::arg("init_pos") = deme::make_float3(0), py::arg("init_oriQ") = deme::make_float4(0, 0, 0, 1))
+        .def("GetNumCombinedInstances", &deme::DEMSolver::GetNumCombinedInstances,
+             "Return the number of combined instances currently cached.")
+        .def(
+            "GetCombinedInstanceInfo",
+            [](deme::DEMSolver& self, size_t combined_instance_id) {
+                deme::bodyID_t master_owner_id = deme::NULL_BODYID;
+                std::vector<deme::bodyID_t> member_owner_ids;
+                std::vector<float3> member_rel_pos;
+                std::vector<float4> member_rel_oriQ;
+                const bool ok = self.GetCombinedInstanceInfo(combined_instance_id, master_owner_id, member_owner_ids,
+                                                             member_rel_pos, member_rel_oriQ);
+                return py::make_tuple(ok, master_owner_id, member_owner_ids, member_rel_pos, member_rel_oriQ);
+            },
+            "Query combined-instance metadata; returns (ok, master_owner_id, member_owner_ids, member_rel_pos, "
+            "member_rel_oriQ).",
+            py::arg("combined_instance_id"))
         .def("EnsureKernelErrMsgLineNum", &deme::DEMSolver::EnsureKernelErrMsgLineNum,
              "If true, each jitification string substitution will do a one-liner to one-liner replacement, so that if "
              "the kernel compilation fails, the error meessage line number will reflex the actual spot where that "
@@ -721,14 +745,12 @@ PYBIND11_MODULE(DEME, obj) {
              "Enable or disable owner wildcard output.", py::arg("enable") = true)
         .def("EnableContactWildcardOutput", &deme::DEMSolver::EnableContactWildcardOutput,
              "Enable or disable contact wildcard output.", py::arg("enable") = true)
-        .def("EnableGeometryWildcardOutput", &deme::DEMSolver::EnableGeometryWildcardOutput,
-             "Enable or disable geometry wildcard output.", py::arg("enable") = true)
+        .def("SetAllowIntraCombinedOwnerContacts", &deme::DEMSolver::SetAllowIntraCombinedOwnerContacts,
+             "Allow or suppress contacts among owners belonging to the same combined owner group.",
+             py::arg("allow") = true)
         .def("SetVerbosity", static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetVerbosity),
              "Set the verbosity level of the solver. Select from 'QUIET', 'ERROR', 'WARNING', 'INFO', 'METRIC' or "
              "'DEBUG'. Recommend 'INFO'.")
-        .def("EnableStoreNormals", &deme::DEMSolver::EnableStoreNormals,
-             "Let the solver store the contact normal information for every contact (or disable it).",
-             py::arg("enable") = true)
 
         .def("AddKernelInclude", &deme::DEMSolver::AddKernelInclude,
              "Add a library that the kernels will be compiled with (so that the user can use the provided methods in "
@@ -755,6 +777,26 @@ PYBIND11_MODULE(DEME, obj) {
                                                    const std::pair<float, float>&, const std::string& dir_exact)>(
                  &deme::DEMSolver::InstructBoxDomainDimension),
              "Set the span of the Box Domain", py::arg("x"), py::arg("y"), py::arg("z"), py::arg("dir_exact") = "none")
+        .def("LoadMeshType",
+             static_cast<std::shared_ptr<deme::DEMMesh> (deme::DEMSolver::*)(
+                 const std::string&, const std::shared_ptr<deme::DEMMaterial>&, bool, bool)>(
+                 &deme::DEMSolver::LoadMeshType),
+             "Load a mesh template into cache so it can be instantiated repeatedly.", py::arg("filename"),
+             py::arg("mat"), py::arg("load_normals") = true, py::arg("load_uv") = false)
+        .def("LoadMeshType",
+             static_cast<std::shared_ptr<deme::DEMMesh> (deme::DEMSolver::*)(const std::string&, bool, bool)>(
+                 &deme::DEMSolver::LoadMeshType),
+             "Load a mesh template into cache (without explicitly assigning material here).", py::arg("filename"),
+             py::arg("load_normals") = true, py::arg("load_uv") = false)
+        .def("LoadMeshType",
+             static_cast<std::shared_ptr<deme::DEMMesh> (deme::DEMSolver::*)(deme::DEMMesh&)>(
+                 &deme::DEMSolver::LoadMeshType),
+             "Load a user-constructed mesh object as a reusable template.", py::arg("mesh"))
+        .def("AddMeshFromTemplate",
+             static_cast<std::shared_ptr<deme::DEMMesh> (deme::DEMSolver::*)(
+                 const std::shared_ptr<deme::DEMMesh>&, const float3&)>(&deme::DEMSolver::AddMeshFromTemplate),
+             "Instantiate a mesh from a cached template at the requested initial position.", py::arg("mesh_template"),
+             py::arg("init_pos") = deme::make_float3(0))
         .def("InstructBoxDomainBoundingBC", &deme::DEMSolver::InstructBoxDomainBoundingBC,
              "Instruct if and how we should add boundaries to the simulation world upon initialization. Choose between "
              "`none', `all' (add 6 boundary planes) and `top_open' (add 5 boundary planes and leave the z-directon top "
@@ -770,6 +812,11 @@ PYBIND11_MODULE(DEME, obj) {
         .def("Track", (&deme::DEMSolver::PythonTrack),
              "Create a DEMTracker to allow direct control/modification/query to this external object/batch of "
              "clumps/triangle mesh object.")
+        .def("Track",
+             static_cast<std::shared_ptr<deme::DEMTracker> (deme::DEMSolver::*)(
+                 const std::shared_ptr<deme::DEMCombinedInstances>&)>(&deme::DEMSolver::Track),
+             "Create a single tracker that tracks all member owners in a combined-instances batch.",
+             py::arg("combined_inst"))
         .def("AddWavefrontMeshObject",
              static_cast<std::shared_ptr<deme::DEMMeshConnected> (deme::DEMSolver::*)(
                  const std::string&, const std::shared_ptr<deme::DEMMaterial>&, bool, bool)>(
@@ -1039,9 +1086,6 @@ PYBIND11_MODULE(DEME, obj) {
              "Set the names for the extra quantities that will be associated with each contact pair.")
         .def("SetOwnerWildcards", &deme::DEMSolver::SetOwnerWildcards,
              "Set the names for the extra quantities that will be associated with each owner.")
-        .def("SetGeometryWildcards", &deme::DEMSolver::SetGeometryWildcards,
-             "Set the names for the extra quantities that will be associated with each geometry entity (such as "
-             "sphere, triangle).")
 
         .def("SetFamilyContactWildcardValueEither", &deme::DEMSolver::SetFamilyContactWildcardValueEither,
              "Change the value of contact wildcards to val if either of the contact geometries is in family N.")
@@ -1086,13 +1130,6 @@ PYBIND11_MODULE(DEME, obj) {
              "Get all contact forces and torque that concern a list of owners.", py::arg("ownerIDs"), py::arg("points"),
              py::arg("forces"), py::arg("torques"), py::arg("torque_in_local") = false)
 
-        .def("SetTriWildcardValue", &deme::DEMSolver::SetTriWildcardValue,
-             "Set the wildcard values of some mesh triangles.")
-        .def("SetSphereWildcardValue", &deme::DEMSolver::SetSphereWildcardValue,
-             "Set the wildcard values of some spheres.")
-        .def("SetAnalWildcardValue", &deme::DEMSolver::SetAnalWildcardValue,
-             "Set the wildcard values of some analytical components.")
-
         .def("SetOwnerWildcardValue",
              static_cast<void (deme::DEMSolver::*)(deme::bodyID_t ownerID, const std::string& name,
                                                    const std::vector<float>& vals)>(
@@ -1114,13 +1151,6 @@ PYBIND11_MODULE(DEME, obj) {
              "Get the owner wildcard's values of all entities.")
         .def("GetFamilyOwnerWildcardValue", &deme::DEMSolver::GetFamilyOwnerWildcardValue,
              "Get the owner wildcard's values of all entities in family N.")
-
-        .def("GetTriWildcardValue", &deme::DEMSolver::GetTriWildcardValue,
-             "Get the geometry wildcard's values of a series of mesh triangles.")
-        .def("GetSphereWildcardValue", &deme::DEMSolver::GetSphereWildcardValue,
-             "Get the geometry wildcard's values of a series of spheres.")
-        .def("GetAnalWildcardValue", &deme::DEMSolver::GetAnalWildcardValue,
-             "Get the geometry wildcard's values of a series of analytical entities.")
 
         .def("SyncMemoryTransfer", &deme::DEMSolver::SyncMemoryTransfer,
              "If the user used async-ed version of a tracker's get/set methods (to get a speed boost in many piecemeal "
@@ -1290,6 +1320,22 @@ PYBIND11_MODULE(DEME, obj) {
         .def("Scale", &deme::DEMClumpTemplate::Scale)
         .def("AssignName", &deme::DEMClumpTemplate::AssignName);
 
+    py::class_<deme::DEMCombinedTemplate, std::shared_ptr<deme::DEMCombinedTemplate>>(obj, "DEMCombinedTemplate")
+        .def(py::init<>());
+
+    py::class_<deme::DEMCombinedInstances, std::shared_ptr<deme::DEMCombinedInstances>>(obj, "DEMCombinedInstances")
+        .def(py::init<>())
+        .def("GetNumOwners", &deme::DEMCombinedInstances::GetNumOwners,
+             "Get total number of member owners in this combined batch.")
+        .def("AddOwnerWildcard",
+             static_cast<void (deme::DEMCombinedInstances::*)(const std::string&, const std::vector<float>&)>(
+                 &deme::DEMCombinedInstances::AddOwnerWildcard),
+             "Add an owner wildcard to all member owners with per-owner values.", py::arg("name"), py::arg("vals"))
+        .def("AddOwnerWildcard",
+             static_cast<void (deme::DEMCombinedInstances::*)(const std::string&, float)>(
+                 &deme::DEMCombinedInstances::AddOwnerWildcard),
+             "Add an owner wildcard to all member owners with a uniform value.", py::arg("name"), py::arg("val"));
+
     py::class_<deme::DEMClumpBatch, deme::DEMInitializer, std::shared_ptr<deme::DEMClumpBatch>>(obj, "DEMClumpBatch")
         .def(py::init<size_t&>())
         .def("GetNumClumps", &deme::DEMClumpBatch::GetNumClumps)
@@ -1320,12 +1366,6 @@ PYBIND11_MODULE(DEME, obj) {
                  &deme::DEMClumpBatch::AddOwnerWildcard))
         .def("AddOwnerWildcard", static_cast<void (deme::DEMClumpBatch::*)(const std::string&, float)>(
                                      &deme::DEMClumpBatch::AddOwnerWildcard))
-        .def("SetGeometryWildcards", &deme::DEMClumpBatch::SetGeometryWildcards)
-        .def("AddGeometryWildcard",
-             static_cast<void (deme::DEMClumpBatch::*)(const std::string&, const std::vector<float>&)>(
-                 &deme::DEMClumpBatch::AddGeometryWildcard))
-        .def("AddGeometryWildcard", static_cast<void (deme::DEMClumpBatch::*)(const std::string&, float)>(
-                                        &deme::DEMClumpBatch::AddGeometryWildcard))
         .def("GetNumContacts", &deme::DEMClumpBatch::GetNumContacts);
 
     py::class_<deme::DEMExternObj, deme::DEMInitializer, std::shared_ptr<deme::DEMExternObj>>(obj, "DEMExternObj")
@@ -1417,12 +1457,6 @@ PYBIND11_MODULE(DEME, obj) {
         .def("Scale",
              static_cast<void (deme::DEMMeshConnected::*)(const std::vector<float>&)>(&deme::DEMMeshConnected::Scale))
         .def("ClearWildcards", &deme::DEMMeshConnected::ClearWildcards)
-        .def("SetGeometryWildcards", &deme::DEMMeshConnected::SetGeometryWildcards)
-        .def("AddGeometryWildcard",
-             static_cast<void (deme::DEMMeshConnected::*)(const std::string&, const std::vector<float>&)>(
-                 &deme::DEMMeshConnected::AddGeometryWildcard))
-        .def("AddGeometryWildcard", static_cast<void (deme::DEMMeshConnected::*)(const std::string&, float)>(
-                                        &deme::DEMMeshConnected::AddGeometryWildcard))
         .def("GetCoordsVertices", &deme::DEMMeshConnected::GetCoordsVerticesAsVectorOfVectors)
         //.def("GetCoordsUV", &deme::DEMMeshConnected::GetCoordsUVPython)
         //.def("GetCoordsColors", &deme::DEMMeshConnected::GetCoordsColorsPython)
@@ -1464,7 +1498,6 @@ PYBIND11_MODULE(DEME, obj) {
         .value("FAMILY", deme::OUTPUT_CONTENT::FAMILY)
         .value("MAT", deme::OUTPUT_CONTENT::MAT)
         .value("OWNER_WILDCARD", deme::OUTPUT_CONTENT::OWNER_WILDCARD)
-        .value("GEO_WILDCARD", deme::OUTPUT_CONTENT::GEO_WILDCARD)
         .value("EXP_FACTOR", deme::OUTPUT_CONTENT::EXP_FACTOR)
         .export_values();
 

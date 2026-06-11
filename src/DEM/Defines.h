@@ -122,6 +122,12 @@ inline __host__ __device__ constexpr bool isSupportedContactType(contact_t type)
     return type == SPHERE_SPHERE_CONTACT || type == SPHERE_TRIANGLE_CONTACT || type == SPHERE_ANALYTICAL_CONTACT ||
            type == TRIANGLE_TRIANGLE_CONTACT || type == TRIANGLE_ANALYTICAL_CONTACT;
 }
+// Stable flooded-island history currently applies only to mesh-related contacts. SS and SA patch IDs are already
+// determined unambiguously by their primitive IDs, so rewriting their island labels adds work without improving
+// identity. If sphere/clump-side patching is introduced later, extend this predicate to opt those types back in.
+inline __host__ __device__ constexpr bool usesStablePatchIslandHistory(contact_t type) {
+    return type == SPHERE_TRIANGLE_CONTACT || type == TRIANGLE_TRIANGLE_CONTACT || type == TRIANGLE_ANALYTICAL_CONTACT;
+}
 constexpr contact_t ALL_CONTACT_TYPES[NUM_SUPPORTED_CONTACT_TYPES] = {
     SPHERE_SPHERE_CONTACT, SPHERE_TRIANGLE_CONTACT, SPHERE_ANALYTICAL_CONTACT, TRIANGLE_TRIANGLE_CONTACT,
     TRIANGLE_ANALYTICAL_CONTACT};
@@ -303,8 +309,6 @@ struct DEMSimParams {
     float3 userBoxMax;
     // Stepping method
     TIME_INTEGRATOR stepping = TIME_INTEGRATOR::FORWARD_EULER;
-    // Whether needs to store the contact normal
-    bool storeNormal = false;
 
     // Number of wildcards (extra property) arrays associated with contacts and owners and geometries
     unsigned int nContactWildcards;
@@ -334,6 +338,11 @@ struct DEMSimParams {
     // user knows that meshed particles have a low polygon count (e.g. box with 12 triangles, tetrahedron with 4) and
     // mesh-mesh contacts are always SAT-traceable, i.e. no triangle can be completely submerged inside another mesh.
     bool meshParticlesLowPoly = false;
+
+    // Number of owners currently participating in combined-owner rigid groups.
+    bodyID_t nCombinedOwners = 0;
+    // If 1, contact detection keeps contacts among owners that share the same combined master.
+    notStupidBool_t allowIntraCombinedOwnerContacts = 0;
 };
 
 // A struct that holds pointers to data arrays that dT uses
@@ -391,6 +400,14 @@ struct DEMDataDT {
     notStupidBool_t* familyMasks;
     // Extra margin size
     float* familyExtraMarginSize;
+    // Combined-owner mapping (owner -> master owner, NULL_BODYID when not in a combined group)
+    bodyID_t* ownerCombinedMaster = nullptr;
+    // Member-fixed transforms in master frame (indexed by owner; ignored for non-members and masters)
+    float3* ownerCombinedRelPos = nullptr;
+    float4* ownerCombinedRelOriQ = nullptr;
+    // Per-master equivalent mass/MOI for combined-group integration.
+    float* ownerCombinedMasterMass = nullptr;
+    float3* ownerCombinedMasterMOI = nullptr;
 
     // Some dT's own work array pointers
     float3* contactForces;
@@ -492,6 +509,8 @@ struct DEMDataKT {
     notStupidBool_t* familyMasks;
     // Extra margin size
     float* familyExtraMarginSize;
+    // Combined-owner mapping (owner -> master owner, NULL_BODYID when not in a combined group)
+    bodyID_t* ownerCombinedMaster = nullptr;
 
     // The offset info that indexes into the template arrays
     bodyID_t* ownerClumpBody;

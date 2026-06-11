@@ -828,6 +828,78 @@ class DEMMesh : public DEMInitializer {
 // Backward compatibility alias
 using DEMMeshConnected = DEMMesh;
 
+// Template-level rigid-group definition for combining owner templates with fixed relative poses.
+class DEMCombinedTemplate {
+  public:
+    OWNER_TYPE member_type = OWNER_TYPE::CLUMP;
+    size_t master_member = 0;
+    std::vector<std::shared_ptr<DEMClumpTemplate>> clump_templates;
+    std::vector<std::shared_ptr<DEMMesh>> mesh_templates;
+    std::vector<float3> rel_pos;
+    std::vector<float4> rel_oriQ;
+    unsigned int load_order = 0;
+};
+
+// Runtime metadata for a batch of combined template instantiations.
+// Each element in the per-instance vectors corresponds to one instantiation request (one pose from the input batch).
+// Within each instantiation, there are n_members owners (matching the template's component count).
+class DEMCombinedInstances {
+  public:
+    std::shared_ptr<DEMCombinedTemplate> type;
+    // Cached member initializer handles (clump batches or meshes) that this batch instantiated.
+    // Flattened: for n instantiations of a template with t members, this has n*t entries. It's like [0, 1, .., t, 0, 1,
+    // ..t, ..,t], pattern repeating n times.
+    std::vector<std::shared_ptr<DEMInitializer>> member_objs;
+    std::vector<bodyID_t> member_owner_ids;
+    std::vector<float> member_mass;
+    std::vector<float3> member_moi;
+    // Per-instantiation equivalent mass/MOI (one per pose in the batch).
+    std::vector<float> master_equiv_mass;
+    std::vector<float3> master_equiv_moi;
+    std::vector<bodyID_t> master_owner_ids;
+    bool owners_resolved = false;
+    // Number of instantiations in this batch.
+    size_t n_instances = 0;
+
+    /// Get total number of member owners in this combined batch (n_instances * members_per_instance).
+    size_t GetNumOwners() const { return member_objs.size(); }
+
+    /// Add an owner wildcard to all member owners in this combined batch with the same value.
+    /// Each member owner gets its own wildcard entry, enabling fine per-owner control.
+    void AddOwnerWildcard(const std::string& name, float val) {
+        for (auto& obj : member_objs) {
+            auto batch = std::dynamic_pointer_cast<DEMClumpBatch>(obj);
+            if (!batch) {
+                DEME_ERROR(
+                    "DEMCombinedInstances::AddOwnerWildcard encountered a member that is not a clump batch.\n"
+                    "Owner wildcards are only supported for combined clump owners.");
+            }
+            batch->AddOwnerWildcard(name, val);
+        }
+    }
+
+    /// Add an owner wildcard to all member owners in this combined batch with per-owner values.
+    /// The input array must have the same size as GetNumOwners() (n_instances * members_per_instance).
+    void AddOwnerWildcard(const std::string& name, const std::vector<float>& vals) {
+        if (vals.size() != member_objs.size()) {
+            DEME_ERROR(
+                "Input owner wildcard array in a DEMCombinedInstances::AddOwnerWildcard call must have the same "
+                "size as the number of member owners.\nHere, the input array has length %zu but this combined "
+                "batch has %zu member owners.",
+                vals.size(), member_objs.size());
+        }
+        for (size_t i = 0; i < member_objs.size(); i++) {
+            auto batch = std::dynamic_pointer_cast<DEMClumpBatch>(member_objs[i]);
+            if (!batch) {
+                DEME_ERROR(
+                    "DEMCombinedInstances::AddOwnerWildcard encountered a member that is not a clump batch.\n"
+                    "Owner wildcards are only supported for combined clump owners.");
+            }
+            batch->AddOwnerWildcard(name, vals[i]);
+        }
+    }
+};
+
 /*
 /// GPU-side struct that holds external object component info. Only component, not their parents, so this is the
 /// equivalent of clump templates. External objects themselves (and their position, velocity etc.) are not stored with

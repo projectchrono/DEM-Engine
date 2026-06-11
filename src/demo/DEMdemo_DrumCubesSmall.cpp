@@ -25,6 +25,7 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEMSim;
+    DEMSim.SetVerbosity("METRIC");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::FAMILY);
     DEMSim.SetNoForceRecord();

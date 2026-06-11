@@ -7,9 +7,16 @@
 // This demo lets a rod with some electric charges stick into a pile of granular
 // material that is also charged. The electrostatic force shows its effect. The
 // electric charges are even moving during the simulation. This is done through
-// `Geometry Wildcard', where the amount of charges is associated with each
-// sphere component (of clumps) and triangles (of meshes). Then a custom force
-// model is used to derive the electrostatic force in addition to contact forces.
+// owner wildcards, where the amount of charge is associated with each owner.
+// Then a custom force model is used to derive the electrostatic force in
+// addition to contact forces.
+//
+// This demo uses the "combined owner" approach: each particle is represented by
+// 6 spheres (from spiky_sphere.csv), and each sphere is its own owner in a
+// combined group. This gives each sphere its own electric charge wildcard (Q),
+// enabling fine-grained charge distribution across the particle's shape. This
+// is in contrast to the old approach where 6 component spheres shared a single
+// owner (and thus a single charge value).
 //
 // NOTE: If you want to create your own force model, it's probably a good idea
 // to understand the default model in the file FullHertzianForceModel.cu
@@ -52,9 +59,8 @@ int main() {
     DEMSim.SetMaterialPropertyPair("mu", mat_type_rod, mat_type_terrain, 0.7);
     // We can specify the force model using a string.
     // This force model is the standard Hertzian--Mindlin model, plus an electrostatic force, based on something
-    // called a `geometry wildcard'. This is an extra property that we can associate with each geometry entity,
-    // such as triangle and sphere. We use this value to derive the electrostatic force. But first, we need to
-    // declare in the force model that a geometry wildcard is in use...
+    // called an owner wildcard. This is an extra property that we can associate with each owner.
+    // We use this value to derive the electrostatic force.
     auto my_force_model = DEMSim.DefineContactForceModel(force_model());
     // auto my_force_model = DEMSim.ReadContactForceModel("ForceModelWithElectrostatic.cu");
 
@@ -63,9 +69,7 @@ int main() {
     my_force_model->SetMustPairwiseMatProp({"CoR", "mu", "Crr"});
     my_force_model->SetPerContactWildcards({"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"});
     // Use variable name `Q' for the amount of electrc charge.
-    // NOTE! If you call it Q here, then you can refer to this wildcard array using variable names Q_A amd Q_B in
-    // your custom force model.
-    my_force_model->SetPerGeometryWildcards({"Q"});
+    my_force_model->SetPerOwnerWildcards({"Q"});
 
     float init_charge = 2e-8;  // Coulomb as the unit...
     float cone_speed = 0.1;
@@ -85,19 +89,35 @@ int main() {
     walls->AddPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_terrain);
     walls->AddPlane(make_float3(0, 0, world_size / 2. - world_size / 20.), make_float3(0, 0, -1), mat_type_terrain);
 
-    // Define the terrain particle templates
-    // Calculate its mass and MOI
+    // Define the terrain particle templates using combined owners.
+    // Each sphere from the spiky_sphere.csv file becomes its own owner in a combined group.
+    // This way, each sphere has its own electric charge wildcard, giving fine charge distribution.
     float terrain_density = 2.6e3;
-    double clump_vol = 4. / 3. * math_PI;
-    float mass = terrain_density * clump_vol;
-    float3 MOI = make_float3(2. / 5.) * mass;
-    // Then load it to system
-    std::shared_ptr<DEMClumpTemplate> my_template =
-        DEMSim.LoadClumpType(mass, MOI, GetDEMEDataFile("clumps/spiky_sphere.csv"), mat_type_terrain);
-    my_template->SetVolume(clump_vol);
-    // Decide the scalings of the templates we just created (so that they are... like particles, not rocks)
     double scale = 0.01;
-    my_template->Scale(scale);
+
+    // The spiky_sphere.csv defines 6 component spheres. We create individual sphere templates for each,
+    // then combine them into a single combined-owner template. Each sphere is an independent owner with
+    // its own charge Q, rather than being mere shape components of a single owner.
+    // Sphere data from spiky_sphere.csv: x, y, z, r
+    std::vector<float3> sphere_positions = {make_float3(0, 0, 0),         make_float3(0, -0.5, 0.5),
+                                            make_float3(0.65, 0.2, 0.55), make_float3(-0.45, 0.25, 0.65),
+                                            make_float3(0, 0.7, 0.2),     make_float3(0.5, 0.2, -0.5)};
+    std::vector<float> sphere_radii = {0.9f, 0.5f, 0.25f, 0.45f, 0.35f, 0.35f};
+
+    // Scale relative positions and radii
+    std::vector<float3> scaled_positions(6);
+    std::vector<std::shared_ptr<DEMClumpTemplate>> component_templates(6);
+    for (int i = 0; i < 6; i++) {
+        scaled_positions[i] = sphere_positions[i] * (float)scale;
+        float r = sphere_radii[i] * (float)scale;
+        float vol = 4. / 3. * math_PI * r * r * r;
+        float m = terrain_density * vol;
+        float3 moi = make_float3(2. / 5. * m * r * r);
+        component_templates[i] = DEMSim.LoadSphereType(m, r, mat_type_terrain);
+    }
+
+    // Create combined template: 6 spheres as 6 owners combined rigidly
+    auto combined_type = DEMSim.LoadCombinedClumpType(component_templates, scaled_positions, {}, 0);
 
     // Sampler to sample
     GridSampler sampler(scale * 2.4);
@@ -105,13 +125,12 @@ int main() {
     float3 fill_center = make_float3(0, 0, bottom + fill_height / 2);
     const float fill_radius = soil_bin_diameter / 2. - scale * 3.;
     auto input_xyz = sampler.SampleCylinderZ(fill_center, fill_radius, fill_height / 2 - scale * 2.);
-    auto particles = DEMSim.AddClumps(my_template, input_xyz);
-    std::cout << "Total num of particles: " << particles->GetNumClumps() << std::endl;
-    std::cout << "Total num of spheres: " << particles->GetNumSpheres() << std::endl;
-    // Add electric charge Q to each sphere. It is important to add it to each sphere, not each clump. This
-    // is because the contact pairs are resolved between geometries, not clumps. Using clumps leads to
-    // double-count or triple-count or...
-    particles->AddGeometryWildcard("Q", std::vector<float>(particles->GetNumSpheres(), init_charge));
+    auto particles = DEMSim.AddCombinedFromTemplate(combined_type, input_xyz);
+    std::cout << "Total num of combined particles: " << input_xyz.size() << std::endl;
+    std::cout << "Total num of member owners: " << particles->GetNumOwners() << std::endl;
+    // Add electric charge Q to each member owner. With combined owners, each of the 6 spheres
+    // per particle gets its own charge, enabling fine-grained electrostatic distribution.
+    particles->AddOwnerWildcard("Q", init_charge);
 
     // Load in the cone used for this penetration test
     auto rod_body = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/cyl_r1_h2.obj"), mat_type_rod);
@@ -128,8 +147,7 @@ int main() {
     rod_body->SetFamily(1);
     // Just fix it: We will manually impose its motion later.
     DEMSim.SetFamilyFixed(1);
-    // We can set the geometry wildcard Q here. But we'll instead show how to modify that using a tracker.
-    // rod_body->AddGeometryWildcard("Q", std::vector<float>(num_tri, init_charge));
+    // We can set the owner wildcard Q here. But we'll instead show how to modify that using a tracker.
 
     // Track the rod
     auto rod_tracker = DEMSim.Track(rod_body);
@@ -176,6 +194,7 @@ int main() {
         DEMSim.WriteSphereFile(out_dir / filename);
         DEMSim.WriteMeshFile(out_dir / meshname);
         DEMSim.ShowThreadCollaborationStats();
+        DEMSim.ShowMemStats();
 
         DEMSim.DoDynamics(frame_time);
     }
@@ -190,9 +209,9 @@ int main() {
 
     DEMSim.EnableContactBetweenFamilies(0, 1);
 
-    // We demonstrate using trackers to set a geometry wildcard. Q is now set for each triangle facet, and it's
+    // We demonstrate using trackers to set an owner wildcard. Q is now set for the rod owner, and it's
     // the opposite charge to the particles. So the rod should attract the particles.
-    rod_tracker->SetGeometryWildcardValues("Q", std::vector<float>(num_tri, -10. * init_charge));
+    rod_tracker->SetOwnerWildcardValue("Q", -10. * init_charge);
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_end; t += step_size, step_count++) {
@@ -204,6 +223,7 @@ int main() {
             DEMSim.WriteSphereFile(out_dir / filename);
             DEMSim.WriteMeshFile(out_dir / meshname);
             DEMSim.ShowThreadCollaborationStats();
+            DEMSim.ShowMemStats();
         }
 
         // Means advance simulation by one time step
@@ -376,23 +396,22 @@ std::string force_model() {
             const float k = 8.99e9;
             const double ABdist2 = dot(bodyAPos - bodyBPos, bodyAPos - bodyBPos);
             // If Q_A and Q_B are the same sign, then the force pushes A away from B, so B2A is the direction.
-            force += k * Q_A[AGeo] * Q_B[BGeo] / ABdist2 * (B2A);
+            force += k * Q[AOwner] * Q[BOwner] / ABdist2 * (B2A);
             // Fun part: we can modify the electric charge on the fly. But we have to use atomic, since multiple contacts
             // can modify the same Q.
             // But this is not recommend unless you understand what you are doing, and there are a lot of details related to it.
-            // For example, although the charges transfer between geometries, the geometries within one clump cannot
-            // re-distribute elec charges among them, since no contact among geometries in one clump. Still, you could write
-            // your own subroutine to further modify those geometry and/or own wildcards in your script, or within the force
-            // model. 
+            // You could write your own subroutine to further modify those wildcards in your script, or within the force
+            // model.
             // On the other hand, if you do not need to modify the wildcards, you just need to use them for calculating
             // the force, then that is probably easier and with less strings attached to it. I can see this being more
             // useful.
             if (overlapDepth > 0) {  // Exchange the elec charge only in physical contact
-                float avg_Q = (Q_A[AGeo] + Q_B[BGeo]) / 2.;
-                float A_change_dir = (abs(avg_Q - Q_A[AGeo]) > 1e-11) ? (avg_Q - Q_A[AGeo]) / abs(avg_Q - Q_A[AGeo]) : 0.;
+                float avg_Q = (Q[AOwner] + Q[BOwner]) / 2.;
+                float A_change_dir =
+                    (abs(avg_Q - Q[AOwner]) > 1e-11) ? (avg_Q - Q[AOwner]) / abs(avg_Q - Q[AOwner]) : 0.;
                 // Modify the charge they carry... the rate is 1e-8 per second
-                atomicAdd(Q_A + AGeo, A_change_dir * 1e-8 * ts);
-                atomicAdd(Q_B + BGeo, -A_change_dir * 1e-8 * ts);
+                atomicAdd(Q + AOwner, A_change_dir * 1e-8 * ts);
+                atomicAdd(Q + BOwner, -A_change_dir * 1e-8 * ts);
             }
         }
     )V0G0N";

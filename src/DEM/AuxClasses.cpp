@@ -575,41 +575,6 @@ std::vector<float> DEMTracker::GetOwnerWildcardValues(const std::string& name) {
     return sys->GetOwnerWildcardValue(obj->ownerID, name, obj->nSpanOwners);
 }
 
-float DEMTracker::GetGeometryWildcardValue(const std::string& name, size_t offset) {
-    std::vector<float> res;
-    switch (obj->obj_type) {
-        case (OWNER_TYPE::CLUMP):
-            assertGeoOffsetValid(offset, "GetGeometryWildcardValue", "spheres");
-            res = sys->GetSphereWildcardValue(obj->geoID + offset, name, 1);
-            break;
-        case (OWNER_TYPE::ANALYTICAL):
-            assertGeoOffsetValid(offset, "GetGeometryWildcardValue", "analytical components");
-            res = sys->GetAnalWildcardValue(obj->geoID + offset, name, 1);
-            break;
-        case (OWNER_TYPE::MESH):
-            assertGeoOffsetValid(offset, "GetGeometryWildcardValue", "mesh triangles");
-            res = sys->GetTriWildcardValue(obj->geoID + offset, name, 1);
-            break;
-    }
-    return res[0];
-}
-
-std::vector<float> DEMTracker::GetGeometryWildcardValues(const std::string& name) {
-    std::vector<float> res;
-    switch (obj->obj_type) {
-        case (OWNER_TYPE::CLUMP):
-            res = sys->GetSphereWildcardValue(obj->geoID, name, obj->nGeos);
-            break;
-        case (OWNER_TYPE::ANALYTICAL):
-            res = sys->GetAnalWildcardValue(obj->geoID, name, obj->nGeos);
-            break;
-        case (OWNER_TYPE::MESH):
-            res = sys->GetTriWildcardValue(obj->geoID, name, obj->nGeos);
-            break;
-    }
-    return res;
-}
-
 size_t DEMTracker::GetContactForces(std::vector<float3>& points, std::vector<float3>& forces, size_t offset) {
     assertThereIsForcePairs("GetContactForces");
     assertOwnerOffsetValid(offset, "GetContactForces");
@@ -771,40 +736,6 @@ void DEMTracker::SetOwnerWildcardValues(const std::string& name, const std::vect
     sys->SetOwnerWildcardValue(obj->ownerID, name, wc);
 }
 
-void DEMTracker::SetGeometryWildcardValue(const std::string& name, float wc, size_t offset) {
-    switch (obj->obj_type) {
-        case (OWNER_TYPE::CLUMP):
-            assertGeoOffsetValid(offset, "SetGeometryWildcardValue", "spheres");
-            sys->SetSphereWildcardValue(obj->geoID + offset, name, std::vector<float>(1, wc));
-            break;
-        case (OWNER_TYPE::ANALYTICAL):
-            assertGeoOffsetValid(offset, "SetGeometryWildcardValue", "analytical components");
-            sys->SetAnalWildcardValue(obj->geoID + offset, name, std::vector<float>(1, wc));
-            break;
-        case (OWNER_TYPE::MESH):
-            assertGeoOffsetValid(offset, "SetGeometryWildcardValue", "mesh triangles");
-            sys->SetTriWildcardValue(obj->geoID + offset, name, std::vector<float>(1, wc));
-            break;
-    }
-}
-
-void DEMTracker::SetGeometryWildcardValues(const std::string& name, const std::vector<float>& wc) {
-    switch (obj->obj_type) {
-        case (OWNER_TYPE::CLUMP):
-            assertGeoSize(wc.size(), "SetGeometryWildcardValues", "spheres");
-            sys->SetSphereWildcardValue(obj->geoID, name, wc);
-            break;
-        case (OWNER_TYPE::ANALYTICAL):
-            assertGeoSize(wc.size(), "SetGeometryWildcardValues", "analytical components");
-            sys->SetAnalWildcardValue(obj->geoID, name, wc);
-            break;
-        case (OWNER_TYPE::MESH):
-            assertGeoSize(wc.size(), "SetGeometryWildcardValues", "mesh triangles");
-            sys->SetTriWildcardValue(obj->geoID, name, wc);
-            break;
-    }
-}
-
 // =============================================================================
 // DEMForceModel class
 // =============================================================================
@@ -878,15 +809,6 @@ void DEMForceModel::SetPerOwnerWildcards(const std::set<std::string>& wildcards)
         }
     }
     m_owner_wildcards = wildcards;
-}
-
-void DEMForceModel::SetPerGeometryWildcards(const std::set<std::string>& wildcards) {
-    for (const auto& a_str : wildcards) {
-        if (match_pattern(a_str, " ")) {
-            DEME_ERROR("Geometry wildcard %s is not valid: no spaces allowed in its name.", a_str.c_str());
-        }
-    }
-    m_geo_wildcards = wildcards;
 }
 
 }  // END namespace deme

@@ -28,6 +28,7 @@ int main() {
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
+    // DEMSim.SetSimplePatchCombination(true);
 
     // If you don't need individual force information, then this option makes the solver run a bit faster.
     DEMSim.SetNoForceRecord();

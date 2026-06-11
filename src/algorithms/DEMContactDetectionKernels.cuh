@@ -344,7 +344,11 @@ __global__ void computeGroupWinners(const contact_t* groupTypes,
         forceSingleIsland[myID] = single_island ? 1 : 0;
 
         notStupidBool_t pickA = 0;
-        if (A_never && B_never) {
+        if (ctype == SPHERE_TRIANGLE_CONTACT) {
+            // SM patch identity is (sphere, mesh patch), and the sphere side always contains exactly one primitive.
+            // Force triangle side B to drive island flooding so reduction follows connected mesh triangles only.
+            pickA = 0;
+        } else if (A_never && B_never) {
             pickA = 0;  // deterministic: prefer B when both are never-winner
         } else if (A_never && !B_never) {
             pickA = 0;
@@ -685,6 +689,124 @@ __global__ void buildIslandCompositeKeyParts(const patchIDPair_t* patchPairs,
     }
 }
 
+__global__ void buildPrimitiveContactKeyParts(const bodyID_t* idA,
+                                              const bodyID_t* idB,
+                                              const contact_t* contactTypes,
+                                              uint64_t* key_hi,
+                                              uint64_t* key_lo,
+                                              size_t n) {
+    // Build sortable primitive-contact identity keys. These keys are used by the host stabilizer to match current
+    // primitive contacts to previous primitive contacts independent of their position in the contact arrays.
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        key_hi[myID] = (static_cast<uint64_t>(contactTypes[myID]) << 32) | static_cast<uint64_t>(idA[myID]);
+        key_lo[myID] = static_cast<uint64_t>(idB[myID]);
+    }
+}
+
+__global__ void buildStableIslandVotes(const bodyID_t* curr_idA,
+                                       const bodyID_t* curr_idB,
+                                       const contact_t* curr_types,
+                                       const contactPairs_t* curr_geomToPatchMap,
+                                       const uint64_t* prev_key_hi,
+                                       const uint64_t* prev_key_lo,
+                                       const bodyID_t* prev_primitiveIsland,
+                                       uint64_t* voteKeys,
+                                       notStupidBool_t* voteFlags,
+                                       size_t numCurr,
+                                       size_t numPrev) {
+    // For each current primitive contact, find the matching previous primitive contact and emit one candidate stable
+    // island vote for the current patch contact. Later reduction counts these votes to select the dominant old label.
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID >= numCurr) {
+        return;
+    }
+
+    voteFlags[myID] = 0;
+    voteKeys[myID] = 0;
+    // Keep SS/SA outside flooded-island stabilization until sphere/clump-side patching gives them meaningful island
+    // identity beyond their already-unambiguous primitive-derived patch IDs.
+    if (numPrev == 0 || !usesStablePatchIslandHistory(curr_types[myID])) {
+        return;
+    }
+
+    const uint64_t curr_hi = (static_cast<uint64_t>(curr_types[myID]) << 32) | static_cast<uint64_t>(curr_idA[myID]);
+    const uint64_t curr_lo = static_cast<uint64_t>(curr_idB[myID]);
+
+    size_t left = 0;
+    size_t right = numPrev;
+    while (left < right) {
+        size_t mid = left + (right - left) / 2;
+        const uint64_t mid_hi = prev_key_hi[mid];
+        const uint64_t mid_lo = prev_key_lo[mid];
+        if (mid_hi < curr_hi || (mid_hi == curr_hi && mid_lo < curr_lo)) {
+            left = mid + 1;
+        } else {
+            right = mid;
+        }
+    }
+
+    if (left < numPrev && prev_key_hi[left] == curr_hi && prev_key_lo[left] == curr_lo) {
+        const bodyID_t prev_label = prev_primitiveIsland[left];
+        if (prev_label != NULL_BODYID) {
+            const contactPairs_t patch_idx = curr_geomToPatchMap[myID];
+            voteKeys[myID] = (static_cast<uint64_t>(patch_idx) << 32) | static_cast<uint64_t>(prev_label);
+            voteFlags[myID] = 1;
+        }
+    }
+}
+
+__global__ void scatterBestStableIslandVote(const uint64_t* uniqueVoteKeys,
+                                            const contactPairs_t* counts,
+                                            unsigned long long* bestPacked,
+                                            size_t n) {
+    // Collapse per-(patch contact, previous stable label) vote counts into one best candidate per patch contact. The
+    // packed score allows an atomic max to compare both overlap count and deterministic tie-break label in one value.
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        const uint64_t vote_key = uniqueVoteKeys[myID];
+        const contactPairs_t patch_idx = static_cast<contactPairs_t>(vote_key >> 32);
+        const bodyID_t label = static_cast<bodyID_t>(vote_key & 0xffffffffull);
+        // Prefer the largest primitive-overlap count. For ties, prefer the smaller previous stable label so the result
+        // is deterministic even if two old islands overlap a new one equally.
+        const unsigned long long packed =
+            (static_cast<unsigned long long>(counts[myID]) << 32) |
+            static_cast<unsigned long long>(0xffffffffull - static_cast<unsigned long long>(label));
+        atomicMax(&bestPacked[patch_idx], packed);
+    }
+}
+
+__global__ void applyBestStableIslandVotes(const unsigned long long* bestPacked,
+                                           bodyID_t* contactPatchIsland,
+                                           size_t nPatchContacts) {
+    // Apply the winning stable labels in-place. Patch contacts without a previous-step overlap keep the raw flooded
+    // label, which gives new islands deterministic first-step IDs without inventing a separate allocator.
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < nPatchContacts) {
+        const unsigned long long packed = bestPacked[myID];
+        if ((packed >> 32) == 0ull) {
+            return;
+        }
+        const bodyID_t label = static_cast<bodyID_t>(0xffffffffull - (packed & 0xffffffffull));
+        contactPatchIsland[myID] = label;
+    }
+}
+
+__global__ void fillPrimitivePatchIslandLabels(const contactPairs_t* geomToPatchMap,
+                                               const bodyID_t* contactPatchIsland,
+                                               const contact_t* primitiveContactTypes,
+                                               bodyID_t* primitivePatchIsland,
+                                               size_t nPrimitive) {
+    // Store mesh-related primitive membership in the finalized patch-island ID space. SS/SA deliberately receive a
+    // null entry so future stable-ID voting cannot affect them unless usesStablePatchIslandHistory is extended.
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < nPrimitive) {
+        primitivePatchIsland[myID] = usesStablePatchIslandHistory(primitiveContactTypes[myID])
+                                         ? contactPatchIsland[geomToPatchMap[myID]]
+                                         : NULL_BODYID;
+    }
+}
+
 // Mark new composite groups for sorted (key_hi, key_lo) arrays.
 __global__ void markNewCompositeGroups64(const uint64_t* key_hi,
                                          const uint64_t* key_lo,
@@ -830,6 +952,58 @@ __global__ void buildPatchContactMappingForType(bodyID_t* curr_idPatchA,
             }
         }
 
+        contactMapping[curr_idx] = my_partner;
+    }
+}
+
+__global__ void buildPatchContactMappingForStableType(bodyID_t* curr_idPatchA,
+                                                      bodyID_t* curr_idPatchB,
+                                                      bodyID_t* curr_patchIsland,
+                                                      bodyID_t* prev_idPatchA,
+                                                      bodyID_t* prev_idPatchB,
+                                                      bodyID_t* prev_patchIsland,
+                                                      contactPairs_t* contactMapping,
+                                                      contactPairs_t curr_start,
+                                                      contactPairs_t curr_count,
+                                                      contactPairs_t prev_start,
+                                                      contactPairs_t prev_count) {
+    // Stable-label rewriting preserves the existing (patch A, patch B) ordering but may scramble island labels within
+    // one patch pair. Binary-search the pair range first, then scan only that usually-small range for the stable label.
+    // This avoids the previous all-to-all per-type scan, which became quadratic for large contact sets.
+    contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < curr_count) {
+        const contactPairs_t curr_idx = curr_start + myID;
+        const bodyID_t curr_A = curr_idPatchA[curr_idx];
+        const bodyID_t curr_B = curr_idPatchB[curr_idx];
+        const bodyID_t curr_L = curr_patchIsland[curr_idx];
+        contactPairs_t my_partner = NULL_MAPPING_PARTNER;
+
+        contactPairs_t left = 0;
+        contactPairs_t right = prev_count;
+        while (left < right) {
+            const contactPairs_t mid = left + (right - left) / 2;
+            const contactPairs_t prev_idx = prev_start + mid;
+            const bodyID_t prev_A = prev_idPatchA[prev_idx];
+            const bodyID_t prev_B = prev_idPatchB[prev_idx];
+            if (prev_A < curr_A || (prev_A == curr_A && prev_B < curr_B)) {
+                left = mid + 1;
+            } else {
+                right = mid;
+            }
+        }
+
+        for (contactPairs_t i = left; i < prev_count; i++) {
+            const contactPairs_t prev_idx = prev_start + i;
+            const bodyID_t prev_A = prev_idPatchA[prev_idx];
+            const bodyID_t prev_B = prev_idPatchB[prev_idx];
+            if (prev_A != curr_A || prev_B != curr_B) {
+                break;
+            }
+            if (prev_patchIsland[prev_idx] == curr_L) {
+                my_partner = prev_idx;
+                break;
+            }
+        }
         contactMapping[curr_idx] = my_partner;
     }
 }

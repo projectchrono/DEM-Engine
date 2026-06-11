@@ -119,6 +119,7 @@ void contactDetection(std::shared_ptr<JitHelper::CachedProgram>& bin_sphere_kern
                       DualArray<bodyID_t>& previous_idPrimitiveA,
                       DualArray<bodyID_t>& previous_idPrimitiveB,
                       DualArray<contact_t>& previous_contactTypePrimitive,
+                      DualArray<bodyID_t>& previous_primitivePatchIsland,
                       DualArray<notStupidBool_t>& contactPersistency,
                       DualArray<contactPairs_t>& contactMapping,
                       // NEW: Separate patch ID arrays and mapping
@@ -291,6 +292,11 @@ void rearrangeContactWildcards(DEMDataDT* granData,
                                size_t nContactPairs,
                                cudaStream_t& this_stream);
 void markAliveContacts(float* wildcard, notStupidBool_t* sentry, size_t nContactPairs, cudaStream_t& this_stream);
+void markAliveContactTypes(const contact_t* previousContactTypes,
+                           const notStupidBool_t* sentry,
+                           unsigned int* typeFlags,
+                           size_t nContactPairs,
+                           cudaStream_t& this_stream);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Misc kernels declarations

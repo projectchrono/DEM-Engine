@@ -565,6 +565,9 @@ struct SolverFlags {
     // index-flooding-based approach. When true, all triangles sharing the same patch ID pair are combined into one
     // patch contact without the connected-component flooding step.
     bool useSimplePatchCombination = false;
+    // Whether the index-flooding patch-combination route remaps raw island labels to stable IDs across contact
+    // detection steps. This preserves contact history when the raw representative triangle changes.
+    bool useStablePatchIslandIDs = true;
 };
 
 class DEMMaterial {
@@ -888,6 +891,7 @@ class DEMClumpTemplate {
 // small, and is mainly there for the purpose of pyDEME entry point.
 class DEMInitializer {
   public:
+    virtual ~DEMInitializer() = default;
     // The type of a clump batch is CLUMP (it is used by tracker objs)
     OWNER_TYPE obj_type;
     // Its offset when this obj got loaded into the API-level user raw-input array
@@ -1131,6 +1135,11 @@ class DEMTrackedObj : public DEMInitializer {
     // The number of geometric entities (sphere components, triangles or analytical components) the tracked objects
     // have.
     size_t nGeos;
+    // If non-zero, override the computed nSpanOwners with this value. Used when tracking CombinedInstances where the
+    // tracker must span all member owners, not just the first member's batch.
+    size_t nSpanOwnersOverride = 0;
+    // If non-zero, override the computed nGeos with this value. Used when tracking CombinedInstances.
+    size_t nGeosOverride = 0;
 };
 
 // General-purpose data container that can hold any type of data, indexed by string keys.

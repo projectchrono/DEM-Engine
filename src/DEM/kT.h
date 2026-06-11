@@ -173,6 +173,8 @@ class DEMKinematicThread {
     // The amount of contact margin that each family should add to its associated contact geometries. Default is 0, and
     // that means geometries should be considered in contact when they are physically in contact.
     DualArray<float> familyExtraMarginSize = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // Combined-owner mapping (owner -> master owner, NULL_BODYID if not participating in a combined owner).
+    DualArray<bodyID_t> ownerCombinedMaster = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // kT computed contact pair info
     DualArray<bodyID_t> idPrimitiveA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
@@ -185,6 +187,10 @@ class DEMKinematicThread {
     DualArray<bodyID_t> previous_idPrimitiveB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<contact_t> previous_contactTypePrimitive =
         DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    // Stable flooded-island ID per previous primitive contact. Used by the next contact detection step to preserve
+    // patch-contact identity when the raw flooded representative triangle changes.
+    DualArray<bodyID_t> previous_primitivePatchIsland =
+        DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Records if this primitive contact is persistent and serves as kT's work array on treating their persistency.
     DualArray<notStupidBool_t> contactPersistency =
