@@ -23,9 +23,11 @@
 #include "Defines.h"
 #include "Structs.h"
 
-// Forward declare jitify::Program to avoid downstream dependency
-namespace jitify {
+// Forward declare deme::jit::Program
+namespace deme {
+namespace jit {
 class Program;
+}
 }
 
 namespace deme {
@@ -408,12 +410,12 @@ class DEMKinematicThread {
 
     // Just-in-time compiled kernels
     // jitify::Program bin_sphere_kernels = JitHelper::buildProgram("bin_sphere_kernels", " ");
-    std::shared_ptr<jitify::Program> bin_sphere_kernels;
-    std::shared_ptr<jitify::Program> bin_triangle_kernels;
-    std::shared_ptr<jitify::Program> sphTri_contact_kernels;
-    std::shared_ptr<jitify::Program> sphere_contact_kernels;
-    std::shared_ptr<jitify::Program> history_kernels;
-    std::shared_ptr<jitify::Program> misc_kernels;
+    std::shared_ptr<deme::jit::Program> bin_sphere_kernels;
+    std::shared_ptr<deme::jit::Program> bin_triangle_kernels;
+    std::shared_ptr<deme::jit::Program> sphTri_contact_kernels;
+    std::shared_ptr<deme::jit::Program> sphere_contact_kernels;
+    std::shared_ptr<deme::jit::Program> history_kernels;
+    std::shared_ptr<deme::jit::Program> misc_kernels;
 
     // Adjuster for bin size
     class AccumTimer {

@@ -14,12 +14,15 @@ configure_file(
 )
 
 
-message(STATUS "${core_message} Extracting NVIDIA Jitify header...") 
-configure_file(
-	${NVIDIAJitifyPath}/jitify.hpp
-	${CMAKE_BINARY_DIR}/src/jitify/jitify.hpp
-	COPYONLY
-)
+# Jitify is only needed for CUDA builds (HIP uses hiprtc directly via JitKernel abstraction)
+if(NOT USE_HIP)
+	message(STATUS "${core_message} Extracting Jitify header...")
+	configure_file(
+		${JitifyPath}/jitify.hpp
+		${CMAKE_BINARY_DIR}/src/jitify/jitify.hpp
+		COPYONLY
+	)
+endif()
 
 add_library(core OBJECT)
 
@@ -31,16 +34,12 @@ target_include_directories(
 )
 
 
+# Core is pure CXX, no GPU library dependencies.
+# CUB/hipcub is only needed by algorithms target.
 if(USE_CHPF)
 	target_link_libraries(
 		core
-		PUBLIC CUB::CUB
 		INTERFACE ${ChPF_IMPORTED_NAME}
-	)
-else()
-	target_link_libraries(
-		core
-		PUBLIC CUB::CUB
 	)
 endif()
 
@@ -50,6 +49,8 @@ set(core_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/CudaAllocator.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ManagedMemory.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/JitHelper.h
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/JitKernel.h
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/JitKernel.inl
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ThreadManager.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuError.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuManager.h
@@ -67,6 +68,13 @@ set(core_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/JitHelper.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/DEMEPaths.cpp
 )
+
+# JitKernel abstraction: select backend based on USE_HIP
+if(USE_HIP)
+	list(APPEND core_sources ${CMAKE_CURRENT_SOURCE_DIR}/utils/JitKernel_hip.cpp)
+else()
+	list(APPEND core_sources ${CMAKE_CURRENT_SOURCE_DIR}/utils/JitKernel_cuda.cpp)
+endif()
 
 target_sources(
 	core
@@ -98,13 +106,15 @@ install(
 		${CMAKE_INSTALL_INCLUDEDIR}/core
 )
 
-# Install Third-party Headers 
-install(
-	FILES 
-		"${NVIDIAJitifyPath}/jitify.hpp"
-	DESTINATION 
-		${CMAKE_INSTALL_INCLUDEDIR}/jitify
-)
+# Install Third-party Headers (jitify only for CUDA builds)
+if(NOT USE_HIP)
+	install(
+		FILES
+			"${NVIDIAJitifyPath}/jitify.hpp"
+		DESTINATION
+			${CMAKE_INSTALL_INCLUDEDIR}/jitify
+	)
+endif()
 
 
 # --------------------------------------------------------- #
@@ -114,7 +124,7 @@ install(
 
 message(STATUS "${core_message} Generating Runtime Data helper (build)...")
 set(DEME_RUNTIME_DATA_DIRECTORY "${CMAKE_BINARY_DIR}")
-set(DEME_RUNTIME_INCLUDE_DIRECTORY "${CMAKE_BINARY_DIR}")
+set(DEME_RUNTIME_INCLUDE_DIRECTORY "${CMAKE_SOURCE_DIR}/src")
 configure_file(
 	utils/RuntimeData.cpp.in utils/RuntimeDataBuild.cpp
 	@ONLY

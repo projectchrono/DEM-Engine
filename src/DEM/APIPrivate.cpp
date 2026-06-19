@@ -2121,7 +2121,20 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
 
     // Some constants that we should consider using or not using
     // strMap["_nAnalGM_"] = std::to_string(nAnalGM);
-    strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
+    // Query device warp size at runtime for correct multi-arch support (wave32 vs wave64)
+    int runtimeWarpSize = DEME_CUDA_WARP_SIZE;  // Compile-time fallback
+#if defined(USE_HIP)
+    {
+        int dev = 0;
+        cudaDeviceProp prop;
+        if (cudaGetDevice(&dev) == cudaSuccess && cudaGetDeviceProperties(&prop, dev) == cudaSuccess) {
+            runtimeWarpSize = prop.warpSize;  // 64 on gfx90a, 32 on gfx1100
+        }
+    }
+#endif
+    clumpComponentOffset_t nActiveLoadingThreads = static_cast<clumpComponentOffset_t>(
+        DEME_MIN(DEME_MIN(runtimeWarpSize, DEME_KT_CD_NTHREADS_PER_BLOCK), DEME_NUM_BODIES_PER_BLOCK));
+    strMap["_nActiveLoadingThreads_"] = std::to_string(nActiveLoadingThreads);
     // nTotalBodyTopologies includes clump topologies and ext obj topologies
     strMap["_nDistinctMassProperties_"] = std::to_string(nDistinctMassProperties);
     strMap["_nJitifiableClumpComponents_"] = std::to_string(nJitifiableClumpComponents);

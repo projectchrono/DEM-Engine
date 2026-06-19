@@ -14,11 +14,29 @@ set(DEME_VERSION_MAJOR   2)
 set(DEME_VERSION_MINOR   1)
 set(DEME_VERSION_PATCH   0)
 
-project(
-	Chrono-DEM-Engine
-	VERSION ${DEME_VERSION_MAJOR}.${DEME_VERSION_MINOR}.${DEME_VERSION_PATCH}
-	LANGUAGES CXX CUDA
-)
+# HIP/ROCm support option (must be set before project() to select the right language)
+option(USE_HIP "Build with HIP for AMD GPUs" OFF)
+
+if(USE_HIP)
+	project(
+		Chrono-DEM-Engine
+		VERSION ${DEME_VERSION_MAJOR}.${DEME_VERSION_MINOR}.${DEME_VERSION_PATCH}
+		LANGUAGES CXX HIP
+	)
+	# Set default HIP architecture if not specified
+	if(NOT DEFINED CMAKE_HIP_ARCHITECTURES OR CMAKE_HIP_ARCHITECTURES STREQUAL "")
+		set(CMAKE_HIP_ARCHITECTURES "gfx90a" CACHE STRING "HIP architectures")
+	endif()
+	add_compile_definitions(USE_HIP)
+	# CXX files that include hip_runtime.h need this defined (HIP compiler defines it automatically)
+	add_compile_definitions(__HIP_PLATFORM_AMD__)
+else()
+	project(
+		Chrono-DEM-Engine
+		VERSION ${DEME_VERSION_MAJOR}.${DEME_VERSION_MINOR}.${DEME_VERSION_PATCH}
+		LANGUAGES CXX CUDA
+	)
+endif()
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   message(STATUS "Setting CMAKE_BUILD_TYPE to 'Release' (default)")
@@ -41,20 +59,29 @@ include(cmake/FixNinjaColors.cmake)
 fix_ninja_colors()
 
 
-find_package(CUDAToolkit REQUIRED)
+if(USE_HIP)
+	# Find hipCUB for HIP builds
+	find_package(hipcub REQUIRED)
+	find_package(hip REQUIRED)
+else()
+	find_package(CUDAToolkit REQUIRED)
+	# Find CUB library (this might need to be done in source-level config)
+	find_package(
+		CUB REQUIRED
+		HINTS ${CUDAToolkit_ROOT}/lib64/cmake/cub
+	)
+endif()
 
-# Find CUB library (this might need to be done in source-level config)
-find_package(
-	CUB REQUIRED
-	HINTS ${CUDAToolkit_ROOT}/lib64/cmake/cub
-)
-
-# Find NVIDIA's Jitify library 
-find_path(
-	NVIDIAJitifyPath
-	NAMES jitify.hpp
-	PATHS "${CMAKE_CURRENT_LIST_DIR}/thirdparty/jitify"
-)
+# Find Jitify library (NVIDIA version only; HIP uses hiprtc directly via JitKernel abstraction)
+if(NOT USE_HIP)
+	find_path(
+		JitifyPath
+		NAMES jitify.hpp
+		PATHS "${CMAKE_CURRENT_LIST_DIR}/thirdparty/jitify"
+	)
+	# Keep backward compat alias
+	set(NVIDIAJitifyPath ${JitifyPath})
+endif()
 
 # Let the user decide if they want to use ChPF
 option(USE_CHPF "Toggle the use of ChPF for outputting" OFF)
@@ -119,8 +146,13 @@ cxx_std_autodetect()
 set(ProjectIncludeSource "${CMAKE_CURRENT_SOURCE_DIR}/src")
 set(ProjectIncludeGenerated "${CMAKE_BINARY_DIR}/src")
 
-# Global fix for CUDA language bug
-include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+# Global fix for CUDA/HIP language bug
+if(USE_HIP)
+	# Add HIP include directories for all targets (both CXX and HIP)
+	include_directories(${HIP_INCLUDE_DIR})
+else()
+	include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+endif()
 
 
 #------------------------------------------------------------
@@ -164,22 +196,41 @@ if(USE_CHPF)
     target_compile_definitions(simulator_multi_gpu PUBLIC DEME_USE_CHPF)
 	set(USE_CHPF_STR "ON")
 
-	target_link_libraries(simulator_multi_gpu
-		PUBLIC CUDA::cudart
-		PUBLIC CUDA::nvrtc
-		PUBLIC CUDA::cuda_driver
-		PUBLIC ${ChPF_IMPORTED_NAME}
-		PUBLIC DEMERuntimeDataHelper
-	)
+	if(USE_HIP)
+		find_library(HIPRTC_LIB hiprtc HINTS ${ROCM_PATH}/lib /opt/rocm/lib REQUIRED)
+		target_link_libraries(simulator_multi_gpu
+			PUBLIC hip::host
+			PUBLIC ${HIPRTC_LIB}
+			PUBLIC ${ChPF_IMPORTED_NAME}
+			PUBLIC DEMERuntimeDataHelper
+		)
+	else()
+		target_link_libraries(simulator_multi_gpu
+			PUBLIC CUDA::cudart
+			PUBLIC CUDA::nvrtc
+			PUBLIC CUDA::cuda_driver
+			PUBLIC ${ChPF_IMPORTED_NAME}
+			PUBLIC DEMERuntimeDataHelper
+		)
+	endif()
 else()
 	set(USE_CHPF_STR "OFF")
 
-	target_link_libraries(simulator_multi_gpu
-		PUBLIC CUDA::cudart
-		PUBLIC CUDA::nvrtc
-		PUBLIC CUDA::cuda_driver
-		PUBLIC DEMERuntimeDataHelper
-	)
+	if(USE_HIP)
+		find_library(HIPRTC_LIB hiprtc HINTS ${ROCM_PATH}/lib /opt/rocm/lib REQUIRED)
+		target_link_libraries(simulator_multi_gpu
+			PUBLIC hip::host
+			PUBLIC ${HIPRTC_LIB}
+			PUBLIC DEMERuntimeDataHelper
+		)
+	else()
+		target_link_libraries(simulator_multi_gpu
+			PUBLIC CUDA::cudart
+			PUBLIC CUDA::nvrtc
+			PUBLIC CUDA::cuda_driver
+			PUBLIC DEMERuntimeDataHelper
+		)
+	endif()
 endif()
 
 # If use managed arrays, define a macro
@@ -194,10 +245,17 @@ if(WIN32)
 endif()
 
 # Attach include directories to the top-level library target
-set_target_properties(simulator_multi_gpu
-	PROPERTIES
-	LINKER_LANGUAGE CUDA
-)
+if(USE_HIP)
+	set_target_properties(simulator_multi_gpu
+		PROPERTIES
+		LINKER_LANGUAGE HIP
+	)
+else()
+	set_target_properties(simulator_multi_gpu
+		PROPERTIES
+		LINKER_LANGUAGE CUDA
+	)
+endif()
 
 # ---------------------------------------------------------------------------- #
 # Export and Install The Generated Targets 

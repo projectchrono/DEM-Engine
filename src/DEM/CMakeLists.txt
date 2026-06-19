@@ -13,16 +13,12 @@ target_include_directories(
 	PUBLIC ${ProjectIncludeGenerated}
 )
 
+# DEM is pure CXX, no GPU library dependencies.
+# CUB/hipcub is only needed by algorithms target.
 if(USE_CHPF)
 	target_link_libraries(
 		DEM
-		PUBLIC CUB::CUB
 		PUBLIC ${ChPF_IMPORTED_NAME}
-	)
-else()
-	target_link_libraries(
-		DEM
-		PUBLIC CUB::CUB
 	)
 endif()
 

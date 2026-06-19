@@ -12,21 +12,30 @@
 #include <algorithm>
 #include <cstdlib>
 #include <stdexcept>
+#include <cstring>
 
-#include <cuda_runtime_api.h>
+#include "cuda_to_hip.h"
 
-// Compile-time default CUDA architecture fallback.
-// Can be overridden at build time via -DDEME_DEFAULT_CUDA_ARCH_STR="compute_XY".
-// At runtime, the environment variable DEME_DEFAULT_CUDA_ARCH takes precedence.
+// Compile-time default architecture fallback.
+// Can be overridden at build time via -DDEME_DEFAULT_CUDA_ARCH_STR="compute_XY" (CUDA)
+// or -DDEME_DEFAULT_HIP_ARCH_STR="gfx90a" (HIP).
+// At runtime, the environment variable DEME_DEFAULT_CUDA_ARCH (CUDA) or
+// DEME_DEFAULT_HIP_ARCH (HIP) takes precedence.
+#if defined(USE_HIP)
+#ifndef DEME_DEFAULT_HIP_ARCH_STR
+    #define DEME_DEFAULT_HIP_ARCH_STR "gfx90a"
+#endif
+#else
 #ifndef DEME_DEFAULT_CUDA_ARCH_STR
     #define DEME_DEFAULT_CUDA_ARCH_STR "compute_75"
+#endif
 #endif
 
 #include <core/ApiVersion.h>
 #include "RuntimeData.h"
 #include "JitHelper.h"
 
-jitify::JitCache* JitHelper::kcache = nullptr;
+deme::jit::ProgramCache* JitHelper::kcache = nullptr;
 
 const std::filesystem::path JitHelper::KERNEL_DIR = DEMERuntimeDataHelper::data_path / "kernel";
 const std::filesystem::path JitHelper::KERNEL_INCLUDE_DIR = DEMERuntimeDataHelper::include_path;
@@ -47,13 +56,12 @@ void JitHelper::Header::substitute(const std::string& symbol, const std::string&
     }
 }
 
-jitify::Program JitHelper::buildProgram(
+deme::jit::Program JitHelper::buildProgram(
     const std::string& name,
     const std::filesystem::path& source,
     std::unordered_map<std::string, std::string> substitutions,
-    // std::vector<JitHelper::Header> headers, // THIS PARAMETER PROBABLY WON'T EVER BE USED
     std::vector<std::string> flags) {
-    // Double ensure include paths for runtime headers + CUDA/CCCL (cuda::std)
+    // Double ensure include paths for runtime headers + CUDA/CCCL (cuda::std) or ROCm
     auto add_inc = [&](const std::filesystem::path& p) {
         if (p.empty())
             return;
@@ -68,15 +76,59 @@ jitify::Program JitHelper::buildProgram(
     // Project/runtime includes
     add_inc(KERNEL_INCLUDE_DIR);
 
+    // Also add the source tree for header includes (cuda_to_hip.h, etc.)
+    // KERNEL_INCLUDE_DIR is the build tree, but some headers live in src/
+    // The source tree is one level up from build, then into src/
+    std::error_code ec;
+    std::filesystem::path src_include = std::filesystem::canonical(KERNEL_INCLUDE_DIR / "..", ec);
+    if (!ec) {
+        add_inc(src_include / "src");
+    }
+
     // Common fallbacks
+#if defined(USE_HIP)
+    // Helper: find clang builtin headers by scanning lib/llvm/lib/clang/<version>/include
+    auto add_clang_builtins = [&](const std::filesystem::path& rocm_root) {
+        std::filesystem::path clang_base = rocm_root / "lib" / "llvm" / "lib" / "clang";
+        std::error_code scan_ec;
+        for (const auto& entry : std::filesystem::directory_iterator(clang_base, scan_ec)) {
+            if (entry.is_directory()) {
+                add_inc(entry.path() / "include");
+                break;  // use the first (and typically only) version dir
+            }
+        }
+    };
+
+    // ROCm include paths for hipRTC
+    if (const char* rocm_path = std::getenv("ROCM_PATH")) {
+        add_inc(std::filesystem::path(rocm_path) / "include");
+        add_inc(std::filesystem::path(rocm_path) / "include" / "hipcub");
+        add_inc(std::filesystem::path(rocm_path) / "include" / "rocprim");
+        // Clang builtin headers (stddef.h, etc.) for hiprtc -- scan for actual version dir
+        add_clang_builtins(std::filesystem::path(rocm_path));
+    }
+    add_inc("/opt/rocm/include");
+    add_inc("/opt/rocm/include/hipcub");
+    add_inc("/opt/rocm/include/rocprim");
+    // Clang builtin headers for hiprtc (needed for stddef.h, stdint.h, etc.)
+    add_clang_builtins(std::filesystem::path("/opt/rocm"));
+#else
     if (const char* cuda_home = std::getenv("CUDA_HOME")) {
         add_inc(std::filesystem::path(cuda_home) / "include");
         add_inc(std::filesystem::path(cuda_home) / "include" / "cccl");
     }
     add_inc("/usr/local/cuda/include");
     add_inc("/usr/local/cuda/include/cccl");
+#endif
 
+#if defined(USE_HIP)
+    // For hiprtc: start with hip_runtime.h to provide HIP types/functions in device code.
+    // The program name is passed separately to hiprtcCreateProgram.
+    std::string code = "#include <hip/hip_runtime.h>\n";
+#else
+    // For CUDA/jitify: the program name on the first line is a jitify requirement.
     std::string code = name + "\n";
+#endif
 
     code.append(JitHelper::loadSourceFile(source));
     // Apply the substitutions
@@ -84,64 +136,53 @@ jitify::Program JitHelper::buildProgram(
         code = std::regex_replace(code, std::regex(subst.first), subst.second);
     }
 
-    std::vector<std::string> header_code;
-    // THIS BLOCK IS ONLY NEEDED IF THE headers PARAMETER IS USED
-    /*
-    for (auto it = headers.begin(); it != headers.end(); it++) {
-        header_code.push_back(it->getSource());
-    }
-    */
-
     if (kcache == nullptr)
-        kcache = new jitify::JitCache();
+        kcache = new deme::jit::ProgramCache();
 
-    // Stage 1: Explicit architecture detection.
-    // Query the active CUDA device compute capability and build an -arch flag.
+    // Detect GPU architecture and add appropriate flags
+    std::string arch_flag;
     {
         int dev = 0;
         cudaDeviceProp prop;
         memset(&prop, 0, sizeof(prop));
-        if (cudaGetDevice(&dev) == cudaSuccess && cudaGetDeviceProperties(&prop, dev) == cudaSuccess &&
-            prop.major > 0 && prop.minor >= 0) {
-            std::string detected_arch = "compute_" + std::to_string(prop.major) + std::to_string(prop.minor);
-            std::vector<std::string> arch_flags = flags;
-            arch_flags.push_back("-arch=" + detected_arch);
-            return kcache->program(code, header_code, arch_flags);
+        if (cudaGetDevice(&dev) == cudaSuccess && cudaGetDeviceProperties(&prop, dev) == cudaSuccess) {
+#if defined(USE_HIP)
+            // HIP: use gcnArchName (e.g., "gfx90a")
+            std::string detected_arch = prop.gcnArchName;
+            // Strip any suffix after the base arch name (e.g., "gfx90a:sramecc+:xnack-" -> "gfx90a")
+            size_t colon_pos = detected_arch.find(':');
+            if (colon_pos != std::string::npos) {
+                detected_arch = detected_arch.substr(0, colon_pos);
+            }
+            arch_flag = "--gpu-architecture=" + detected_arch;
+#else
+            if (prop.major > 0 && prop.minor >= 0) {
+                std::string detected_arch = "compute_" + std::to_string(prop.major) + std::to_string(prop.minor);
+                arch_flag = "-arch=" + detected_arch;
+            }
+#endif
         }
     }
 
-    // Stage 2: Jitify auto-detect.
-    // Device detection failed or returned an invalid compute capability; compile
-    // without an explicit -arch flag and let Jitify detect the architecture.
-    try {
-        return kcache->program(code, header_code, flags);
-    } catch (const std::exception& e) {
-        const std::string err_msg = e.what();
-        // Only fall through to Stage 3 when the failure is architecture-related.
-        const bool is_arch_error =
-            (err_msg.find("arch") != std::string::npos || err_msg.find("compute_") != std::string::npos ||
-             err_msg.find("sm_") != std::string::npos);
-        if (!is_arch_error) {
-            throw;
-        }
-
-        // Stage 3: Hardcoded default fallback.
-        // Use the DEME_DEFAULT_CUDA_ARCH environment variable if set; otherwise fall
-        // back to the compile-time constant DEME_DEFAULT_CUDA_ARCH_STR.
+    // If device detection failed, use fallback
+    if (arch_flag.empty()) {
+#if defined(USE_HIP)
+        const char* env_arch = std::getenv("DEME_DEFAULT_HIP_ARCH");
+        const std::string fallback_arch =
+            (env_arch != nullptr && env_arch[0] != '\0') ? std::string(env_arch) : DEME_DEFAULT_HIP_ARCH_STR;
+        arch_flag = "--gpu-architecture=" + fallback_arch;
+#else
         const char* env_arch = std::getenv("DEME_DEFAULT_CUDA_ARCH");
         const std::string fallback_arch =
             (env_arch != nullptr && env_arch[0] != '\0') ? std::string(env_arch) : DEME_DEFAULT_CUDA_ARCH_STR;
-        std::vector<std::string> fallback_flags = flags;
-        fallback_flags.push_back("-arch=" + fallback_arch);
-        try {
-            return kcache->program(code, header_code, fallback_flags);
-        } catch (const std::exception& e3) {
-            std::string ctx = "Jitify compilation failed with fallback arch '";
-            ctx += fallback_arch;
-            ctx += (env_arch != nullptr && env_arch[0] != '\0') ? "' (from DEME_DEFAULT_CUDA_ARCH env var): "
-                                                                : "' (compile-time default): ";
-            ctx += e3.what();
-            throw std::runtime_error(ctx);
-        }
+        arch_flag = "-arch=" + fallback_arch;
+#endif
     }
+
+    std::vector<std::string> final_flags = flags;
+    final_flags.push_back(arch_flag);
+
+    // Use the unified JitKernel abstraction - no headers needed for our usage
+    std::vector<std::pair<std::string, std::string>> headers;
+    return kcache->program(name, code, headers, final_flags);
 }

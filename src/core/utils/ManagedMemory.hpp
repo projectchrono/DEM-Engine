@@ -13,7 +13,7 @@
 // Convenience functions to help with Managed Memory (allocated using ManagedAllocator, typically)
 namespace deme {
 
-#if CUDART_VERSION >= 13000
+#if !defined(USE_HIP) && CUDART_VERSION >= 13000
 inline cudaMemLocation make_device_location(int device) {
     cudaMemLocation loc{};
     loc.type = cudaMemLocationTypeDevice;
@@ -25,7 +25,10 @@ inline cudaMemLocation make_device_location(int device) {
 // Underlying implementation
 template <class T>
 inline void __migrate_impl(T* data, std::size_t size, int device, cudaStream_t stream = 0) {
-#if CUDART_VERSION >= 13000
+#if defined(USE_HIP)
+    // HIP uses the 4-arg form: hipMemPrefetchAsync(const void*, size_t, int dstDevice, hipStream_t)
+    cudaMemPrefetchAsync(static_cast<void*>(data), size * sizeof(T), device, stream);
+#elif CUDART_VERSION >= 13000
     // CUDA 13.0+: cudaMemPrefetchAsync(const void*, size_t, cudaMemLocation, unsigned int flags, cudaStream_t)
     auto loc = make_device_location(device);
     unsigned int flags = 0;
@@ -74,18 +77,30 @@ void migrate(const std::vector<T>& data, int device, cudaStream_t stream = 0) {
 
 // Aliases for cudaMemoryAdvise constants
 enum class ManagedAdvice {
+#if defined(USE_HIP)
+    READ_MOSTLY = hipMemAdviseSetReadMostly,
+    PREFERRED_LOC = hipMemAdviseSetPreferredLocation,
+    ACCESSED_BY = hipMemAdviseSetAccessedBy,
+    UNSET_READ_MOSTLY = hipMemAdviseUnsetReadMostly,
+    UNSET_PREFERRED_LOC = hipMemAdviseUnsetPreferredLocation,
+    UNSET_ACCESSED_BY = hipMemAdviseUnsetAccessedBy
+#else
     READ_MOSTLY = cudaMemAdviseSetReadMostly,
     PREFERRED_LOC = cudaMemAdviseSetPreferredLocation,
     ACCESSED_BY = cudaMemAdviseSetAccessedBy,
     UNSET_READ_MOSTLY = cudaMemAdviseUnsetReadMostly,
     UNSET_PREFERRED_LOC = cudaMemAdviseUnsetPreferredLocation,
     UNSET_ACCESSED_BY = cudaMemAdviseUnsetAccessedBy
+#endif
 };
 
 // Underlying implementation
 template <class T>
 void __advise_impl(const T* data, std::size_t size, ManagedAdvice advice, int device) {
-#if CUDART_VERSION >= 13000
+#if defined(USE_HIP)
+    // HIP uses the 4-arg form: hipMemAdvise(const void*, size_t, hipMemoryAdvise, int)
+    hipMemAdvise(static_cast<const void*>(data), size * sizeof(T), static_cast<hipMemoryAdvise>(advice), device);
+#elif CUDART_VERSION >= 13000
     cudaMemLocation loc{};
     loc.type = cudaMemLocationTypeDevice;
     loc.id = device;

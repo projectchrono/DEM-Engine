@@ -3,7 +3,16 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+#include <core/utils/cuda_to_hip.h>
+#if defined(USE_HIP)
+#include <hipcub/hipcub.hpp>
+// CUB_RUNTIME_FUNCTION is a CUB macro not defined in hipCUB
+#ifndef CUB_RUNTIME_FUNCTION
+#define CUB_RUNTIME_FUNCTION
+#endif
+#else
 #include <cub/cub.cuh>
+#endif
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
 #include <core/utils/GpuError.h>

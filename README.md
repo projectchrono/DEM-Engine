@@ -42,7 +42,7 @@ __A dual-GPU DEM solver with complex grain geometry support__
 
 DEM-Engine, nicknamed _DEME_, does Discrete Element Method simulations:
 
-- Using up to two GPUs at the same time (works great on consumer _and_ data center GPUs).
+- Using up to two GPUs at the same time (works great on consumer _and_ data center GPUs, on both NVIDIA CUDA and AMD ROCm).
 - With the particles having complex shapes represented by clumped spheres.
 - With support for customizable contact force models (want to add a non-standard cohesive force, or an electrostatic repulsive force? You got this).
 - With an emphasis on computational efficiency. As a rule of thumb, using 3-sphere clump elements, simulating 1 million elements for 1 million time steps takes around 1 hour on two RTX 3080s.
@@ -138,6 +138,21 @@ Some additional troubleshooting tips for building the project:
 - If you see some grammatical errors during compilation, such as `filesystem` not being a member of `std` or arguments not expanded with `...`, then manually setting the flag `TargetCXXStandard` to `STD_CXX17` might help.
 - If CUB is not found, then you may manually set it in the `ccmake` GUI as `/usr/local/cuda/lib64/cmake/cub`. It may be a slightly different path on your machine or cluster.
 - If `libcudacxx` is not found, then you may manually set it in the `ccmake` GUI as `/usr/local/cuda-12.8/targets/x86_64-linux/lib/cmake/libcudacxx`. Depending on your CUDA version it may be a slightly different path on your machine or cluster. You may also try to find these packages using `find`. 
+
+### AMD GPUs (ROCm)
+
+_DEME_ also builds and runs on AMD GPUs through ROCm/HIP. Instead of CUDA, install a recent [ROCm](https://rocm.docs.amd.com/) release (the HIP runtime, `hiprtc`, and `hipCUB` are required). You do not need the NVIDIA/jitify submodule for an AMD build; runtime kernel compilation is handled by `hiprtc`.
+
+Configure the project the same way as in the **Linux and WSL** section, but pass `-DUSE_HIP=ON`, and set `CMAKE_HIP_ARCHITECTURES` to your GPU's architecture (for example `gfx90a` for MI200-series, `gfx1100` for RDNA3 desktop, or `gfx1201` for RDNA4). An example:
+
+```
+mkdir build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Release -DUSE_HIP=ON -DCMAKE_HIP_ARCHITECTURES=gfx90a -DCMAKE_PREFIX_PATH=/opt/rocm ..
+ninja
+```
+
+If `CMAKE_HIP_ARCHITECTURES` is left unset it defaults to `gfx90a`. You can list the architecture of an installed device with `rocminfo`. If the ROCm install is not on CMake's default search path, point `-DCMAKE_PREFIX_PATH` at it (e.g. `/opt/rocm`) so `find_package` can locate hip and hipCUB. The demos are then run exactly as in the **Numerical examples** section.
 
 ### Windows
 
