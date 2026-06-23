@@ -23,10 +23,8 @@ if(USE_HIP)
 		VERSION ${DEME_VERSION_MAJOR}.${DEME_VERSION_MINOR}.${DEME_VERSION_PATCH}
 		LANGUAGES CXX HIP
 	)
-	# Set default HIP architecture if not specified
-	if(NOT DEFINED CMAKE_HIP_ARCHITECTURES OR CMAKE_HIP_ARCHITECTURES STREQUAL "")
-		set(CMAKE_HIP_ARCHITECTURES "gfx90a" CACHE STRING "HIP architectures")
-	endif()
+	# The LANGUAGES ... HIP enable above auto-detects the host GPU arch (and
+	# errors on a no-GPU host); pass -DCMAKE_HIP_ARCHITECTURES to override.
 	add_compile_definitions(USE_HIP)
 	# CXX files that include hip_runtime.h need this defined (HIP compiler defines it automatically)
 	add_compile_definitions(__HIP_PLATFORM_AMD__)
