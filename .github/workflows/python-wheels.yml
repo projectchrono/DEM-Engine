@@ -1,0 +1,111 @@
+name: Build Python wheels
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_to_pypi:
+        description: Publish the six validated wheels to the deme3 project on PyPI
+        required: true
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - ".github/workflows/python-wheels.yml"
+      - "CMakeLists.txt"
+      - "cmake/**"
+      - "pyproject.toml"
+      - "src/**"
+      - "thirdparty/**"
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux-wheels:
+    name: ${{ matrix.python }} / CUDA 12.9 / manylinux_2_28 x86_64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        python: [cp39, cp310, cp311, cp312, cp313, cp314]
+
+    steps:
+      - name: Check out source and bundled dependencies
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Build and repair wheel
+        uses: pypa/cibuildwheel@v4.1.1
+        env:
+          CIBW_BUILD: ${{ matrix.python }}-manylinux_x86_64
+          CIBW_MANYLINUX_X86_64_IMAGE: quay.io/manylinux_cuda/manylinux_2_28_x86_64_cuda12_9:latest
+
+      - name: Validate wheel metadata and native platform tag
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check twine auditwheel
+          python -m twine check wheelhouse/*.whl
+          python -m auditwheel show wheelhouse/*.whl
+          python - <<'PY'
+          from pathlib import Path
+
+          wheels = list(Path("wheelhouse").glob("*.whl"))
+          if len(wheels) != 1:
+              raise SystemExit(f"Expected exactly one wheel, found: {wheels}")
+
+          name = wheels[0].name
+          expected_python = "${{ matrix.python }}"
+          if expected_python not in name or "manylinux_2_28_x86_64" not in name:
+              raise SystemExit(f"Unexpected wheel tags: {name}")
+
+          # CUDA must come from the deployment host. In particular, auditwheel must not copy its build-time driver
+          # stub or an incomplete NVRTC installation into the repaired artifact.
+          from zipfile import ZipFile
+
+          with ZipFile(wheels[0]) as archive:
+              bundled_cuda = [
+                  member
+                  for member in archive.namelist()
+                  if ".libs/" in member
+                  and any(library in member for library in ("libcuda", "libcudart", "libnvrtc"))
+              ]
+          if bundled_cuda:
+              raise SystemExit(f"CUDA libraries must remain external: {bundled_cuda}")
+
+          print(f"Validated {name} ({wheels[0].stat().st_size / 1024 / 1024:.1f} MiB)")
+          PY
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deme3-${{ matrix.python }}-manylinux_2_28-x86_64
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-pypi:
+    name: Publish deme3 wheels to PyPI
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_to_pypi
+    needs: build-linux-wheels
+    runs-on: ubuntu-24.04
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Download validated wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: deme3-*-manylinux_2_28-x86_64
+          path: dist
+          merge-multiple: true
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
