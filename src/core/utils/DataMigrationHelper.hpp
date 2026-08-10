@@ -231,15 +231,31 @@ class DualArray : private NonCopyable {
 
     void resize(size_t n) {
         assert(m_host_vec_ptr == m_pinned_vec.get() && "resize() requires internal host ownership");
+        const size_t old_size = size();
         resizeHost(n);
         resizeDevice(n);
+        // New elements must be defined on BOTH residences. resizeHost value-initialises
+        // the host tail, but resizeDevice never initialises grown elements: on
+        // reallocation it copies forward only pre-existing data, and when capacity
+        // already suffices it returns without touching memory (so the tail would hold
+        // stale bytes). Push the host tail down so device [old_size, n) is defined.
+        if (n > old_size) {
+            toDevice(old_size, n - old_size);
+        }
     }
 
-    // This resize flavor fills host values only!
     void resize(size_t n, const T& val) {
         assert(m_host_vec_ptr == m_pinned_vec.get() && "resize() requires internal host ownership");
+        const size_t old_size = size();
         resizeHost(n, val);
         resizeDevice(n);
+        // Same as resize(n) above: without this push, the device tail [old_size, n) is
+        // undefined on both growth paths while every caller reasonably believes it holds
+        // `val`. Only the grown tail is copied; device data in [0, old_size) stays
+        // authoritative and is never overwritten by host state here.
+        if (n > old_size) {
+            toDevice(old_size, n - old_size);
+        }
     }
 
     void resizeHost(size_t n) {
@@ -515,7 +531,9 @@ class DualArray : private NonCopyable {
         resizeDevice(n);
     }
 
-    // This resize flavor fills host values only!
+    // Managed memory is a single allocation seen by host and device alike, so the
+    // host-side fill in resizeHost already defines what kernels read; no explicit
+    // host-to-device push is needed here (contrast with the pinned variant).
     void resize(size_t n, const T& val) {
         assert(m_host_vec_ptr == m_pinned_vec.get() && "resize() requires internal host ownership");
         resizeHost(n, val);
