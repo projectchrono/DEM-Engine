@@ -239,6 +239,12 @@ class DualArray : private NonCopyable {
         // reallocation it copies forward only pre-existing data, and when capacity
         // already suffices it returns without touching memory (so the tail would hold
         // stale bytes). Push the host tail down so device [old_size, n) is defined.
+        // Precondition: device [0, old_size) is already defined, which holds whenever all
+        // prior growth went through resize(); this method does not repair a host-only
+        // prefix created by growing through resizeHost() directly (no in-tree caller
+        // does that). Shrink and same-size calls return without touching device memory:
+        // device capacity >= logical size is the invariant, and device bytes beyond the
+        // new logical size are dead, not cleared.
         if (n > old_size) {
             toDevice(old_size, n - old_size);
         }
@@ -252,7 +258,9 @@ class DualArray : private NonCopyable {
         // Same as resize(n) above: without this push, the device tail [old_size, n) is
         // undefined on both growth paths while every caller reasonably believes it holds
         // `val`. Only the grown tail is copied; device data in [0, old_size) stays
-        // authoritative and is never overwritten by host state here.
+        // authoritative and is never overwritten by host state here. The same
+        // preconditions as resize(n) apply: an already-defined device prefix, and
+        // shrink/same-size calls leave device memory untouched.
         if (n > old_size) {
             toDevice(old_size, n - old_size);
         }
