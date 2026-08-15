@@ -532,6 +532,12 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
             DEME_DUAL_ARRAY_RESIZE(contactTorque_convToForce, cnt_arr_size, make_float3(0));
             DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, cnt_arr_size, make_float3(0));
             DEME_DUAL_ARRAY_RESIZE(contactPointGeometryB, cnt_arr_size, make_float3(0));
+            // The contact point device ranges must be zeroed for the same reason as in
+            // contactEventArraysResize: resize fills host values only, and these two arrays
+            // are never per-step cleared, so entries that no kernel writes (margin-only
+            // pairs) would otherwise expose recycled device memory.
+            DEME_GPU_CALL(cudaMemset(contactPointGeometryA.data(), 0, cnt_arr_size * sizeof(float3)));
+            DEME_GPU_CALL(cudaMemset(contactPointGeometryB.data(), 0, cnt_arr_size * sizeof(float3)));
         }
         // Allocate memory for each wildcard array
         contactWildcards.resize(simParams->nContactWildcards);
@@ -1945,6 +1951,16 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
         DEME_DUAL_ARRAY_RESIZE(contactTorque_convToForce, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryB, nContactPairs, make_float3(0));
+        // DualArray::resize(n, val) fills host values only, so the grown device range holds
+        // whatever the allocator recycled. contactForces and contactTorque_convToForce are
+        // cleared every time step by prepareForceArrays before use, but the contact point
+        // arrays are only ever written for entries whose ContactType is a real contact, and
+        // collectContactForcesAccStyle reads them for ALL entries: cross(garbage, 0) is 0 for
+        // finite garbage but NaN for NaN/inf garbage, which poisons that owner's angular
+        // acceleration and cascades (quaternion -> position -> full-grid bin ranges in kT's
+        // contact detection, presenting as a GPU-pegged stall). Zero them on device here.
+        DEME_GPU_CALL(cudaMemset(contactPointGeometryA.data(), 0, nContactPairs * sizeof(float3)));
+        DEME_GPU_CALL(cudaMemset(contactPointGeometryB.data(), 0, nContactPairs * sizeof(float3)));
     }
 
     // Re-packing pointers now is automatic

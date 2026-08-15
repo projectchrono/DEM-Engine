@@ -683,6 +683,16 @@ void DEMSolver::preprocessAnalyticalObjs() {
                     addAnalCompTemplate(ANAL_OBJ_TYPE_CYL_INF, comp_mat.at(i), thisExtObj, param.cyl.center,
                                         param.cyl.dir, param.cyl.radius, 0, 0, param.cyl.normal);
                     break;
+                case OBJ_COMPONENT::CONE_INF:
+                    addAnalCompTemplate(ANAL_OBJ_TYPE_CONE_INF, comp_mat.at(i), thisExtObj, param.cone.cone_tip,
+                                        param.cone.dir, param.cone.slope, param.cone.hmin, param.cone.hmax,
+                                        param.cone.normal);
+                    break;
+                case OBJ_COMPONENT::CONE:
+                    addAnalCompTemplate(ANAL_OBJ_TYPE_CONE, comp_mat.at(i), thisExtObj, param.cone.cone_tip,
+                                        param.cone.dir, param.cone.slope, param.cone.hmin, param.cone.hmax,
+                                        param.cone.normal);
+                    break;
                 default:
                     DEME_ERROR("There is at least one analytical boundary that has a type not supported.");
             }

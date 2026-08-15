@@ -1754,11 +1754,11 @@ class DEMSolver {
     // Some float3 quantity that is representitive of a component's initial orientation (such as plane normal, and its
     // meaning can vary among different types)
     std::vector<float3> m_anal_comp_rot;
-    // Some float quantity that is representitive of a component's size (e.g. for a cylinder, top radius)
+    // Some float quantity that is representitive of a component's size (e.g. cylinder radius or cone slope)
     std::vector<float> m_anal_size_1;
-    // Some float quantity that is representitive of a component's size (e.g. for a cylinder, bottom radius)
+    // Some float quantity that is representitive of a component's size (e.g. cone lower axial bound)
     std::vector<float> m_anal_size_2;
-    // Some float quantity that is representitive of a component's size (e.g. for a cylinder, its length)
+    // Some float quantity that is representitive of a component's size (e.g. cone upper axial bound)
     std::vector<float> m_anal_size_3;
     // Component object types
     std::vector<objType_t> m_anal_types;

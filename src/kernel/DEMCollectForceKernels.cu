@@ -102,6 +102,19 @@ __global__ void forceToAngAcc(float3* angAcc,
                               deme::DEMDataDT* granData) {
     deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
+        // torque_inForceForm is usually the contribution of rolling resistance and it contributes to torque only, not
+        // linear velocity
+        float3 myF = F[myID] + torque_inForceForm[myID];
+        // Zero-force entries must contribute exactly zero angular acceleration without touching
+        // cntPnt: entries the force kernel never writes (pairs registered by kT's contact margin
+        // that have no physical overlap) can hold uninitialized device memory in their cntPnt
+        // slot, and cross(NaN, 0) is NaN, which would poison this owner's angular acceleration.
+        // These entries are the majority of the list, so the early-out also skips their MOI and
+        // quaternion loads.
+        if (myF.x == 0.0f && myF.y == 0.0f && myF.z == 0.0f) {
+            angAcc[myID] = make_float3(0, 0, 0);
+            return;
+        }
         const deme::bodyID_t myOwner = owner[myID];
         float3 myMOI;
         // Get my mass info from either jitified arrays or global memory
@@ -114,9 +127,7 @@ __global__ void forceToAngAcc(float3* angAcc,
         const deme::oriQ_t myOriQz = oriQz[myOwner];
 
         float3 myCntPnt = cntPnt[myID];
-        // torque_inForceForm is usually the contribution of rolling resistance and it contributes to torque only, not
-        // linear velocity
-        float3 myF = (F[myID] + torque_inForceForm[myID]) * modifier;
+        myF = myF * modifier;
         // F is in global frame, but it needs to be in local to coordinate with moi and cntPnt
         applyOriQToVector3<float, deme::oriQ_t>(myF.x, myF.y, myF.z, myOriQw, -myOriQx, -myOriQy, -myOriQz);
         angAcc[myID] = cross(myCntPnt, myF) / myMOI;

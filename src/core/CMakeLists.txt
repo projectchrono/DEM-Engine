@@ -16,12 +16,17 @@ configure_file(
 
 # Jitify is only needed for CUDA builds (HIP uses hiprtc directly via JitKernel abstraction)
 if(NOT USE_HIP)
-	message(STATUS "${core_message} Extracting Jitify header...")
-	configure_file(
-		${JitifyPath}/jitify.hpp
-		${CMAKE_BINARY_DIR}/src/jitify/jitify.hpp
-		COPYONLY
-	)
+  set(DEMEJitifyHeader "${ProjectIncludeSource}/jitify/jitify.hpp")
+  if(NOT EXISTS "${DEMEJitifyHeader}")
+    set(DEMEJitifyHeader "${NVIDIAJitifyPath}/jitify.hpp")
+  endif()
+
+  message(STATUS "${core_message} Extracting Jitify header...")
+  configure_file(
+    ${DEMEJitifyHeader}
+    ${CMAKE_BINARY_DIR}/src/jitify/jitify.hpp
+    COPYONLY
+  )
 endif()
 
 add_library(core OBJECT)
@@ -108,12 +113,12 @@ install(
 
 # Install Third-party Headers (jitify only for CUDA builds)
 if(NOT USE_HIP)
-	install(
-		FILES
-			"${NVIDIAJitifyPath}/jitify.hpp"
-		DESTINATION
-			${CMAKE_INSTALL_INCLUDEDIR}/jitify
-	)
+  install(
+    FILES 
+      "${DEMEJitifyHeader}"
+    DESTINATION 
+      ${CMAKE_INSTALL_INCLUDEDIR}/jitify
+  )
 endif()
 
 
@@ -211,4 +216,3 @@ set_target_properties(
 
 # Make sure this target is generated **AFTER** the build-tree version 
 add_dependencies(DEMERuntimeDataHelper_install DEMERuntimeDataHelper)
-

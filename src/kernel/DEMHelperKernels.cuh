@@ -454,6 +454,16 @@ inline __host__ __device__ void matProxy2ContactParam(T1& E_eff,
     E_eff = (T1)1 / invE;
 }
 
+inline __host__ __device__ float3 anyPerpendicularUnitVector(const float3& axis) {
+    float3 reference = (fabsf(axis.x) < 0.5f) ? make_float3(1, 0, 0) : make_float3(0, 1, 0);
+    float3 perpendicular = cross(axis, reference);
+    if (length(perpendicular) < DEME_TINY_FLOAT) {
+        reference = make_float3(0, 0, 1);
+        perpendicular = cross(axis, reference);
+    }
+    return normalize(perpendicular);
+}
+
 // Check whether a sphere and an analytical boundary are in contact, and gives overlap depth, contact point and contact
 // normal.
 template <typename T1, typename T2, typename T3>
@@ -513,6 +523,64 @@ inline __host__ __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
                 cntNormal = dirB;
                 CP = A;
             }
+            return contactType;
+        }
+        case (deme::ANAL_OBJ_TYPE_CONE_INF):
+        case (deme::ANAL_OBJ_TYPE_CONE): {
+            const float cone_slope = size1B;
+            const T3 min_h = (T3)size2B;
+            const T3 max_h = (T3)size3B;
+            const T1 tip2sph = A - B;
+            const T1 cone_axis = to_real3<float3, T1>(dirB);
+            const T3 axial_dist = dot(tip2sph, cone_axis);
+            const T1 radial_vec = tip2sph - cone_axis * axial_dist;
+            const T3 radial_dist = length(radial_vec);
+            const float3 radial_dir = (radial_dist >= (T3)DEME_TINY_FLOAT)
+                                          ? to_real3<T1, float3>(radial_vec / radial_dist)
+                                          : anyPerpendicularUnitVector(dirB);
+
+            // The exact closest point on the conical side is found by projecting the sphere center onto the 2-D
+            // generator line (h, rho) = (h, slope * h). Clamping that axial coordinate gives the apex/rim feature for
+            // bounded cone segments without introducing mesh facets.
+            const T3 inv_slope_metric = (T3)1.0 / ((T3)1.0 + (T3)cone_slope * (T3)cone_slope);
+            T3 closest_h = (axial_dist + (T3)cone_slope * radial_dist) * inv_slope_metric;
+            bool closest_is_edge = false;
+            if (closest_h < min_h) {
+                closest_h = min_h;
+                closest_is_edge = true;
+            } else if (closest_h > max_h) {
+                closest_h = max_h;
+                closest_is_edge = true;
+            }
+
+            if (closest_is_edge) {
+                const T1 closest = B + cone_axis * closest_h +
+                                   to_real3<float3, T1>(radial_dir) * ((T3)cone_slope * closest_h);
+                const T1 feature2sph = A - closest;
+                const T3 dist_to_feature = length(feature2sph);
+                overlapDepth = (T3)radA + (T3)beta4Entity - dist_to_feature;
+                contactType = (overlapDepth < (T3)0.0) ? deme::NOT_A_CONTACT : deme::SPHERE_CONE_CONTACT;
+
+                if (dist_to_feature >= (T3)DEME_TINY_FLOAT) {
+                    cntNormal = to_real3<T1, float3>(feature2sph / dist_to_feature);
+                } else {
+                    const T3 side_normal_len = sqrt((T3)1.0 + (T3)cone_slope * (T3)cone_slope);
+                    cntNormal = normal_sign * (cone_slope * dirB - radial_dir) / side_normal_len;
+                }
+                CP = A - to_real3<float3, T1>(cntNormal * ((T3)radA - overlapDepth / (T3)2.0));
+                return contactType;
+            }
+
+            // Directional cone contact mirrors the cylinder convention. With inward normals, particles are expected
+            // where radial_dist <= slope * axial_dist; with outward normals, they are expected outside that side.
+            const T3 side_normal_len = sqrt((T3)1.0 + (T3)cone_slope * (T3)cone_slope);
+            const T3 signed_gap =
+                (T3)normal_sign * ((T3)cone_slope * axial_dist - radial_dist) / side_normal_len;
+            overlapDepth = (T3)radA + (T3)beta4Entity - signed_gap;
+            contactType = (overlapDepth < (T3)0.0) ? deme::NOT_A_CONTACT : deme::SPHERE_CONE_CONTACT;
+
+            cntNormal = normal_sign * (cone_slope * dirB - radial_dir) / side_normal_len;
+            CP = A - to_real3<float3, T1>(cntNormal * ((T3)radA - overlapDepth / (T3)2.0));
             return contactType;
         }
         default:
