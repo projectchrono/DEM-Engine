@@ -7,11 +7,12 @@
 #define DEME_JIT_HELPER_H
 
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 #include <unordered_map>
 
-#include <jitify/jitify.hpp>
+#include "JitKernel.h"
 
 #if defined(_WIN32) || defined(_WIN64)
     #undef max
@@ -31,24 +32,17 @@ class JitHelper {
         std::string _source;
     };
 
-    static jitify::Program buildProgram(
+    static deme::jit::Program buildProgram(
         const std::string& name,
         const std::filesystem::path& source,
         std::unordered_map<std::string, std::string> substitutions = std::unordered_map<std::string, std::string>(),
         std::vector<std::string> flags = std::vector<std::string>());
 
-    //// I'm pretty sure C++17 auto-converts this
-    // static jitify::Program buildProgram(
-    // 	const std::string& name, const std::string& code,
-    // 	std::vector<Header> headers = 0,
-    // 	std::vector<std::string> flags = 0
-    // );
-
     static const std::filesystem::path KERNEL_DIR;
     static const std::filesystem::path KERNEL_INCLUDE_DIR;
 
   private:
-    static jitify::JitCache* kcache;
+    static deme::jit::ProgramCache* kcache;
 
     inline static std::string loadSourceFile(const std::filesystem::path& sourcefile) {
         std::string code;

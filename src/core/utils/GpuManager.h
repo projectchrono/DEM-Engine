@@ -1,7 +1,7 @@
 #ifndef DEME_GPU_MANAGER_H
 #define DEME_GPU_MANAGER_H
 
-#include <cuda_runtime_api.h>
+#include "cuda_to_hip.h"
 #include <vector>
 #include <mutex>
 

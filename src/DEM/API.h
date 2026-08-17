@@ -1370,12 +1370,12 @@ class DEMSolver {
     void PrintKinematicScratchSpaceUsage() const { kT->printScratchSpaceUsage(); }
 
     /// Let dT do this call and return the reduce value of the inspected quantity.
-    float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
+    float dTInspectReduce(const std::shared_ptr<deme::jit::Program>& inspection_kernel,
                           const std::string& kernel_name,
                           INSPECT_ENTITY_TYPE thing_to_insp,
                           CUB_REDUCE_FLAVOR reduce_flavor,
                           bool all_domain);
-    float* dTInspectNoReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
+    float* dTInspectNoReduce(const std::shared_ptr<deme::jit::Program>& inspection_kernel,
                              const std::string& kernel_name,
                              INSPECT_ENTITY_TYPE thing_to_insp,
                              CUB_REDUCE_FLAVOR reduce_flavor,
@@ -1509,7 +1509,9 @@ class DEMSolver {
     int m_updateFreq = 20;
 
     // The extra libs that the kernels need to include.
-    std::string kernel_includes = "#include <curand_kernel.h>\n";
+    // Default: none (curand/hiprand not used by built-in kernels).
+    // Users can add custom includes via SetKernelInclude() if needed.
+    std::string kernel_includes = "";
 
     // If and how we should add boundaries to the simulation world upon initialization. Choose between none, all and
     // top_open.
