@@ -28,7 +28,7 @@ namespace deme {
 namespace jit {
 class Program;
 }
-}
+}  // namespace deme
 
 namespace deme {
 

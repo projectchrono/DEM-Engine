@@ -71,8 +71,7 @@ inline void assertConeInputs(const float3 axis,
                              const float hmin,
                              const float hmax,
                              const std::string& func_name) {
-    if (!std::isfinite(axis.x) || !std::isfinite(axis.y) || !std::isfinite(axis.z) ||
-        length(axis) <= DEME_TINY_FLOAT) {
+    if (!std::isfinite(axis.x) || !std::isfinite(axis.y) || !std::isfinite(axis.z) || length(axis) <= DEME_TINY_FLOAT) {
         std::stringstream out;
         out << func_name << "'s axis argument must be a finite, non-zero direction.\n";
         throw std::runtime_error(out.str());

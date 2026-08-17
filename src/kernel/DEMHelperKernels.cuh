@@ -554,8 +554,8 @@ inline __host__ __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             }
 
             if (closest_is_edge) {
-                const T1 closest = B + cone_axis * closest_h +
-                                   to_real3<float3, T1>(radial_dir) * ((T3)cone_slope * closest_h);
+                const T1 closest =
+                    B + cone_axis * closest_h + to_real3<float3, T1>(radial_dir) * ((T3)cone_slope * closest_h);
                 const T1 feature2sph = A - closest;
                 const T3 dist_to_feature = length(feature2sph);
                 overlapDepth = (T3)radA + (T3)beta4Entity - dist_to_feature;
@@ -574,8 +574,7 @@ inline __host__ __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             // Directional cone contact mirrors the cylinder convention. With inward normals, particles are expected
             // where radial_dist <= slope * axial_dist; with outward normals, they are expected outside that side.
             const T3 side_normal_len = sqrt((T3)1.0 + (T3)cone_slope * (T3)cone_slope);
-            const T3 signed_gap =
-                (T3)normal_sign * ((T3)cone_slope * axial_dist - radial_dist) / side_normal_len;
+            const T3 signed_gap = (T3)normal_sign * ((T3)cone_slope * axial_dist - radial_dist) / side_normal_len;
             overlapDepth = (T3)radA + (T3)beta4Entity - signed_gap;
             contactType = (overlapDepth < (T3)0.0) ? deme::NOT_A_CONTACT : deme::SPHERE_CONE_CONTACT;
 

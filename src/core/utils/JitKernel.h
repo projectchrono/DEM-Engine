@@ -18,10 +18,10 @@
 #include <utility>
 
 #ifdef USE_HIP
-#include <hip/hip_runtime.h>
+    #include <hip/hip_runtime.h>
 using gpuStream_t = hipStream_t;
 #else
-#include <cuda_runtime.h>
+    #include <cuda_runtime.h>
 using gpuStream_t = cudaStream_t;
 #endif
 

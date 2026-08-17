@@ -82,11 +82,11 @@
 #pragma once
 
 #ifndef JITIFY_THREAD_SAFE
-#define JITIFY_THREAD_SAFE 1
+    #define JITIFY_THREAD_SAFE 1
 #endif
 
 #if JITIFY_ENABLE_EMBEDDED_FILES
-#include <dlfcn.h>
+    #include <dlfcn.h>
 #endif
 #include <stdint.h>
 #include <algorithm>
@@ -107,80 +107,78 @@
 #include <unordered_set>
 #include <vector>
 #if JITIFY_THREAD_SAFE
-#include <mutex>
+    #include <mutex>
 #endif
 
 #include <cuda.h>
 #include <cuda_runtime_api.h>  // For dim3, cudaStream_t
 #if CUDA_VERSION >= 8000
-#define NVRTC_GET_TYPE_NAME 1
+    #define NVRTC_GET_TYPE_NAME 1
 #endif
 #include <nvrtc.h>
 
 // For use by get_current_executable_path().
 #ifdef __linux__
-#include <linux/limits.h>  // For PATH_MAX
+    #include <linux/limits.h>  // For PATH_MAX
 
-#include <cstdlib>  // For realpath
-#define JITIFY_PATH_MAX PATH_MAX
+    #include <cstdlib>  // For realpath
+    #define JITIFY_PATH_MAX PATH_MAX
 #elif defined(_WIN32) || defined(_WIN64)
-#include <windows.h>
-#define JITIFY_PATH_MAX MAX_PATH
+    #include <windows.h>
+    #define JITIFY_PATH_MAX MAX_PATH
 #else
-#error "Unsupported platform"
+    #error "Unsupported platform"
 #endif
 
-#ifdef _MSC_VER       // MSVC compiler
-#include <dbghelp.h>  // For UnDecorateSymbolName
+#ifdef _MSC_VER           // MSVC compiler
+    #include <dbghelp.h>  // For UnDecorateSymbolName
 #else
-#include <cxxabi.h>  // For abi::__cxa_demangle
+    #include <cxxabi.h>  // For abi::__cxa_demangle
 #endif
 
 #if defined(_WIN32) || defined(_WIN64)
-// WAR for strtok_r being called strtok_s on Windows
-#pragma push_macro("strtok_r")
-#undef strtok_r
-#define strtok_r strtok_s
-// WAR for min and max possibly being macros defined by windows.h
-#pragma push_macro("min")
-#pragma push_macro("max")
-#undef min
-#undef max
+    // WAR for strtok_r being called strtok_s on Windows
+    #pragma push_macro("strtok_r")
+    #undef strtok_r
+    #define strtok_r strtok_s
+    // WAR for min and max possibly being macros defined by windows.h
+    #pragma push_macro("min")
+    #pragma push_macro("max")
+    #undef min
+    #undef max
 #endif
 
 #ifndef JITIFY_PRINT_LOG
-#define JITIFY_PRINT_LOG 1
+    #define JITIFY_PRINT_LOG 1
 #endif
 
 #if JITIFY_PRINT_ALL
-#define JITIFY_PRINT_INSTANTIATION 1
-#define JITIFY_PRINT_SOURCE 1
-#define JITIFY_PRINT_LOG 1
-#define JITIFY_PRINT_PTX 1
-#define JITIFY_PRINT_LINKER_LOG 1
-#define JITIFY_PRINT_LAUNCH 1
-#define JITIFY_PRINT_HEADER_PATHS 1
+    #define JITIFY_PRINT_INSTANTIATION 1
+    #define JITIFY_PRINT_SOURCE 1
+    #define JITIFY_PRINT_LOG 1
+    #define JITIFY_PRINT_PTX 1
+    #define JITIFY_PRINT_LINKER_LOG 1
+    #define JITIFY_PRINT_LAUNCH 1
+    #define JITIFY_PRINT_HEADER_PATHS 1
 #endif
 
 #if JITIFY_ENABLE_EMBEDDED_FILES
-#define JITIFY_FORCE_UNDEFINED_SYMBOL(x) void* x##_forced = (void*)&x
-/*! Include a source file that has been embedded into the executable using the
- *    GCC linker.
- * \param name The name of the source file (<b>not</b> as a string), which must
- * be sanitized by replacing non-alpha-numeric characters with underscores.
- * E.g., \code{.cpp}JITIFY_INCLUDE_EMBEDDED_FILE(my_header_h)\endcode will
- * include the embedded file "my_header.h".
- * \note Files declared with this macro can be referenced using
- * their original (unsanitized) filenames when creating a \p
- * jitify::Program instance.
- */
-#define JITIFY_INCLUDE_EMBEDDED_FILE(name)                                \
-  extern "C" uint8_t _jitify_binary_##name##_start[] asm("_binary_" #name \
-                                                         "_start");       \
-  extern "C" uint8_t _jitify_binary_##name##_end[] asm("_binary_" #name   \
-                                                       "_end");           \
-  JITIFY_FORCE_UNDEFINED_SYMBOL(_jitify_binary_##name##_start);           \
-  JITIFY_FORCE_UNDEFINED_SYMBOL(_jitify_binary_##name##_end)
+    #define JITIFY_FORCE_UNDEFINED_SYMBOL(x) void* x##_forced = (void*)&x
+    /*! Include a source file that has been embedded into the executable using the
+     *    GCC linker.
+     * \param name The name of the source file (<b>not</b> as a string), which must
+     * be sanitized by replacing non-alpha-numeric characters with underscores.
+     * E.g., \code{.cpp}JITIFY_INCLUDE_EMBEDDED_FILE(my_header_h)\endcode will
+     * include the embedded file "my_header.h".
+     * \note Files declared with this macro can be referenced using
+     * their original (unsanitized) filenames when creating a \p
+     * jitify::Program instance.
+     */
+    #define JITIFY_INCLUDE_EMBEDDED_FILE(name)                                             \
+        extern "C" uint8_t _jitify_binary_##name##_start[] asm("_binary_" #name "_start"); \
+        extern "C" uint8_t _jitify_binary_##name##_end[] asm("_binary_" #name "_end");     \
+        JITIFY_FORCE_UNDEFINED_SYMBOL(_jitify_binary_##name##_start);                      \
+        JITIFY_FORCE_UNDEFINED_SYMBOL(_jitify_binary_##name##_end)
 #endif  // JITIFY_ENABLE_EMBEDDED_FILES
 
 /*! Jitify library namespace
@@ -194,8 +192,7 @@ namespace jitify {
  *  \return A pointer to an input stream containing the source code, or NULL
  *  to defer loading of the file to Jitify's file-loading mechanisms.
  */
-typedef std::istream* (*file_callback_type)(std::string filename,
-                                            std::iostream& tmp_stream);
+typedef std::istream* (*file_callback_type)(std::string filename, std::iostream& tmp_stream);
 
 // Exclude from Doxygen
 //! \cond
@@ -205,73 +202,68 @@ class JitCache;
 // Simple cache using LRU discard policy
 template <typename KeyType, typename ValueType>
 class ObjectCache {
- public:
-  typedef KeyType key_type;
-  typedef ValueType value_type;
+  public:
+    typedef KeyType key_type;
+    typedef ValueType value_type;
 
- private:
-  typedef std::map<key_type, value_type> object_map;
-  typedef std::deque<key_type> key_rank;
-  typedef typename key_rank::iterator rank_iterator;
-  object_map _objects;
-  key_rank _ranked_keys;
-  size_t _capacity;
+  private:
+    typedef std::map<key_type, value_type> object_map;
+    typedef std::deque<key_type> key_rank;
+    typedef typename key_rank::iterator rank_iterator;
+    object_map _objects;
+    key_rank _ranked_keys;
+    size_t _capacity;
 
-  inline void discard_old(size_t n = 0) {
-    if (n > _capacity) {
-      throw std::runtime_error("Insufficient capacity in cache");
+    inline void discard_old(size_t n = 0) {
+        if (n > _capacity) {
+            throw std::runtime_error("Insufficient capacity in cache");
+        }
+        while (_objects.size() > _capacity - n) {
+            key_type discard_key = _ranked_keys.back();
+            _ranked_keys.pop_back();
+            _objects.erase(discard_key);
+        }
     }
-    while (_objects.size() > _capacity - n) {
-      key_type discard_key = _ranked_keys.back();
-      _ranked_keys.pop_back();
-      _objects.erase(discard_key);
-    }
-  }
 
- public:
-  inline ObjectCache(size_t capacity = 8) : _capacity(capacity) {}
-  inline void resize(size_t capacity) {
-    _capacity = capacity;
-    this->discard_old();
-  }
-  inline bool contains(const key_type& k) const {
-    return (bool)_objects.count(k);
-  }
-  inline void touch(const key_type& k) {
-    if (!this->contains(k)) {
-      throw std::runtime_error("Key not found in cache");
+  public:
+    inline ObjectCache(size_t capacity = 8) : _capacity(capacity) {}
+    inline void resize(size_t capacity) {
+        _capacity = capacity;
+        this->discard_old();
     }
-    rank_iterator rank = std::find(_ranked_keys.begin(), _ranked_keys.end(), k);
-    if (rank != _ranked_keys.begin()) {
-      // Move key to front of ranks
-      _ranked_keys.erase(rank);
-      _ranked_keys.push_front(k);
+    inline bool contains(const key_type& k) const { return (bool)_objects.count(k); }
+    inline void touch(const key_type& k) {
+        if (!this->contains(k)) {
+            throw std::runtime_error("Key not found in cache");
+        }
+        rank_iterator rank = std::find(_ranked_keys.begin(), _ranked_keys.end(), k);
+        if (rank != _ranked_keys.begin()) {
+            // Move key to front of ranks
+            _ranked_keys.erase(rank);
+            _ranked_keys.push_front(k);
+        }
     }
-  }
-  inline value_type& get(const key_type& k) {
-    if (!this->contains(k)) {
-      throw std::runtime_error("Key not found in cache");
+    inline value_type& get(const key_type& k) {
+        if (!this->contains(k)) {
+            throw std::runtime_error("Key not found in cache");
+        }
+        this->touch(k);
+        return _objects[k];
     }
-    this->touch(k);
-    return _objects[k];
-  }
-  inline value_type& insert(const key_type& k,
-                            const value_type& v = value_type()) {
-    this->discard_old(1);
-    _ranked_keys.push_front(k);
-    return _objects.insert(std::make_pair(k, v)).first->second;
-  }
-  template <typename... Args>
-  inline value_type& emplace(const key_type& k, Args&&... args) {
-    this->discard_old(1);
-    // Note: Use of piecewise_construct allows non-movable non-copyable types
-    auto iter = _objects
-                    .emplace(std::piecewise_construct, std::forward_as_tuple(k),
-                             std::forward_as_tuple(args...))
-                    .first;
-    _ranked_keys.push_front(iter->first);
-    return iter->second;
-  }
+    inline value_type& insert(const key_type& k, const value_type& v = value_type()) {
+        this->discard_old(1);
+        _ranked_keys.push_front(k);
+        return _objects.insert(std::make_pair(k, v)).first->second;
+    }
+    template <typename... Args>
+    inline value_type& emplace(const key_type& k, Args&&... args) {
+        this->discard_old(1);
+        // Note: Use of piecewise_construct allows non-movable non-copyable types
+        auto iter =
+            _objects.emplace(std::piecewise_construct, std::forward_as_tuple(k), std::forward_as_tuple(args...)).first;
+        _ranked_keys.push_front(iter->first);
+        return iter->second;
+    }
 };
 
 namespace detail {
@@ -279,439 +271,417 @@ namespace detail {
 // Convenience wrapper for std::vector that provides handy constructors
 template <typename T>
 class vector : public std::vector<T> {
-  typedef std::vector<T> super_type;
+    typedef std::vector<T> super_type;
 
- public:
-  vector() : super_type() {}
-  vector(size_t n) : super_type(n) {}  // Note: Not explicit, allows =0
-  vector(std::vector<T> const& vals) : super_type(vals) {}
-  template <int N>
-  vector(T const (&vals)[N]) : super_type(vals, vals + N) {}
-  vector(std::vector<T>&& vals) : super_type(vals) {}
-  vector(std::initializer_list<T> vals) : super_type(vals) {}
+  public:
+    vector() : super_type() {}
+    vector(size_t n) : super_type(n) {}  // Note: Not explicit, allows =0
+    vector(std::vector<T> const& vals) : super_type(vals) {}
+    template <int N>
+    vector(T const (&vals)[N]) : super_type(vals, vals + N) {}
+    vector(std::vector<T>&& vals) : super_type(vals) {}
+    vector(std::initializer_list<T> vals) : super_type(vals) {}
 };
 
 // Helper functions for parsing/manipulating source code
 
-inline std::string replace_characters(std::string str,
-                                      std::string const& oldchars,
-                                      char newchar) {
-  size_t i = str.find_first_of(oldchars);
-  while (i != std::string::npos) {
-    str[i] = newchar;
-    i = str.find_first_of(oldchars, i + 1);
-  }
-  return str;
+inline std::string replace_characters(std::string str, std::string const& oldchars, char newchar) {
+    size_t i = str.find_first_of(oldchars);
+    while (i != std::string::npos) {
+        str[i] = newchar;
+        i = str.find_first_of(oldchars, i + 1);
+    }
+    return str;
 }
 inline std::string sanitize_filename(std::string name) {
-  return replace_characters(name, "/\\.-: ?%*|\"<>", '_');
+    return replace_characters(name, "/\\.-: ?%*|\"<>", '_');
 }
 
 #if JITIFY_ENABLE_EMBEDDED_FILES
 class EmbeddedData {
-  void* _app;
-  EmbeddedData(EmbeddedData const&);
-  EmbeddedData& operator=(EmbeddedData const&);
+    void* _app;
+    EmbeddedData(EmbeddedData const&);
+    EmbeddedData& operator=(EmbeddedData const&);
 
- public:
-  EmbeddedData() {
-    _app = dlopen(NULL, RTLD_LAZY);
-    if (!_app) {
-      throw std::runtime_error(std::string("dlopen failed: ") + dlerror());
+  public:
+    EmbeddedData() {
+        _app = dlopen(NULL, RTLD_LAZY);
+        if (!_app) {
+            throw std::runtime_error(std::string("dlopen failed: ") + dlerror());
+        }
+        dlerror();  // Clear any existing error
     }
-    dlerror();  // Clear any existing error
-  }
-  ~EmbeddedData() {
-    if (_app) {
-      dlclose(_app);
+    ~EmbeddedData() {
+        if (_app) {
+            dlclose(_app);
+        }
     }
-  }
-  const uint8_t* operator[](std::string key) const {
-    key = sanitize_filename(key);
-    key = "_binary_" + key;
-    uint8_t const* data = (uint8_t const*)dlsym(_app, key.c_str());
-    if (!data) {
-      throw std::runtime_error(std::string("dlsym failed: ") + dlerror());
+    const uint8_t* operator[](std::string key) const {
+        key = sanitize_filename(key);
+        key = "_binary_" + key;
+        uint8_t const* data = (uint8_t const*)dlsym(_app, key.c_str());
+        if (!data) {
+            throw std::runtime_error(std::string("dlsym failed: ") + dlerror());
+        }
+        return data;
     }
-    return data;
-  }
-  const uint8_t* begin(std::string key) const {
-    return (*this)[key + "_start"];
-  }
-  const uint8_t* end(std::string key) const { return (*this)[key + "_end"]; }
+    const uint8_t* begin(std::string key) const { return (*this)[key + "_start"]; }
+    const uint8_t* end(std::string key) const { return (*this)[key + "_end"]; }
 };
 #endif  // JITIFY_ENABLE_EMBEDDED_FILES
 
 inline bool is_tokenchar(char c) {
-  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-         (c >= '0' && c <= '9') || c == '_';
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
 }
-inline std::string replace_token(std::string src, std::string token,
-                                 std::string replacement) {
-  size_t i = src.find(token);
-  while (i != std::string::npos) {
-    if (i == 0 || i == src.size() - token.size() ||
-        (!is_tokenchar(src[i - 1]) && !is_tokenchar(src[i + token.size()]))) {
-      src.replace(i, token.size(), replacement);
-      i += replacement.size();
-    } else {
-      i += token.size();
+inline std::string replace_token(std::string src, std::string token, std::string replacement) {
+    size_t i = src.find(token);
+    while (i != std::string::npos) {
+        if (i == 0 || i == src.size() - token.size() ||
+            (!is_tokenchar(src[i - 1]) && !is_tokenchar(src[i + token.size()]))) {
+            src.replace(i, token.size(), replacement);
+            i += replacement.size();
+        } else {
+            i += token.size();
+        }
+        i = src.find(token, i);
     }
-    i = src.find(token, i);
-  }
-  return src;
+    return src;
 }
 inline std::string path_base(std::string p) {
-  // "/usr/local/myfile.dat" -> "/usr/local"
-  // "foo/bar"  -> "foo"
-  // "foo/bar/" -> "foo/bar"
+    // "/usr/local/myfile.dat" -> "/usr/local"
+    // "foo/bar"  -> "foo"
+    // "foo/bar/" -> "foo/bar"
 #if defined _WIN32 || defined _WIN64
-  const char* sep = "\\/";
+    const char* sep = "\\/";
 #else
-  char sep = '/';
+    char sep = '/';
 #endif
-  size_t i = p.find_last_of(sep);
-  if (i != std::string::npos) {
-    return p.substr(0, i);
-  } else {
-    return "";
-  }
+    size_t i = p.find_last_of(sep);
+    if (i != std::string::npos) {
+        return p.substr(0, i);
+    } else {
+        return "";
+    }
 }
 inline std::string path_join(std::string p1, std::string p2) {
 #ifdef _WIN32
-  char sep = '\\';
+    char sep = '\\';
 #else
-  char sep = '/';
+    char sep = '/';
 #endif
-  if (p1.size() && p2.size() && p2[0] == sep) {
-    throw std::invalid_argument("Cannot join to absolute path");
-  }
-  if (p1.size() && p1[p1.size() - 1] != sep) {
-    p1 += sep;
-  }
-  return p1 + p2;
+    if (p1.size() && p2.size() && p2[0] == sep) {
+        throw std::invalid_argument("Cannot join to absolute path");
+    }
+    if (p1.size() && p1[p1.size() - 1] != sep) {
+        p1 += sep;
+    }
+    return p1 + p2;
 }
 // Elides "/." and "/.." tokens from path.
 inline std::string path_simplify(const std::string& path) {
-  std::vector<std::string> dirs;
-  std::string cur_dir;
-  bool after_slash = false;
-  for (int i = 0; i < (int)path.size(); ++i) {
-    if (path[i] == '/') {
-      if (after_slash) continue;  // Ignore repeat slashes
-      after_slash = true;
-      if (cur_dir == ".." && !dirs.empty() && dirs.back() != "..") {
-        if (dirs.size() == 1 && dirs.front().empty()) {
-          throw std::runtime_error(
-              "Invalid path: back-traversals exceed depth of absolute path");
+    std::vector<std::string> dirs;
+    std::string cur_dir;
+    bool after_slash = false;
+    for (int i = 0; i < (int)path.size(); ++i) {
+        if (path[i] == '/') {
+            if (after_slash)
+                continue;  // Ignore repeat slashes
+            after_slash = true;
+            if (cur_dir == ".." && !dirs.empty() && dirs.back() != "..") {
+                if (dirs.size() == 1 && dirs.front().empty()) {
+                    throw std::runtime_error("Invalid path: back-traversals exceed depth of absolute path");
+                }
+                dirs.pop_back();
+            } else if (cur_dir != ".") {  // Ignore /./
+                dirs.push_back(cur_dir);
+            }
+            cur_dir.clear();
+        } else {
+            after_slash = false;
+            cur_dir.push_back(path[i]);
         }
-        dirs.pop_back();
-      } else if (cur_dir != ".") {  // Ignore /./
-        dirs.push_back(cur_dir);
-      }
-      cur_dir.clear();
-    } else {
-      after_slash = false;
-      cur_dir.push_back(path[i]);
     }
-  }
-  if (!after_slash) {
-    dirs.push_back(cur_dir);
-  }
-  std::stringstream ss;
-  for (int i = 0; i < (int)dirs.size() - 1; ++i) {
-    ss << dirs[i] << "/";
-  }
-  if (!dirs.empty()) ss << dirs.back();
-  if (after_slash) ss << "/";
-  return ss.str();
+    if (!after_slash) {
+        dirs.push_back(cur_dir);
+    }
+    std::stringstream ss;
+    for (int i = 0; i < (int)dirs.size() - 1; ++i) {
+        ss << dirs[i] << "/";
+    }
+    if (!dirs.empty())
+        ss << dirs.back();
+    if (after_slash)
+        ss << "/";
+    return ss.str();
 }
-inline unsigned long long hash_larson64(const char* s,
-                                        unsigned long long seed = 0) {
-  unsigned long long hash = seed;
-  while (*s) {
-    hash = hash * 101 + *s++;
-  }
-  return hash;
+inline unsigned long long hash_larson64(const char* s, unsigned long long seed = 0) {
+    unsigned long long hash = seed;
+    while (*s) {
+        hash = hash * 101 + *s++;
+    }
+    return hash;
 }
 
 inline uint64_t hash_combine(uint64_t a, uint64_t b) {
-  // Note: The magic number comes from the golden ratio
-  return a ^ (0x9E3779B97F4A7C17ull + b + (b >> 2) + (a << 6));
+    // Note: The magic number comes from the golden ratio
+    return a ^ (0x9E3779B97F4A7C17ull + b + (b >> 2) + (a << 6));
 }
 
 inline bool extract_include_info_from_compile_error(std::string log,
                                                     std::string& name,
                                                     std::string& parent,
                                                     int& line_num) {
-  static const std::vector<std::string> pattern = {
-      "could not open source file \"", "cannot open source file \""};
+    static const std::vector<std::string> pattern = {"could not open source file \"", "cannot open source file \""};
 
-  for (auto& p : pattern) {
-    size_t beg = log.find(p);
-    if (beg != std::string::npos) {
-      beg += p.size();
-      size_t end = log.find("\"", beg);
-      name = log.substr(beg, end - beg);
+    for (auto& p : pattern) {
+        size_t beg = log.find(p);
+        if (beg != std::string::npos) {
+            beg += p.size();
+            size_t end = log.find("\"", beg);
+            name = log.substr(beg, end - beg);
 
-      size_t line_beg = log.rfind("\n", beg);
-      if (line_beg == std::string::npos) {
-        line_beg = 0;
-      } else {
-        line_beg += 1;
-      }
+            size_t line_beg = log.rfind("\n", beg);
+            if (line_beg == std::string::npos) {
+                line_beg = 0;
+            } else {
+                line_beg += 1;
+            }
 
-      size_t split = log.find("(", line_beg);
-      parent = log.substr(line_beg, split - line_beg);
-      line_num =
-          atoi(log.substr(split + 1, log.find(")", split + 1) - (split + 1))
-                   .c_str());
+            size_t split = log.find("(", line_beg);
+            parent = log.substr(line_beg, split - line_beg);
+            line_num = atoi(log.substr(split + 1, log.find(")", split + 1) - (split + 1)).c_str());
 
-      return true;
+            return true;
+        }
     }
-  }
 
-  return false;
+    return false;
 }
 
-inline bool is_include_directive_with_quotes(const std::string& source,
-                                             int line_num) {
-  // TODO: Check each find() for failure.
-  size_t beg = 0;
-  for (int i = 1; i < line_num; ++i) {
-    beg = source.find("\n", beg) + 1;
-  }
-  beg = source.find("include", beg) + 7;
-  beg = source.find_first_of("\"<", beg);
-  return source[beg] == '"';
+inline bool is_include_directive_with_quotes(const std::string& source, int line_num) {
+    // TODO: Check each find() for failure.
+    size_t beg = 0;
+    for (int i = 1; i < line_num; ++i) {
+        beg = source.find("\n", beg) + 1;
+    }
+    beg = source.find("include", beg) + 7;
+    beg = source.find_first_of("\"<", beg);
+    return source[beg] == '"';
 }
 
 inline std::string comment_out_code_line(int line_num, std::string source) {
-  size_t beg = 0;
-  for (int i = 1; i < line_num; ++i) {
-    beg = source.find("\n", beg) + 1;
-  }
-  return (source.substr(0, beg) + "//" + source.substr(beg));
+    size_t beg = 0;
+    for (int i = 1; i < line_num; ++i) {
+        beg = source.find("\n", beg) + 1;
+    }
+    return (source.substr(0, beg) + "//" + source.substr(beg));
 }
 
 inline void print_with_line_numbers(std::string const& source) {
-  int linenum = 1;
-  std::stringstream source_ss(source);
-  std::stringstream output_ss;
-  output_ss.imbue(std::locale::classic());
-  for (std::string line; std::getline(source_ss, line); ++linenum) {
-    output_ss << std::setfill(' ') << std::setw(3) << linenum << " " << line
-              << std::endl;
-  }
-  std::cout << output_ss.str();
+    int linenum = 1;
+    std::stringstream source_ss(source);
+    std::stringstream output_ss;
+    output_ss.imbue(std::locale::classic());
+    for (std::string line; std::getline(source_ss, line); ++linenum) {
+        output_ss << std::setfill(' ') << std::setw(3) << linenum << " " << line << std::endl;
+    }
+    std::cout << output_ss.str();
 }
 
-inline void print_compile_log(std::string program_name,
-                              std::string const& log) {
-  std::cout << "---------------------------------------------------"
-            << std::endl;
-  std::cout << "--- JIT compile log for " << program_name << " ---"
-            << std::endl;
-  std::cout << "---------------------------------------------------"
-            << std::endl;
-  std::cout << log << std::endl;
-  std::cout << "---------------------------------------------------"
-            << std::endl;
+inline void print_compile_log(std::string program_name, std::string const& log) {
+    std::cout << "---------------------------------------------------" << std::endl;
+    std::cout << "--- JIT compile log for " << program_name << " ---" << std::endl;
+    std::cout << "---------------------------------------------------" << std::endl;
+    std::cout << log << std::endl;
+    std::cout << "---------------------------------------------------" << std::endl;
 }
 
-inline std::vector<std::string> split_string(std::string str,
-                                             long maxsplit = -1,
-                                             std::string delims = " \t") {
-  std::vector<std::string> results;
-  if (maxsplit == 0) {
-    results.push_back(str);
+inline std::vector<std::string> split_string(std::string str, long maxsplit = -1, std::string delims = " \t") {
+    std::vector<std::string> results;
+    if (maxsplit == 0) {
+        results.push_back(str);
+        return results;
+    }
+    // Note: +1 to include NULL-terminator
+    std::vector<char> v_str(str.c_str(), str.c_str() + (str.size() + 1));
+    char* c_str = v_str.data();
+    char* saveptr = c_str;
+    char* token = nullptr;
+    for (long i = 0; i != maxsplit; ++i) {
+        token = ::strtok_r(c_str, delims.c_str(), &saveptr);
+        c_str = 0;
+        if (!token) {
+            return results;
+        }
+        results.push_back(token);
+    }
+    // Check if there's a final piece
+    token += ::strlen(token) + 1;
+    if (token - v_str.data() < (ptrdiff_t)str.size()) {
+        // Find the start of the final piece
+        token += ::strspn(token, delims.c_str());
+        if (*token) {
+            results.push_back(token);
+        }
+    }
     return results;
-  }
-  // Note: +1 to include NULL-terminator
-  std::vector<char> v_str(str.c_str(), str.c_str() + (str.size() + 1));
-  char* c_str = v_str.data();
-  char* saveptr = c_str;
-  char* token = nullptr;
-  for (long i = 0; i != maxsplit; ++i) {
-    token = ::strtok_r(c_str, delims.c_str(), &saveptr);
-    c_str = 0;
-    if (!token) {
-      return results;
-    }
-    results.push_back(token);
-  }
-  // Check if there's a final piece
-  token += ::strlen(token) + 1;
-  if (token - v_str.data() < (ptrdiff_t)str.size()) {
-    // Find the start of the final piece
-    token += ::strspn(token, delims.c_str());
-    if (*token) {
-      results.push_back(token);
-    }
-  }
-  return results;
 }
 
 static const std::map<std::string, std::string>& get_jitsafe_headers_map();
 
-inline bool load_source(
-    std::string filename, std::map<std::string, std::string>& sources,
-    std::string current_dir = "",
-    std::vector<std::string> include_paths = std::vector<std::string>(),
-    file_callback_type file_callback = 0, std::string* program_name = nullptr,
-    std::map<std::string, std::string>* fullpaths = nullptr,
-    bool search_current_dir = true) {
-  std::istream* source_stream = 0;
-  std::stringstream string_stream;
-  std::ifstream file_stream;
-  // First detect direct source-code string ("my_program\nprogram_code...")
-  size_t newline_pos = filename.find("\n");
-  if (newline_pos != std::string::npos) {
-    std::string source = filename.substr(newline_pos + 1);
-    filename = filename.substr(0, newline_pos);
-    string_stream << source;
-    source_stream = &string_stream;
-  }
-  if (program_name) {
-    *program_name = filename;
-  }
-  if (sources.count(filename)) {
-    // Already got this one
-    return true;
-  }
-  if (!source_stream) {
-    std::string fullpath = path_join(current_dir, filename);
-    // Try loading from callback
-    if (!file_callback ||
-        !((source_stream = file_callback(fullpath, string_stream)) != 0)) {
-#if JITIFY_ENABLE_EMBEDDED_FILES
-      // Try loading as embedded file
-      EmbeddedData embedded;
-      std::string source;
-      try {
-        source.assign(embedded.begin(fullpath), embedded.end(fullpath));
+inline bool load_source(std::string filename,
+                        std::map<std::string, std::string>& sources,
+                        std::string current_dir = "",
+                        std::vector<std::string> include_paths = std::vector<std::string>(),
+                        file_callback_type file_callback = 0,
+                        std::string* program_name = nullptr,
+                        std::map<std::string, std::string>* fullpaths = nullptr,
+                        bool search_current_dir = true) {
+    std::istream* source_stream = 0;
+    std::stringstream string_stream;
+    std::ifstream file_stream;
+    // First detect direct source-code string ("my_program\nprogram_code...")
+    size_t newline_pos = filename.find("\n");
+    if (newline_pos != std::string::npos) {
+        std::string source = filename.substr(newline_pos + 1);
+        filename = filename.substr(0, newline_pos);
         string_stream << source;
         source_stream = &string_stream;
-      } catch (std::runtime_error const&)
+    }
+    if (program_name) {
+        *program_name = filename;
+    }
+    if (sources.count(filename)) {
+        // Already got this one
+        return true;
+    }
+    if (!source_stream) {
+        std::string fullpath = path_join(current_dir, filename);
+        // Try loading from callback
+        if (!file_callback || !((source_stream = file_callback(fullpath, string_stream)) != 0)) {
+#if JITIFY_ENABLE_EMBEDDED_FILES
+            // Try loading as embedded file
+            EmbeddedData embedded;
+            std::string source;
+            try {
+                source.assign(embedded.begin(fullpath), embedded.end(fullpath));
+                string_stream << source;
+                source_stream = &string_stream;
+            } catch (std::runtime_error const&)
 #endif  // JITIFY_ENABLE_EMBEDDED_FILES
-      {
-        // Try loading from filesystem
-        bool found_file = false;
-        if (search_current_dir) {
-          file_stream.open(fullpath.c_str());
-          if (file_stream) {
-            source_stream = &file_stream;
-            found_file = true;
-          }
-        }
-        // Search include directories
-        if (!found_file) {
-          for (int i = 0; i < (int)include_paths.size(); ++i) {
-            fullpath = path_join(include_paths[i], filename);
-            file_stream.open(fullpath.c_str());
-            if (file_stream) {
-              source_stream = &file_stream;
-              found_file = true;
-              break;
+            {
+                // Try loading from filesystem
+                bool found_file = false;
+                if (search_current_dir) {
+                    file_stream.open(fullpath.c_str());
+                    if (file_stream) {
+                        source_stream = &file_stream;
+                        found_file = true;
+                    }
+                }
+                // Search include directories
+                if (!found_file) {
+                    for (int i = 0; i < (int)include_paths.size(); ++i) {
+                        fullpath = path_join(include_paths[i], filename);
+                        file_stream.open(fullpath.c_str());
+                        if (file_stream) {
+                            source_stream = &file_stream;
+                            found_file = true;
+                            break;
+                        }
+                    }
+                    if (!found_file) {
+                        // Try loading from builtin headers
+                        fullpath = path_join("__jitify_builtin", filename);
+                        auto it = get_jitsafe_headers_map().find(filename);
+                        if (it != get_jitsafe_headers_map().end()) {
+                            string_stream << it->second;
+                            source_stream = &string_stream;
+                        } else {
+                            return false;
+                        }
+                    }
+                }
             }
-          }
-          if (!found_file) {
-            // Try loading from builtin headers
-            fullpath = path_join("__jitify_builtin", filename);
-            auto it = get_jitsafe_headers_map().find(filename);
-            if (it != get_jitsafe_headers_map().end()) {
-              string_stream << it->second;
-              source_stream = &string_stream;
-            } else {
-              return false;
-            }
-          }
         }
-      }
+        if (fullpaths) {
+            // Record the full file path corresponding to this include name.
+            (*fullpaths)[filename] = path_simplify(fullpath);
+        }
     }
-    if (fullpaths) {
-      // Record the full file path corresponding to this include name.
-      (*fullpaths)[filename] = path_simplify(fullpath);
+    sources[filename] = std::string();
+    std::string& source = sources[filename];
+    std::string line;
+    size_t linenum = 0;
+    unsigned long long hash = 0;
+    bool pragma_once = false;
+    bool remove_next_blank_line = false;
+    while (std::getline(*source_stream, line)) {
+        ++linenum;
+
+        // HACK WAR for static variables not allowed on the device (unless
+        // __shared__)
+        // TODO: This breaks static member variables
+        // line = replace_token(line, "static const", "/*static*/ const");
+
+        // TODO: Need to watch out for /* */ comments too
+        std::string cleanline = line.substr(0, line.find("//"));  // Strip line comments
+        // if( cleanline.back() == "\r" ) { // Remove Windows line ending
+        //	cleanline = cleanline.substr(0, cleanline.size()-1);
+        //}
+        // TODO: Should trim whitespace before checking .empty()
+        if (cleanline.empty() && remove_next_blank_line) {
+            remove_next_blank_line = false;
+            continue;
+        }
+        // Maintain a file hash for use in #pragma once WAR
+        hash = hash_larson64(line.c_str(), hash);
+        if (cleanline.find("#pragma once") != std::string::npos) {
+            pragma_once = true;
+            // Note: This is an attempt to recover the original line numbering,
+            //         which otherwise gets off-by-one due to the include guard.
+            remove_next_blank_line = true;
+            // line = "//" + line; // Comment out the #pragma once line
+            continue;
+        }
+
+        // HACK WAR for Thrust using "#define FOO #pragma bar"
+        // TODO: This is not robust to block comments, line continuations, or tabs.
+        size_t pragma_beg = cleanline.find("#pragma ");
+        if (pragma_beg != std::string::npos) {
+            std::string line_after_pragma = line.substr(pragma_beg + 8);
+            // TODO: Handle block comments (currently they cause a compilation error).
+            size_t comment_start = line_after_pragma.find("//");
+            std::string pragma_args = line_after_pragma.substr(0, comment_start);
+            // handle quote character used in #pragma expression
+            pragma_args = replace_token(pragma_args, "\"", "\\\"");
+            std::string comment = comment_start != std::string::npos ? line_after_pragma.substr(comment_start) : "";
+            line = line.substr(0, pragma_beg) + "_Pragma(\"" + pragma_args + "\")" + comment;
+        }
+
+        source += line + "\n";
     }
-  }
-  sources[filename] = std::string();
-  std::string& source = sources[filename];
-  std::string line;
-  size_t linenum = 0;
-  unsigned long long hash = 0;
-  bool pragma_once = false;
-  bool remove_next_blank_line = false;
-  while (std::getline(*source_stream, line)) {
-    ++linenum;
+    // HACK TESTING (WAR for cub)
+    source = "#define cudaDeviceSynchronize() cudaSuccess\n" + source;
+    ////source = "cudaError_t cudaDeviceSynchronize() { return cudaSuccess; }\n" +
+    /// source;
 
-    // HACK WAR for static variables not allowed on the device (unless
-    // __shared__)
-    // TODO: This breaks static member variables
-    // line = replace_token(line, "static const", "/*static*/ const");
-
-    // TODO: Need to watch out for /* */ comments too
-    std::string cleanline =
-        line.substr(0, line.find("//"));  // Strip line comments
-    // if( cleanline.back() == "\r" ) { // Remove Windows line ending
-    //	cleanline = cleanline.substr(0, cleanline.size()-1);
-    //}
-    // TODO: Should trim whitespace before checking .empty()
-    if (cleanline.empty() && remove_next_blank_line) {
-      remove_next_blank_line = false;
-      continue;
+    // WAR for #pragma once causing problems when there are multiple inclusions
+    //   of the same header from different paths.
+    if (pragma_once) {
+        std::stringstream ss;
+        ss.imbue(std::locale::classic());
+        ss << std::uppercase << std::hex << std::setw(8) << std::setfill('0') << hash;
+        std::string include_guard_name = "_JITIFY_INCLUDE_GUARD_" + ss.str() + "\n";
+        std::string include_guard_header;
+        include_guard_header += "#ifndef " + include_guard_name;
+        include_guard_header += "#define " + include_guard_name;
+        std::string include_guard_footer;
+        include_guard_footer += "#endif // " + include_guard_name;
+        source = include_guard_header + source + "\n" + include_guard_footer;
     }
-    // Maintain a file hash for use in #pragma once WAR
-    hash = hash_larson64(line.c_str(), hash);
-    if (cleanline.find("#pragma once") != std::string::npos) {
-      pragma_once = true;
-      // Note: This is an attempt to recover the original line numbering,
-      //         which otherwise gets off-by-one due to the include guard.
-      remove_next_blank_line = true;
-      // line = "//" + line; // Comment out the #pragma once line
-      continue;
-    }
-
-    // HACK WAR for Thrust using "#define FOO #pragma bar"
-    // TODO: This is not robust to block comments, line continuations, or tabs.
-    size_t pragma_beg = cleanline.find("#pragma ");
-    if (pragma_beg != std::string::npos) {
-      std::string line_after_pragma = line.substr(pragma_beg + 8);
-      // TODO: Handle block comments (currently they cause a compilation error).
-      size_t comment_start = line_after_pragma.find("//");
-      std::string pragma_args = line_after_pragma.substr(0, comment_start);
-      // handle quote character used in #pragma expression
-      pragma_args = replace_token(pragma_args, "\"", "\\\"");
-      std::string comment = comment_start != std::string::npos
-                                ? line_after_pragma.substr(comment_start)
-                                : "";
-      line = line.substr(0, pragma_beg) + "_Pragma(\"" + pragma_args + "\")" +
-             comment;
-    }
-
-    source += line + "\n";
-  }
-  // HACK TESTING (WAR for cub)
-  source = "#define cudaDeviceSynchronize() cudaSuccess\n" + source;
-  ////source = "cudaError_t cudaDeviceSynchronize() { return cudaSuccess; }\n" +
-  /// source;
-
-  // WAR for #pragma once causing problems when there are multiple inclusions
-  //   of the same header from different paths.
-  if (pragma_once) {
-    std::stringstream ss;
-    ss.imbue(std::locale::classic());
-    ss << std::uppercase << std::hex << std::setw(8) << std::setfill('0')
-       << hash;
-    std::string include_guard_name = "_JITIFY_INCLUDE_GUARD_" + ss.str() + "\n";
-    std::string include_guard_header;
-    include_guard_header += "#ifndef " + include_guard_name;
-    include_guard_header += "#define " + include_guard_name;
-    std::string include_guard_footer;
-    include_guard_footer += "#endif // " + include_guard_name;
-    source = include_guard_header + source + "\n" + include_guard_footer;
-  }
-  // return filename;
-  return true;
+    // return filename;
+    return true;
 }
 
 }  // namespace detail
@@ -734,7 +704,7 @@ namespace reflection {
  */
 template <typename T, T VALUE_>
 struct NonType {
-  constexpr static T VALUE = VALUE_;
+    constexpr static T VALUE = VALUE_;
 };
 
 // Forward declaration
@@ -747,97 +717,94 @@ namespace detail {
 
 template <typename T>
 inline std::string value_string(const T& x) {
-  std::stringstream ss;
-  ss << x;
-  return ss.str();
+    std::stringstream ss;
+    ss << x;
+    return ss.str();
 }
 // WAR for non-printable characters
 template <>
 inline std::string value_string<char>(const char& x) {
-  std::stringstream ss;
-  ss << (int)x;
-  return ss.str();
+    std::stringstream ss;
+    ss << (int)x;
+    return ss.str();
 }
 template <>
 inline std::string value_string<signed char>(const signed char& x) {
-  std::stringstream ss;
-  ss << (int)x;
-  return ss.str();
+    std::stringstream ss;
+    ss << (int)x;
+    return ss.str();
 }
 template <>
 inline std::string value_string<unsigned char>(const unsigned char& x) {
-  std::stringstream ss;
-  ss << (int)x;
-  return ss.str();
+    std::stringstream ss;
+    ss << (int)x;
+    return ss.str();
 }
 template <>
 inline std::string value_string<wchar_t>(const wchar_t& x) {
-  std::stringstream ss;
-  ss << (long)x;
-  return ss.str();
+    std::stringstream ss;
+    ss << (long)x;
+    return ss.str();
 }
 // Specialisation for bool true/false literals
 template <>
 inline std::string value_string<bool>(const bool& x) {
-  return x ? "true" : "false";
+    return x ? "true" : "false";
 }
 
 // Removes all tokens that start with double underscores.
 inline void strip_double_underscore_tokens(char* s) {
-  using jitify::detail::is_tokenchar;
-  char* w = s;
-  do {
-    if (*s == '_' && *(s + 1) == '_') {
-      while (is_tokenchar(*++s))
-        ;
-    }
-  } while ((*w++ = *s++));
+    using jitify::detail::is_tokenchar;
+    char* w = s;
+    do {
+        if (*s == '_' && *(s + 1) == '_') {
+            while (is_tokenchar(*++s))
+                ;
+        }
+    } while ((*w++ = *s++));
 }
 
 //#if CUDA_VERSION < 8000
 #ifdef _MSC_VER  // MSVC compiler
 inline std::string demangle_cuda_symbol(const char* mangled_name) {
-  // We don't have a way to demangle CUDA symbol names under MSVC.
-  return mangled_name;
+    // We don't have a way to demangle CUDA symbol names under MSVC.
+    return mangled_name;
 }
 inline std::string demangle_native_type(const std::type_info& typeinfo) {
-  // Get the decorated name and skip over the leading '.'.
-  const char* decorated_name = typeinfo.raw_name() + 1;
-  char undecorated_name[4096];
-  if (UnDecorateSymbolName(
-          decorated_name, undecorated_name,
-          sizeof(undecorated_name) / sizeof(*undecorated_name),
-          UNDNAME_NO_ARGUMENTS |          // Treat input as a type name
-              UNDNAME_NAME_ONLY           // No "class" and "struct" prefixes
-          /*UNDNAME_NO_MS_KEYWORDS*/)) {  // No "__cdecl", "__ptr64" etc.
-    // WAR for UNDNAME_NO_MS_KEYWORDS messing up function types.
-    strip_double_underscore_tokens(undecorated_name);
-    return undecorated_name;
-  }
-  throw std::runtime_error("UnDecorateSymbolName failed");
+    // Get the decorated name and skip over the leading '.'.
+    const char* decorated_name = typeinfo.raw_name() + 1;
+    char undecorated_name[4096];
+    if (UnDecorateSymbolName(decorated_name, undecorated_name, sizeof(undecorated_name) / sizeof(*undecorated_name),
+                             UNDNAME_NO_ARGUMENTS |          // Treat input as a type name
+                                 UNDNAME_NAME_ONLY           // No "class" and "struct" prefixes
+                             /*UNDNAME_NO_MS_KEYWORDS*/)) {  // No "__cdecl", "__ptr64" etc.
+        // WAR for UNDNAME_NO_MS_KEYWORDS messing up function types.
+        strip_double_underscore_tokens(undecorated_name);
+        return undecorated_name;
+    }
+    throw std::runtime_error("UnDecorateSymbolName failed");
 }
-#else  // not MSVC
+#else   // not MSVC
 inline std::string demangle_cuda_symbol(const char* mangled_name) {
-  size_t bufsize = 0;
-  char* buf = nullptr;
-  std::string demangled_name;
-  int status;
-  auto demangled_ptr = std::unique_ptr<char, decltype(free)*>(
-      abi::__cxa_demangle(mangled_name, buf, &bufsize, &status), free);
-  if (status == 0) {
-    demangled_name = demangled_ptr.get();  // all worked as expected
-  } else if (status == -2) {
-    demangled_name = mangled_name;  // we interpret this as plain C name
-  } else if (status == -1) {
-    throw std::runtime_error(
-        std::string("memory allocation failure in __cxa_demangle"));
-  } else if (status == -3) {
-    throw std::runtime_error(std::string("invalid argument to __cxa_demangle"));
-  }
-  return demangled_name;
+    size_t bufsize = 0;
+    char* buf = nullptr;
+    std::string demangled_name;
+    int status;
+    auto demangled_ptr =
+        std::unique_ptr<char, decltype(free)*>(abi::__cxa_demangle(mangled_name, buf, &bufsize, &status), free);
+    if (status == 0) {
+        demangled_name = demangled_ptr.get();  // all worked as expected
+    } else if (status == -2) {
+        demangled_name = mangled_name;  // we interpret this as plain C name
+    } else if (status == -1) {
+        throw std::runtime_error(std::string("memory allocation failure in __cxa_demangle"));
+    } else if (status == -3) {
+        throw std::runtime_error(std::string("invalid argument to __cxa_demangle"));
+    }
+    return demangled_name;
 }
 inline std::string demangle_native_type(const std::type_info& typeinfo) {
-  return demangle_cuda_symbol(typeinfo.name());
+    return demangle_cuda_symbol(typeinfo.name());
 }
 #endif  // not MSVC
 //#endif // CUDA_VERSION < 8000
@@ -847,41 +814,37 @@ class JitifyTypeNameWrapper_ {};
 
 template <typename T>
 struct type_reflection {
-  inline static std::string name() {
-    //#if CUDA_VERSION < 8000
-    // TODO: Use nvrtcGetTypeName once it has the same behavior as this.
-    // WAR for typeid discarding cv qualifiers on value-types
-    // Wrap type in dummy template class to preserve cv-qualifiers, then strip
-    // off the wrapper from the resulting string.
-    std::string wrapped_name =
-        demangle_native_type(typeid(JitifyTypeNameWrapper_<T>));
-    // Note: The reflected name of this class also has namespace prefixes.
-    const std::string wrapper_class_name = "JitifyTypeNameWrapper_<";
-    size_t start = wrapped_name.find(wrapper_class_name);
-    if (start == std::string::npos) {
-      throw std::runtime_error("Type reflection failed: " + wrapped_name);
+    inline static std::string name() {
+        //#if CUDA_VERSION < 8000
+        // TODO: Use nvrtcGetTypeName once it has the same behavior as this.
+        // WAR for typeid discarding cv qualifiers on value-types
+        // Wrap type in dummy template class to preserve cv-qualifiers, then strip
+        // off the wrapper from the resulting string.
+        std::string wrapped_name = demangle_native_type(typeid(JitifyTypeNameWrapper_<T>));
+        // Note: The reflected name of this class also has namespace prefixes.
+        const std::string wrapper_class_name = "JitifyTypeNameWrapper_<";
+        size_t start = wrapped_name.find(wrapper_class_name);
+        if (start == std::string::npos) {
+            throw std::runtime_error("Type reflection failed: " + wrapped_name);
+        }
+        start += wrapper_class_name.size();
+        std::string name = wrapped_name.substr(start, wrapped_name.size() - (start + 1));
+        return name;
+        //#else
+        //         std::string ret;
+        //         nvrtcResult status = nvrtcGetTypeName<T>(&ret);
+        //         if( status != NVRTC_SUCCESS ) {
+        //                 throw std::runtime_error(std::string("nvrtcGetTypeName
+        // failed:
+        //")+ nvrtcGetErrorString(status));
+        //         }
+        //         return ret;
+        //#endif
     }
-    start += wrapper_class_name.size();
-    std::string name =
-        wrapped_name.substr(start, wrapped_name.size() - (start + 1));
-    return name;
-    //#else
-    //         std::string ret;
-    //         nvrtcResult status = nvrtcGetTypeName<T>(&ret);
-    //         if( status != NVRTC_SUCCESS ) {
-    //                 throw std::runtime_error(std::string("nvrtcGetTypeName
-    // failed:
-    //")+ nvrtcGetErrorString(status));
-    //         }
-    //         return ret;
-    //#endif
-  }
 };  // namespace detail
 template <typename T, T VALUE>
 struct type_reflection<NonType<T, VALUE> > {
-  inline static std::string name() {
-    return jitify::reflection::reflect(VALUE);
-  }
+    inline static std::string name() { return jitify::reflection::reflect(VALUE); }
 };
 
 }  // namespace detail
@@ -896,8 +859,8 @@ struct type_reflection<NonType<T, VALUE> > {
  */
 template <typename T>
 struct Instance {
-  const T& value;
-  Instance(const T& value_arg) : value(value_arg) {}
+    const T& value;
+    Instance(const T& value_arg) : value(value_arg) {}
 };
 
 /*! Create an Instance object from which we can extract the value's run-time
@@ -906,7 +869,7 @@ struct Instance {
  */
 template <typename T>
 inline Instance<T const> instance_of(T const& value) {
-  return Instance<T const>(value);
+    return Instance<T const>(value);
 }
 
 /*! A wrapper used for representing types as values.
@@ -922,7 +885,7 @@ struct Type {};
  */
 template <typename T>
 inline std::string reflect() {
-  return detail::type_reflection<T>::name();
+    return detail::type_reflection<T>::name();
 }
 // Value reflection
 // E.g., reflect(3.14f) -> "(float)3.14"
@@ -931,7 +894,7 @@ inline std::string reflect() {
  */
 template <typename T>
 inline std::string reflect(T const& value) {
-  return "(" + reflect<T>() + ")" + detail::value_string(value);
+    return "(" + reflect<T>() + ")" + detail::value_string(value);
 }
 // Non-type template arg reflection (implicit conversion to int64_t)
 // E.g., reflect<7>() -> "(int64_t)7"
@@ -940,7 +903,7 @@ inline std::string reflect(T const& value) {
  */
 template <int64_t N>
 inline std::string reflect() {
-  return reflect<NonType<int64_t, N> >();
+    return reflect<NonType<int64_t, N> >();
 }
 // Non-type template arg reflection (explicit type)
 // E.g., reflect<int,7>() -> "(int)7"
@@ -949,7 +912,7 @@ inline std::string reflect() {
  */
 template <typename T, T N>
 inline std::string reflect() {
-  return reflect<NonType<T, N> >();
+    return reflect<NonType<T, N> >();
 }
 // Type reflection via value
 // E.g., reflect(Type<float>()) -> "float"
@@ -958,7 +921,7 @@ inline std::string reflect() {
  */
 template <typename T>
 inline std::string reflect(jitify::reflection::Type<T>) {
-  return reflect<T>();
+    return reflect<T>();
 }
 
 /*! Generate a code-string for a type wrapped as an Instance instance.
@@ -970,7 +933,7 @@ inline std::string reflect(jitify::reflection::Type<T>) {
  */
 template <typename T>
 inline std::string reflect(jitify::reflection::Instance<T>& value) {
-  return detail::demangle_native_type(typeid(value.value));
+    return detail::demangle_native_type(typeid(value.value));
 }
 
 // Type from value
@@ -980,47 +943,47 @@ inline std::string reflect(jitify::reflection::Instance<T>& value) {
  */
 template <typename T>
 inline Type<T> type_of(T&) {
-  return Type<T>();
+    return Type<T>();
 }
 /*! Create a Type object representing a value's type.
  *  \param value The const value whose type is to be captured.
  */
 template <typename T>
 inline Type<T const> type_of(T const&) {
-  return Type<T const>();
+    return Type<T const>();
 }
 
 // Multiple value reflections one call, returning list of strings
 template <typename... Args>
 inline std::vector<std::string> reflect_all(Args... args) {
-  return {reflect(args)...};
+    return {reflect(args)...};
 }
 
 inline std::string reflect_list(jitify::detail::vector<std::string> const& args,
                                 std::string opener = "",
                                 std::string closer = "") {
-  std::stringstream ss;
-  ss << opener;
-  for (int i = 0; i < (int)args.size(); ++i) {
-    if (i > 0) ss << ",";
-    ss << args[i];
-  }
-  ss << closer;
-  return ss.str();
+    std::stringstream ss;
+    ss << opener;
+    for (int i = 0; i < (int)args.size(); ++i) {
+        if (i > 0)
+            ss << ",";
+        ss << args[i];
+    }
+    ss << closer;
+    return ss.str();
 }
 
 // Template instantiation reflection
 // inline std::string reflect_template(std::vector<std::string> const& args) {
-inline std::string reflect_template(
-    jitify::detail::vector<std::string> const& args) {
-  // Note: The space in " >" is a WAR to avoid '>>' appearing
-  return reflect_list(args, "<", " >");
+inline std::string reflect_template(jitify::detail::vector<std::string> const& args) {
+    // Note: The space in " >" is a WAR to avoid '>>' appearing
+    return reflect_list(args, "<", " >");
 }
 // TODO: See if can make this evaluate completely at compile-time
 template <typename... Ts>
 inline std::string reflect_template() {
-  return reflect_template({reflect<Ts>()...});
-  // return reflect_template<sizeof...(Ts)>({reflect<Ts>()...});
+    return reflect_template({reflect<Ts>()...});
+    // return reflect_template<sizeof...(Ts)>({reflect<Ts>()...});
 }
 
 }  // namespace reflection
@@ -1032,348 +995,360 @@ namespace detail {
 // Demangles nested variable names using the PTX name mangling scheme
 // (which follows the Itanium64 ABI). E.g., _ZN1a3Foo2bcE -> a::Foo::bc.
 inline std::string demangle_ptx_variable_name(const char* name) {
-  std::stringstream ss;
-  const char* c = name;
-  if (*c++ != '_' || *c++ != 'Z') return name;  // Non-mangled name
-  if (*c++ != 'N') return "";  // Not a nested name, unsupported
-  while (true) {
-    // Parse identifier length.
-    int n = 0;
-    while (std::isdigit(*c)) {
-      n = n * 10 + (*c - '0');
-      c++;
+    std::stringstream ss;
+    const char* c = name;
+    if (*c++ != '_' || *c++ != 'Z')
+        return name;  // Non-mangled name
+    if (*c++ != 'N')
+        return "";  // Not a nested name, unsupported
+    while (true) {
+        // Parse identifier length.
+        int n = 0;
+        while (std::isdigit(*c)) {
+            n = n * 10 + (*c - '0');
+            c++;
+        }
+        if (!n)
+            return "";  // Invalid or unsupported mangled name
+        // Parse identifier.
+        const char* c0 = c;
+        while (n-- && *c)
+            c++;
+        if (!*c)
+            return "";  // Mangled name is truncated
+        std::string id(c0, c);
+        // Identifiers starting with "_GLOBAL" are anonymous namespaces.
+        ss << (id.substr(0, 7) == "_GLOBAL" ? "(anonymous namespace)" : id);
+        // Nested name specifiers end with 'E'.
+        if (*c == 'E')
+            break;
+        // There are more identifiers to come, add join token.
+        ss << "::";
     }
-    if (!n) return "";  // Invalid or unsupported mangled name
-    // Parse identifier.
-    const char* c0 = c;
-    while (n-- && *c) c++;
-    if (!*c) return "";  // Mangled name is truncated
-    std::string id(c0, c);
-    // Identifiers starting with "_GLOBAL" are anonymous namespaces.
-    ss << (id.substr(0, 7) == "_GLOBAL" ? "(anonymous namespace)" : id);
-    // Nested name specifiers end with 'E'.
-    if (*c == 'E') break;
-    // There are more identifiers to come, add join token.
-    ss << "::";
-  }
-  return ss.str();
+    return ss.str();
 }
 
 static const char* get_current_executable_path() {
-  static const char* path = []() -> const char* {
-    static char buffer[JITIFY_PATH_MAX] = {};
+    static const char* path = []() -> const char* {
+        static char buffer[JITIFY_PATH_MAX] = {};
 #ifdef __linux__
-    if (!::realpath("/proc/self/exe", buffer)) return nullptr;
+        if (!::realpath("/proc/self/exe", buffer))
+            return nullptr;
 #elif defined(_WIN32) || defined(_WIN64)
-    if (!GetModuleFileNameA(nullptr, buffer, JITIFY_PATH_MAX)) return nullptr;
+        if (!GetModuleFileNameA(nullptr, buffer, JITIFY_PATH_MAX))
+            return nullptr;
 #endif
-    return buffer;
-  }();
-  return path;
+        return buffer;
+    }();
+    return path;
 }
 
 inline bool endswith(const std::string& str, const std::string& suffix) {
-  return str.size() >= suffix.size() &&
-         str.substr(str.size() - suffix.size()) == suffix;
+    return str.size() >= suffix.size() && str.substr(str.size() - suffix.size()) == suffix;
 }
 
 // Infers the JIT input type from the filename suffix. If no known suffix is
 // present, the filename is assumed to refer to a library, and the associated
 // suffix (and possibly prefix) is automatically added to the filename.
 inline CUjitInputType get_cuda_jit_input_type(std::string* filename) {
-  if (endswith(*filename, ".ptx")) {
-    return CU_JIT_INPUT_PTX;
-  } else if (endswith(*filename, ".cubin")) {
-    return CU_JIT_INPUT_CUBIN;
-  } else if (endswith(*filename, ".fatbin")) {
-    return CU_JIT_INPUT_FATBINARY;
-  } else if (endswith(*filename,
+    if (endswith(*filename, ".ptx")) {
+        return CU_JIT_INPUT_PTX;
+    } else if (endswith(*filename, ".cubin")) {
+        return CU_JIT_INPUT_CUBIN;
+    } else if (endswith(*filename, ".fatbin")) {
+        return CU_JIT_INPUT_FATBINARY;
+    } else if (endswith(*filename,
 #if defined _WIN32 || defined _WIN64
-                      ".obj"
+                        ".obj"
 #else  // Linux
-                      ".o"
+                        ".o"
 #endif
-                      )) {
-    return CU_JIT_INPUT_OBJECT;
-  } else {  // Assume library
+                        )) {
+        return CU_JIT_INPUT_OBJECT;
+    } else {  // Assume library
 #if defined _WIN32 || defined _WIN64
-    if (!endswith(*filename, ".lib")) {
-      *filename += ".lib";
-    }
+        if (!endswith(*filename, ".lib")) {
+            *filename += ".lib";
+        }
 #else  // Linux
-    if (!endswith(*filename, ".a")) {
-      *filename = "lib" + *filename + ".a";
-    }
+        if (!endswith(*filename, ".a")) {
+            *filename = "lib" + *filename + ".a";
+        }
 #endif
-    return CU_JIT_INPUT_LIBRARY;
-  }
+        return CU_JIT_INPUT_LIBRARY;
+    }
 }
 
 class CUDAKernel {
-  std::vector<std::string> _link_files;
-  std::vector<std::string> _link_paths;
-  CUlinkState _link_state;
-  CUmodule _module;
-  CUfunction _kernel;
-  std::string _func_name;
-  std::string _ptx;
-  std::map<std::string, std::string> _global_map;
-  std::vector<CUjit_option> _opts;
-  std::vector<void*> _optvals;
+    std::vector<std::string> _link_files;
+    std::vector<std::string> _link_paths;
+    CUlinkState _link_state;
+    CUmodule _module;
+    CUfunction _kernel;
+    std::string _func_name;
+    std::string _ptx;
+    std::map<std::string, std::string> _global_map;
+    std::vector<CUjit_option> _opts;
+    std::vector<void*> _optvals;
 #ifdef JITIFY_PRINT_LINKER_LOG
-  static const unsigned int _log_size = 8192;
-  char _error_log[_log_size];
-  char _info_log[_log_size];
+    static const unsigned int _log_size = 8192;
+    char _error_log[_log_size];
+    char _info_log[_log_size];
 #endif
 
-  inline void cuda_safe_call(CUresult res) const {
-    if (res != CUDA_SUCCESS) {
-      const char* msg;
-      cuGetErrorName(res, &msg);
-      throw std::runtime_error(msg);
+    inline void cuda_safe_call(CUresult res) const {
+        if (res != CUDA_SUCCESS) {
+            const char* msg;
+            cuGetErrorName(res, &msg);
+            throw std::runtime_error(msg);
+        }
     }
-  }
-  inline void create_module(std::vector<std::string> link_files,
-                            std::vector<std::string> link_paths) {
-    CUresult result;
+    inline void create_module(std::vector<std::string> link_files, std::vector<std::string> link_paths) {
+        CUresult result;
 #ifndef JITIFY_PRINT_LINKER_LOG
-    // WAR since linker log does not seem to be constructed using a single call
-    // to cuModuleLoadDataEx.
-    if (link_files.empty()) {
-      result =
-          cuModuleLoadDataEx(&_module, _ptx.c_str(), (unsigned)_opts.size(),
-                             _opts.data(), _optvals.data());
-    } else
+        // WAR since linker log does not seem to be constructed using a single call
+        // to cuModuleLoadDataEx.
+        if (link_files.empty()) {
+            result = cuModuleLoadDataEx(&_module, _ptx.c_str(), (unsigned)_opts.size(), _opts.data(), _optvals.data());
+        } else
 #endif
-    {
-      cuda_safe_call(cuLinkCreate((unsigned)_opts.size(), _opts.data(),
-                                  _optvals.data(), &_link_state));
-      cuda_safe_call(cuLinkAddData(_link_state, CU_JIT_INPUT_PTX,
-                                   (void*)_ptx.c_str(), _ptx.size(),
-                                   "jitified_source.ptx", 0, 0, 0));
-      for (int i = 0; i < (int)link_files.size(); ++i) {
-        std::string link_file = link_files[i];
-        CUjitInputType jit_input_type;
-        if (link_file == ".") {
-          // Special case for linking to current executable.
-          link_file = get_current_executable_path();
-          jit_input_type = CU_JIT_INPUT_OBJECT;
-        } else {
-          // Infer based on filename.
-          jit_input_type = get_cuda_jit_input_type(&link_file);
-        }
-        result = cuLinkAddFile(_link_state, jit_input_type, link_file.c_str(),
-                               0, 0, 0);
-        int path_num = 0;
-        while (result == CUDA_ERROR_FILE_NOT_FOUND &&
-               path_num < (int)link_paths.size()) {
-          std::string filename = path_join(link_paths[path_num++], link_file);
-          result = cuLinkAddFile(_link_state, jit_input_type, filename.c_str(),
-                                 0, 0, 0);
-        }
+        {
+            cuda_safe_call(cuLinkCreate((unsigned)_opts.size(), _opts.data(), _optvals.data(), &_link_state));
+            cuda_safe_call(cuLinkAddData(_link_state, CU_JIT_INPUT_PTX, (void*)_ptx.c_str(), _ptx.size(),
+                                         "jitified_source.ptx", 0, 0, 0));
+            for (int i = 0; i < (int)link_files.size(); ++i) {
+                std::string link_file = link_files[i];
+                CUjitInputType jit_input_type;
+                if (link_file == ".") {
+                    // Special case for linking to current executable.
+                    link_file = get_current_executable_path();
+                    jit_input_type = CU_JIT_INPUT_OBJECT;
+                } else {
+                    // Infer based on filename.
+                    jit_input_type = get_cuda_jit_input_type(&link_file);
+                }
+                result = cuLinkAddFile(_link_state, jit_input_type, link_file.c_str(), 0, 0, 0);
+                int path_num = 0;
+                while (result == CUDA_ERROR_FILE_NOT_FOUND && path_num < (int)link_paths.size()) {
+                    std::string filename = path_join(link_paths[path_num++], link_file);
+                    result = cuLinkAddFile(_link_state, jit_input_type, filename.c_str(), 0, 0, 0);
+                }
 #if JITIFY_PRINT_LINKER_LOG
-        if (result == CUDA_ERROR_FILE_NOT_FOUND) {
-          std::cerr << "Linker error: Device library not found: " << link_file
-                    << std::endl;
-        } else if (result != CUDA_SUCCESS) {
-          std::cerr << "Linker error: Failed to add file: " << link_file
-                    << std::endl;
-          std::cerr << _error_log << std::endl;
+                if (result == CUDA_ERROR_FILE_NOT_FOUND) {
+                    std::cerr << "Linker error: Device library not found: " << link_file << std::endl;
+                } else if (result != CUDA_SUCCESS) {
+                    std::cerr << "Linker error: Failed to add file: " << link_file << std::endl;
+                    std::cerr << _error_log << std::endl;
+                }
+#endif
+                cuda_safe_call(result);
+            }
+            size_t cubin_size;
+            void* cubin;
+            result = cuLinkComplete(_link_state, &cubin, &cubin_size);
+            if (result == CUDA_SUCCESS) {
+                result = cuModuleLoadData(&_module, cubin);
+            }
         }
+#ifdef JITIFY_PRINT_LINKER_LOG
+        std::cout << "---------------------------------------" << std::endl;
+        std::cout << "--- Linker for " << reflection::detail::demangle_cuda_symbol(_func_name.c_str()) << " ---"
+                  << std::endl;
+        std::cout << "---------------------------------------" << std::endl;
+        std::cout << _info_log << std::endl;
+        std::cout << std::endl;
+        std::cout << _error_log << std::endl;
+        std::cout << "---------------------------------------" << std::endl;
 #endif
         cuda_safe_call(result);
-      }
-      size_t cubin_size;
-      void* cubin;
-      result = cuLinkComplete(_link_state, &cubin, &cubin_size);
-      if (result == CUDA_SUCCESS) {
-        result = cuModuleLoadData(&_module, cubin);
-      }
+        // Allow _func_name to be empty to support cases where we want to generate
+        // PTX containing extern symbol definitions but no kernels.
+        if (!_func_name.empty()) {
+            cuda_safe_call(cuModuleGetFunction(&_kernel, _module, _func_name.c_str()));
+        }
     }
+    inline void destroy_module() {
+        if (_link_state) {
+            cuda_safe_call(cuLinkDestroy(_link_state));
+        }
+        _link_state = 0;
+        if (_module) {
+            cuModuleUnload(_module);
+        }
+        _module = 0;
+    }
+
+    // create a map of __constant__ and __device__ variables in the ptx file
+    // mapping demangled to mangled name
+    inline void create_global_variable_map() {
+        size_t pos = 0;
+        while (pos < _ptx.size()) {
+            pos = std::min(_ptx.find(".const .align", pos), _ptx.find(".global .align", pos));
+            if (pos == std::string::npos)
+                break;
+            size_t end = _ptx.find_first_of(";=", pos);
+            if (_ptx[end] == '=')
+                --end;
+            std::string line = _ptx.substr(pos, end - pos);
+            pos = end;
+            size_t symbol_start = line.find_last_of(" ") + 1;
+            size_t symbol_end = line.find_last_of("[");
+            std::string entry = line.substr(symbol_start, symbol_end - symbol_start);
+            std::string key = detail::demangle_ptx_variable_name(entry.c_str());
+            // Skip unsupported mangled names. E.g., a static variable defined inside
+            // a function (such variables are not directly addressable from outside
+            // the function, so skipping them is the correct behavior).
+            if (key == "")
+                continue;
+            _global_map[key] = entry;
+        }
+    }
+
+    inline void set_linker_log() {
 #ifdef JITIFY_PRINT_LINKER_LOG
-    std::cout << "---------------------------------------" << std::endl;
-    std::cout << "--- Linker for "
-              << reflection::detail::demangle_cuda_symbol(_func_name.c_str())
-              << " ---" << std::endl;
-    std::cout << "---------------------------------------" << std::endl;
-    std::cout << _info_log << std::endl;
-    std::cout << std::endl;
-    std::cout << _error_log << std::endl;
-    std::cout << "---------------------------------------" << std::endl;
+        _opts.push_back(CU_JIT_INFO_LOG_BUFFER);
+        _optvals.push_back((void*)_info_log);
+        _opts.push_back(CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES);
+        _optvals.push_back((void*)(long)_log_size);
+        _opts.push_back(CU_JIT_ERROR_LOG_BUFFER);
+        _optvals.push_back((void*)_error_log);
+        _opts.push_back(CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES);
+        _optvals.push_back((void*)(long)_log_size);
+        _opts.push_back(CU_JIT_LOG_VERBOSE);
+        _optvals.push_back((void*)1);
 #endif
-    cuda_safe_call(result);
-    // Allow _func_name to be empty to support cases where we want to generate
-    // PTX containing extern symbol definitions but no kernels.
-    if (!_func_name.empty()) {
-      cuda_safe_call(
-          cuModuleGetFunction(&_kernel, _module, _func_name.c_str()));
     }
-  }
-  inline void destroy_module() {
-    if (_link_state) {
-      cuda_safe_call(cuLinkDestroy(_link_state));
+
+  public:
+    inline CUDAKernel() : _link_state(0), _module(0), _kernel(0) {}
+    inline CUDAKernel(const CUDAKernel& other) = delete;
+    inline CUDAKernel& operator=(const CUDAKernel& other) = delete;
+    inline CUDAKernel(CUDAKernel&& other) = delete;
+    inline CUDAKernel& operator=(CUDAKernel&& other) = delete;
+    inline CUDAKernel(const char* func_name,
+                      const char* ptx,
+                      std::vector<std::string> link_files,
+                      std::vector<std::string> link_paths,
+                      unsigned int nopts = 0,
+                      CUjit_option* opts = 0,
+                      void** optvals = 0)
+        : _link_files(link_files),
+          _link_paths(link_paths),
+          _link_state(0),
+          _module(0),
+          _kernel(0),
+          _func_name(func_name),
+          _ptx(ptx),
+          _opts(opts, opts + nopts),
+          _optvals(optvals, optvals + nopts) {
+        this->set_linker_log();
+        this->create_module(link_files, link_paths);
+        this->create_global_variable_map();
     }
-    _link_state = 0;
-    if (_module) {
-      cuModuleUnload(_module);
+
+    inline CUDAKernel& set(const char* func_name,
+                           const char* ptx,
+                           std::vector<std::string> link_files,
+                           std::vector<std::string> link_paths,
+                           unsigned int nopts = 0,
+                           CUjit_option* opts = 0,
+                           void** optvals = 0) {
+        this->destroy_module();
+        _func_name = func_name;
+        _ptx = ptx;
+        _link_files = link_files;
+        _link_paths = link_paths;
+        _opts.assign(opts, opts + nopts);
+        _optvals.assign(optvals, optvals + nopts);
+        this->set_linker_log();
+        this->create_module(link_files, link_paths);
+        this->create_global_variable_map();
+        return *this;
     }
-    _module = 0;
-  }
-
-  // create a map of __constant__ and __device__ variables in the ptx file
-  // mapping demangled to mangled name
-  inline void create_global_variable_map() {
-    size_t pos = 0;
-    while (pos < _ptx.size()) {
-      pos = std::min(_ptx.find(".const .align", pos),
-                     _ptx.find(".global .align", pos));
-      if (pos == std::string::npos) break;
-      size_t end = _ptx.find_first_of(";=", pos);
-      if (_ptx[end] == '=') --end;
-      std::string line = _ptx.substr(pos, end - pos);
-      pos = end;
-      size_t symbol_start = line.find_last_of(" ") + 1;
-      size_t symbol_end = line.find_last_of("[");
-      std::string entry = line.substr(symbol_start, symbol_end - symbol_start);
-      std::string key = detail::demangle_ptx_variable_name(entry.c_str());
-      // Skip unsupported mangled names. E.g., a static variable defined inside
-      // a function (such variables are not directly addressable from outside
-      // the function, so skipping them is the correct behavior).
-      if (key == "") continue;
-      _global_map[key] = entry;
+    inline ~CUDAKernel() {
+        this->destroy_module();
     }
-  }
-
-  inline void set_linker_log() {
-#ifdef JITIFY_PRINT_LINKER_LOG
-    _opts.push_back(CU_JIT_INFO_LOG_BUFFER);
-    _optvals.push_back((void*)_info_log);
-    _opts.push_back(CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES);
-    _optvals.push_back((void*)(long)_log_size);
-    _opts.push_back(CU_JIT_ERROR_LOG_BUFFER);
-    _optvals.push_back((void*)_error_log);
-    _opts.push_back(CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES);
-    _optvals.push_back((void*)(long)_log_size);
-    _opts.push_back(CU_JIT_LOG_VERBOSE);
-    _optvals.push_back((void*)1);
-#endif
-  }
-
- public:
-  inline CUDAKernel() : _link_state(0), _module(0), _kernel(0) {}
-  inline CUDAKernel(const CUDAKernel& other) = delete;
-  inline CUDAKernel& operator=(const CUDAKernel& other) = delete;
-  inline CUDAKernel(CUDAKernel&& other) = delete;
-  inline CUDAKernel& operator=(CUDAKernel&& other) = delete;
-  inline CUDAKernel(const char* func_name, const char* ptx,
-                    std::vector<std::string> link_files,
-                    std::vector<std::string> link_paths, unsigned int nopts = 0,
-                    CUjit_option* opts = 0, void** optvals = 0)
-      : _link_files(link_files),
-        _link_paths(link_paths),
-        _link_state(0),
-        _module(0),
-        _kernel(0),
-        _func_name(func_name),
-        _ptx(ptx),
-        _opts(opts, opts + nopts),
-        _optvals(optvals, optvals + nopts) {
-    this->set_linker_log();
-    this->create_module(link_files, link_paths);
-    this->create_global_variable_map();
-  }
-
-  inline CUDAKernel& set(const char* func_name, const char* ptx,
-                         std::vector<std::string> link_files,
-                         std::vector<std::string> link_paths,
-                         unsigned int nopts = 0, CUjit_option* opts = 0,
-                         void** optvals = 0) {
-    this->destroy_module();
-    _func_name = func_name;
-    _ptx = ptx;
-    _link_files = link_files;
-    _link_paths = link_paths;
-    _opts.assign(opts, opts + nopts);
-    _optvals.assign(optvals, optvals + nopts);
-    this->set_linker_log();
-    this->create_module(link_files, link_paths);
-    this->create_global_variable_map();
-    return *this;
-  }
-  inline ~CUDAKernel() { this->destroy_module(); }
-  inline operator CUfunction() const { return _kernel; }
-
-  inline CUresult launch(dim3 grid, dim3 block, unsigned int smem,
-                         CUstream stream, std::vector<void*> arg_ptrs) const {
-    return cuLaunchKernel(_kernel, grid.x, grid.y, grid.z, block.x, block.y,
-                          block.z, smem, stream, arg_ptrs.data(), NULL);
-  }
-
-  inline void safe_launch(dim3 grid, dim3 block, unsigned int smem,
-                          CUstream stream, std::vector<void*> arg_ptrs) const {
-    return cuda_safe_call(cuLaunchKernel(_kernel, grid.x, grid.y, grid.z,
-                                         block.x, block.y, block.z, smem,
-                                         stream, arg_ptrs.data(), NULL));
-  }
-
-  inline int get_func_attribute(CUfunction_attribute attribute) const {
-    int value;
-    cuda_safe_call(cuFuncGetAttribute(&value, attribute, _kernel));
-    return value;
-  }
-
-  inline void set_func_attribute(CUfunction_attribute attribute,
-                                 int value) const {
-    cuda_safe_call(cuFuncSetAttribute(_kernel, attribute, value));
-  }
-
-  inline CUdeviceptr get_global_ptr(const char* name,
-                                    size_t* size = nullptr) const {
-    CUdeviceptr global_ptr = 0;
-    auto global = _global_map.find(name);
-    if (global != _global_map.end()) {
-      cuda_safe_call(cuModuleGetGlobal(&global_ptr, size, _module,
-                                       global->second.c_str()));
-    } else {
-      throw std::runtime_error(std::string("failed to look up global ") + name);
+    inline operator CUfunction() const {
+        return _kernel;
     }
-    return global_ptr;
-  }
 
-  template <typename T>
-  inline CUresult get_global_data(const char* name, T* data, size_t count,
-                                  CUstream stream = 0) const {
-    size_t size_bytes;
-    CUdeviceptr ptr = get_global_ptr(name, &size_bytes);
-    size_t given_size_bytes = count * sizeof(T);
-    if (given_size_bytes != size_bytes) {
-      throw std::runtime_error(
-          std::string("Value for global variable ") + name +
-          " has wrong size: got " + std::to_string(given_size_bytes) +
-          " bytes, expected " + std::to_string(size_bytes));
+    inline CUresult launch(dim3 grid,
+                           dim3 block,
+                           unsigned int smem,
+                           CUstream stream,
+                           std::vector<void*> arg_ptrs) const {
+        return cuLaunchKernel(_kernel, grid.x, grid.y, grid.z, block.x, block.y, block.z, smem, stream, arg_ptrs.data(),
+                              NULL);
     }
-    return cuMemcpyDtoHAsync(data, ptr, size_bytes, stream);
-  }
 
-  template <typename T>
-  inline CUresult set_global_data(const char* name, const T* data, size_t count,
-                                  CUstream stream = 0) const {
-    size_t size_bytes;
-    CUdeviceptr ptr = get_global_ptr(name, &size_bytes);
-    size_t given_size_bytes = count * sizeof(T);
-    if (given_size_bytes != size_bytes) {
-      throw std::runtime_error(
-          std::string("Value for global variable ") + name +
-          " has wrong size: got " + std::to_string(given_size_bytes) +
-          " bytes, expected " + std::to_string(size_bytes));
+    inline void safe_launch(dim3 grid,
+                            dim3 block,
+                            unsigned int smem,
+                            CUstream stream,
+                            std::vector<void*> arg_ptrs) const {
+        return cuda_safe_call(cuLaunchKernel(_kernel, grid.x, grid.y, grid.z, block.x, block.y, block.z, smem, stream,
+                                             arg_ptrs.data(), NULL));
     }
-    return cuMemcpyHtoDAsync(ptr, data, size_bytes, stream);
-  }
 
-  const std::string& function_name() const { return _func_name; }
-  const std::string& ptx() const { return _ptx; }
-  const std::vector<std::string>& link_files() const { return _link_files; }
-  const std::vector<std::string>& link_paths() const { return _link_paths; }
+    inline int get_func_attribute(CUfunction_attribute attribute) const {
+        int value;
+        cuda_safe_call(cuFuncGetAttribute(&value, attribute, _kernel));
+        return value;
+    }
+
+    inline void set_func_attribute(CUfunction_attribute attribute, int value) const {
+        cuda_safe_call(cuFuncSetAttribute(_kernel, attribute, value));
+    }
+
+    inline CUdeviceptr get_global_ptr(const char* name, size_t* size = nullptr) const {
+        CUdeviceptr global_ptr = 0;
+        auto global = _global_map.find(name);
+        if (global != _global_map.end()) {
+            cuda_safe_call(cuModuleGetGlobal(&global_ptr, size, _module, global->second.c_str()));
+        } else {
+            throw std::runtime_error(std::string("failed to look up global ") + name);
+        }
+        return global_ptr;
+    }
+
+    template <typename T>
+    inline CUresult get_global_data(const char* name, T* data, size_t count, CUstream stream = 0) const {
+        size_t size_bytes;
+        CUdeviceptr ptr = get_global_ptr(name, &size_bytes);
+        size_t given_size_bytes = count * sizeof(T);
+        if (given_size_bytes != size_bytes) {
+            throw std::runtime_error(std::string("Value for global variable ") + name + " has wrong size: got " +
+                                     std::to_string(given_size_bytes) + " bytes, expected " +
+                                     std::to_string(size_bytes));
+        }
+        return cuMemcpyDtoHAsync(data, ptr, size_bytes, stream);
+    }
+
+    template <typename T>
+    inline CUresult set_global_data(const char* name, const T* data, size_t count, CUstream stream = 0) const {
+        size_t size_bytes;
+        CUdeviceptr ptr = get_global_ptr(name, &size_bytes);
+        size_t given_size_bytes = count * sizeof(T);
+        if (given_size_bytes != size_bytes) {
+            throw std::runtime_error(std::string("Value for global variable ") + name + " has wrong size: got " +
+                                     std::to_string(given_size_bytes) + " bytes, expected " +
+                                     std::to_string(size_bytes));
+        }
+        return cuMemcpyHtoDAsync(ptr, data, size_bytes, stream);
+    }
+
+    const std::string& function_name() const {
+        return _func_name;
+    }
+    const std::string& ptx() const {
+        return _ptx;
+    }
+    const std::vector<std::string>& link_files() const {
+        return _link_files;
+    }
+    const std::vector<std::string>& link_paths() const {
+        return _link_paths;
+    }
 };
 
 static const char* jitsafe_header_preinclude_h = R"(
@@ -1397,14 +1372,14 @@ static const char* jitsafe_header_preinclude_h = R"(
 #define catch(...)
 )"
 #if defined(_WIN32) || defined(_WIN64)
-// WAR for NVRTC <= 11.0 not defining _WIN64.
-R"(
+                                                 // WAR for NVRTC <= 11.0 not defining _WIN64.
+                                                 R"(
 #ifndef _WIN64
 #define _WIN64 1
 #endif
 )"
 #endif
-;
+    ;
 
 static const char* jitsafe_header_float_h = R"(
 #pragma once
@@ -2466,118 +2441,115 @@ static const char* preinclude_jitsafe_header_names[] = {"jitify_preinclude.h",
 
 template <class T, int N>
 int array_size(T (&)[N]) {
-  return N;
+    return N;
 }
-const int preinclude_jitsafe_headers_count =
-    array_size(preinclude_jitsafe_header_names);
+const int preinclude_jitsafe_headers_count = array_size(preinclude_jitsafe_header_names);
 
 static const std::map<std::string, std::string>& get_jitsafe_headers_map() {
-  static const std::map<std::string, std::string> jitsafe_headers_map = {
-      {"jitify_preinclude.h", jitsafe_header_preinclude_h},
-      {"float.h", jitsafe_header_float_h},
-      {"cfloat", jitsafe_header_float_h},
-      {"limits.h", jitsafe_header_limits_h},
-      {"climits", jitsafe_header_limits_h},
-      {"stdint.h", jitsafe_header_stdint_h},
-      {"cstdint", jitsafe_header_stdint_h},
-      {"stddef.h", jitsafe_header_stddef_h},
-      {"cstddef", jitsafe_header_stddef_h},
-      {"stdlib.h", jitsafe_header_stdlib_h},
-      {"cstdlib", jitsafe_header_stdlib_h},
-      {"stdio.h", jitsafe_header_stdio_h},
-      {"cstdio", jitsafe_header_stdio_h},
-      {"string.h", jitsafe_header_string_h},
-      {"cstring", jitsafe_header_cstring},
-      {"iterator", jitsafe_header_iterator},
-      {"limits", jitsafe_header_limits},
-      {"type_traits", jitsafe_header_type_traits},
-      {"utility", jitsafe_header_utility},
-      {"math.h", jitsafe_header_math_h},
-      {"cmath", jitsafe_header_math_h},
-      {"memory.h", jitsafe_header_memory_h},
-      {"complex", jitsafe_header_complex},
-      {"iostream", jitsafe_header_iostream},
-      {"ostream", jitsafe_header_ostream},
-      {"istream", jitsafe_header_istream},
-      {"sstream", jitsafe_header_sstream},
-      {"vector", jitsafe_header_vector},
-      {"string", jitsafe_header_string},
-      {"stdexcept", jitsafe_header_stdexcept},
-      {"mutex", jitsafe_header_mutex},
-      {"algorithm", jitsafe_header_algorithm},
-      {"time.h", jitsafe_header_time_h},
-      {"ctime", jitsafe_header_time_h},
-      {"tuple", jitsafe_header_tuple},
-      {"assert.h", jitsafe_header_assert},
-      {"cassert", jitsafe_header_assert}};
-  return jitsafe_headers_map;
+    static const std::map<std::string, std::string> jitsafe_headers_map = {
+        {"jitify_preinclude.h", jitsafe_header_preinclude_h},
+        {"float.h", jitsafe_header_float_h},
+        {"cfloat", jitsafe_header_float_h},
+        {"limits.h", jitsafe_header_limits_h},
+        {"climits", jitsafe_header_limits_h},
+        {"stdint.h", jitsafe_header_stdint_h},
+        {"cstdint", jitsafe_header_stdint_h},
+        {"stddef.h", jitsafe_header_stddef_h},
+        {"cstddef", jitsafe_header_stddef_h},
+        {"stdlib.h", jitsafe_header_stdlib_h},
+        {"cstdlib", jitsafe_header_stdlib_h},
+        {"stdio.h", jitsafe_header_stdio_h},
+        {"cstdio", jitsafe_header_stdio_h},
+        {"string.h", jitsafe_header_string_h},
+        {"cstring", jitsafe_header_cstring},
+        {"iterator", jitsafe_header_iterator},
+        {"limits", jitsafe_header_limits},
+        {"type_traits", jitsafe_header_type_traits},
+        {"utility", jitsafe_header_utility},
+        {"math.h", jitsafe_header_math_h},
+        {"cmath", jitsafe_header_math_h},
+        {"memory.h", jitsafe_header_memory_h},
+        {"complex", jitsafe_header_complex},
+        {"iostream", jitsafe_header_iostream},
+        {"ostream", jitsafe_header_ostream},
+        {"istream", jitsafe_header_istream},
+        {"sstream", jitsafe_header_sstream},
+        {"vector", jitsafe_header_vector},
+        {"string", jitsafe_header_string},
+        {"stdexcept", jitsafe_header_stdexcept},
+        {"mutex", jitsafe_header_mutex},
+        {"algorithm", jitsafe_header_algorithm},
+        {"time.h", jitsafe_header_time_h},
+        {"ctime", jitsafe_header_time_h},
+        {"tuple", jitsafe_header_tuple},
+        {"assert.h", jitsafe_header_assert},
+        {"cassert", jitsafe_header_assert}};
+    return jitsafe_headers_map;
 }
 
 inline void add_options_from_env(std::vector<std::string>& options) {
-  // Add options from environment variable
-  const char* env_options = std::getenv("JITIFY_OPTIONS");
-  if (env_options) {
+    // Add options from environment variable
+    const char* env_options = std::getenv("JITIFY_OPTIONS");
+    if (env_options) {
+        std::stringstream ss;
+        ss << env_options;
+        std::string opt;
+        while (!(ss >> opt).fail()) {
+            options.push_back(opt);
+        }
+    }
+    // Add options from JITIFY_OPTIONS macro
+#ifdef JITIFY_OPTIONS
+    #define JITIFY_TOSTRING_IMPL(x) #x
+    #define JITIFY_TOSTRING(x) JITIFY_TOSTRING_IMPL(x)
     std::stringstream ss;
-    ss << env_options;
+    ss << JITIFY_TOSTRING(JITIFY_OPTIONS);
     std::string opt;
     while (!(ss >> opt).fail()) {
-      options.push_back(opt);
+        options.push_back(opt);
     }
-  }
-  // Add options from JITIFY_OPTIONS macro
-#ifdef JITIFY_OPTIONS
-#define JITIFY_TOSTRING_IMPL(x) #x
-#define JITIFY_TOSTRING(x) JITIFY_TOSTRING_IMPL(x)
-  std::stringstream ss;
-  ss << JITIFY_TOSTRING(JITIFY_OPTIONS);
-  std::string opt;
-  while (!(ss >> opt).fail()) {
-    options.push_back(opt);
-  }
-#undef JITIFY_TOSTRING
-#undef JITIFY_TOSTRING_IMPL
+    #undef JITIFY_TOSTRING
+    #undef JITIFY_TOSTRING_IMPL
 #endif  // JITIFY_OPTIONS
 }
 
 inline void detect_and_add_cuda_arch(std::vector<std::string>& options) {
-  for (int i = 0; i < (int)options.size(); ++i) {
-    // Note that this will also match the middle of "--gpu-architecture".
-    if (options[i].find("-arch") != std::string::npos) {
-      // Arch already specified in options
-      return;
+    for (int i = 0; i < (int)options.size(); ++i) {
+        // Note that this will also match the middle of "--gpu-architecture".
+        if (options[i].find("-arch") != std::string::npos) {
+            // Arch already specified in options
+            return;
+        }
     }
-  }
-  // Use the compute capability of the current device
-  // TODO: Check these API calls for errors
-  cudaError_t status;
-  int device;
-  status = cudaGetDevice(&device);
-  if (status != cudaSuccess) {
-    throw std::runtime_error(
-        std::string(
-            "Failed to detect GPU architecture: cudaGetDevice failed: ") +
-        cudaGetErrorString(status));
-  }
-  int cc_major;
-  cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device);
-  int cc_minor;
-  cudaDeviceGetAttribute(&cc_minor, cudaDevAttrComputeCapabilityMinor, device);
-  int cc = cc_major * 10 + cc_minor;
-  // Note: We must limit the architecture to the max supported by the current
-  //         version of NVRTC, otherwise newer hardware will cause errors
-  //         on older versions of CUDA.
-  // TODO: It would be better to detect this somehow, rather than hard-coding it
+    // Use the compute capability of the current device
+    // TODO: Check these API calls for errors
+    cudaError_t status;
+    int device;
+    status = cudaGetDevice(&device);
+    if (status != cudaSuccess) {
+        throw std::runtime_error(std::string("Failed to detect GPU architecture: cudaGetDevice failed: ") +
+                                 cudaGetErrorString(status));
+    }
+    int cc_major;
+    cudaDeviceGetAttribute(&cc_major, cudaDevAttrComputeCapabilityMajor, device);
+    int cc_minor;
+    cudaDeviceGetAttribute(&cc_minor, cudaDevAttrComputeCapabilityMinor, device);
+    int cc = cc_major * 10 + cc_minor;
+    // Note: We must limit the architecture to the max supported by the current
+    //         version of NVRTC, otherwise newer hardware will cause errors
+    //         on older versions of CUDA.
+    // TODO: It would be better to detect this somehow, rather than hard-coding it
 
-  // Tegra chips do not have forwards compatibility so we need to special case
-  // them.
-  bool is_tegra = ((cc_major == 3 && cc_minor == 2) ||  // Logan
-                   (cc_major == 5 && cc_minor == 3) ||  // Erista
-                   (cc_major == 6 && cc_minor == 2) ||  // Parker
-                   (cc_major == 7 && cc_minor == 2));   // Xavier
-  if (!is_tegra) {
-    // ensure that future CUDA versions just work (even if suboptimal)
-    const int cuda_major = std::min(10, CUDA_VERSION / 1000);
-    // clang-format off
+    // Tegra chips do not have forwards compatibility so we need to special case
+    // them.
+    bool is_tegra = ((cc_major == 3 && cc_minor == 2) ||  // Logan
+                     (cc_major == 5 && cc_minor == 3) ||  // Erista
+                     (cc_major == 6 && cc_minor == 2) ||  // Parker
+                     (cc_major == 7 && cc_minor == 2));   // Xavier
+    if (!is_tegra) {
+        // ensure that future CUDA versions just work (even if suboptimal)
+        const int cuda_major = std::min(10, CUDA_VERSION / 1000);
+        // clang-format off
     switch (cuda_major) {
       case 10: cc = std::min(cc, 75); break; // Turing
       case  9: cc = std::min(cc, 70); break; // Volta
@@ -2587,545 +2559,514 @@ inline void detect_and_add_cuda_arch(std::vector<std::string>& options) {
         throw std::runtime_error("Unexpected CUDA major version " +
                                  std::to_string(cuda_major));
     }
-    // clang-format on
-  }
+        // clang-format on
+    }
 
-  std::stringstream ss;
-  ss << cc;
-  options.push_back("-arch=compute_" + ss.str());
+    std::stringstream ss;
+    ss << cc;
+    options.push_back("-arch=compute_" + ss.str());
 }
 
 inline void detect_and_add_cxx11_flag(std::vector<std::string>& options) {
-  // Reverse loop so we can erase on the fly.
-  for (int i = (int)options.size() - 1; i >= 0; --i) {
-    if (options[i].find("-std=c++98") != std::string::npos) {
-      // NVRTC doesn't support specifying c++98 explicitly, so we remove it.
-      options.erase(options.begin() + i);
-      return;
-    } else if (options[i].find("-std") != std::string::npos) {
-      // Some other standard was explicitly specified, don't change anything.
-      return;
+    // Reverse loop so we can erase on the fly.
+    for (int i = (int)options.size() - 1; i >= 0; --i) {
+        if (options[i].find("-std=c++98") != std::string::npos) {
+            // NVRTC doesn't support specifying c++98 explicitly, so we remove it.
+            options.erase(options.begin() + i);
+            return;
+        } else if (options[i].find("-std") != std::string::npos) {
+            // Some other standard was explicitly specified, don't change anything.
+            return;
+        }
     }
-  }
-  // Jitify must be compiled with C++11 support, so we default to enabling it
-  // for the JIT-compiled code too.
-  options.push_back("-std=c++11");
+    // Jitify must be compiled with C++11 support, so we default to enabling it
+    // for the JIT-compiled code too.
+    options.push_back("-std=c++11");
 }
 
-inline void split_compiler_and_linker_options(
-    std::vector<std::string> options,
-    std::vector<std::string>* compiler_options,
-    std::vector<std::string>* linker_files,
-    std::vector<std::string>* linker_paths) {
-  for (int i = 0; i < (int)options.size(); ++i) {
-    std::string opt = options[i];
-    std::string flag = opt.substr(0, 2);
-    std::string value = opt.substr(2);
-    if (flag == "-l") {
-      linker_files->push_back(value);
-    } else if (flag == "-L") {
-      linker_paths->push_back(value);
-    } else {
-      compiler_options->push_back(opt);
+inline void split_compiler_and_linker_options(std::vector<std::string> options,
+                                              std::vector<std::string>* compiler_options,
+                                              std::vector<std::string>* linker_files,
+                                              std::vector<std::string>* linker_paths) {
+    for (int i = 0; i < (int)options.size(); ++i) {
+        std::string opt = options[i];
+        std::string flag = opt.substr(0, 2);
+        std::string value = opt.substr(2);
+        if (flag == "-l") {
+            linker_files->push_back(value);
+        } else if (flag == "-L") {
+            linker_paths->push_back(value);
+        } else {
+            compiler_options->push_back(opt);
+        }
     }
-  }
 }
 
 inline bool pop_remove_unused_globals_flag(std::vector<std::string>* options) {
-  auto it = std::remove_if(
-      options->begin(), options->end(), [](const std::string& opt) {
+    auto it = std::remove_if(options->begin(), options->end(), [](const std::string& opt) {
         return opt.find("-remove-unused-globals") != std::string::npos;
-      });
-  if (it != options->end()) {
-    options->resize(it - options->begin());
-    return true;
-  }
-  return false;
+    });
+    if (it != options->end()) {
+        options->resize(it - options->begin());
+        return true;
+    }
+    return false;
 }
 
 inline std::string ptx_parse_decl_name(const std::string& line) {
-  size_t name_end = line.find_first_of("[;");
-  if (name_end == std::string::npos) {
-    throw std::runtime_error(
-        "Failed to parse .global/.const declaration in PTX: expected a "
-        "semicolon");
-  }
-  size_t name_start_minus1 = line.find_last_of(" \t", name_end);
-  if (name_start_minus1 == std::string::npos) {
-    throw std::runtime_error(
-        "Failed to parse .global/.const declaration in PTX: expected "
-        "whitespace");
-  }
-  size_t name_start = name_start_minus1 + 1;
-  std::string name = line.substr(name_start, name_end - name_start);
-  return name;
+    size_t name_end = line.find_first_of("[;");
+    if (name_end == std::string::npos) {
+        throw std::runtime_error(
+            "Failed to parse .global/.const declaration in PTX: expected a "
+            "semicolon");
+    }
+    size_t name_start_minus1 = line.find_last_of(" \t", name_end);
+    if (name_start_minus1 == std::string::npos) {
+        throw std::runtime_error(
+            "Failed to parse .global/.const declaration in PTX: expected "
+            "whitespace");
+    }
+    size_t name_start = name_start_minus1 + 1;
+    std::string name = line.substr(name_start, name_end - name_start);
+    return name;
 }
 
 inline void ptx_remove_unused_globals(std::string* ptx) {
-  std::istringstream iss(*ptx);
-  std::vector<std::string> lines;
-  std::unordered_map<size_t, std::string> line_num_to_global_name;
-  std::unordered_set<std::string> name_set;
-  for (std::string line; std::getline(iss, line);) {
-    size_t line_num = lines.size();
-    lines.push_back(line);
-    auto terms = split_string(line);
-    if (terms.size() <= 1) continue;  // Ignore lines with no arguments
-    if (terms[0].substr(0, 2) == "//") continue;  // Ignore comment lines
-    if (terms[0].substr(0, 7) == ".global" ||
-        terms[0].substr(0, 6) == ".const") {
-      line_num_to_global_name.emplace(line_num, ptx_parse_decl_name(line));
-      continue;
-    }
-    if (terms[0][0] == '.') continue;  // Ignore .version, .reg, .param etc.
-    // Note: The first term will always be an instruction name; starting at 1
-    // also allows unchecked inspection of the previous term.
-    for (int i = 1; i < (int)terms.size(); ++i) {
-      if (terms[i].substr(0, 2) == "//") break;  // Ignore comments
-      // Note: The characters '.' and '%' are not treated as delimiters.
-      const char* token_delims = " \t()[]{},;+-*/~&|^?:=!<>\"'\\";
-      for (auto token : split_string(terms[i], -1, token_delims)) {
-        if (  // Ignore non-names
-            !(std::isalpha(token[0]) || token[0] == '_' || token[0] == '$') ||
-            token.find('.') != std::string::npos ||
-            // Ignore variable/parameter declarations
-            terms[i - 1][0] == '.' ||
-            // Ignore branch instructions
-            (token == "bra" && terms[i - 1][0] == '@') ||
-            // Ignore branch labels
-            (token.substr(0, 2) == "BB" &&
-             terms[i - 1].substr(0, 3) == "bra")) {
-          continue;
+    std::istringstream iss(*ptx);
+    std::vector<std::string> lines;
+    std::unordered_map<size_t, std::string> line_num_to_global_name;
+    std::unordered_set<std::string> name_set;
+    for (std::string line; std::getline(iss, line);) {
+        size_t line_num = lines.size();
+        lines.push_back(line);
+        auto terms = split_string(line);
+        if (terms.size() <= 1)
+            continue;  // Ignore lines with no arguments
+        if (terms[0].substr(0, 2) == "//")
+            continue;  // Ignore comment lines
+        if (terms[0].substr(0, 7) == ".global" || terms[0].substr(0, 6) == ".const") {
+            line_num_to_global_name.emplace(line_num, ptx_parse_decl_name(line));
+            continue;
         }
-        name_set.insert(token);
-      }
+        if (terms[0][0] == '.')
+            continue;  // Ignore .version, .reg, .param etc.
+        // Note: The first term will always be an instruction name; starting at 1
+        // also allows unchecked inspection of the previous term.
+        for (int i = 1; i < (int)terms.size(); ++i) {
+            if (terms[i].substr(0, 2) == "//")
+                break;  // Ignore comments
+            // Note: The characters '.' and '%' are not treated as delimiters.
+            const char* token_delims = " \t()[]{},;+-*/~&|^?:=!<>\"'\\";
+            for (auto token : split_string(terms[i], -1, token_delims)) {
+                if (  // Ignore non-names
+                    !(std::isalpha(token[0]) || token[0] == '_' || token[0] == '$') ||
+                    token.find('.') != std::string::npos ||
+                    // Ignore variable/parameter declarations
+                    terms[i - 1][0] == '.' ||
+                    // Ignore branch instructions
+                    (token == "bra" && terms[i - 1][0] == '@') ||
+                    // Ignore branch labels
+                    (token.substr(0, 2) == "BB" && terms[i - 1].substr(0, 3) == "bra")) {
+                    continue;
+                }
+                name_set.insert(token);
+            }
+        }
     }
-  }
-  std::ostringstream oss;
-  for (size_t line_num = 0; line_num < lines.size(); ++line_num) {
-    auto it = line_num_to_global_name.find(line_num);
-    if (it != line_num_to_global_name.end()) {
-      const std::string& name = it->second;
-      if (!name_set.count(name)) {
-        continue;  // Remove unused .global declaration.
-      }
+    std::ostringstream oss;
+    for (size_t line_num = 0; line_num < lines.size(); ++line_num) {
+        auto it = line_num_to_global_name.find(line_num);
+        if (it != line_num_to_global_name.end()) {
+            const std::string& name = it->second;
+            if (!name_set.count(name)) {
+                continue;  // Remove unused .global declaration.
+            }
+        }
+        oss << lines[line_num] << '\n';
     }
-    oss << lines[line_num] << '\n';
-  }
-  *ptx = oss.str();
+    *ptx = oss.str();
 }
 
 inline nvrtcResult compile_kernel(std::string program_name,
                                   std::map<std::string, std::string> sources,
                                   std::vector<std::string> options,
                                   std::string instantiation = "",
-                                  std::string* log = 0, std::string* ptx = 0,
+                                  std::string* log = 0,
+                                  std::string* ptx = 0,
                                   std::string* mangled_instantiation = 0) {
-  std::string program_source = sources[program_name];
-  // Build arrays of header names and sources
-  std::vector<const char*> header_names_c;
-  std::vector<const char*> header_sources_c;
-  int num_headers = (int)(sources.size() - 1);
-  header_names_c.reserve(num_headers);
-  header_sources_c.reserve(num_headers);
-  typedef std::map<std::string, std::string> source_map;
-  for (source_map::const_iterator iter = sources.begin(); iter != sources.end();
-       ++iter) {
-    std::string const& name = iter->first;
-    std::string const& code = iter->second;
-    if (name == program_name) {
-      continue;
+    std::string program_source = sources[program_name];
+    // Build arrays of header names and sources
+    std::vector<const char*> header_names_c;
+    std::vector<const char*> header_sources_c;
+    int num_headers = (int)(sources.size() - 1);
+    header_names_c.reserve(num_headers);
+    header_sources_c.reserve(num_headers);
+    typedef std::map<std::string, std::string> source_map;
+    for (source_map::const_iterator iter = sources.begin(); iter != sources.end(); ++iter) {
+        std::string const& name = iter->first;
+        std::string const& code = iter->second;
+        if (name == program_name) {
+            continue;
+        }
+        header_names_c.push_back(name.c_str());
+        header_sources_c.push_back(code.c_str());
     }
-    header_names_c.push_back(name.c_str());
-    header_sources_c.push_back(code.c_str());
-  }
 
-  // TODO: This WAR is expected to be unnecessary as of CUDA > 10.2.
-  bool should_remove_unused_globals =
-      detail::pop_remove_unused_globals_flag(&options);
+    // TODO: This WAR is expected to be unnecessary as of CUDA > 10.2.
+    bool should_remove_unused_globals = detail::pop_remove_unused_globals_flag(&options);
 
-  std::vector<const char*> options_c(options.size() + 2);
-  options_c[0] = "--device-as-default-execution-space";
-  options_c[1] = "--pre-include=jitify_preinclude.h";
-  for (int i = 0; i < (int)options.size(); ++i) {
-    options_c[i + 2] = options[i].c_str();
-  }
+    std::vector<const char*> options_c(options.size() + 2);
+    options_c[0] = "--device-as-default-execution-space";
+    options_c[1] = "--pre-include=jitify_preinclude.h";
+    for (int i = 0; i < (int)options.size(); ++i) {
+        options_c[i + 2] = options[i].c_str();
+    }
 
 #if CUDA_VERSION < 8000
-  std::string inst_dummy;
-  if (!instantiation.empty()) {
-    // WAR for no nvrtcAddNameExpression before CUDA 8.0
-    // Force template instantiation by adding dummy reference to kernel
-    inst_dummy = "__jitify_instantiation";
-    program_source +=
-        "\nvoid* " + inst_dummy + " = (void*)" + instantiation + ";\n";
-  }
-#endif
-
-#define CHECK_NVRTC(call)                         \
-  do {                                            \
-    nvrtcResult check_nvrtc_macro_ret = call;     \
-    if (check_nvrtc_macro_ret != NVRTC_SUCCESS) { \
-      return check_nvrtc_macro_ret;               \
-    }                                             \
-  } while (0)
-
-  nvrtcProgram nvrtc_program;
-  CHECK_NVRTC(nvrtcCreateProgram(
-      &nvrtc_program, program_source.c_str(), program_name.c_str(), num_headers,
-      header_sources_c.data(), header_names_c.data()));
-
-  // Ensure nvrtc_program gets destroyed.
-  struct ScopedNvrtcProgramDestroyer {
-    nvrtcProgram& nvrtc_program_;
-    ScopedNvrtcProgramDestroyer(nvrtcProgram& nvrtc_program)
-        : nvrtc_program_(nvrtc_program) {}
-    ~ScopedNvrtcProgramDestroyer() { nvrtcDestroyProgram(&nvrtc_program_); }
-    ScopedNvrtcProgramDestroyer(const ScopedNvrtcProgramDestroyer&) = delete;
-    ScopedNvrtcProgramDestroyer& operator=(const ScopedNvrtcProgramDestroyer&) =
-        delete;
-  } nvrtc_program_scope_guard{nvrtc_program};
-
-#if CUDA_VERSION >= 8000
-  if (!instantiation.empty()) {
-    CHECK_NVRTC(nvrtcAddNameExpression(nvrtc_program, instantiation.c_str()));
-  }
-#endif
-
-  nvrtcResult ret = nvrtcCompileProgram(nvrtc_program, (int)options_c.size(),
-                                        options_c.data());
-  if (log) {
-    size_t logsize;
-    CHECK_NVRTC(nvrtcGetProgramLogSize(nvrtc_program, &logsize));
-    std::vector<char> vlog(logsize, 0);
-    CHECK_NVRTC(nvrtcGetProgramLog(nvrtc_program, vlog.data()));
-    log->assign(vlog.data(), logsize);
-  }
-  if (ret != NVRTC_SUCCESS) {
-    return ret;
-  }
-
-  if (ptx) {
-    size_t ptxsize;
-    CHECK_NVRTC(nvrtcGetPTXSize(nvrtc_program, &ptxsize));
-    std::vector<char> vptx(ptxsize);
-    CHECK_NVRTC(nvrtcGetPTX(nvrtc_program, vptx.data()));
-    ptx->assign(vptx.data(), ptxsize);
-    if (should_remove_unused_globals) {
-      detail::ptx_remove_unused_globals(ptx);
+    std::string inst_dummy;
+    if (!instantiation.empty()) {
+        // WAR for no nvrtcAddNameExpression before CUDA 8.0
+        // Force template instantiation by adding dummy reference to kernel
+        inst_dummy = "__jitify_instantiation";
+        program_source += "\nvoid* " + inst_dummy + " = (void*)" + instantiation + ";\n";
     }
-  }
-
-  if (!instantiation.empty() && mangled_instantiation) {
-#if CUDA_VERSION >= 8000
-    const char* mangled_instantiation_cstr;
-    // Note: The returned string pointer becomes invalid after
-    //         nvrtcDestroyProgram has been called, so we save it.
-    CHECK_NVRTC(nvrtcGetLoweredName(nvrtc_program, instantiation.c_str(),
-                                    &mangled_instantiation_cstr));
-    *mangled_instantiation = mangled_instantiation_cstr;
-#else
-    // Extract mangled kernel template instantiation from PTX
-    inst_dummy += " = ";  // Note: This must match how the PTX is generated
-    int mi_beg = ptx->find(inst_dummy) + inst_dummy.size();
-    int mi_end = ptx->find(";", mi_beg);
-    *mangled_instantiation = ptx->substr(mi_beg, mi_end - mi_beg);
 #endif
-  }
+
+#define CHECK_NVRTC(call)                             \
+    do {                                              \
+        nvrtcResult check_nvrtc_macro_ret = call;     \
+        if (check_nvrtc_macro_ret != NVRTC_SUCCESS) { \
+            return check_nvrtc_macro_ret;             \
+        }                                             \
+    } while (0)
+
+    nvrtcProgram nvrtc_program;
+    CHECK_NVRTC(nvrtcCreateProgram(&nvrtc_program, program_source.c_str(), program_name.c_str(), num_headers,
+                                   header_sources_c.data(), header_names_c.data()));
+
+    // Ensure nvrtc_program gets destroyed.
+    struct ScopedNvrtcProgramDestroyer {
+        nvrtcProgram& nvrtc_program_;
+        ScopedNvrtcProgramDestroyer(nvrtcProgram& nvrtc_program) : nvrtc_program_(nvrtc_program) {}
+        ~ScopedNvrtcProgramDestroyer() { nvrtcDestroyProgram(&nvrtc_program_); }
+        ScopedNvrtcProgramDestroyer(const ScopedNvrtcProgramDestroyer&) = delete;
+        ScopedNvrtcProgramDestroyer& operator=(const ScopedNvrtcProgramDestroyer&) = delete;
+    } nvrtc_program_scope_guard{nvrtc_program};
+
+#if CUDA_VERSION >= 8000
+    if (!instantiation.empty()) {
+        CHECK_NVRTC(nvrtcAddNameExpression(nvrtc_program, instantiation.c_str()));
+    }
+#endif
+
+    nvrtcResult ret = nvrtcCompileProgram(nvrtc_program, (int)options_c.size(), options_c.data());
+    if (log) {
+        size_t logsize;
+        CHECK_NVRTC(nvrtcGetProgramLogSize(nvrtc_program, &logsize));
+        std::vector<char> vlog(logsize, 0);
+        CHECK_NVRTC(nvrtcGetProgramLog(nvrtc_program, vlog.data()));
+        log->assign(vlog.data(), logsize);
+    }
+    if (ret != NVRTC_SUCCESS) {
+        return ret;
+    }
+
+    if (ptx) {
+        size_t ptxsize;
+        CHECK_NVRTC(nvrtcGetPTXSize(nvrtc_program, &ptxsize));
+        std::vector<char> vptx(ptxsize);
+        CHECK_NVRTC(nvrtcGetPTX(nvrtc_program, vptx.data()));
+        ptx->assign(vptx.data(), ptxsize);
+        if (should_remove_unused_globals) {
+            detail::ptx_remove_unused_globals(ptx);
+        }
+    }
+
+    if (!instantiation.empty() && mangled_instantiation) {
+#if CUDA_VERSION >= 8000
+        const char* mangled_instantiation_cstr;
+        // Note: The returned string pointer becomes invalid after
+        //         nvrtcDestroyProgram has been called, so we save it.
+        CHECK_NVRTC(nvrtcGetLoweredName(nvrtc_program, instantiation.c_str(), &mangled_instantiation_cstr));
+        *mangled_instantiation = mangled_instantiation_cstr;
+#else
+        // Extract mangled kernel template instantiation from PTX
+        inst_dummy += " = ";  // Note: This must match how the PTX is generated
+        int mi_beg = ptx->find(inst_dummy) + inst_dummy.size();
+        int mi_end = ptx->find(";", mi_beg);
+        *mangled_instantiation = ptx->substr(mi_beg, mi_end - mi_beg);
+#endif
+    }
 
 #undef CHECK_NVRTC
-  return NVRTC_SUCCESS;
+    return NVRTC_SUCCESS;
 }
 
 inline std::string persistent_header_cache_path();
 
 inline bool use_global_header_cache() {
-  // Keep upstream Jitify behavior by default. Users who repeatedly start fresh
-  // DEME processes can opt in by setting DEME_PERSISTENT_JITIFY_CACHE to a
-  // cache-file path.
-  return !persistent_header_cache_path().empty();
+    // Keep upstream Jitify behavior by default. Users who repeatedly start fresh
+    // DEME processes can opt in by setting DEME_PERSISTENT_JITIFY_CACHE to a
+    // cache-file path.
+    return !persistent_header_cache_path().empty();
 }
 
 inline std::map<std::string, std::string>& global_header_source_cache() {
-  static std::map<std::string, std::string> cache;
-  return cache;
+    static std::map<std::string, std::string> cache;
+    return cache;
 }
 
 inline std::map<std::string, std::string>& global_header_fullpath_cache() {
-  static std::map<std::string, std::string> cache;
-  return cache;
+    static std::map<std::string, std::string> cache;
+    return cache;
 }
 
 #if JITIFY_THREAD_SAFE
 inline std::mutex& global_header_cache_mutex() {
-  static std::mutex mutex;
-  return mutex;
+    static std::mutex mutex;
+    return mutex;
 }
 #endif
 
 inline std::string persistent_header_cache_path() {
-  const char* path = std::getenv("DEME_PERSISTENT_JITIFY_CACHE");
-  if (!path || path[0] == '\0') {
-    return std::string();
-  }
-  std::string value(path);
-  std::string lower = value;
-  std::transform(lower.begin(), lower.end(), lower.begin(),
-                 [](unsigned char c) { return (char)std::tolower(c); });
-  if (lower == "0" || lower == "false" || lower == "off" || lower == "no") {
-    return std::string();
-  }
-  if (lower == "1" || lower == "true" || lower == "on" || lower == "yes") {
+    const char* path = std::getenv("DEME_PERSISTENT_JITIFY_CACHE");
+    if (!path || path[0] == '\0') {
+        return std::string();
+    }
+    std::string value(path);
+    std::string lower = value;
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+    if (lower == "0" || lower == "false" || lower == "off" || lower == "no") {
+        return std::string();
+    }
+    if (lower == "1" || lower == "true" || lower == "on" || lower == "yes") {
 #if defined(_WIN32) || defined(_WIN64)
-    const char* temp = std::getenv("TEMP");
-    if (temp && temp[0] != '\0') {
-      return std::string(temp) + "\\deme_jitify_header_cache.bin";
-    }
-    return "deme_jitify_header_cache.bin";
+        const char* temp = std::getenv("TEMP");
+        if (temp && temp[0] != '\0') {
+            return std::string(temp) + "\\deme_jitify_header_cache.bin";
+        }
+        return "deme_jitify_header_cache.bin";
 #else
-    const char* user_env = std::getenv("USER");
-    if (!user_env || user_env[0] == '\0') {
-      user_env = std::getenv("LOGNAME");
-    }
-    std::string user = (user_env && user_env[0] != '\0') ? std::string(user_env) : std::string("user");
-    std::replace(user.begin(), user.end(), '/', '_');
-    return "/tmp/deme_jitify_header_cache_" + user + ".bin";
+        const char* user_env = std::getenv("USER");
+        if (!user_env || user_env[0] == '\0') {
+            user_env = std::getenv("LOGNAME");
+        }
+        std::string user = (user_env && user_env[0] != '\0') ? std::string(user_env) : std::string("user");
+        std::replace(user.begin(), user.end(), '/', '_');
+        return "/tmp/deme_jitify_header_cache_" + user + ".bin";
 #endif
-  }
-  return value;
+    }
+    return value;
 }
 
-inline std::string make_header_cache_signature(
-    const std::vector<std::string>& include_paths,
-    const std::vector<std::string>& compiler_options) {
-  std::ostringstream out;
-  out << "CUDA_VERSION=" << CUDA_VERSION << "\n";
-  out << "include_paths=" << include_paths.size() << "\n";
-  for (std::vector<std::string>::const_iterator it = include_paths.begin();
-       it != include_paths.end(); ++it) {
-    out << it->size() << ":" << *it << "\n";
-  }
-  out << "compiler_options=" << compiler_options.size() << "\n";
-  for (std::vector<std::string>::const_iterator it = compiler_options.begin();
-       it != compiler_options.end(); ++it) {
-    out << it->size() << ":" << *it << "\n";
-  }
-  return out.str();
+inline std::string make_header_cache_signature(const std::vector<std::string>& include_paths,
+                                               const std::vector<std::string>& compiler_options) {
+    std::ostringstream out;
+    out << "CUDA_VERSION=" << CUDA_VERSION << "\n";
+    out << "include_paths=" << include_paths.size() << "\n";
+    for (std::vector<std::string>::const_iterator it = include_paths.begin(); it != include_paths.end(); ++it) {
+        out << it->size() << ":" << *it << "\n";
+    }
+    out << "compiler_options=" << compiler_options.size() << "\n";
+    for (std::vector<std::string>::const_iterator it = compiler_options.begin(); it != compiler_options.end(); ++it) {
+        out << it->size() << ":" << *it << "\n";
+    }
+    return out.str();
 }
 
 inline std::string& global_header_cache_signature() {
-  static std::string signature;
-  return signature;
+    static std::string signature;
+    return signature;
 }
 
 inline void read_string_record(std::istream& in, std::string* out) {
-  uint64_t size = 0;
-  in.read(reinterpret_cast<char*>(&size), sizeof(size));
-  if (!in || size > (uint64_t)256 * 1024 * 1024) {
-    in.setstate(std::ios::failbit);
-    return;
-  }
-  out->assign((size_t)size, '\0');
-  if (size) {
-    in.read(&(*out)[0], (std::streamsize)size);
-  }
+    uint64_t size = 0;
+    in.read(reinterpret_cast<char*>(&size), sizeof(size));
+    if (!in || size > (uint64_t)256 * 1024 * 1024) {
+        in.setstate(std::ios::failbit);
+        return;
+    }
+    out->assign((size_t)size, '\0');
+    if (size) {
+        in.read(&(*out)[0], (std::streamsize)size);
+    }
 }
 
 inline void write_string_record(std::ostream& out, const std::string& value) {
-  uint64_t size = (uint64_t)value.size();
-  out.write(reinterpret_cast<const char*>(&size), sizeof(size));
-  if (size) {
-    out.write(value.data(), (std::streamsize)size);
-  }
+    uint64_t size = (uint64_t)value.size();
+    out.write(reinterpret_cast<const char*>(&size), sizeof(size));
+    if (size) {
+        out.write(value.data(), (std::streamsize)size);
+    }
 }
 
 inline bool& persistent_header_cache_loaded() {
-  static bool loaded = false;
-  return loaded;
+    static bool loaded = false;
+    return loaded;
 }
 
 inline size_t& persistent_header_cache_saved_count() {
-  static size_t count = 0;
-  return count;
+    static size_t count = 0;
+    return count;
 }
 
 inline void load_persistent_header_cache_once(const std::string& signature) {
-  if (persistent_header_cache_loaded()) {
-    return;
-  }
-  persistent_header_cache_loaded() = true;
+    if (persistent_header_cache_loaded()) {
+        return;
+    }
+    persistent_header_cache_loaded() = true;
 
-  std::string path = persistent_header_cache_path();
-  if (path.empty()) {
-    return;
-  }
+    std::string path = persistent_header_cache_path();
+    if (path.empty()) {
+        return;
+    }
 
-  std::ifstream in(path.c_str(), std::ios::binary);
-  if (!in) {
-    return;
-  }
-
-  const std::string magic = "JITIFY_HEADER_CACHE_V2";
-  std::string got_magic;
-  read_string_record(in, &got_magic);
-  if (!in || got_magic != magic) {
-    return;
-  }
-
-  std::string got_signature;
-  read_string_record(in, &got_signature);
-  if (!in || got_signature != signature) {
-    return;
-  }
-
-  uint64_t count = 0;
-  in.read(reinterpret_cast<char*>(&count), sizeof(count));
-  if (!in || count > 4096) {
-    return;
-  }
-
-  std::map<std::string, std::string>& source_cache =
-      global_header_source_cache();
-  std::map<std::string, std::string>& fullpath_cache =
-      global_header_fullpath_cache();
-
-  for (uint64_t i = 0; i < count; ++i) {
-    std::string name;
-    std::string source;
-    std::string fullpath;
-    read_string_record(in, &name);
-    read_string_record(in, &source);
-    read_string_record(in, &fullpath);
+    std::ifstream in(path.c_str(), std::ios::binary);
     if (!in) {
-      return;
+        return;
     }
-    if (!name.empty() && !source.empty()) {
-      source_cache[name] = source;
-      if (!fullpath.empty()) {
-        fullpath_cache[name] = fullpath;
-      }
+
+    const std::string magic = "JITIFY_HEADER_CACHE_V2";
+    std::string got_magic;
+    read_string_record(in, &got_magic);
+    if (!in || got_magic != magic) {
+        return;
     }
-  }
-  persistent_header_cache_saved_count() = source_cache.size();
+
+    std::string got_signature;
+    read_string_record(in, &got_signature);
+    if (!in || got_signature != signature) {
+        return;
+    }
+
+    uint64_t count = 0;
+    in.read(reinterpret_cast<char*>(&count), sizeof(count));
+    if (!in || count > 4096) {
+        return;
+    }
+
+    std::map<std::string, std::string>& source_cache = global_header_source_cache();
+    std::map<std::string, std::string>& fullpath_cache = global_header_fullpath_cache();
+
+    for (uint64_t i = 0; i < count; ++i) {
+        std::string name;
+        std::string source;
+        std::string fullpath;
+        read_string_record(in, &name);
+        read_string_record(in, &source);
+        read_string_record(in, &fullpath);
+        if (!in) {
+            return;
+        }
+        if (!name.empty() && !source.empty()) {
+            source_cache[name] = source;
+            if (!fullpath.empty()) {
+                fullpath_cache[name] = fullpath;
+            }
+        }
+    }
+    persistent_header_cache_saved_count() = source_cache.size();
 }
 
-inline void save_persistent_header_cache_if_needed(
-    const std::string& signature) {
-  std::string path = persistent_header_cache_path();
-  if (path.empty()) {
-    return;
-  }
+inline void save_persistent_header_cache_if_needed(const std::string& signature) {
+    std::string path = persistent_header_cache_path();
+    if (path.empty()) {
+        return;
+    }
 
-  std::map<std::string, std::string>& source_cache =
-      global_header_source_cache();
-  if (source_cache.size() == persistent_header_cache_saved_count()) {
-    return;
-  }
+    std::map<std::string, std::string>& source_cache = global_header_source_cache();
+    if (source_cache.size() == persistent_header_cache_saved_count()) {
+        return;
+    }
 
-  std::string tmp_path = path + ".tmp";
-  std::ofstream out(tmp_path.c_str(), std::ios::binary | std::ios::trunc);
-  if (!out) {
-    return;
-  }
+    std::string tmp_path = path + ".tmp";
+    std::ofstream out(tmp_path.c_str(), std::ios::binary | std::ios::trunc);
+    if (!out) {
+        return;
+    }
 
-  write_string_record(out, "JITIFY_HEADER_CACHE_V2");
-  write_string_record(out, signature);
-  uint64_t count = (uint64_t)source_cache.size();
-  out.write(reinterpret_cast<const char*>(&count), sizeof(count));
+    write_string_record(out, "JITIFY_HEADER_CACHE_V2");
+    write_string_record(out, signature);
+    uint64_t count = (uint64_t)source_cache.size();
+    out.write(reinterpret_cast<const char*>(&count), sizeof(count));
 
-  std::map<std::string, std::string>& fullpath_cache =
-      global_header_fullpath_cache();
-  for (std::map<std::string, std::string>::const_iterator it =
-           source_cache.begin();
-       it != source_cache.end(); ++it) {
-    write_string_record(out, it->first);
-    write_string_record(out, it->second);
-    std::map<std::string, std::string>::const_iterator path_it =
-        fullpath_cache.find(it->first);
-    write_string_record(out, path_it == fullpath_cache.end() ? std::string()
-                                                             : path_it->second);
-  }
-  out.close();
-  if (out) {
-    std::rename(tmp_path.c_str(), path.c_str());
-    persistent_header_cache_saved_count() = source_cache.size();
-  }
+    std::map<std::string, std::string>& fullpath_cache = global_header_fullpath_cache();
+    for (std::map<std::string, std::string>::const_iterator it = source_cache.begin(); it != source_cache.end(); ++it) {
+        write_string_record(out, it->first);
+        write_string_record(out, it->second);
+        std::map<std::string, std::string>::const_iterator path_it = fullpath_cache.find(it->first);
+        write_string_record(out, path_it == fullpath_cache.end() ? std::string() : path_it->second);
+    }
+    out.close();
+    if (out) {
+        std::rename(tmp_path.c_str(), path.c_str());
+        persistent_header_cache_saved_count() = source_cache.size();
+    }
 }
 
 inline bool prepare_global_header_cache(const std::string& signature) {
-  if (!use_global_header_cache()) {
-    return false;
-  }
-  std::string& active_signature = global_header_cache_signature();
-  if (active_signature.empty()) {
-    active_signature = signature;
-    load_persistent_header_cache_once(signature);
-  }
-  return active_signature == signature;
+    if (!use_global_header_cache()) {
+        return false;
+    }
+    std::string& active_signature = global_header_cache_signature();
+    if (active_signature.empty()) {
+        active_signature = signature;
+        load_persistent_header_cache_once(signature);
+    }
+    return active_signature == signature;
 }
 
-inline void preload_cached_headers(
-    std::map<std::string, std::string>* program_sources,
-    std::map<std::string, std::string>* header_fullpaths,
-    const std::string& program_name,
-    const std::string& signature) {
+inline void preload_cached_headers(std::map<std::string, std::string>* program_sources,
+                                   std::map<std::string, std::string>* header_fullpaths,
+                                   const std::string& program_name,
+                                   const std::string& signature) {
 #if JITIFY_THREAD_SAFE
-  std::lock_guard<std::mutex> lock(global_header_cache_mutex());
+    std::lock_guard<std::mutex> lock(global_header_cache_mutex());
 #endif
-  if (!prepare_global_header_cache(signature)) {
-    return;
-  }
-  std::map<std::string, std::string>& source_cache =
-      global_header_source_cache();
-  for (std::map<std::string, std::string>::const_iterator it =
-           source_cache.begin();
-       it != source_cache.end(); ++it) {
-    if (it->first == program_name || program_sources->count(it->first)) {
-      continue;
+    if (!prepare_global_header_cache(signature)) {
+        return;
     }
-    (*program_sources)[it->first] = it->second;
-  }
+    std::map<std::string, std::string>& source_cache = global_header_source_cache();
+    for (std::map<std::string, std::string>::const_iterator it = source_cache.begin(); it != source_cache.end(); ++it) {
+        if (it->first == program_name || program_sources->count(it->first)) {
+            continue;
+        }
+        (*program_sources)[it->first] = it->second;
+    }
 
-  std::map<std::string, std::string>& fullpath_cache =
-      global_header_fullpath_cache();
-  for (std::map<std::string, std::string>::const_iterator it =
-           fullpath_cache.begin();
-       it != fullpath_cache.end(); ++it) {
-    if (!header_fullpaths->count(it->first)) {
-      (*header_fullpaths)[it->first] = it->second;
+    std::map<std::string, std::string>& fullpath_cache = global_header_fullpath_cache();
+    for (std::map<std::string, std::string>::const_iterator it = fullpath_cache.begin(); it != fullpath_cache.end();
+         ++it) {
+        if (!header_fullpaths->count(it->first)) {
+            (*header_fullpaths)[it->first] = it->second;
+        }
     }
-  }
 }
 
-inline void remember_loaded_headers(
-    const std::map<std::string, std::string>& program_sources,
-    const std::map<std::string, std::string>& header_fullpaths,
-    const std::string& program_name,
-    const std::string& signature) {
+inline void remember_loaded_headers(const std::map<std::string, std::string>& program_sources,
+                                    const std::map<std::string, std::string>& header_fullpaths,
+                                    const std::string& program_name,
+                                    const std::string& signature) {
 #if JITIFY_THREAD_SAFE
-  std::lock_guard<std::mutex> lock(global_header_cache_mutex());
+    std::lock_guard<std::mutex> lock(global_header_cache_mutex());
 #endif
-  if (!prepare_global_header_cache(signature)) {
-    return;
-  }
-  std::map<std::string, std::string>& source_cache =
-      global_header_source_cache();
-  for (std::map<std::string, std::string>::const_iterator it =
-           program_sources.begin();
-       it != program_sources.end(); ++it) {
-    if (it->first != program_name) {
-      source_cache[it->first] = it->second;
+    if (!prepare_global_header_cache(signature)) {
+        return;
     }
-  }
+    std::map<std::string, std::string>& source_cache = global_header_source_cache();
+    for (std::map<std::string, std::string>::const_iterator it = program_sources.begin(); it != program_sources.end();
+         ++it) {
+        if (it->first != program_name) {
+            source_cache[it->first] = it->second;
+        }
+    }
 
-  std::map<std::string, std::string>& fullpath_cache =
-      global_header_fullpath_cache();
-  for (std::map<std::string, std::string>::const_iterator it =
-           header_fullpaths.begin();
-       it != header_fullpaths.end(); ++it) {
-    fullpath_cache[it->first] = it->second;
-  }
-  save_persistent_header_cache_if_needed(signature);
+    std::map<std::string, std::string>& fullpath_cache = global_header_fullpath_cache();
+    for (std::map<std::string, std::string>::const_iterator it = header_fullpaths.begin(); it != header_fullpaths.end();
+         ++it) {
+        fullpath_cache[it->first] = it->second;
+    }
+    save_persistent_header_cache_if_needed(signature);
 }
 
 inline void load_program(std::string const& cuda_source,
@@ -3135,202 +3076,190 @@ inline void load_program(std::string const& cuda_source,
                          std::map<std::string, std::string>* program_sources,
                          std::vector<std::string>* program_options,
                          std::string* program_name) {
-  // Extract include paths from compile options
-  std::vector<std::string>::iterator iter = program_options->begin();
-  while (iter != program_options->end()) {
-    std::string const& opt = *iter;
-    if (opt.substr(0, 2) == "-I") {
-      include_paths->push_back(opt.substr(2));
-      iter = program_options->erase(iter);
-    } else {
-      ++iter;
+    // Extract include paths from compile options
+    std::vector<std::string>::iterator iter = program_options->begin();
+    while (iter != program_options->end()) {
+        std::string const& opt = *iter;
+        if (opt.substr(0, 2) == "-I") {
+            include_paths->push_back(opt.substr(2));
+            iter = program_options->erase(iter);
+        } else {
+            ++iter;
+        }
     }
-  }
 
-  // Load program source
-  if (!detail::load_source(cuda_source, *program_sources, "", *include_paths,
-                           file_callback, program_name)) {
-    throw std::runtime_error("Source not found: " + cuda_source);
-  }
-
-  // Maps header include names to their full file paths.
-  std::map<std::string, std::string> header_fullpaths;
-
-  // Load header sources
-  for (std::string const& header : headers) {
-    if (!detail::load_source(header, *program_sources, "", *include_paths,
-                             file_callback, nullptr, &header_fullpaths)) {
-      // **TODO: Deal with source not found
-      throw std::runtime_error("Source not found: " + header);
+    // Load program source
+    if (!detail::load_source(cuda_source, *program_sources, "", *include_paths, file_callback, program_name)) {
+        throw std::runtime_error("Source not found: " + cuda_source);
     }
-  }
+
+    // Maps header include names to their full file paths.
+    std::map<std::string, std::string> header_fullpaths;
+
+    // Load header sources
+    for (std::string const& header : headers) {
+        if (!detail::load_source(header, *program_sources, "", *include_paths, file_callback, nullptr,
+                                 &header_fullpaths)) {
+            // **TODO: Deal with source not found
+            throw std::runtime_error("Source not found: " + header);
+        }
+    }
 
 #if JITIFY_PRINT_SOURCE
-  std::string& program_source = (*program_sources)[*program_name];
-  std::cout << "---------------------------------------" << std::endl;
-  std::cout << "--- Source of " << *program_name << " ---" << std::endl;
-  std::cout << "---------------------------------------" << std::endl;
-  detail::print_with_line_numbers(program_source);
-  std::cout << "---------------------------------------" << std::endl;
+    std::string& program_source = (*program_sources)[*program_name];
+    std::cout << "---------------------------------------" << std::endl;
+    std::cout << "--- Source of " << *program_name << " ---" << std::endl;
+    std::cout << "---------------------------------------" << std::endl;
+    detail::print_with_line_numbers(program_source);
+    std::cout << "---------------------------------------" << std::endl;
 #endif
 
-  std::vector<std::string> compiler_options, linker_files, linker_paths;
-  detail::split_compiler_and_linker_options(*program_options, &compiler_options,
-                                            &linker_files, &linker_paths);
+    std::vector<std::string> compiler_options, linker_files, linker_paths;
+    detail::split_compiler_and_linker_options(*program_options, &compiler_options, &linker_files, &linker_paths);
 
-  // If no arch is specified at this point we use whatever the current
-  // context is. This ensures we pick up the correct internal headers
-  // for arch-dependent compilation, e.g., some intrinsics are only
-  // present for specific architectures.
-  detail::detect_and_add_cuda_arch(compiler_options);
-  detail::detect_and_add_cxx11_flag(compiler_options);
+    // If no arch is specified at this point we use whatever the current
+    // context is. This ensures we pick up the correct internal headers
+    // for arch-dependent compilation, e.g., some intrinsics are only
+    // present for specific architectures.
+    detail::detect_and_add_cuda_arch(compiler_options);
+    detail::detect_and_add_cxx11_flag(compiler_options);
 
-  const std::string header_cache_signature =
-      make_header_cache_signature(*include_paths, compiler_options);
-  preload_cached_headers(program_sources, &header_fullpaths, *program_name,
-                         header_cache_signature);
+    const std::string header_cache_signature = make_header_cache_signature(*include_paths, compiler_options);
+    preload_cached_headers(program_sources, &header_fullpaths, *program_name, header_cache_signature);
 
-  // Iteratively try to compile the sources, and use the resulting errors to
-  // identify missing headers.
-  std::string log;
-  nvrtcResult ret;
-  while ((ret = detail::compile_kernel(*program_name, *program_sources,
-                                       compiler_options, "", &log)) ==
-         NVRTC_ERROR_COMPILATION) {
-    std::string include_name;
-    std::string include_parent;
-    int line_num = 0;
-    if (!detail::extract_include_info_from_compile_error(
-            log, include_name, include_parent, line_num)) {
+    // Iteratively try to compile the sources, and use the resulting errors to
+    // identify missing headers.
+    std::string log;
+    nvrtcResult ret;
+    while ((ret = detail::compile_kernel(*program_name, *program_sources, compiler_options, "", &log)) ==
+           NVRTC_ERROR_COMPILATION) {
+        std::string include_name;
+        std::string include_parent;
+        int line_num = 0;
+        if (!detail::extract_include_info_from_compile_error(log, include_name, include_parent, line_num)) {
 #if JITIFY_PRINT_LOG
-      detail::print_compile_log(*program_name, log);
+            detail::print_compile_log(*program_name, log);
 #endif
-      // There was a non include-related compilation error
-      // TODO: How to handle error?
-      throw std::runtime_error("Runtime compilation failed");
-    }
-
-    bool is_included_with_quotes = false;
-    if (program_sources->count(include_parent)) {
-      const std::string& parent_source = (*program_sources)[include_parent];
-      is_included_with_quotes =
-          is_include_directive_with_quotes(parent_source, line_num);
-    }
-
-    // Try to load the new header
-    // Note: This fullpath lookup is needed because the compiler error
-    // messages have the include name of the header instead of its full path.
-    std::string include_parent_fullpath = header_fullpaths[include_parent];
-    std::string include_path = detail::path_base(include_parent_fullpath);
-    if (detail::load_source(include_name, *program_sources, include_path,
-                            *include_paths, file_callback, nullptr,
-                            &header_fullpaths, is_included_with_quotes)) {
-#if JITIFY_PRINT_HEADER_PATHS
-      std::cout << "Found #include " << include_name << " from "
-                << include_parent << ":" << line_num << " ["
-                << include_parent_fullpath << "]"
-                << " at:\n  " << header_fullpaths[include_name] << std::endl;
-#endif
-    } else {  // Failed to find header file.
-      // Comment-out the include line and print a warning
-      if (!program_sources->count(include_parent)) {
-        // ***TODO: Unless there's another mechanism (e.g., potentially
-        //            the parent path vs. filename problem), getting
-        //            here means include_parent was found automatically
-        //            in a system include path.
-        //            We need a WAR to zap it from *its parent*.
-
-        typedef std::map<std::string, std::string> source_map;
-        for (source_map::const_iterator it = program_sources->begin();
-             it != program_sources->end(); ++it) {
-          std::cout << "  " << it->first << std::endl;
+            // There was a non include-related compilation error
+            // TODO: How to handle error?
+            throw std::runtime_error("Runtime compilation failed");
         }
-        throw std::out_of_range(include_parent +
-                                " not in loaded sources!"
-                                " This may be due to a header being loaded by"
-                                " NVRTC without Jitify's knowledge.");
-      }
-      std::string& parent_source = (*program_sources)[include_parent];
-      parent_source = detail::comment_out_code_line(line_num, parent_source);
-#if JITIFY_PRINT_LOG
-      std::cout << include_parent << "(" << line_num
-                << "): warning: " << include_name << ": [jitify] File not found"
-                << std::endl;
+
+        bool is_included_with_quotes = false;
+        if (program_sources->count(include_parent)) {
+            const std::string& parent_source = (*program_sources)[include_parent];
+            is_included_with_quotes = is_include_directive_with_quotes(parent_source, line_num);
+        }
+
+        // Try to load the new header
+        // Note: This fullpath lookup is needed because the compiler error
+        // messages have the include name of the header instead of its full path.
+        std::string include_parent_fullpath = header_fullpaths[include_parent];
+        std::string include_path = detail::path_base(include_parent_fullpath);
+        if (detail::load_source(include_name, *program_sources, include_path, *include_paths, file_callback, nullptr,
+                                &header_fullpaths, is_included_with_quotes)) {
+#if JITIFY_PRINT_HEADER_PATHS
+            std::cout << "Found #include " << include_name << " from " << include_parent << ":" << line_num << " ["
+                      << include_parent_fullpath << "]"
+                      << " at:\n  " << header_fullpaths[include_name] << std::endl;
 #endif
-    }
-  }
-  if (ret != NVRTC_SUCCESS) {
+        } else {  // Failed to find header file.
+            // Comment-out the include line and print a warning
+            if (!program_sources->count(include_parent)) {
+                // ***TODO: Unless there's another mechanism (e.g., potentially
+                //            the parent path vs. filename problem), getting
+                //            here means include_parent was found automatically
+                //            in a system include path.
+                //            We need a WAR to zap it from *its parent*.
+
+                typedef std::map<std::string, std::string> source_map;
+                for (source_map::const_iterator it = program_sources->begin(); it != program_sources->end(); ++it) {
+                    std::cout << "  " << it->first << std::endl;
+                }
+                throw std::out_of_range(include_parent +
+                                        " not in loaded sources!"
+                                        " This may be due to a header being loaded by"
+                                        " NVRTC without Jitify's knowledge.");
+            }
+            std::string& parent_source = (*program_sources)[include_parent];
+            parent_source = detail::comment_out_code_line(line_num, parent_source);
 #if JITIFY_PRINT_LOG
-    if (ret == NVRTC_ERROR_INVALID_OPTION) {
-      std::cout << "Compiler options: ";
-      for (int i = 0; i < (int)compiler_options.size(); ++i) {
-        std::cout << compiler_options[i] << " ";
-      }
-      std::cout << std::endl;
-    }
+            std::cout << include_parent << "(" << line_num << "): warning: " << include_name
+                      << ": [jitify] File not found" << std::endl;
 #endif
-    throw std::runtime_error(std::string("NVRTC error: ") +
-                             nvrtcGetErrorString(ret));
-  }
-  remember_loaded_headers(*program_sources, header_fullpaths, *program_name,
-                          header_cache_signature);
+        }
+    }
+    if (ret != NVRTC_SUCCESS) {
+#if JITIFY_PRINT_LOG
+        if (ret == NVRTC_ERROR_INVALID_OPTION) {
+            std::cout << "Compiler options: ";
+            for (int i = 0; i < (int)compiler_options.size(); ++i) {
+                std::cout << compiler_options[i] << " ";
+            }
+            std::cout << std::endl;
+        }
+#endif
+        throw std::runtime_error(std::string("NVRTC error: ") + nvrtcGetErrorString(ret));
+    }
+    remember_loaded_headers(*program_sources, header_fullpaths, *program_name, header_cache_signature);
 }
 
-inline void instantiate_kernel(
-    std::string const& program_name,
-    std::map<std::string, std::string> const& program_sources,
-    std::string const& instantiation, std::vector<std::string> const& options,
-    std::string* log, std::string* ptx, std::string* mangled_instantiation,
-    std::vector<std::string>* linker_files,
-    std::vector<std::string>* linker_paths) {
-  std::vector<std::string> compiler_options;
-  detail::split_compiler_and_linker_options(options, &compiler_options,
-                                            linker_files, linker_paths);
+inline void instantiate_kernel(std::string const& program_name,
+                               std::map<std::string, std::string> const& program_sources,
+                               std::string const& instantiation,
+                               std::vector<std::string> const& options,
+                               std::string* log,
+                               std::string* ptx,
+                               std::string* mangled_instantiation,
+                               std::vector<std::string>* linker_files,
+                               std::vector<std::string>* linker_paths) {
+    std::vector<std::string> compiler_options;
+    detail::split_compiler_and_linker_options(options, &compiler_options, linker_files, linker_paths);
 
-  nvrtcResult ret =
-      detail::compile_kernel(program_name, program_sources, compiler_options,
-                             instantiation, log, ptx, mangled_instantiation);
+    nvrtcResult ret = detail::compile_kernel(program_name, program_sources, compiler_options, instantiation, log, ptx,
+                                             mangled_instantiation);
 #if JITIFY_PRINT_LOG
-  if (log->size() > 1) {
-    detail::print_compile_log(program_name, *log);
-  }
+    if (log->size() > 1) {
+        detail::print_compile_log(program_name, *log);
+    }
 #endif
-  if (ret != NVRTC_SUCCESS) {
-    throw std::runtime_error(std::string("NVRTC error: ") +
-                             nvrtcGetErrorString(ret));
-  }
+    if (ret != NVRTC_SUCCESS) {
+        throw std::runtime_error(std::string("NVRTC error: ") + nvrtcGetErrorString(ret));
+    }
 
 #if JITIFY_PRINT_PTX
-  std::cout << "---------------------------------------" << std::endl;
-  std::cout << *mangled_instantiation << std::endl;
-  std::cout << "---------------------------------------" << std::endl;
-  std::cout << "--- PTX for " << mangled_instantiation << " in " << program_name
-            << " ---" << std::endl;
-  std::cout << "---------------------------------------" << std::endl;
-  std::cout << *ptx << std::endl;
-  std::cout << "---------------------------------------" << std::endl;
+    std::cout << "---------------------------------------" << std::endl;
+    std::cout << *mangled_instantiation << std::endl;
+    std::cout << "---------------------------------------" << std::endl;
+    std::cout << "--- PTX for " << mangled_instantiation << " in " << program_name << " ---" << std::endl;
+    std::cout << "---------------------------------------" << std::endl;
+    std::cout << *ptx << std::endl;
+    std::cout << "---------------------------------------" << std::endl;
 #endif
 }
 
 inline void get_1d_max_occupancy(CUfunction func,
                                  CUoccupancyB2DSize smem_callback,
-                                 unsigned int* smem, int max_block_size,
-                                 unsigned int flags, int* grid, int* block) {
-  if (!func) {
-    throw std::runtime_error(
-        "Kernel pointer is NULL; you may need to define JITIFY_THREAD_SAFE "
-        "1");
-  }
-  CUresult res = cuOccupancyMaxPotentialBlockSizeWithFlags(
-      grid, block, func, smem_callback, *smem, max_block_size, flags);
-  if (res != CUDA_SUCCESS) {
-    const char* msg;
-    cuGetErrorName(res, &msg);
-    throw std::runtime_error(msg);
-  }
-  if (smem_callback) {
-    *smem = (unsigned int)smem_callback(*block);
-  }
+                                 unsigned int* smem,
+                                 int max_block_size,
+                                 unsigned int flags,
+                                 int* grid,
+                                 int* block) {
+    if (!func) {
+        throw std::runtime_error(
+            "Kernel pointer is NULL; you may need to define JITIFY_THREAD_SAFE "
+            "1");
+    }
+    CUresult res =
+        cuOccupancyMaxPotentialBlockSizeWithFlags(grid, block, func, smem_callback, *smem, max_block_size, flags);
+    if (res != CUDA_SUCCESS) {
+        const char* msg;
+        cuGetErrorName(res, &msg);
+        throw std::runtime_error(msg);
+    }
+    if (smem_callback) {
+        *smem = (unsigned int)smem_callback(*block);
+    }
 }
 
 }  // namespace detail
@@ -3343,684 +3272,631 @@ class Program;
 class JitCache;
 
 struct ProgramConfig {
-  std::vector<std::string> options;
-  std::vector<std::string> include_paths;
-  std::string name;
-  typedef std::map<std::string, std::string> source_map;
-  source_map sources;
+    std::vector<std::string> options;
+    std::vector<std::string> include_paths;
+    std::string name;
+    typedef std::map<std::string, std::string> source_map;
+    source_map sources;
 };
 
 class JitCache_impl {
-  friend class Program_impl;
-  friend class KernelInstantiation_impl;
-  friend class KernelLauncher_impl;
-  typedef uint64_t key_type;
-  jitify::ObjectCache<key_type, detail::CUDAKernel> _kernel_cache;
-  jitify::ObjectCache<key_type, ProgramConfig> _program_config_cache;
-  std::vector<std::string> _options;
+    friend class Program_impl;
+    friend class KernelInstantiation_impl;
+    friend class KernelLauncher_impl;
+    typedef uint64_t key_type;
+    jitify::ObjectCache<key_type, detail::CUDAKernel> _kernel_cache;
+    jitify::ObjectCache<key_type, ProgramConfig> _program_config_cache;
+    std::vector<std::string> _options;
 #if JITIFY_THREAD_SAFE
-  std::mutex _kernel_cache_mutex;
-  std::mutex _program_cache_mutex;
+    std::mutex _kernel_cache_mutex;
+    std::mutex _program_cache_mutex;
 #endif
- public:
-  inline JitCache_impl(size_t cache_size)
-      : _kernel_cache(cache_size), _program_config_cache(cache_size) {
-    detail::add_options_from_env(_options);
+  public:
+    inline JitCache_impl(size_t cache_size) : _kernel_cache(cache_size), _program_config_cache(cache_size) {
+        detail::add_options_from_env(_options);
 
-    // Bootstrap the cuda context to avoid errors
-    cudaFree(0);
-  }
+        // Bootstrap the cuda context to avoid errors
+        cudaFree(0);
+    }
 };
 
 class Program_impl {
-  // A friendly class
-  friend class Kernel_impl;
-  friend class KernelLauncher_impl;
-  friend class KernelInstantiation_impl;
-  // TODO: This can become invalid if JitCache is destroyed before the
-  //         Program object is. However, this can't happen if JitCache
-  //           instances are static.
-  JitCache_impl& _cache;
-  uint64_t _hash;
-  ProgramConfig* _config;
-  void load_sources(std::string source, std::vector<std::string> headers,
-                    std::vector<std::string> options,
-                    file_callback_type file_callback);
+    // A friendly class
+    friend class Kernel_impl;
+    friend class KernelLauncher_impl;
+    friend class KernelInstantiation_impl;
+    // TODO: This can become invalid if JitCache is destroyed before the
+    //         Program object is. However, this can't happen if JitCache
+    //           instances are static.
+    JitCache_impl& _cache;
+    uint64_t _hash;
+    ProgramConfig* _config;
+    void load_sources(std::string source,
+                      std::vector<std::string> headers,
+                      std::vector<std::string> options,
+                      file_callback_type file_callback);
 
- public:
-  inline Program_impl(JitCache_impl& cache, std::string source,
-                      jitify::detail::vector<std::string> headers = 0,
-                      jitify::detail::vector<std::string> options = 0,
-                      file_callback_type file_callback = 0);
-  inline Program_impl(Program_impl const&) = default;
-  inline Program_impl(Program_impl&&) = default;
-  inline std::vector<std::string> const& options() const {
-    return _config->options;
-  }
-  inline std::string const& name() const { return _config->name; }
-  inline ProgramConfig::source_map const& sources() const {
-    return _config->sources;
-  }
-  inline std::vector<std::string> const& include_paths() const {
-    return _config->include_paths;
-  }
+  public:
+    inline Program_impl(JitCache_impl& cache,
+                        std::string source,
+                        jitify::detail::vector<std::string> headers = 0,
+                        jitify::detail::vector<std::string> options = 0,
+                        file_callback_type file_callback = 0);
+    inline Program_impl(Program_impl const&) = default;
+    inline Program_impl(Program_impl&&) = default;
+    inline std::vector<std::string> const& options() const { return _config->options; }
+    inline std::string const& name() const { return _config->name; }
+    inline ProgramConfig::source_map const& sources() const { return _config->sources; }
+    inline std::vector<std::string> const& include_paths() const { return _config->include_paths; }
 };
 
 class Kernel_impl {
-  friend class KernelLauncher_impl;
-  friend class KernelInstantiation_impl;
-  Program_impl _program;
-  std::string _name;
-  std::vector<std::string> _options;
-  uint64_t _hash;
+    friend class KernelLauncher_impl;
+    friend class KernelInstantiation_impl;
+    Program_impl _program;
+    std::string _name;
+    std::vector<std::string> _options;
+    uint64_t _hash;
 
- public:
-  inline Kernel_impl(Program_impl const& program, std::string name,
-                     jitify::detail::vector<std::string> options = 0);
-  inline Kernel_impl(Kernel_impl const&) = default;
-  inline Kernel_impl(Kernel_impl&&) = default;
+  public:
+    inline Kernel_impl(Program_impl const& program, std::string name, jitify::detail::vector<std::string> options = 0);
+    inline Kernel_impl(Kernel_impl const&) = default;
+    inline Kernel_impl(Kernel_impl&&) = default;
 };
 
 class KernelInstantiation_impl {
-  friend class KernelLauncher_impl;
-  Kernel_impl _kernel;
-  uint64_t _hash;
-  std::string _template_inst;
-  std::vector<std::string> _options;
-  detail::CUDAKernel* _cuda_kernel;
-  inline void print() const;
-  void build_kernel();
+    friend class KernelLauncher_impl;
+    Kernel_impl _kernel;
+    uint64_t _hash;
+    std::string _template_inst;
+    std::vector<std::string> _options;
+    detail::CUDAKernel* _cuda_kernel;
+    inline void print() const;
+    void build_kernel();
 
- public:
-  inline KernelInstantiation_impl(
-      Kernel_impl const& kernel, std::vector<std::string> const& template_args);
-  inline KernelInstantiation_impl(KernelInstantiation_impl const&) = default;
-  inline KernelInstantiation_impl(KernelInstantiation_impl&&) = default;
-  detail::CUDAKernel const& cuda_kernel() const { return *_cuda_kernel; }
+  public:
+    inline KernelInstantiation_impl(Kernel_impl const& kernel, std::vector<std::string> const& template_args);
+    inline KernelInstantiation_impl(KernelInstantiation_impl const&) = default;
+    inline KernelInstantiation_impl(KernelInstantiation_impl&&) = default;
+    detail::CUDAKernel const& cuda_kernel() const { return *_cuda_kernel; }
 };
 
 class KernelLauncher_impl {
-  KernelInstantiation_impl _kernel_inst;
-  dim3 _grid;
-  dim3 _block;
-  unsigned int _smem;
-  cudaStream_t _stream;
+    KernelInstantiation_impl _kernel_inst;
+    dim3 _grid;
+    dim3 _block;
+    unsigned int _smem;
+    cudaStream_t _stream;
 
- public:
-  inline KernelLauncher_impl(KernelInstantiation_impl const& kernel_inst,
-                             dim3 grid, dim3 block, unsigned int smem = 0,
-                             cudaStream_t stream = 0)
-      : _kernel_inst(kernel_inst),
-        _grid(grid),
-        _block(block),
-        _smem(smem),
-        _stream(stream) {}
-  inline KernelLauncher_impl(KernelLauncher_impl const&) = default;
-  inline KernelLauncher_impl(KernelLauncher_impl&&) = default;
-  inline CUresult launch(
-      jitify::detail::vector<void*> arg_ptrs,
-      jitify::detail::vector<std::string> arg_types = 0) const;
-  inline void safe_launch(
-      jitify::detail::vector<void*> arg_ptrs,
-      jitify::detail::vector<std::string> arg_types = 0) const;
+  public:
+    inline KernelLauncher_impl(KernelInstantiation_impl const& kernel_inst,
+                               dim3 grid,
+                               dim3 block,
+                               unsigned int smem = 0,
+                               cudaStream_t stream = 0)
+        : _kernel_inst(kernel_inst), _grid(grid), _block(block), _smem(smem), _stream(stream) {}
+    inline KernelLauncher_impl(KernelLauncher_impl const&) = default;
+    inline KernelLauncher_impl(KernelLauncher_impl&&) = default;
+    inline CUresult launch(jitify::detail::vector<void*> arg_ptrs,
+                           jitify::detail::vector<std::string> arg_types = 0) const;
+    inline void safe_launch(jitify::detail::vector<void*> arg_ptrs,
+                            jitify::detail::vector<std::string> arg_types = 0) const;
 
- private:
-  inline void pre_launch(
-      jitify::detail::vector<std::string> arg_types = 0) const;
+  private:
+    inline void pre_launch(jitify::detail::vector<std::string> arg_types = 0) const;
 };
 
 /*! An object representing a configured and instantiated kernel ready
  *    for launching.
  */
 class KernelLauncher {
-  std::unique_ptr<KernelLauncher_impl const> _impl;
+    std::unique_ptr<KernelLauncher_impl const> _impl;
 
- public:
-  KernelLauncher() = default;
-  inline KernelLauncher(KernelInstantiation const& kernel_inst, dim3 grid,
-                        dim3 block, unsigned int smem = 0,
-                        cudaStream_t stream = 0);
+  public:
+    KernelLauncher() = default;
+    inline KernelLauncher(KernelInstantiation const& kernel_inst,
+                          dim3 grid,
+                          dim3 block,
+                          unsigned int smem = 0,
+                          cudaStream_t stream = 0);
 
-  // Note: It's important that there is no implicit conversion required
-  //         for arg_ptrs, because otherwise the parameter pack version
-  //         below gets called instead (probably resulting in a segfault).
-  /*! Launch the kernel.
-   *
-   *  \param arg_ptrs  A vector of pointers to each function argument for the
-   *    kernel.
-   *  \param arg_types A vector of function argument types represented
-   *    as code-strings. This parameter is optional and is only used to print
-   *    out the function signature.
-   */
-  inline CUresult launch(
-      std::vector<void*> arg_ptrs = std::vector<void*>(),
-      jitify::detail::vector<std::string> arg_types = 0) const {
-    return _impl->launch(arg_ptrs, arg_types);
-  }
+    // Note: It's important that there is no implicit conversion required
+    //         for arg_ptrs, because otherwise the parameter pack version
+    //         below gets called instead (probably resulting in a segfault).
+    /*! Launch the kernel.
+     *
+     *  \param arg_ptrs  A vector of pointers to each function argument for the
+     *    kernel.
+     *  \param arg_types A vector of function argument types represented
+     *    as code-strings. This parameter is optional and is only used to print
+     *    out the function signature.
+     */
+    inline CUresult launch(std::vector<void*> arg_ptrs = std::vector<void*>(),
+                           jitify::detail::vector<std::string> arg_types = 0) const {
+        return _impl->launch(arg_ptrs, arg_types);
+    }
 
-  /*! Launch the kernel and check for cuda errors.
-   *
-   *  \see launch
-   */
-  inline void safe_launch(
-      std::vector<void*> arg_ptrs = std::vector<void*>(),
-      jitify::detail::vector<std::string> arg_types = 0) const {
-    _impl->safe_launch(arg_ptrs, arg_types);
-  }
+    /*! Launch the kernel and check for cuda errors.
+     *
+     *  \see launch
+     */
+    inline void safe_launch(std::vector<void*> arg_ptrs = std::vector<void*>(),
+                            jitify::detail::vector<std::string> arg_types = 0) const {
+        _impl->safe_launch(arg_ptrs, arg_types);
+    }
 
-  // Regular function call syntax
-  /*! Launch the kernel.
-   *
-   *  \see launch
-   */
-  template <typename... ArgTypes>
-  inline CUresult operator()(const ArgTypes&... args) const {
-    return this->launch(args...);
-  }
-  /*! Launch the kernel.
-   *
-   *  \param args Function arguments for the kernel.
-   */
-  template <typename... ArgTypes>
-  inline CUresult launch(const ArgTypes&... args) const {
-    return this->launch(std::vector<void*>({(void*)&args...}),
-                        {reflection::reflect<ArgTypes>()...});
-  }
-  /*! Launch the kernel and check for cuda errors.
-   *
-   *  \param args Function arguments for the kernel.
-   */
-  template <typename... ArgTypes>
-  inline void safe_launch(const ArgTypes&... args) const {
-    this->safe_launch(std::vector<void*>({(void*)&args...}),
-                      {reflection::reflect<ArgTypes>()...});
-  }
+    // Regular function call syntax
+    /*! Launch the kernel.
+     *
+     *  \see launch
+     */
+    template <typename... ArgTypes>
+    inline CUresult operator()(const ArgTypes&... args) const {
+        return this->launch(args...);
+    }
+    /*! Launch the kernel.
+     *
+     *  \param args Function arguments for the kernel.
+     */
+    template <typename... ArgTypes>
+    inline CUresult launch(const ArgTypes&... args) const {
+        return this->launch(std::vector<void*>({(void*)&args...}), {reflection::reflect<ArgTypes>()...});
+    }
+    /*! Launch the kernel and check for cuda errors.
+     *
+     *  \param args Function arguments for the kernel.
+     */
+    template <typename... ArgTypes>
+    inline void safe_launch(const ArgTypes&... args) const {
+        this->safe_launch(std::vector<void*>({(void*)&args...}), {reflection::reflect<ArgTypes>()...});
+    }
 };
 
 /*! An object representing a kernel instantiation made up of a Kernel and
  *    template arguments.
  */
 class KernelInstantiation {
-  friend class KernelLauncher;
-  std::unique_ptr<KernelInstantiation_impl const> _impl;
+    friend class KernelLauncher;
+    std::unique_ptr<KernelInstantiation_impl const> _impl;
 
- public:
-  KernelInstantiation() = default;
-  inline KernelInstantiation(Kernel const& kernel,
-                             std::vector<std::string> const& template_args);
+  public:
+    KernelInstantiation() = default;
+    inline KernelInstantiation(Kernel const& kernel, std::vector<std::string> const& template_args);
 
-  /*! Implicit conversion to the underlying CUfunction object.
-   *
-   * \note This allows use of CUDA APIs like
-   *   cuOccupancyMaxActiveBlocksPerMultiprocessor.
-   */
-  inline operator CUfunction() const { return _impl->cuda_kernel(); }
+    /*! Implicit conversion to the underlying CUfunction object.
+     *
+     * \note This allows use of CUDA APIs like
+     *   cuOccupancyMaxActiveBlocksPerMultiprocessor.
+     */
+    inline operator CUfunction() const { return _impl->cuda_kernel(); }
 
-  /*! Configure the kernel launch.
-   *
-   *  \see configure
-   */
-  inline KernelLauncher operator()(dim3 grid, dim3 block, unsigned int smem = 0,
-                                   cudaStream_t stream = 0) const {
-    return this->configure(grid, block, smem, stream);
-  }
-  /*! Configure the kernel launch.
-   *
-   *  \param grid   The thread grid dimensions for the launch.
-   *  \param block  The thread block dimensions for the launch.
-   *  \param smem   The amount of shared memory to dynamically allocate, in
-   * bytes.
-   *  \param stream The CUDA stream to launch the kernel in.
-   */
-  inline KernelLauncher configure(dim3 grid, dim3 block, unsigned int smem = 0,
-                                  cudaStream_t stream = 0) const {
-    return KernelLauncher(*this, grid, block, smem, stream);
-  }
-  /*! Configure the kernel launch with a 1-dimensional block and grid chosen
-   *  automatically to maximise occupancy.
-   *
-   * \param max_block_size  The upper limit on the block size, or 0 for no
-   * limit.
-   * \param smem  The amount of shared memory to dynamically allocate, in bytes.
-   * \param smem_callback  A function returning smem for a given block size (overrides \p smem).
-   * \param stream The CUDA stream to launch the kernel in.
-   * \param flags The flags to pass to cuOccupancyMaxPotentialBlockSizeWithFlags.
-   */
-  inline KernelLauncher configure_1d_max_occupancy(
-      int max_block_size = 0, unsigned int smem = 0,
-      CUoccupancyB2DSize smem_callback = 0, cudaStream_t stream = 0,
-      unsigned int flags = 0) const {
-    int grid;
-    int block;
-    CUfunction func = _impl->cuda_kernel();
-    detail::get_1d_max_occupancy(func, smem_callback, &smem, max_block_size,
-                                 flags, &grid, &block);
-    return this->configure(grid, block, smem, stream);
-  }
+    /*! Configure the kernel launch.
+     *
+     *  \see configure
+     */
+    inline KernelLauncher operator()(dim3 grid, dim3 block, unsigned int smem = 0, cudaStream_t stream = 0) const {
+        return this->configure(grid, block, smem, stream);
+    }
+    /*! Configure the kernel launch.
+     *
+     *  \param grid   The thread grid dimensions for the launch.
+     *  \param block  The thread block dimensions for the launch.
+     *  \param smem   The amount of shared memory to dynamically allocate, in
+     * bytes.
+     *  \param stream The CUDA stream to launch the kernel in.
+     */
+    inline KernelLauncher configure(dim3 grid, dim3 block, unsigned int smem = 0, cudaStream_t stream = 0) const {
+        return KernelLauncher(*this, grid, block, smem, stream);
+    }
+    /*! Configure the kernel launch with a 1-dimensional block and grid chosen
+     *  automatically to maximise occupancy.
+     *
+     * \param max_block_size  The upper limit on the block size, or 0 for no
+     * limit.
+     * \param smem  The amount of shared memory to dynamically allocate, in bytes.
+     * \param smem_callback  A function returning smem for a given block size (overrides \p smem).
+     * \param stream The CUDA stream to launch the kernel in.
+     * \param flags The flags to pass to cuOccupancyMaxPotentialBlockSizeWithFlags.
+     */
+    inline KernelLauncher configure_1d_max_occupancy(int max_block_size = 0,
+                                                     unsigned int smem = 0,
+                                                     CUoccupancyB2DSize smem_callback = 0,
+                                                     cudaStream_t stream = 0,
+                                                     unsigned int flags = 0) const {
+        int grid;
+        int block;
+        CUfunction func = _impl->cuda_kernel();
+        detail::get_1d_max_occupancy(func, smem_callback, &smem, max_block_size, flags, &grid, &block);
+        return this->configure(grid, block, smem, stream);
+    }
 
-  /*
-   * Returns the function attribute requested from the kernel
-   */
-  inline int get_func_attribute(CUfunction_attribute attribute) const {
-    return _impl->cuda_kernel().get_func_attribute(attribute);
-  }
+    /*
+     * Returns the function attribute requested from the kernel
+     */
+    inline int get_func_attribute(CUfunction_attribute attribute) const {
+        return _impl->cuda_kernel().get_func_attribute(attribute);
+    }
 
-  /*
-   * Set the function attribute requested for the kernel
-   */
-  inline void set_func_attribute(CUfunction_attribute attribute,
-                                 int value) const {
-    _impl->cuda_kernel().set_func_attribute(attribute, value);
-  }
+    /*
+     * Set the function attribute requested for the kernel
+     */
+    inline void set_func_attribute(CUfunction_attribute attribute, int value) const {
+        _impl->cuda_kernel().set_func_attribute(attribute, value);
+    }
 
-  /*
-   * \deprecated Use \p get_global_ptr instead.
-   */
-  inline CUdeviceptr get_constant_ptr(const char* name,
-                                      size_t* size = nullptr) const {
-    return get_global_ptr(name, size);
-  }
+    /*
+     * \deprecated Use \p get_global_ptr instead.
+     */
+    inline CUdeviceptr get_constant_ptr(const char* name, size_t* size = nullptr) const {
+        return get_global_ptr(name, size);
+    }
 
-  /*
-   * Get a device pointer to a global __constant__ or __device__ variable using
-   * its un-mangled name. If provided, *size is set to the size of the variable
-   * in bytes.
-   */
-  inline CUdeviceptr get_global_ptr(const char* name,
-                                    size_t* size = nullptr) const {
-    return _impl->cuda_kernel().get_global_ptr(name, size);
-  }
+    /*
+     * Get a device pointer to a global __constant__ or __device__ variable using
+     * its un-mangled name. If provided, *size is set to the size of the variable
+     * in bytes.
+     */
+    inline CUdeviceptr get_global_ptr(const char* name, size_t* size = nullptr) const {
+        return _impl->cuda_kernel().get_global_ptr(name, size);
+    }
 
-  /*
-   * Copy data from a global __constant__ or __device__ array to the host using
-   * its un-mangled name.
-   */
-  template <typename T>
-  inline CUresult get_global_array(const char* name, T* data, size_t count,
-                                   CUstream stream = 0) const {
-    return _impl->cuda_kernel().get_global_data(name, data, count, stream);
-  }
+    /*
+     * Copy data from a global __constant__ or __device__ array to the host using
+     * its un-mangled name.
+     */
+    template <typename T>
+    inline CUresult get_global_array(const char* name, T* data, size_t count, CUstream stream = 0) const {
+        return _impl->cuda_kernel().get_global_data(name, data, count, stream);
+    }
 
-  /*
-   * Copy a value from a global __constant__ or __device__ variable to the host
-   * using its un-mangled name.
-   */
-  template <typename T>
-  inline CUresult get_global_value(const char* name, T* value,
-                                   CUstream stream = 0) const {
-    return get_global_array(name, value, 1, stream);
-  }
+    /*
+     * Copy a value from a global __constant__ or __device__ variable to the host
+     * using its un-mangled name.
+     */
+    template <typename T>
+    inline CUresult get_global_value(const char* name, T* value, CUstream stream = 0) const {
+        return get_global_array(name, value, 1, stream);
+    }
 
-  /*
-   * Copy data from the host to a global __constant__ or __device__ array using
-   * its un-mangled name.
-   */
-  template <typename T>
-  inline CUresult set_global_array(const char* name, const T* data,
-                                   size_t count, CUstream stream = 0) const {
-    return _impl->cuda_kernel().set_global_data(name, data, count, stream);
-  }
+    /*
+     * Copy data from the host to a global __constant__ or __device__ array using
+     * its un-mangled name.
+     */
+    template <typename T>
+    inline CUresult set_global_array(const char* name, const T* data, size_t count, CUstream stream = 0) const {
+        return _impl->cuda_kernel().set_global_data(name, data, count, stream);
+    }
 
-  /*
-   * Copy a value from the host to a global __constant__ or __device__ variable
-   * using its un-mangled name.
-   */
-  template <typename T>
-  inline CUresult set_global_value(const char* name, const T& value,
-                                   CUstream stream = 0) const {
-    return set_global_array(name, &value, 1, stream);
-  }
+    /*
+     * Copy a value from the host to a global __constant__ or __device__ variable
+     * using its un-mangled name.
+     */
+    template <typename T>
+    inline CUresult set_global_value(const char* name, const T& value, CUstream stream = 0) const {
+        return set_global_array(name, &value, 1, stream);
+    }
 
-  const std::string& mangled_name() const {
-    return _impl->cuda_kernel().function_name();
-  }
+    const std::string& mangled_name() const { return _impl->cuda_kernel().function_name(); }
 
-  const std::string& ptx() const { return _impl->cuda_kernel().ptx(); }
+    const std::string& ptx() const { return _impl->cuda_kernel().ptx(); }
 
-  const std::vector<std::string>& link_files() const {
-    return _impl->cuda_kernel().link_files();
-  }
+    const std::vector<std::string>& link_files() const { return _impl->cuda_kernel().link_files(); }
 
-  const std::vector<std::string>& link_paths() const {
-    return _impl->cuda_kernel().link_paths();
-  }
+    const std::vector<std::string>& link_paths() const { return _impl->cuda_kernel().link_paths(); }
 };
 
 /*! An object representing a kernel made up of a Program, a name and options.
  */
 class Kernel {
-  friend class KernelInstantiation;
-  std::unique_ptr<Kernel_impl const> _impl;
+    friend class KernelInstantiation;
+    std::unique_ptr<Kernel_impl const> _impl;
 
- public:
-  Kernel() = default;
-  Kernel(Program const& program, std::string name,
-         jitify::detail::vector<std::string> options = 0);
+  public:
+    Kernel() = default;
+    Kernel(Program const& program, std::string name, jitify::detail::vector<std::string> options = 0);
 
-  /*! Instantiate the kernel.
-   *
-   *  \param template_args A vector of template arguments represented as
-   *    code-strings. These can be generated using
-   *    \code{.cpp}jitify::reflection::reflect<type>()\endcode or
-   *    \code{.cpp}jitify::reflection::reflect(value)\endcode
-   *
-   *  \note Template type deduction is not possible, so all types must be
-   *    explicitly specified.
-   */
-  // inline KernelInstantiation instantiate(std::vector<std::string> const&
-  // template_args) const {
-  inline KernelInstantiation instantiate(
-      std::vector<std::string> const& template_args =
-          std::vector<std::string>()) const {
-    return KernelInstantiation(*this, template_args);
-  }
+    /*! Instantiate the kernel.
+     *
+     *  \param template_args A vector of template arguments represented as
+     *    code-strings. These can be generated using
+     *    \code{.cpp}jitify::reflection::reflect<type>()\endcode or
+     *    \code{.cpp}jitify::reflection::reflect(value)\endcode
+     *
+     *  \note Template type deduction is not possible, so all types must be
+     *    explicitly specified.
+     */
+    // inline KernelInstantiation instantiate(std::vector<std::string> const&
+    // template_args) const {
+    inline KernelInstantiation instantiate(
+        std::vector<std::string> const& template_args = std::vector<std::string>()) const {
+        return KernelInstantiation(*this, template_args);
+    }
 
-  // Regular template instantiation syntax (note limited flexibility)
-  /*! Instantiate the kernel.
-   *
-   *  \note The template arguments specified on this function are
-   *    used to instantiate the kernel. Non-type template arguments must
-   *    be wrapped with
-   *    \code{.cpp}jitify::reflection::NonType<type,value>\endcode
-   *
-   *  \note Template type deduction is not possible, so all types must be
-   *    explicitly specified.
-   */
-  template <typename... TemplateArgs>
-  inline KernelInstantiation instantiate() const {
-    return this->instantiate(
-        std::vector<std::string>({reflection::reflect<TemplateArgs>()...}));
-  }
-  // Template-like instantiation syntax
-  //   E.g., instantiate(myvar,Type<MyType>())(grid,block)
-  /*! Instantiate the kernel.
-   *
-   *  \param targs The template arguments for the kernel, represented as
-   *    values. Types must be wrapped with
-   *    \code{.cpp}jitify::reflection::Type<type>()\endcode or
-   *    \code{.cpp}jitify::reflection::type_of(value)\endcode
-   *
-   *  \note Template type deduction is not possible, so all types must be
-   *    explicitly specified.
-   */
-  template <typename... TemplateArgs>
-  inline KernelInstantiation instantiate(TemplateArgs... targs) const {
-    return this->instantiate(
-        std::vector<std::string>({reflection::reflect(targs)...}));
-  }
+    // Regular template instantiation syntax (note limited flexibility)
+    /*! Instantiate the kernel.
+     *
+     *  \note The template arguments specified on this function are
+     *    used to instantiate the kernel. Non-type template arguments must
+     *    be wrapped with
+     *    \code{.cpp}jitify::reflection::NonType<type,value>\endcode
+     *
+     *  \note Template type deduction is not possible, so all types must be
+     *    explicitly specified.
+     */
+    template <typename... TemplateArgs>
+    inline KernelInstantiation instantiate() const {
+        return this->instantiate(std::vector<std::string>({reflection::reflect<TemplateArgs>()...}));
+    }
+    // Template-like instantiation syntax
+    //   E.g., instantiate(myvar,Type<MyType>())(grid,block)
+    /*! Instantiate the kernel.
+     *
+     *  \param targs The template arguments for the kernel, represented as
+     *    values. Types must be wrapped with
+     *    \code{.cpp}jitify::reflection::Type<type>()\endcode or
+     *    \code{.cpp}jitify::reflection::type_of(value)\endcode
+     *
+     *  \note Template type deduction is not possible, so all types must be
+     *    explicitly specified.
+     */
+    template <typename... TemplateArgs>
+    inline KernelInstantiation instantiate(TemplateArgs... targs) const {
+        return this->instantiate(std::vector<std::string>({reflection::reflect(targs)...}));
+    }
 };
 
 /*! An object representing a program made up of source code, headers
  *    and options.
  */
 class Program {
-  friend class Kernel;
-  std::unique_ptr<Program_impl const> _impl;
+    friend class Kernel;
+    std::unique_ptr<Program_impl const> _impl;
 
- public:
-  Program() = default;
-  Program(JitCache& cache, std::string source,
-          jitify::detail::vector<std::string> headers = 0,
-          jitify::detail::vector<std::string> options = 0,
-          file_callback_type file_callback = 0);
+  public:
+    Program() = default;
+    Program(JitCache& cache,
+            std::string source,
+            jitify::detail::vector<std::string> headers = 0,
+            jitify::detail::vector<std::string> options = 0,
+            file_callback_type file_callback = 0);
 
-  /*! Select a kernel.
-   *
-   * \param name The name of the kernel (unmangled and without
-   * template arguments).
-   * \param options A vector of options to be passed to the NVRTC
-   * compiler when compiling this kernel.
-   */
-  inline Kernel kernel(std::string name,
-                       jitify::detail::vector<std::string> options = 0) const {
-    return Kernel(*this, name, options);
-  }
-  /*! Select a kernel.
-   *
-   *  \see kernel
-   */
-  inline Kernel operator()(
-      std::string name, jitify::detail::vector<std::string> options = 0) const {
-    return this->kernel(name, options);
-  }
+    /*! Select a kernel.
+     *
+     * \param name The name of the kernel (unmangled and without
+     * template arguments).
+     * \param options A vector of options to be passed to the NVRTC
+     * compiler when compiling this kernel.
+     */
+    inline Kernel kernel(std::string name, jitify::detail::vector<std::string> options = 0) const {
+        return Kernel(*this, name, options);
+    }
+    /*! Select a kernel.
+     *
+     *  \see kernel
+     */
+    inline Kernel operator()(std::string name, jitify::detail::vector<std::string> options = 0) const {
+        return this->kernel(name, options);
+    }
 };
 
 /*! An object that manages a cache of JIT-compiled CUDA kernels.
  *
  */
 class JitCache {
-  friend class Program;
-  std::unique_ptr<JitCache_impl> _impl;
+    friend class Program;
+    std::unique_ptr<JitCache_impl> _impl;
 
- public:
-  /*! JitCache constructor.
-   *  \param cache_size The number of kernels to hold in the cache
-   *    before overwriting the least-recently-used ones.
-   */
-  enum { DEFAULT_CACHE_SIZE = 128 };
-  JitCache(size_t cache_size = DEFAULT_CACHE_SIZE)
-      : _impl(new JitCache_impl(cache_size)) {}
+  public:
+    /*! JitCache constructor.
+     *  \param cache_size The number of kernels to hold in the cache
+     *    before overwriting the least-recently-used ones.
+     */
+    enum { DEFAULT_CACHE_SIZE = 128 };
+    JitCache(size_t cache_size = DEFAULT_CACHE_SIZE) : _impl(new JitCache_impl(cache_size)) {}
 
-  /*! Create a program.
-   *
-   *  \param source A string containing either the source filename or
-   *    the source itself; in the latter case, the first line must be
-   *    the name of the program.
-   *  \param headers A vector of strings representing the source of
-   *    each header file required by the program. Each entry can be
-   *    either the header filename or the header source itself; in
-   *    the latter case, the first line must be the name of the header
-   *    (i.e., the name by which the header is #included).
-   *  \param options A vector of options to be passed to the
-   *    NVRTC compiler. Include paths specified with \p -I
-   *    are added to the search paths used by Jitify. The environment
-   *    variable JITIFY_OPTIONS can also be used to define additional
-   *    options.
-   *  \param file_callback A pointer to a callback function that is
-   *    invoked whenever a source file needs to be loaded. Inside this
-   *    function, the user can either load/specify the source themselves
-   *    or defer to Jitify's file-loading mechanisms.
-   *  \note Program or header source files referenced by filename are
-   *  looked-up using the following mechanisms (in this order):
-   *  \note 1) By calling file_callback.
-   *  \note 2) By looking for the file embedded in the executable via the GCC
-   * linker.
-   *  \note 3) By looking for the file in the filesystem.
-   *
-   *  \note Jitify recursively scans all source files for \p #include
-   *  directives and automatically adds them to the set of headers needed
-   *  by the program.
-   *  If a \p #include directive references a header that cannot be found,
-   *  the directive is automatically removed from the source code to prevent
-   *  immediate compilation failure. This may result in compilation errors
-   *  if the header was required by the program.
-   *
-   *  \note Jitify automatically includes NVRTC-safe versions of some
-   *  standard library headers.
-   */
-  inline Program program(std::string source,
-                         jitify::detail::vector<std::string> headers = 0,
-                         jitify::detail::vector<std::string> options = 0,
-                         file_callback_type file_callback = 0) {
-    return Program(*this, source, headers, options, file_callback);
-  }
+    /*! Create a program.
+     *
+     *  \param source A string containing either the source filename or
+     *    the source itself; in the latter case, the first line must be
+     *    the name of the program.
+     *  \param headers A vector of strings representing the source of
+     *    each header file required by the program. Each entry can be
+     *    either the header filename or the header source itself; in
+     *    the latter case, the first line must be the name of the header
+     *    (i.e., the name by which the header is #included).
+     *  \param options A vector of options to be passed to the
+     *    NVRTC compiler. Include paths specified with \p -I
+     *    are added to the search paths used by Jitify. The environment
+     *    variable JITIFY_OPTIONS can also be used to define additional
+     *    options.
+     *  \param file_callback A pointer to a callback function that is
+     *    invoked whenever a source file needs to be loaded. Inside this
+     *    function, the user can either load/specify the source themselves
+     *    or defer to Jitify's file-loading mechanisms.
+     *  \note Program or header source files referenced by filename are
+     *  looked-up using the following mechanisms (in this order):
+     *  \note 1) By calling file_callback.
+     *  \note 2) By looking for the file embedded in the executable via the GCC
+     * linker.
+     *  \note 3) By looking for the file in the filesystem.
+     *
+     *  \note Jitify recursively scans all source files for \p #include
+     *  directives and automatically adds them to the set of headers needed
+     *  by the program.
+     *  If a \p #include directive references a header that cannot be found,
+     *  the directive is automatically removed from the source code to prevent
+     *  immediate compilation failure. This may result in compilation errors
+     *  if the header was required by the program.
+     *
+     *  \note Jitify automatically includes NVRTC-safe versions of some
+     *  standard library headers.
+     */
+    inline Program program(std::string source,
+                           jitify::detail::vector<std::string> headers = 0,
+                           jitify::detail::vector<std::string> options = 0,
+                           file_callback_type file_callback = 0) {
+        return Program(*this, source, headers, options, file_callback);
+    }
 };
 
-inline Program::Program(JitCache& cache, std::string source,
+inline Program::Program(JitCache& cache,
+                        std::string source,
                         jitify::detail::vector<std::string> headers,
                         jitify::detail::vector<std::string> options,
                         file_callback_type file_callback)
-    : _impl(new Program_impl(*cache._impl, source, headers, options,
-                             file_callback)) {}
+    : _impl(new Program_impl(*cache._impl, source, headers, options, file_callback)) {}
 
-inline Kernel::Kernel(Program const& program, std::string name,
-                      jitify::detail::vector<std::string> options)
+inline Kernel::Kernel(Program const& program, std::string name, jitify::detail::vector<std::string> options)
     : _impl(new Kernel_impl(*program._impl, name, options)) {}
 
-inline KernelInstantiation::KernelInstantiation(
-    Kernel const& kernel, std::vector<std::string> const& template_args)
+inline KernelInstantiation::KernelInstantiation(Kernel const& kernel, std::vector<std::string> const& template_args)
     : _impl(new KernelInstantiation_impl(*kernel._impl, template_args)) {}
 
 inline KernelLauncher::KernelLauncher(KernelInstantiation const& kernel_inst,
-                                      dim3 grid, dim3 block, unsigned int smem,
+                                      dim3 grid,
+                                      dim3 block,
+                                      unsigned int smem,
                                       cudaStream_t stream)
-    : _impl(new KernelLauncher_impl(*kernel_inst._impl, grid, block, smem,
-                                    stream)) {}
+    : _impl(new KernelLauncher_impl(*kernel_inst._impl, grid, block, smem, stream)) {}
 
 inline std::ostream& operator<<(std::ostream& stream, dim3 d) {
-  if (d.y == 1 && d.z == 1) {
-    stream << d.x;
-  } else {
-    stream << "(" << d.x << "," << d.y << "," << d.z << ")";
-  }
-  return stream;
+    if (d.y == 1 && d.z == 1) {
+        stream << d.x;
+    } else {
+        stream << "(" << d.x << "," << d.y << "," << d.z << ")";
+    }
+    return stream;
 }
 
-inline void KernelLauncher_impl::pre_launch(
-    jitify::detail::vector<std::string> arg_types) const {
-  (void)arg_types;
+inline void KernelLauncher_impl::pre_launch(jitify::detail::vector<std::string> arg_types) const {
+    (void)arg_types;
 #if JITIFY_PRINT_LAUNCH
-  Kernel_impl const& kernel = _kernel_inst._kernel;
-  std::string arg_types_string =
-      (arg_types.empty() ? "..." : reflection::reflect_list(arg_types));
-  std::cout << "Launching " << kernel._name << _kernel_inst._template_inst
-            << "<<<" << _grid << "," << _block << "," << _smem << "," << _stream
-            << ">>>"
-            << "(" << arg_types_string << ")" << std::endl;
+    Kernel_impl const& kernel = _kernel_inst._kernel;
+    std::string arg_types_string = (arg_types.empty() ? "..." : reflection::reflect_list(arg_types));
+    std::cout << "Launching " << kernel._name << _kernel_inst._template_inst << "<<<" << _grid << "," << _block << ","
+              << _smem << "," << _stream << ">>>"
+              << "(" << arg_types_string << ")" << std::endl;
 #endif
-  if (!_kernel_inst._cuda_kernel) {
-    throw std::runtime_error(
-        "Kernel pointer is NULL; you may need to define JITIFY_THREAD_SAFE 1");
-  }
+    if (!_kernel_inst._cuda_kernel) {
+        throw std::runtime_error("Kernel pointer is NULL; you may need to define JITIFY_THREAD_SAFE 1");
+    }
 }
 
-inline CUresult KernelLauncher_impl::launch(
-    jitify::detail::vector<void*> arg_ptrs,
-    jitify::detail::vector<std::string> arg_types) const {
-  pre_launch(arg_types);
-  return _kernel_inst._cuda_kernel->launch(_grid, _block, _smem, _stream,
-                                           arg_ptrs);
+inline CUresult KernelLauncher_impl::launch(jitify::detail::vector<void*> arg_ptrs,
+                                            jitify::detail::vector<std::string> arg_types) const {
+    pre_launch(arg_types);
+    return _kernel_inst._cuda_kernel->launch(_grid, _block, _smem, _stream, arg_ptrs);
 }
 
-inline void KernelLauncher_impl::safe_launch(
-    jitify::detail::vector<void*> arg_ptrs,
-    jitify::detail::vector<std::string> arg_types) const {
-  pre_launch(arg_types);
-  _kernel_inst._cuda_kernel->safe_launch(_grid, _block, _smem, _stream,
-                                         arg_ptrs);
+inline void KernelLauncher_impl::safe_launch(jitify::detail::vector<void*> arg_ptrs,
+                                             jitify::detail::vector<std::string> arg_types) const {
+    pre_launch(arg_types);
+    _kernel_inst._cuda_kernel->safe_launch(_grid, _block, _smem, _stream, arg_ptrs);
 }
 
-inline KernelInstantiation_impl::KernelInstantiation_impl(
-    Kernel_impl const& kernel, std::vector<std::string> const& template_args)
+inline KernelInstantiation_impl::KernelInstantiation_impl(Kernel_impl const& kernel,
+                                                          std::vector<std::string> const& template_args)
     : _kernel(kernel), _options(kernel._options) {
-  _template_inst =
-      (template_args.empty() ? ""
-                             : reflection::reflect_template(template_args));
-  using detail::hash_combine;
-  using detail::hash_larson64;
-  _hash = _kernel._hash;
-  _hash = hash_combine(_hash, hash_larson64(_template_inst.c_str()));
-  JitCache_impl& cache = _kernel._program._cache;
-  uint64_t cache_key = _hash;
+    _template_inst = (template_args.empty() ? "" : reflection::reflect_template(template_args));
+    using detail::hash_combine;
+    using detail::hash_larson64;
+    _hash = _kernel._hash;
+    _hash = hash_combine(_hash, hash_larson64(_template_inst.c_str()));
+    JitCache_impl& cache = _kernel._program._cache;
+    uint64_t cache_key = _hash;
 #if JITIFY_THREAD_SAFE
-  std::lock_guard<std::mutex> lock(cache._kernel_cache_mutex);
+    std::lock_guard<std::mutex> lock(cache._kernel_cache_mutex);
 #endif
-  if (cache._kernel_cache.contains(cache_key)) {
+    if (cache._kernel_cache.contains(cache_key)) {
 #if JITIFY_PRINT_INSTANTIATION
-    std::cout << "Found ";
-    this->print();
+        std::cout << "Found ";
+        this->print();
 #endif
-    _cuda_kernel = &cache._kernel_cache.get(cache_key);
-  } else {
+        _cuda_kernel = &cache._kernel_cache.get(cache_key);
+    } else {
 #if JITIFY_PRINT_INSTANTIATION
-    std::cout << "Building ";
-    this->print();
+        std::cout << "Building ";
+        this->print();
 #endif
-    _cuda_kernel = &cache._kernel_cache.emplace(cache_key);
-    this->build_kernel();
-  }
+        _cuda_kernel = &cache._kernel_cache.emplace(cache_key);
+        this->build_kernel();
+    }
 }
 
 inline void KernelInstantiation_impl::print() const {
-  std::string options_string = reflection::reflect_list(_options);
-  std::cout << _kernel._name << _template_inst << " [" << options_string << "]"
-            << std::endl;
+    std::string options_string = reflection::reflect_list(_options);
+    std::cout << _kernel._name << _template_inst << " [" << options_string << "]" << std::endl;
 }
 
 inline void KernelInstantiation_impl::build_kernel() {
-  Program_impl const& program = _kernel._program;
+    Program_impl const& program = _kernel._program;
 
-  std::string instantiation = _kernel._name + _template_inst;
+    std::string instantiation = _kernel._name + _template_inst;
 
-  std::string log, ptx, mangled_instantiation;
-  std::vector<std::string> linker_files, linker_paths;
-  detail::instantiate_kernel(program.name(), program.sources(), instantiation,
-                             _options, &log, &ptx, &mangled_instantiation,
-                             &linker_files, &linker_paths);
+    std::string log, ptx, mangled_instantiation;
+    std::vector<std::string> linker_files, linker_paths;
+    detail::instantiate_kernel(program.name(), program.sources(), instantiation, _options, &log, &ptx,
+                               &mangled_instantiation, &linker_files, &linker_paths);
 
-  _cuda_kernel->set(mangled_instantiation.c_str(), ptx.c_str(), linker_files,
-                    linker_paths);
+    _cuda_kernel->set(mangled_instantiation.c_str(), ptx.c_str(), linker_files, linker_paths);
 }
 
-Kernel_impl::Kernel_impl(Program_impl const& program, std::string name,
-                         jitify::detail::vector<std::string> options)
+Kernel_impl::Kernel_impl(Program_impl const& program, std::string name, jitify::detail::vector<std::string> options)
     : _program(program), _name(name), _options(options) {
-  // Merge options from parent
-  _options.insert(_options.end(), _program.options().begin(),
-                  _program.options().end());
-  detail::detect_and_add_cuda_arch(_options);
-  detail::detect_and_add_cxx11_flag(_options);
-  std::string options_string = reflection::reflect_list(_options);
-  using detail::hash_combine;
-  using detail::hash_larson64;
-  _hash = _program._hash;
-  _hash = hash_combine(_hash, hash_larson64(_name.c_str()));
-  _hash = hash_combine(_hash, hash_larson64(options_string.c_str()));
+    // Merge options from parent
+    _options.insert(_options.end(), _program.options().begin(), _program.options().end());
+    detail::detect_and_add_cuda_arch(_options);
+    detail::detect_and_add_cxx11_flag(_options);
+    std::string options_string = reflection::reflect_list(_options);
+    using detail::hash_combine;
+    using detail::hash_larson64;
+    _hash = _program._hash;
+    _hash = hash_combine(_hash, hash_larson64(_name.c_str()));
+    _hash = hash_combine(_hash, hash_larson64(options_string.c_str()));
 }
 
-Program_impl::Program_impl(JitCache_impl& cache, std::string source,
+Program_impl::Program_impl(JitCache_impl& cache,
+                           std::string source,
                            jitify::detail::vector<std::string> headers,
                            jitify::detail::vector<std::string> options,
                            file_callback_type file_callback)
     : _cache(cache) {
-  // Compute hash of source, headers and options
-  std::string options_string = reflection::reflect_list(options);
-  using detail::hash_combine;
-  using detail::hash_larson64;
-  _hash = hash_combine(hash_larson64(source.c_str()),
-                       hash_larson64(options_string.c_str()));
-  for (size_t i = 0; i < headers.size(); ++i) {
-    _hash = hash_combine(_hash, hash_larson64(headers[i].c_str()));
-  }
-  _hash = hash_combine(_hash, (uint64_t)file_callback);
-  // Add pre-include built-in JIT-safe headers
-  for (int i = 0; i < detail::preinclude_jitsafe_headers_count; ++i) {
-    const char* hdr_name = detail::preinclude_jitsafe_header_names[i];
-    const std::string& hdr_source =
-        detail::get_jitsafe_headers_map().at(hdr_name);
-    headers.push_back(std::string(hdr_name) + "\n" + hdr_source);
-  }
-  // Merge options from parent
-  options.insert(options.end(), _cache._options.begin(), _cache._options.end());
-  // Load sources
+    // Compute hash of source, headers and options
+    std::string options_string = reflection::reflect_list(options);
+    using detail::hash_combine;
+    using detail::hash_larson64;
+    _hash = hash_combine(hash_larson64(source.c_str()), hash_larson64(options_string.c_str()));
+    for (size_t i = 0; i < headers.size(); ++i) {
+        _hash = hash_combine(_hash, hash_larson64(headers[i].c_str()));
+    }
+    _hash = hash_combine(_hash, (uint64_t)file_callback);
+    // Add pre-include built-in JIT-safe headers
+    for (int i = 0; i < detail::preinclude_jitsafe_headers_count; ++i) {
+        const char* hdr_name = detail::preinclude_jitsafe_header_names[i];
+        const std::string& hdr_source = detail::get_jitsafe_headers_map().at(hdr_name);
+        headers.push_back(std::string(hdr_name) + "\n" + hdr_source);
+    }
+    // Merge options from parent
+    options.insert(options.end(), _cache._options.begin(), _cache._options.end());
+    // Load sources
 #if JITIFY_THREAD_SAFE
-  std::lock_guard<std::mutex> lock(cache._program_cache_mutex);
+    std::lock_guard<std::mutex> lock(cache._program_cache_mutex);
 #endif
-  if (!cache._program_config_cache.contains(_hash)) {
-    _config = &cache._program_config_cache.insert(_hash);
-    this->load_sources(source, headers, options, file_callback);
-  } else {
-    _config = &cache._program_config_cache.get(_hash);
-  }
+    if (!cache._program_config_cache.contains(_hash)) {
+        _config = &cache._program_config_cache.insert(_hash);
+        this->load_sources(source, headers, options, file_callback);
+    } else {
+        _config = &cache._program_config_cache.get(_hash);
+    }
 }
 
 inline void Program_impl::load_sources(std::string source,
                                        std::vector<std::string> headers,
                                        std::vector<std::string> options,
                                        file_callback_type file_callback) {
-  _config->options = options;
-  detail::load_program(source, headers, file_callback, &_config->include_paths,
-                       &_config->sources, &_config->options, &_config->name);
+    _config->options = options;
+    detail::load_program(source, headers, file_callback, &_config->include_paths, &_config->sources, &_config->options,
+                         &_config->name);
 }
 
 enum Location { HOST, DEVICE };
@@ -4036,38 +3912,39 @@ enum Location { HOST, DEVICE };
  * before overwriting the least-recently-used ones.
  */
 struct ExecutionPolicy {
-  /*! Location (HOST or DEVICE) on which to execute.*/
-  Location location;
-  /*! List of headers to include when compiling the algorithm.*/
-  std::vector<std::string> headers;
-  /*! List of compiler options.*/
-  std::vector<std::string> options;
-  /*! Optional callback for loading source files.*/
-  file_callback_type file_callback;
-  /*! CUDA stream on which to execute.*/
-  cudaStream_t stream;
-  /*! CUDA device on which to execute.*/
-  int device;
-  /*! CUDA block size with which to execute.*/
-  int block_size;
-  /*! The number of instantiations to store in the cache before overwriting
-   *  the least-recently-used ones.*/
-  size_t cache_size;
-  ExecutionPolicy(Location location_ = DEVICE,
-                  jitify::detail::vector<std::string> headers_ = 0,
-                  jitify::detail::vector<std::string> options_ = 0,
-                  file_callback_type file_callback_ = 0,
-                  cudaStream_t stream_ = 0, int device_ = 0,
-                  int block_size_ = 256,
-                  size_t cache_size_ = JitCache::DEFAULT_CACHE_SIZE)
-      : location(location_),
-        headers(headers_),
-        options(options_),
-        file_callback(file_callback_),
-        stream(stream_),
-        device(device_),
-        block_size(block_size_),
-        cache_size(cache_size_) {}
+    /*! Location (HOST or DEVICE) on which to execute.*/
+    Location location;
+    /*! List of headers to include when compiling the algorithm.*/
+    std::vector<std::string> headers;
+    /*! List of compiler options.*/
+    std::vector<std::string> options;
+    /*! Optional callback for loading source files.*/
+    file_callback_type file_callback;
+    /*! CUDA stream on which to execute.*/
+    cudaStream_t stream;
+    /*! CUDA device on which to execute.*/
+    int device;
+    /*! CUDA block size with which to execute.*/
+    int block_size;
+    /*! The number of instantiations to store in the cache before overwriting
+     *  the least-recently-used ones.*/
+    size_t cache_size;
+    ExecutionPolicy(Location location_ = DEVICE,
+                    jitify::detail::vector<std::string> headers_ = 0,
+                    jitify::detail::vector<std::string> options_ = 0,
+                    file_callback_type file_callback_ = 0,
+                    cudaStream_t stream_ = 0,
+                    int device_ = 0,
+                    int block_size_ = 256,
+                    size_t cache_size_ = JitCache::DEFAULT_CACHE_SIZE)
+        : location(location_),
+          headers(headers_),
+          options(options_),
+          file_callback(file_callback_),
+          stream(stream_),
+          device(device_),
+          block_size(block_size_),
+          cache_size(cache_size_) {}
 };
 
 template <class Func>
@@ -4077,20 +3954,19 @@ class Lambda;
  *    expression. See JITIFY_CAPTURE().
  */
 class Capture {
- public:
-  std::vector<std::string> _arg_decls;
-  std::vector<void*> _arg_ptrs;
+  public:
+    std::vector<std::string> _arg_decls;
+    std::vector<void*> _arg_ptrs;
 
- public:
-  template <typename... Args>
-  inline Capture(std::vector<std::string> arg_names, Args const&... args)
-      : _arg_ptrs{(void*)&args...} {
-    std::vector<std::string> arg_types = {reflection::reflect<Args>()...};
-    _arg_decls.resize(arg_names.size());
-    for (int i = 0; i < (int)arg_names.size(); ++i) {
-      _arg_decls[i] = arg_types[i] + " " + arg_names[i];
+  public:
+    template <typename... Args>
+    inline Capture(std::vector<std::string> arg_names, Args const&... args) : _arg_ptrs{(void*)&args...} {
+        std::vector<std::string> arg_types = {reflection::reflect<Args>()...};
+        _arg_decls.resize(arg_names.size());
+        for (int i = 0; i < (int)arg_names.size(); ++i) {
+            _arg_decls[i] = arg_types[i] + " " + arg_names[i];
+        }
     }
-  }
 };
 
 /*! An object that captures the instantiated Lambda function for use
@@ -4099,34 +3975,29 @@ class Capture {
  */
 template <class Func>
 class Lambda {
- public:
-  Capture _capture;
-  std::string _func_string;
-  Func _func;
+  public:
+    Capture _capture;
+    std::string _func_string;
+    Func _func;
 
- public:
-  inline Lambda(Capture const& capture, std::string func_string, Func func)
-      : _capture(capture), _func_string(func_string), _func(func) {}
+  public:
+    inline Lambda(Capture const& capture, std::string func_string, Func func)
+        : _capture(capture), _func_string(func_string), _func(func) {}
 };
 
 template <typename T>
-inline Lambda<T> make_Lambda(Capture const& capture, std::string func,
-                             T lambda) {
-  return Lambda<T>(capture, func, lambda);
+inline Lambda<T> make_Lambda(Capture const& capture, std::string func, T lambda) {
+    return Lambda<T>(capture, func, lambda);
 }
 
-#define JITIFY_CAPTURE(...)                                            \
-  jitify::Capture(jitify::detail::split_string(#__VA_ARGS__, -1, ","), \
-                  __VA_ARGS__)
+#define JITIFY_CAPTURE(...) jitify::Capture(jitify::detail::split_string(#__VA_ARGS__, -1, ","), __VA_ARGS__)
 
-#define JITIFY_MAKE_LAMBDA(capture, x, ...)               \
-  jitify::make_Lambda(capture, std::string(#__VA_ARGS__), \
-                      [x](int i) { __VA_ARGS__; })
+#define JITIFY_MAKE_LAMBDA(capture, x, ...) \
+    jitify::make_Lambda(capture, std::string(#__VA_ARGS__), [x](int i) { __VA_ARGS__; })
 
 #define JITIFY_ARGS(...) __VA_ARGS__
 
-#define JITIFY_LAMBDA_(x, ...) \
-  JITIFY_MAKE_LAMBDA(JITIFY_CAPTURE(x), JITIFY_ARGS(x), __VA_ARGS__)
+#define JITIFY_LAMBDA_(x, ...) JITIFY_MAKE_LAMBDA(JITIFY_CAPTURE(x), JITIFY_ARGS(x), __VA_ARGS__)
 
 // macro sequence to strip surrounding brackets
 #define JITIFY_STRIP_PARENS(X) X
@@ -4144,9 +4015,8 @@ inline Lambda<T> make_Lambda(Capture const& capture, std::string func,
  *                                  capture_me[i] = i*capture_me_too );
  *  \endcode
  */
-#define JITIFY_LAMBDA(capture, ...)                            \
-  JITIFY_LAMBDA_(JITIFY_ARGS(JITIFY_PASS_PARAMETERS(capture)), \
-                 JITIFY_ARGS(__VA_ARGS__))
+#define JITIFY_LAMBDA(capture, ...) \
+    JITIFY_LAMBDA_(JITIFY_ARGS(JITIFY_PASS_PARAMETERS(capture)), JITIFY_ARGS(__VA_ARGS__))
 
 // TODO: Try to implement for_each that accepts iterators instead of indices
 //       Add compile guard for NOCUDA compilation
@@ -4165,62 +4035,58 @@ inline Lambda<T> make_Lambda(Capture const& capture, std::string func,
  * x*x; } ); \endcode
  */
 template <typename IndexType, class Func>
-CUresult parallel_for(ExecutionPolicy policy, IndexType begin, IndexType end,
-                      Lambda<Func> const& lambda) {
-  using namespace jitify;
+CUresult parallel_for(ExecutionPolicy policy, IndexType begin, IndexType end, Lambda<Func> const& lambda) {
+    using namespace jitify;
 
-  if (policy.location == HOST) {
+    if (policy.location == HOST) {
 #ifdef _OPENMP
-#pragma omp parallel for
+    #pragma omp parallel for
 #endif
-    for (IndexType i = begin; i < end; i++) {
-      lambda._func(i);
+        for (IndexType i = begin; i < end; i++) {
+            lambda._func(i);
+        }
+        return CUDA_SUCCESS;  // FIXME - replace with non-CUDA enum type?
     }
-    return CUDA_SUCCESS;  // FIXME - replace with non-CUDA enum type?
-  }
 
-  thread_local static JitCache kernel_cache(policy.cache_size);
+    thread_local static JitCache kernel_cache(policy.cache_size);
 
-  std::vector<std::string> arg_decls;
-  arg_decls.push_back("I begin, I end");
-  arg_decls.insert(arg_decls.end(), lambda._capture._arg_decls.begin(),
-                   lambda._capture._arg_decls.end());
+    std::vector<std::string> arg_decls;
+    arg_decls.push_back("I begin, I end");
+    arg_decls.insert(arg_decls.end(), lambda._capture._arg_decls.begin(), lambda._capture._arg_decls.end());
 
-  std::stringstream source_ss;
-  source_ss << "parallel_for_program\n";
-  for (auto const& header : policy.headers) {
-    std::string header_name = header.substr(0, header.find("\n"));
-    source_ss << "#include <" << header_name << ">\n";
-  }
-  source_ss << "template<typename I>\n"
-               "__global__\n"
-               "void parallel_for_kernel("
-            << reflection::reflect_list(arg_decls)
-            << ") {\n"
-               "	I i0 = threadIdx.x + blockDim.x*blockIdx.x;\n"
-               "	for( I i=i0+begin; i<end; i+=blockDim.x*gridDim.x ) {\n"
-               "	"
-            << "\t" << lambda._func_string << ";\n"
-            << "	}\n"
-               "}\n";
+    std::stringstream source_ss;
+    source_ss << "parallel_for_program\n";
+    for (auto const& header : policy.headers) {
+        std::string header_name = header.substr(0, header.find("\n"));
+        source_ss << "#include <" << header_name << ">\n";
+    }
+    source_ss << "template<typename I>\n"
+                 "__global__\n"
+                 "void parallel_for_kernel("
+              << reflection::reflect_list(arg_decls)
+              << ") {\n"
+                 "	I i0 = threadIdx.x + blockDim.x*blockIdx.x;\n"
+                 "	for( I i=i0+begin; i<end; i+=blockDim.x*gridDim.x ) {\n"
+                 "	"
+              << "\t" << lambda._func_string << ";\n"
+              << "	}\n"
+                 "}\n";
 
-  Program program = kernel_cache.program(source_ss.str(), policy.headers,
-                                         policy.options, policy.file_callback);
+    Program program = kernel_cache.program(source_ss.str(), policy.headers, policy.options, policy.file_callback);
 
-  std::vector<void*> arg_ptrs;
-  arg_ptrs.push_back(&begin);
-  arg_ptrs.push_back(&end);
-  arg_ptrs.insert(arg_ptrs.end(), lambda._capture._arg_ptrs.begin(),
-                  lambda._capture._arg_ptrs.end());
+    std::vector<void*> arg_ptrs;
+    arg_ptrs.push_back(&begin);
+    arg_ptrs.push_back(&end);
+    arg_ptrs.insert(arg_ptrs.end(), lambda._capture._arg_ptrs.begin(), lambda._capture._arg_ptrs.end());
 
-  size_t n = end - begin;
-  dim3 block(policy.block_size);
-  dim3 grid((unsigned int)std::min((n - 1) / block.x + 1, size_t(65535)));
-  cudaSetDevice(policy.device);
-  return program.kernel("parallel_for_kernel")
-      .instantiate<IndexType>()
-      .configure(grid, block, 0, policy.stream)
-      .launch(arg_ptrs);
+    size_t n = end - begin;
+    dim3 block(policy.block_size);
+    dim3 grid((unsigned int)std::min((n - 1) / block.x + 1, size_t(65535)));
+    cudaSetDevice(policy.device);
+    return program.kernel("parallel_for_kernel")
+        .instantiate<IndexType>()
+        .configure(grid, block, 0, policy.stream)
+        .launch(arg_ptrs);
 }
 
 namespace experimental {
@@ -4236,125 +4102,130 @@ namespace detail {
 static constexpr const size_t kSerializationVersion = 2;
 
 inline void serialize(std::ostream& stream, size_t u) {
-  uint64_t u64 = u;
-  char bytes[8];
-  for (int i = 0; i < (int)sizeof(bytes); ++i) {
-    // Convert to little-endian bytes.
-    bytes[i] = (unsigned char)(u64 >> (i * CHAR_BIT));
-  }
-  stream.write(bytes, sizeof(bytes));
+    uint64_t u64 = u;
+    char bytes[8];
+    for (int i = 0; i < (int)sizeof(bytes); ++i) {
+        // Convert to little-endian bytes.
+        bytes[i] = (unsigned char)(u64 >> (i * CHAR_BIT));
+    }
+    stream.write(bytes, sizeof(bytes));
 }
 
 inline bool deserialize(std::istream& stream, size_t* size) {
-  char bytes[8];
-  stream.read(bytes, sizeof(bytes));
-  uint64_t u64 = 0;
-  for (int i = 0; i < (int)sizeof(bytes); ++i) {
-    // Convert from little-endian bytes.
-    u64 |= uint64_t((unsigned char)(bytes[i])) << (i * CHAR_BIT);
-  }
-  *size = u64;
-  return stream.good();
+    char bytes[8];
+    stream.read(bytes, sizeof(bytes));
+    uint64_t u64 = 0;
+    for (int i = 0; i < (int)sizeof(bytes); ++i) {
+        // Convert from little-endian bytes.
+        u64 |= uint64_t((unsigned char)(bytes[i])) << (i * CHAR_BIT);
+    }
+    *size = u64;
+    return stream.good();
 }
 
 inline void serialize(std::ostream& stream, std::string const& s) {
-  serialize(stream, s.size());
-  stream.write(s.data(), s.size());
+    serialize(stream, s.size());
+    stream.write(s.data(), s.size());
 }
 
 inline bool deserialize(std::istream& stream, std::string* s) {
-  size_t size;
-  if (!deserialize(stream, &size)) return false;
-  s->resize(size);
-  if (s->size()) {
-    stream.read(&(*s)[0], s->size());
-  }
-  return stream.good();
+    size_t size;
+    if (!deserialize(stream, &size))
+        return false;
+    s->resize(size);
+    if (s->size()) {
+        stream.read(&(*s)[0], s->size());
+    }
+    return stream.good();
 }
 
 inline void serialize(std::ostream& stream, std::vector<std::string> const& v) {
-  serialize(stream, v.size());
-  for (auto const& s : v) {
-    serialize(stream, s);
-  }
+    serialize(stream, v.size());
+    for (auto const& s : v) {
+        serialize(stream, s);
+    }
 }
 
 inline bool deserialize(std::istream& stream, std::vector<std::string>* v) {
-  size_t size;
-  if (!deserialize(stream, &size)) return false;
-  v->resize(size);
-  for (auto& s : *v) {
-    if (!deserialize(stream, &s)) return false;
-  }
-  return true;
+    size_t size;
+    if (!deserialize(stream, &size))
+        return false;
+    v->resize(size);
+    for (auto& s : *v) {
+        if (!deserialize(stream, &s))
+            return false;
+    }
+    return true;
 }
 
-inline void serialize(std::ostream& stream,
-                      std::map<std::string, std::string> const& m) {
-  serialize(stream, m.size());
-  for (auto const& kv : m) {
-    serialize(stream, kv.first);
-    serialize(stream, kv.second);
-  }
+inline void serialize(std::ostream& stream, std::map<std::string, std::string> const& m) {
+    serialize(stream, m.size());
+    for (auto const& kv : m) {
+        serialize(stream, kv.first);
+        serialize(stream, kv.second);
+    }
 }
 
-inline bool deserialize(std::istream& stream,
-                        std::map<std::string, std::string>* m) {
-  size_t size;
-  if (!deserialize(stream, &size)) return false;
-  for (size_t i = 0; i < size; ++i) {
-    std::string key;
-    if (!deserialize(stream, &key)) return false;
-    if (!deserialize(stream, &(*m)[key])) return false;
-  }
-  return true;
+inline bool deserialize(std::istream& stream, std::map<std::string, std::string>* m) {
+    size_t size;
+    if (!deserialize(stream, &size))
+        return false;
+    for (size_t i = 0; i < size; ++i) {
+        std::string key;
+        if (!deserialize(stream, &key))
+            return false;
+        if (!deserialize(stream, &(*m)[key]))
+            return false;
+    }
+    return true;
 }
 
 template <typename T, typename... Rest>
 inline void serialize(std::ostream& stream, T const& value, Rest... rest) {
-  serialize(stream, value);
-  serialize(stream, rest...);
+    serialize(stream, value);
+    serialize(stream, rest...);
 }
 
 template <typename T, typename... Rest>
 inline bool deserialize(std::istream& stream, T* value, Rest... rest) {
-  if (!deserialize(stream, value)) return false;
-  return deserialize(stream, rest...);
+    if (!deserialize(stream, value))
+        return false;
+    return deserialize(stream, rest...);
 }
 
 inline void serialize_magic_number(std::ostream& stream) {
-  stream.write("JTFY", 4);
-  serialize(stream, kSerializationVersion);
+    stream.write("JTFY", 4);
+    serialize(stream, kSerializationVersion);
 }
 
 inline bool deserialize_magic_number(std::istream& stream) {
-  char magic_number[4] = {0, 0, 0, 0};
-  stream.read(&magic_number[0], 4);
-  if (!(magic_number[0] == 'J' && magic_number[1] == 'T' &&
-        magic_number[2] == 'F' && magic_number[3] == 'Y')) {
-    return false;
-  }
-  size_t serialization_version;
-  if (!deserialize(stream, &serialization_version)) return false;
-  return serialization_version == kSerializationVersion;
+    char magic_number[4] = {0, 0, 0, 0};
+    stream.read(&magic_number[0], 4);
+    if (!(magic_number[0] == 'J' && magic_number[1] == 'T' && magic_number[2] == 'F' && magic_number[3] == 'Y')) {
+        return false;
+    }
+    size_t serialization_version;
+    if (!deserialize(stream, &serialization_version))
+        return false;
+    return serialization_version == kSerializationVersion;
 }
 
 }  // namespace detail
 
 template <typename... Values>
 inline std::string serialize(Values const&... values) {
-  std::ostringstream ss(std::stringstream::out | std::stringstream::binary);
-  detail::serialize_magic_number(ss);
-  detail::serialize(ss, values...);
-  return ss.str();
+    std::ostringstream ss(std::stringstream::out | std::stringstream::binary);
+    detail::serialize_magic_number(ss);
+    detail::serialize(ss, values...);
+    return ss.str();
 }
 
 template <typename... Values>
 inline bool deserialize(std::string const& serialized, Values*... values) {
-  std::istringstream ss(serialized,
-                        std::stringstream::in | std::stringstream::binary);
-  if (!detail::deserialize_magic_number(ss)) return false;
-  return detail::deserialize(ss, values...);
+    std::istringstream ss(serialized, std::stringstream::in | std::stringstream::binary);
+    if (!detail::deserialize_magic_number(ss))
+        return false;
+    return detail::deserialize(ss, values...);
 }
 
 }  // namespace serialization
@@ -4368,464 +4239,424 @@ class KernelLauncher;
  *    and options.
  */
 class Program {
- private:
-  friend class KernelInstantiation;
-  std::string _name;
-  std::vector<std::string> _options;
-  std::map<std::string, std::string> _sources;
+  private:
+    friend class KernelInstantiation;
+    std::string _name;
+    std::vector<std::string> _options;
+    std::map<std::string, std::string> _sources;
 
-  // Private constructor used by deserialize()
-  Program() {}
+    // Private constructor used by deserialize()
+    Program() {}
 
- public:
-  /*! Create a program.
-   *
-   *  \param source A string containing either the source filename or
-   *    the source itself; in the latter case, the first line must be
-   *    the name of the program.
-   *  \param headers A vector of strings representing the source of
-   *    each header file required by the program. Each entry can be
-   *    either the header filename or the header source itself; in
-   *    the latter case, the first line must be the name of the header
-   *    (i.e., the name by which the header is #included).
-   *  \param options A vector of options to be passed to the
-   *    NVRTC compiler. Include paths specified with \p -I
-   *    are added to the search paths used by Jitify. The environment
-   *    variable JITIFY_OPTIONS can also be used to define additional
-   *    options.
-   *  \param file_callback A pointer to a callback function that is
-   *    invoked whenever a source file needs to be loaded. Inside this
-   *    function, the user can either load/specify the source themselves
-   *    or defer to Jitify's file-loading mechanisms.
-   *  \note Program or header source files referenced by filename are
-   *  looked-up using the following mechanisms (in this order):
-   *  \note 1) By calling file_callback.
-   *  \note 2) By looking for the file embedded in the executable via the GCC
-   * linker.
-   *  \note 3) By looking for the file in the filesystem.
-   *
-   *  \note Jitify recursively scans all source files for \p #include
-   *  directives and automatically adds them to the set of headers needed
-   *  by the program.
-   *  If a \p #include directive references a header that cannot be found,
-   *  the directive is automatically removed from the source code to prevent
-   *  immediate compilation failure. This may result in compilation errors
-   *  if the header was required by the program.
-   *
-   *  \note Jitify automatically includes NVRTC-safe versions of some
-   *  standard library headers.
-   */
-  Program(std::string const& cuda_source,
-          std::vector<std::string> const& given_headers = {},
-          std::vector<std::string> const& given_options = {},
-          file_callback_type file_callback = nullptr) {
-    // Add pre-include built-in JIT-safe headers
-    std::vector<std::string> headers = given_headers;
-    for (int i = 0; i < detail::preinclude_jitsafe_headers_count; ++i) {
-      const char* hdr_name = detail::preinclude_jitsafe_header_names[i];
-      const std::string& hdr_source =
-          detail::get_jitsafe_headers_map().at(hdr_name);
-      headers.push_back(std::string(hdr_name) + "\n" + hdr_source);
+  public:
+    /*! Create a program.
+     *
+     *  \param source A string containing either the source filename or
+     *    the source itself; in the latter case, the first line must be
+     *    the name of the program.
+     *  \param headers A vector of strings representing the source of
+     *    each header file required by the program. Each entry can be
+     *    either the header filename or the header source itself; in
+     *    the latter case, the first line must be the name of the header
+     *    (i.e., the name by which the header is #included).
+     *  \param options A vector of options to be passed to the
+     *    NVRTC compiler. Include paths specified with \p -I
+     *    are added to the search paths used by Jitify. The environment
+     *    variable JITIFY_OPTIONS can also be used to define additional
+     *    options.
+     *  \param file_callback A pointer to a callback function that is
+     *    invoked whenever a source file needs to be loaded. Inside this
+     *    function, the user can either load/specify the source themselves
+     *    or defer to Jitify's file-loading mechanisms.
+     *  \note Program or header source files referenced by filename are
+     *  looked-up using the following mechanisms (in this order):
+     *  \note 1) By calling file_callback.
+     *  \note 2) By looking for the file embedded in the executable via the GCC
+     * linker.
+     *  \note 3) By looking for the file in the filesystem.
+     *
+     *  \note Jitify recursively scans all source files for \p #include
+     *  directives and automatically adds them to the set of headers needed
+     *  by the program.
+     *  If a \p #include directive references a header that cannot be found,
+     *  the directive is automatically removed from the source code to prevent
+     *  immediate compilation failure. This may result in compilation errors
+     *  if the header was required by the program.
+     *
+     *  \note Jitify automatically includes NVRTC-safe versions of some
+     *  standard library headers.
+     */
+    Program(std::string const& cuda_source,
+            std::vector<std::string> const& given_headers = {},
+            std::vector<std::string> const& given_options = {},
+            file_callback_type file_callback = nullptr) {
+        // Add pre-include built-in JIT-safe headers
+        std::vector<std::string> headers = given_headers;
+        for (int i = 0; i < detail::preinclude_jitsafe_headers_count; ++i) {
+            const char* hdr_name = detail::preinclude_jitsafe_header_names[i];
+            const std::string& hdr_source = detail::get_jitsafe_headers_map().at(hdr_name);
+            headers.push_back(std::string(hdr_name) + "\n" + hdr_source);
+        }
+
+        _options = given_options;
+        detail::add_options_from_env(_options);
+        std::vector<std::string> include_paths;
+        detail::load_program(cuda_source, headers, file_callback, &include_paths, &_sources, &_options, &_name);
     }
 
-    _options = given_options;
-    detail::add_options_from_env(_options);
-    std::vector<std::string> include_paths;
-    detail::load_program(cuda_source, headers, file_callback, &include_paths,
-                         &_sources, &_options, &_name);
-  }
-
-  /*! Restore a serialized program.
-   *
-   * \param serialized_program The serialized program to restore.
-   *
-   * \see serialize
-   */
-  static Program deserialize(std::string const& serialized_program) {
-    Program program;
-    if (!serialization::deserialize(serialized_program, &program._name,
-                                    &program._options, &program._sources)) {
-      throw std::runtime_error("Failed to deserialize program");
+    /*! Restore a serialized program.
+     *
+     * \param serialized_program The serialized program to restore.
+     *
+     * \see serialize
+     */
+    static Program deserialize(std::string const& serialized_program) {
+        Program program;
+        if (!serialization::deserialize(serialized_program, &program._name, &program._options, &program._sources)) {
+            throw std::runtime_error("Failed to deserialize program");
+        }
+        return program;
     }
-    return program;
-  }
 
-  /*! Save the program.
-   *
-   * \see deserialize
-   */
-  std::string serialize() const {
-    // Note: Must update kSerializationVersion if this is changed.
-    return serialization::serialize(_name, _options, _sources);
-  };
+    /*! Save the program.
+     *
+     * \see deserialize
+     */
+    std::string serialize() const {
+        // Note: Must update kSerializationVersion if this is changed.
+        return serialization::serialize(_name, _options, _sources);
+    };
 
-  /*! Select a kernel.
-   *
-   * \param name The name of the kernel (unmangled and without
-   * template arguments).
-   * \param options A vector of options to be passed to the NVRTC
-   * compiler when compiling this kernel.
-   */
-  Kernel kernel(std::string const& name,
-                std::vector<std::string> const& options = {}) const;
+    /*! Select a kernel.
+     *
+     * \param name The name of the kernel (unmangled and without
+     * template arguments).
+     * \param options A vector of options to be passed to the NVRTC
+     * compiler when compiling this kernel.
+     */
+    Kernel kernel(std::string const& name, std::vector<std::string> const& options = {}) const;
 };
 
 class Kernel {
-  friend class KernelInstantiation;
-  Program const* _program;
-  std::string _name;
-  std::vector<std::string> _options;
+    friend class KernelInstantiation;
+    Program const* _program;
+    std::string _name;
+    std::vector<std::string> _options;
 
- public:
-  Kernel(Program const* program, std::string const& name,
-         std::vector<std::string> const& options = {})
-      : _program(program), _name(name), _options(options) {}
+  public:
+    Kernel(Program const* program, std::string const& name, std::vector<std::string> const& options = {})
+        : _program(program), _name(name), _options(options) {}
 
-  /*! Instantiate the kernel.
-   *
-   *  \param template_args A vector of template arguments represented as
-   *    code-strings. These can be generated using
-   *    \code{.cpp}jitify::reflection::reflect<type>()\endcode or
-   *    \code{.cpp}jitify::reflection::reflect(value)\endcode
-   *
-   *  \note Template type deduction is not possible, so all types must be
-   *    explicitly specified.
-   */
-  KernelInstantiation instantiate(
-      std::vector<std::string> const& template_args =
-          std::vector<std::string>()) const;
+    /*! Instantiate the kernel.
+     *
+     *  \param template_args A vector of template arguments represented as
+     *    code-strings. These can be generated using
+     *    \code{.cpp}jitify::reflection::reflect<type>()\endcode or
+     *    \code{.cpp}jitify::reflection::reflect(value)\endcode
+     *
+     *  \note Template type deduction is not possible, so all types must be
+     *    explicitly specified.
+     */
+    KernelInstantiation instantiate(std::vector<std::string> const& template_args = std::vector<std::string>()) const;
 
-  // Regular template instantiation syntax (note limited flexibility)
-  /*! Instantiate the kernel.
-   *
-   *  \note The template arguments specified on this function are
-   *    used to instantiate the kernel. Non-type template arguments must
-   *    be wrapped with
-   *    \code{.cpp}jitify::reflection::NonType<type,value>\endcode
-   *
-   *  \note Template type deduction is not possible, so all types must be
-   *    explicitly specified.
-   */
-  template <typename... TemplateArgs>
-  KernelInstantiation instantiate() const;
+    // Regular template instantiation syntax (note limited flexibility)
+    /*! Instantiate the kernel.
+     *
+     *  \note The template arguments specified on this function are
+     *    used to instantiate the kernel. Non-type template arguments must
+     *    be wrapped with
+     *    \code{.cpp}jitify::reflection::NonType<type,value>\endcode
+     *
+     *  \note Template type deduction is not possible, so all types must be
+     *    explicitly specified.
+     */
+    template <typename... TemplateArgs>
+    KernelInstantiation instantiate() const;
 
-  // Template-like instantiation syntax
-  //   E.g., instantiate(myvar,Type<MyType>())(grid,block)
-  /*! Instantiate the kernel.
-   *
-   *  \param targs The template arguments for the kernel, represented as
-   *    values. Types must be wrapped with
-   *    \code{.cpp}jitify::reflection::Type<type>()\endcode or
-   *    \code{.cpp}jitify::reflection::type_of(value)\endcode
-   *
-   *  \note Template type deduction is not possible, so all types must be
-   *    explicitly specified.
-   */
-  template <typename... TemplateArgs>
-  KernelInstantiation instantiate(TemplateArgs... targs) const;
+    // Template-like instantiation syntax
+    //   E.g., instantiate(myvar,Type<MyType>())(grid,block)
+    /*! Instantiate the kernel.
+     *
+     *  \param targs The template arguments for the kernel, represented as
+     *    values. Types must be wrapped with
+     *    \code{.cpp}jitify::reflection::Type<type>()\endcode or
+     *    \code{.cpp}jitify::reflection::type_of(value)\endcode
+     *
+     *  \note Template type deduction is not possible, so all types must be
+     *    explicitly specified.
+     */
+    template <typename... TemplateArgs>
+    KernelInstantiation instantiate(TemplateArgs... targs) const;
 };
 
 class KernelInstantiation {
-  friend class KernelLauncher;
-  std::unique_ptr<detail::CUDAKernel> _cuda_kernel;
+    friend class KernelLauncher;
+    std::unique_ptr<detail::CUDAKernel> _cuda_kernel;
 
-  // Private constructor used by deserialize()
-  KernelInstantiation(std::string const& func_name, std::string const& ptx,
-                      std::vector<std::string> const& link_files,
-                      std::vector<std::string> const& link_paths)
-      : _cuda_kernel(new detail::CUDAKernel(func_name.c_str(), ptx.c_str(),
-                                            link_files, link_paths)) {}
+    // Private constructor used by deserialize()
+    KernelInstantiation(std::string const& func_name,
+                        std::string const& ptx,
+                        std::vector<std::string> const& link_files,
+                        std::vector<std::string> const& link_paths)
+        : _cuda_kernel(new detail::CUDAKernel(func_name.c_str(), ptx.c_str(), link_files, link_paths)) {}
 
- public:
-  KernelInstantiation(Kernel const& kernel,
-                      std::vector<std::string> const& template_args) {
-    Program const* program = kernel._program;
+  public:
+    KernelInstantiation(Kernel const& kernel, std::vector<std::string> const& template_args) {
+        Program const* program = kernel._program;
 
-    std::string template_inst =
-        (template_args.empty() ? ""
-                               : reflection::reflect_template(template_args));
-    std::string instantiation = kernel._name + template_inst;
+        std::string template_inst = (template_args.empty() ? "" : reflection::reflect_template(template_args));
+        std::string instantiation = kernel._name + template_inst;
 
-    std::vector<std::string> options;
-    options.insert(options.begin(), program->_options.begin(),
-                   program->_options.end());
-    options.insert(options.begin(), kernel._options.begin(),
-                   kernel._options.end());
-    detail::detect_and_add_cuda_arch(options);
-    detail::detect_and_add_cxx11_flag(options);
+        std::vector<std::string> options;
+        options.insert(options.begin(), program->_options.begin(), program->_options.end());
+        options.insert(options.begin(), kernel._options.begin(), kernel._options.end());
+        detail::detect_and_add_cuda_arch(options);
+        detail::detect_and_add_cxx11_flag(options);
 
-    std::string log, ptx, mangled_instantiation;
-    std::vector<std::string> linker_files, linker_paths;
-    detail::instantiate_kernel(program->_name, program->_sources, instantiation,
-                               options, &log, &ptx, &mangled_instantiation,
-                               &linker_files, &linker_paths);
+        std::string log, ptx, mangled_instantiation;
+        std::vector<std::string> linker_files, linker_paths;
+        detail::instantiate_kernel(program->_name, program->_sources, instantiation, options, &log, &ptx,
+                                   &mangled_instantiation, &linker_files, &linker_paths);
 
-    _cuda_kernel.reset(new detail::CUDAKernel(mangled_instantiation.c_str(),
-                                              ptx.c_str(), linker_files,
-                                              linker_paths));
-  }
-
-  /*! Implicit conversion to the underlying CUfunction object.
-   *
-   * \note This allows use of CUDA APIs like
-   *   cuOccupancyMaxActiveBlocksPerMultiprocessor.
-   */
-  operator CUfunction() const { return *_cuda_kernel; }
-
-  /*! Restore a serialized kernel instantiation.
-   *
-   * \param serialized_kernel_inst The serialized kernel instantiation to
-   * restore.
-   *
-   * \see serialize
-   */
-  static KernelInstantiation deserialize(
-      std::string const& serialized_kernel_inst) {
-    std::string func_name, ptx;
-    std::vector<std::string> link_files, link_paths;
-    if (!serialization::deserialize(serialized_kernel_inst, &func_name, &ptx,
-                                    &link_files, &link_paths)) {
-      throw std::runtime_error("Failed to deserialize kernel instantiation");
+        _cuda_kernel.reset(
+            new detail::CUDAKernel(mangled_instantiation.c_str(), ptx.c_str(), linker_files, linker_paths));
     }
-    return KernelInstantiation(func_name, ptx, link_files, link_paths);
-  }
 
-  /*! Save the program.
-   *
-   * \see deserialize
-   */
-  std::string serialize() const {
-    // Note: Must update kSerializationVersion if this is changed.
-    return serialization::serialize(
-        _cuda_kernel->function_name(), _cuda_kernel->ptx(),
-        _cuda_kernel->link_files(), _cuda_kernel->link_paths());
-  }
+    /*! Implicit conversion to the underlying CUfunction object.
+     *
+     * \note This allows use of CUDA APIs like
+     *   cuOccupancyMaxActiveBlocksPerMultiprocessor.
+     */
+    operator CUfunction() const { return *_cuda_kernel; }
 
-  /*! Configure the kernel launch.
-   *
-   *  \param grid   The thread grid dimensions for the launch.
-   *  \param block  The thread block dimensions for the launch.
-   *  \param smem   The amount of shared memory to dynamically allocate, in
-   * bytes.
-   *  \param stream The CUDA stream to launch the kernel in.
-   */
-  KernelLauncher configure(dim3 grid, dim3 block, unsigned int smem = 0,
-                           cudaStream_t stream = 0) const;
+    /*! Restore a serialized kernel instantiation.
+     *
+     * \param serialized_kernel_inst The serialized kernel instantiation to
+     * restore.
+     *
+     * \see serialize
+     */
+    static KernelInstantiation deserialize(std::string const& serialized_kernel_inst) {
+        std::string func_name, ptx;
+        std::vector<std::string> link_files, link_paths;
+        if (!serialization::deserialize(serialized_kernel_inst, &func_name, &ptx, &link_files, &link_paths)) {
+            throw std::runtime_error("Failed to deserialize kernel instantiation");
+        }
+        return KernelInstantiation(func_name, ptx, link_files, link_paths);
+    }
 
-  /*! Configure the kernel launch with a 1-dimensional block and grid chosen
-   *  automatically to maximise occupancy.
-   *
-   * \param max_block_size  The upper limit on the block size, or 0 for no
-   * limit.
-   * \param smem  The amount of shared memory to dynamically allocate, in bytes.
-   * \param smem_callback  A function returning smem for a given block size
-   * (overrides \p smem).
-   * \param stream The CUDA stream to launch the kernel in.
-   * \param flags The flags to pass to
-   * cuOccupancyMaxPotentialBlockSizeWithFlags.
-   */
-  KernelLauncher configure_1d_max_occupancy(
-      int max_block_size = 0, unsigned int smem = 0,
-      CUoccupancyB2DSize smem_callback = 0, cudaStream_t stream = 0,
-      unsigned int flags = 0) const;
+    /*! Save the program.
+     *
+     * \see deserialize
+     */
+    std::string serialize() const {
+        // Note: Must update kSerializationVersion if this is changed.
+        return serialization::serialize(_cuda_kernel->function_name(), _cuda_kernel->ptx(), _cuda_kernel->link_files(),
+                                        _cuda_kernel->link_paths());
+    }
 
-  /*
-   * Returns the function attribute requested from the kernel
-   */
-  inline int get_func_attribute(CUfunction_attribute attribute) const {
-    return _cuda_kernel->get_func_attribute(attribute);
-  }
+    /*! Configure the kernel launch.
+     *
+     *  \param grid   The thread grid dimensions for the launch.
+     *  \param block  The thread block dimensions for the launch.
+     *  \param smem   The amount of shared memory to dynamically allocate, in
+     * bytes.
+     *  \param stream The CUDA stream to launch the kernel in.
+     */
+    KernelLauncher configure(dim3 grid, dim3 block, unsigned int smem = 0, cudaStream_t stream = 0) const;
 
-  /*
-   * Set the function attribute requested for the kernel
-   */
-  inline void set_func_attribute(CUfunction_attribute attribute,
-                                 int value) const {
-    _cuda_kernel->set_func_attribute(attribute, value);
-  }
+    /*! Configure the kernel launch with a 1-dimensional block and grid chosen
+     *  automatically to maximise occupancy.
+     *
+     * \param max_block_size  The upper limit on the block size, or 0 for no
+     * limit.
+     * \param smem  The amount of shared memory to dynamically allocate, in bytes.
+     * \param smem_callback  A function returning smem for a given block size
+     * (overrides \p smem).
+     * \param stream The CUDA stream to launch the kernel in.
+     * \param flags The flags to pass to
+     * cuOccupancyMaxPotentialBlockSizeWithFlags.
+     */
+    KernelLauncher configure_1d_max_occupancy(int max_block_size = 0,
+                                              unsigned int smem = 0,
+                                              CUoccupancyB2DSize smem_callback = 0,
+                                              cudaStream_t stream = 0,
+                                              unsigned int flags = 0) const;
 
-  /*
-   * \deprecated Use \p get_global_ptr instead.
-   */
-  CUdeviceptr get_constant_ptr(const char* name, size_t* size = nullptr) const {
-    return get_global_ptr(name, size);
-  }
+    /*
+     * Returns the function attribute requested from the kernel
+     */
+    inline int get_func_attribute(CUfunction_attribute attribute) const {
+        return _cuda_kernel->get_func_attribute(attribute);
+    }
 
-  /*
-   * Get a device pointer to a global __constant__ or __device__ variable using
-   * its un-mangled name. If provided, *size is set to the size of the variable
-   * in bytes.
-   */
-  CUdeviceptr get_global_ptr(const char* name, size_t* size = nullptr) const {
-    return _cuda_kernel->get_global_ptr(name, size);
-  }
+    /*
+     * Set the function attribute requested for the kernel
+     */
+    inline void set_func_attribute(CUfunction_attribute attribute, int value) const {
+        _cuda_kernel->set_func_attribute(attribute, value);
+    }
 
-  /*
-   * Copy data from a global __constant__ or __device__ array to the host using
-   * its un-mangled name.
-   */
-  template <typename T>
-  CUresult get_global_array(const char* name, T* data, size_t count,
-                            CUstream stream = 0) const {
-    return _cuda_kernel->get_global_data(name, data, count, stream);
-  }
+    /*
+     * \deprecated Use \p get_global_ptr instead.
+     */
+    CUdeviceptr get_constant_ptr(const char* name, size_t* size = nullptr) const { return get_global_ptr(name, size); }
 
-  /*
-   * Copy a value from a global __constant__ or __device__ variable to the host
-   * using its un-mangled name.
-   */
-  template <typename T>
-  CUresult get_global_value(const char* name, T* value,
-                            CUstream stream = 0) const {
-    return get_global_array(name, value, 1, stream);
-  }
+    /*
+     * Get a device pointer to a global __constant__ or __device__ variable using
+     * its un-mangled name. If provided, *size is set to the size of the variable
+     * in bytes.
+     */
+    CUdeviceptr get_global_ptr(const char* name, size_t* size = nullptr) const {
+        return _cuda_kernel->get_global_ptr(name, size);
+    }
 
-  /*
-   * Copy data from the host to a global __constant__ or __device__ array using
-   * its un-mangled name.
-   */
-  template <typename T>
-  CUresult set_global_array(const char* name, const T* data, size_t count,
-                            CUstream stream = 0) const {
-    return _cuda_kernel->set_global_data(name, data, count, stream);
-  }
+    /*
+     * Copy data from a global __constant__ or __device__ array to the host using
+     * its un-mangled name.
+     */
+    template <typename T>
+    CUresult get_global_array(const char* name, T* data, size_t count, CUstream stream = 0) const {
+        return _cuda_kernel->get_global_data(name, data, count, stream);
+    }
 
-  /*
-   * Copy a value from the host to a global __constant__ or __device__ variable
-   * using its un-mangled name.
-   */
-  template <typename T>
-  CUresult set_global_value(const char* name, const T& value,
-                            CUstream stream = 0) const {
-    return set_global_array(name, &value, 1, stream);
-  }
+    /*
+     * Copy a value from a global __constant__ or __device__ variable to the host
+     * using its un-mangled name.
+     */
+    template <typename T>
+    CUresult get_global_value(const char* name, T* value, CUstream stream = 0) const {
+        return get_global_array(name, value, 1, stream);
+    }
 
-  const std::string& mangled_name() const {
-    return _cuda_kernel->function_name();
-  }
+    /*
+     * Copy data from the host to a global __constant__ or __device__ array using
+     * its un-mangled name.
+     */
+    template <typename T>
+    CUresult set_global_array(const char* name, const T* data, size_t count, CUstream stream = 0) const {
+        return _cuda_kernel->set_global_data(name, data, count, stream);
+    }
 
-  const std::string& ptx() const { return _cuda_kernel->ptx(); }
+    /*
+     * Copy a value from the host to a global __constant__ or __device__ variable
+     * using its un-mangled name.
+     */
+    template <typename T>
+    CUresult set_global_value(const char* name, const T& value, CUstream stream = 0) const {
+        return set_global_array(name, &value, 1, stream);
+    }
 
-  const std::vector<std::string>& link_files() const {
-    return _cuda_kernel->link_files();
-  }
+    const std::string& mangled_name() const { return _cuda_kernel->function_name(); }
 
-  const std::vector<std::string>& link_paths() const {
-    return _cuda_kernel->link_paths();
-  }
+    const std::string& ptx() const { return _cuda_kernel->ptx(); }
+
+    const std::vector<std::string>& link_files() const { return _cuda_kernel->link_files(); }
+
+    const std::vector<std::string>& link_paths() const { return _cuda_kernel->link_paths(); }
 };
 
 class KernelLauncher {
-  KernelInstantiation const* _kernel_inst;
-  dim3 _grid;
-  dim3 _block;
-  unsigned int _smem;
-  cudaStream_t _stream;
+    KernelInstantiation const* _kernel_inst;
+    dim3 _grid;
+    dim3 _block;
+    unsigned int _smem;
+    cudaStream_t _stream;
 
- private:
-  void pre_launch(std::vector<std::string> arg_types = {}) const {
-    (void)arg_types;
+  private:
+    void pre_launch(std::vector<std::string> arg_types = {}) const {
+        (void)arg_types;
 #if JITIFY_PRINT_LAUNCH
-    std::string arg_types_string =
-        (arg_types.empty() ? "..." : reflection::reflect_list(arg_types));
-    std::cout << "Launching " << _kernel_inst->_cuda_kernel->function_name()
-              << "<<<" << _grid << "," << _block << "," << _smem << ","
-              << _stream << ">>>"
-              << "(" << arg_types_string << ")" << std::endl;
+        std::string arg_types_string = (arg_types.empty() ? "..." : reflection::reflect_list(arg_types));
+        std::cout << "Launching " << _kernel_inst->_cuda_kernel->function_name() << "<<<" << _grid << "," << _block
+                  << "," << _smem << "," << _stream << ">>>"
+                  << "(" << arg_types_string << ")" << std::endl;
 #endif
-  }
+    }
 
- public:
-  KernelLauncher(KernelInstantiation const* kernel_inst, dim3 grid, dim3 block,
-                 unsigned int smem = 0, cudaStream_t stream = 0)
-      : _kernel_inst(kernel_inst),
-        _grid(grid),
-        _block(block),
-        _smem(smem),
-        _stream(stream) {}
+  public:
+    KernelLauncher(KernelInstantiation const* kernel_inst,
+                   dim3 grid,
+                   dim3 block,
+                   unsigned int smem = 0,
+                   cudaStream_t stream = 0)
+        : _kernel_inst(kernel_inst), _grid(grid), _block(block), _smem(smem), _stream(stream) {}
 
-  // Note: It's important that there is no implicit conversion required
-  //         for arg_ptrs, because otherwise the parameter pack version
-  //         below gets called instead (probably resulting in a segfault).
-  /*! Launch the kernel.
-   *
-   *  \param arg_ptrs  A vector of pointers to each function argument for the
-   *    kernel.
-   *  \param arg_types A vector of function argument types represented
-   *    as code-strings. This parameter is optional and is only used to print
-   *    out the function signature.
-   */
-  CUresult launch(std::vector<void*> arg_ptrs = {},
-                  std::vector<std::string> arg_types = {}) const {
-    pre_launch(arg_types);
-    return _kernel_inst->_cuda_kernel->launch(_grid, _block, _smem, _stream,
-                                              arg_ptrs);
-  }
+    // Note: It's important that there is no implicit conversion required
+    //         for arg_ptrs, because otherwise the parameter pack version
+    //         below gets called instead (probably resulting in a segfault).
+    /*! Launch the kernel.
+     *
+     *  \param arg_ptrs  A vector of pointers to each function argument for the
+     *    kernel.
+     *  \param arg_types A vector of function argument types represented
+     *    as code-strings. This parameter is optional and is only used to print
+     *    out the function signature.
+     */
+    CUresult launch(std::vector<void*> arg_ptrs = {}, std::vector<std::string> arg_types = {}) const {
+        pre_launch(arg_types);
+        return _kernel_inst->_cuda_kernel->launch(_grid, _block, _smem, _stream, arg_ptrs);
+    }
 
-  void safe_launch(std::vector<void*> arg_ptrs = {},
-                   std::vector<std::string> arg_types = {}) const {
-    pre_launch(arg_types);
-    _kernel_inst->_cuda_kernel->safe_launch(_grid, _block, _smem, _stream,
-                                            arg_ptrs);
-  }
+    void safe_launch(std::vector<void*> arg_ptrs = {}, std::vector<std::string> arg_types = {}) const {
+        pre_launch(arg_types);
+        _kernel_inst->_cuda_kernel->safe_launch(_grid, _block, _smem, _stream, arg_ptrs);
+    }
 
-  /*! Launch the kernel.
-   *
-   *  \param args Function arguments for the kernel.
-   */
-  template <typename... ArgTypes>
-  CUresult launch(const ArgTypes&... args) const {
-    return this->launch(std::vector<void*>({(void*)&args...}),
-                        {reflection::reflect<ArgTypes>()...});
-  }
+    /*! Launch the kernel.
+     *
+     *  \param args Function arguments for the kernel.
+     */
+    template <typename... ArgTypes>
+    CUresult launch(const ArgTypes&... args) const {
+        return this->launch(std::vector<void*>({(void*)&args...}), {reflection::reflect<ArgTypes>()...});
+    }
 
-  /*! Launch the kernel and check for cuda errors.
-   *
-   *  \param args Function arguments for the kernel.
-   */
-  template <typename... ArgTypes>
-  void safe_launch(const ArgTypes&... args) const {
-    return this->safe_launch(std::vector<void*>({(void*)&args...}),
-                             {reflection::reflect<ArgTypes>()...});
-  }
+    /*! Launch the kernel and check for cuda errors.
+     *
+     *  \param args Function arguments for the kernel.
+     */
+    template <typename... ArgTypes>
+    void safe_launch(const ArgTypes&... args) const {
+        return this->safe_launch(std::vector<void*>({(void*)&args...}), {reflection::reflect<ArgTypes>()...});
+    }
 };
 
-inline Kernel Program::kernel(std::string const& name,
-                              std::vector<std::string> const& options) const {
-  return Kernel(this, name, options);
+inline Kernel Program::kernel(std::string const& name, std::vector<std::string> const& options) const {
+    return Kernel(this, name, options);
 }
 
-inline KernelInstantiation Kernel::instantiate(
-    std::vector<std::string> const& template_args) const {
-  return KernelInstantiation(*this, template_args);
+inline KernelInstantiation Kernel::instantiate(std::vector<std::string> const& template_args) const {
+    return KernelInstantiation(*this, template_args);
 }
 
 template <typename... TemplateArgs>
 inline KernelInstantiation Kernel::instantiate() const {
-  return this->instantiate(
-      std::vector<std::string>({reflection::reflect<TemplateArgs>()...}));
+    return this->instantiate(std::vector<std::string>({reflection::reflect<TemplateArgs>()...}));
 }
 
 template <typename... TemplateArgs>
 inline KernelInstantiation Kernel::instantiate(TemplateArgs... targs) const {
-  return this->instantiate(
-      std::vector<std::string>({reflection::reflect(targs)...}));
+    return this->instantiate(std::vector<std::string>({reflection::reflect(targs)...}));
 }
 
-inline KernelLauncher KernelInstantiation::configure(
-    dim3 grid, dim3 block, unsigned int smem, cudaStream_t stream) const {
-  return KernelLauncher(this, grid, block, smem, stream);
+inline KernelLauncher KernelInstantiation::configure(dim3 grid,
+                                                     dim3 block,
+                                                     unsigned int smem,
+                                                     cudaStream_t stream) const {
+    return KernelLauncher(this, grid, block, smem, stream);
 }
 
-inline KernelLauncher KernelInstantiation::configure_1d_max_occupancy(
-    int max_block_size, unsigned int smem, CUoccupancyB2DSize smem_callback,
-    cudaStream_t stream, unsigned int flags) const {
-  int grid;
-  int block;
-  CUfunction func = *_cuda_kernel;
-  detail::get_1d_max_occupancy(func, smem_callback, &smem, max_block_size,
-                               flags, &grid, &block);
-  return this->configure(grid, block, smem, stream);
+inline KernelLauncher KernelInstantiation::configure_1d_max_occupancy(int max_block_size,
+                                                                      unsigned int smem,
+                                                                      CUoccupancyB2DSize smem_callback,
+                                                                      cudaStream_t stream,
+                                                                      unsigned int flags) const {
+    int grid;
+    int block;
+    CUfunction func = *_cuda_kernel;
+    detail::get_1d_max_occupancy(func, smem_callback, &smem, max_block_size, flags, &grid, &block);
+    return this->configure(grid, block, smem, stream);
 }
 
 }  // namespace experimental
@@ -4833,7 +4664,7 @@ inline KernelLauncher KernelInstantiation::configure_1d_max_occupancy(
 }  // namespace jitify
 
 #if defined(_WIN32) || defined(_WIN64)
-#pragma pop_macro("max")
-#pragma pop_macro("min")
-#pragma pop_macro("strtok_r")
+    #pragma pop_macro("max")
+    #pragma pop_macro("min")
+    #pragma pop_macro("strtok_r")
 #endif

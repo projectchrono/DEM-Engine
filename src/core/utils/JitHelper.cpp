@@ -22,13 +22,13 @@
 // At runtime, the environment variable DEME_DEFAULT_CUDA_ARCH (CUDA) or
 // DEME_DEFAULT_HIP_ARCH (HIP) takes precedence.
 #if defined(USE_HIP)
-#ifndef DEME_DEFAULT_HIP_ARCH_STR
-    #define DEME_DEFAULT_HIP_ARCH_STR "gfx90a"
-#endif
+    #ifndef DEME_DEFAULT_HIP_ARCH_STR
+        #define DEME_DEFAULT_HIP_ARCH_STR "gfx90a"
+    #endif
 #else
-#ifndef DEME_DEFAULT_CUDA_ARCH_STR
-    #define DEME_DEFAULT_CUDA_ARCH_STR "compute_75"
-#endif
+    #ifndef DEME_DEFAULT_CUDA_ARCH_STR
+        #define DEME_DEFAULT_CUDA_ARCH_STR "compute_75"
+    #endif
 #endif
 
 #include <core/ApiVersion.h>
@@ -56,11 +56,10 @@ void JitHelper::Header::substitute(const std::string& symbol, const std::string&
     }
 }
 
-deme::jit::Program JitHelper::buildProgram(
-    const std::string& name,
-    const std::filesystem::path& source,
-    std::unordered_map<std::string, std::string> substitutions,
-    std::vector<std::string> flags) {
+deme::jit::Program JitHelper::buildProgram(const std::string& name,
+                                           const std::filesystem::path& source,
+                                           std::unordered_map<std::string, std::string> substitutions,
+                                           std::vector<std::string> flags) {
     // Double ensure include paths for runtime headers + CUDA/CCCL (cuda::std) or ROCm
     auto add_inc = [&](const std::filesystem::path& p) {
         if (p.empty())

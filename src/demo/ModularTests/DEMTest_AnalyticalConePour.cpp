@@ -4,7 +4,7 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 // =============================================================================
-// This demo pours spheres into three analytical cone/cylinder containers:
+// This modular test pours spheres into three analytical cone/cylinder containers:
 //   1. a cone with its corner down, used as a hollow conical wall,
 //   2. a cone with its corner up, used as a solid conical obstacle,
 //   3. a cone whose analytical tip is below the floor, so the active surface is
@@ -95,8 +95,8 @@ void write_pour_sphere_metadata(const std::filesystem::path& out_file, const std
 
     metadata << "sphere_id,case_id,radius,initial_x,initial_y,initial_z,initial_vx,initial_vy,initial_vz\n";
     for (const auto& sphere : spheres) {
-        metadata << sphere.sphere_id << "," << sphere.case_id << "," << sphere.radius << "," << sphere.position.x
-                 << "," << sphere.position.y << "," << sphere.position.z << "," << sphere.velocity.x << ","
+        metadata << sphere.sphere_id << "," << sphere.case_id << "," << sphere.radius << "," << sphere.position.x << ","
+                 << sphere.position.y << "," << sphere.position.z << "," << sphere.velocity.x << ","
                  << sphere.velocity.y << "," << sphere.velocity.z << "\n";
     }
 }
@@ -148,10 +148,8 @@ int main(int argc, char** argv) {
     DEMSim.SetContactOutputContent({"OWNER", "GEO_ID", "FORCE", "POINT", "NORMAL"});
     DEMSim.UseFrictionalHertzianModel();
 
-    auto mat_sphere =
-        DEMSim.LoadMaterial({{"E", 2.0e5f}, {"nu", 0.3f}, {"CoR", 0.2f}, {"mu", 0.45f}, {"Crr", 0.01f}});
-    auto mat_wall =
-        DEMSim.LoadMaterial({{"E", 2.0e5f}, {"nu", 0.3f}, {"CoR", 0.2f}, {"mu", 0.45f}, {"Crr", 0.01f}});
+    auto mat_sphere = DEMSim.LoadMaterial({{"E", 2.0e5f}, {"nu", 0.3f}, {"CoR", 0.2f}, {"mu", 0.45f}, {"Crr", 0.01f}});
+    auto mat_wall = DEMSim.LoadMaterial({{"E", 2.0e5f}, {"nu", 0.3f}, {"CoR", 0.2f}, {"mu", 0.45f}, {"Crr", 0.01f}});
 
     constexpr float cylinder_radius = 0.72f;
     constexpr float bottom_z = 0.0f;
@@ -161,16 +159,16 @@ int main(int argc, char** argv) {
     const float frustum_slope = cylinder_radius / (frustum_tip_below_floor + cone_height);
 
     const std::vector<PourCase> cases = {
-        {"corner_down", "Cone corner down", -2.25f, make_float3(-2.25f, 0.0f, bottom_z),
-         make_float3(0.0f, 0.0f, 1.0f), cylinder_radius / cone_height, 0.0f, cone_height, ENTITY_NORMAL_INWARD,
-         cylinder_radius, bottom_z, top_z, 10, 110},
+        {"corner_down", "Cone corner down", -2.25f, make_float3(-2.25f, 0.0f, bottom_z), make_float3(0.0f, 0.0f, 1.0f),
+         cylinder_radius / cone_height, 0.0f, cone_height, ENTITY_NORMAL_INWARD, cylinder_radius, bottom_z, top_z, 10,
+         110},
         {"corner_up", "Cone corner up", 0.0f, make_float3(0.0f, 0.0f, top_z), make_float3(0.0f, 0.0f, -1.0f),
          cylinder_radius / cone_height, 0.0f, cone_height, ENTITY_NORMAL_OUTWARD, cylinder_radius, bottom_z, top_z, 11,
          111},
         {"frustum_from_below", "Cone tip below floor visible frustum", 2.25f,
-         make_float3(2.25f, 0.0f, bottom_z - frustum_tip_below_floor), make_float3(0.0f, 0.0f, 1.0f),
-         frustum_slope, frustum_tip_below_floor, frustum_tip_below_floor + cone_height, ENTITY_NORMAL_INWARD,
-         cylinder_radius, bottom_z, top_z, 12, 112},
+         make_float3(2.25f, 0.0f, bottom_z - frustum_tip_below_floor), make_float3(0.0f, 0.0f, 1.0f), frustum_slope,
+         frustum_tip_below_floor, frustum_tip_below_floor + cone_height, ENTITY_NORMAL_INWARD, cylinder_radius,
+         bottom_z, top_z, 12, 112},
     };
 
     for (const auto& this_case : cases) {
@@ -187,7 +185,8 @@ int main(int argc, char** argv) {
 
     constexpr float sphere_radius = 0.045f;
     constexpr float sphere_density = 1800.0f;
-    constexpr float sphere_volume = 4.0f / 3.0f * 3.14159265358979323846f * sphere_radius * sphere_radius * sphere_radius;
+    constexpr float sphere_volume =
+        4.0f / 3.0f * 3.14159265358979323846f * sphere_radius * sphere_radius * sphere_radius;
     const float sphere_mass = sphere_density * sphere_volume;
     auto sphere_type = DEMSim.LoadSphereType(sphere_mass, sphere_radius, mat_sphere);
     const std::vector<SphereSeed> seeds = make_sphere_seeds(cases, sphere_radius);

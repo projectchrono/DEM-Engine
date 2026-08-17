@@ -5,9 +5,9 @@
 
 #include <core/utils/cuda_to_hip.h>
 #if defined(USE_HIP)
-#include <hipcub/hipcub.hpp>
+    #include <hipcub/hipcub.hpp>
 #else
-#include <cub/cub.cuh>
+    #include <cub/cub.cuh>
 #endif
 // #include <thrust/sort.h>
 #include <kernel/DEMHelperKernels.cuh>

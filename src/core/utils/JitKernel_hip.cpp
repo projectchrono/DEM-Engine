@@ -14,16 +14,16 @@
 
 #ifdef USE_HIP
 
-#include "JitKernel.h"
-#include <hip/hiprtc.h>
-#include <hip/hip_runtime.h>
-#include <unordered_map>
-#include <unordered_set>
-#include <stdexcept>
-#include <mutex>
-#include <vector>
-#include <cstring>
-#include <algorithm>
+    #include "JitKernel.h"
+    #include <hip/hiprtc.h>
+    #include <hip/hip_runtime.h>
+    #include <unordered_map>
+    #include <unordered_set>
+    #include <stdexcept>
+    #include <mutex>
+    #include <vector>
+    #include <cstring>
+    #include <algorithm>
 
 namespace deme {
 namespace jit {
@@ -110,8 +110,7 @@ struct ProgramImpl {
             header_sources.push_back(h.second.c_str());
         }
 
-        checkHiprtc(hiprtcCreateProgram(&prog, source.c_str(), name.c_str(),
-                                        static_cast<int>(header_sources.size()),
+        checkHiprtc(hiprtcCreateProgram(&prog, source.c_str(), name.c_str(), static_cast<int>(header_sources.size()),
                                         header_sources.data(), header_names.data()),
                     "hiprtcCreateProgram");
 
@@ -274,12 +273,11 @@ KernelLauncher& KernelLauncher::instantiate(const std::string& type_names) {
         kernel_->impl_->program->ensureCompiled();
 
         // Now get the function handle
-        hipError_t err = hipModuleGetFunction(&kernel_->impl_->func,
-                                               kernel_->impl_->program->module,
-                                               loweredName.c_str());
+        hipError_t err =
+            hipModuleGetFunction(&kernel_->impl_->func, kernel_->impl_->program->module, loweredName.c_str());
         if (err != hipSuccess) {
-            throw std::runtime_error("hipModuleGetFunction failed for '" + nameExpr +
-                                     "' (lowered: " + loweredName + "): " + hipGetErrorString(err));
+            throw std::runtime_error("hipModuleGetFunction failed for '" + nameExpr + "' (lowered: " + loweredName +
+                                     "): " + hipGetErrorString(err));
         }
     }
     instantiated_ = true;
@@ -392,9 +390,8 @@ void KernelLauncher::launchRaw(void** kernel_args, size_t num_args) {
         return;
     }
 
-    hipError_t err =
-        hipModuleLaunchKernel(kernel_->impl_->func, grid_.x, grid_.y, grid_.z, block_.x, block_.y, block_.z,
-                              shared_mem_, stream_, kernel_args, nullptr);
+    hipError_t err = hipModuleLaunchKernel(kernel_->impl_->func, grid_.x, grid_.y, grid_.z, block_.x, block_.y,
+                                           block_.z, shared_mem_, stream_, kernel_args, nullptr);
 
     checkHip(err, ("hipModuleLaunchKernel failed for '" + kernel_->impl_->name + "'").c_str());
     (void)num_args;

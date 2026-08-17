@@ -4,7 +4,7 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 // =============================================================================
-// This small validation demo exercises analytical cone contacts without using
+// This small modular test exercises analytical cone contacts without using
 // triangle meshes. It keeps all contacts in one DEM solver initialization:
 //   - inward cone side contact,
 //   - outward cone side contact,
@@ -99,14 +99,14 @@ void write_validation_case_metadata(const std::filesystem::path& out_file,
         // DEM object itself remains the semi-infinite analytical AddCone used
         // below, so this metadata does not introduce a mesh into the test.
         constexpr float display_height = 2.25f;
-        metadata << i << "," << this_case.name << "," << this_case.title << "," << i << ","
-                 << this_case.sphere_family << "," << this_case.cone_family << "," << sphere_radius << ","
-                 << this_case.sphere_position.x << "," << this_case.sphere_position.y << ","
-                 << this_case.sphere_position.z << "," << this_case.cone_tip.x << "," << this_case.cone_tip.y << ","
-                 << this_case.cone_tip.z << "," << this_case.cone_axis.x << "," << this_case.cone_axis.y << ","
-                 << this_case.cone_axis.z << "," << this_case.slope << "," << normal_mode_name(this_case.normal) << ","
-                 << (this_case.expected_active_contact ? 1 : 0) << "," << this_case.expected_force_x_sign << ","
-                 << this_case.expected_force_z_sign << "," << display_height << "\n";
+        metadata << i << "," << this_case.name << "," << this_case.title << "," << i << "," << this_case.sphere_family
+                 << "," << this_case.cone_family << "," << sphere_radius << "," << this_case.sphere_position.x << ","
+                 << this_case.sphere_position.y << "," << this_case.sphere_position.z << "," << this_case.cone_tip.x
+                 << "," << this_case.cone_tip.y << "," << this_case.cone_tip.z << "," << this_case.cone_axis.x << ","
+                 << this_case.cone_axis.y << "," << this_case.cone_axis.z << "," << this_case.slope << ","
+                 << normal_mode_name(this_case.normal) << "," << (this_case.expected_active_contact ? 1 : 0) << ","
+                 << this_case.expected_force_x_sign << "," << this_case.expected_force_z_sign << "," << display_height
+                 << "\n";
     }
 }
 
@@ -138,8 +138,7 @@ int main(int argc, char** argv) {
         {"apex", "Apex contact", make_float3(8.0f, 0.0f, -0.05f), make_float3(8.0f, 0.0f, 0.0f),
          make_float3(0.0f, 0.0f, 1.0f), 1.0f, ENTITY_NORMAL_INWARD, 12, 22, 0, -1, true},
         {"no_contact", "No-contact control", make_float3(12.5f, 0.0f, 1.0f), make_float3(12.0f, 0.0f, 0.0f),
-         make_float3(0.0f, 0.0f, 1.0f), 1.0f, ENTITY_NORMAL_INWARD, 13, 23, 0, 0, false}
-    };
+         make_float3(0.0f, 0.0f, 1.0f), 1.0f, ENTITY_NORMAL_INWARD, 13, 23, 0, 0, false}};
 
     std::vector<float3> sphere_positions;
     std::vector<unsigned int> sphere_families;

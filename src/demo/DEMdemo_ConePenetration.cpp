@@ -84,8 +84,8 @@ int main() {
     const float cone_radius = cone_diameter / 2;
     const float cone_height = cone_radius * tip_height;
     auto cone_tip = DEMSim.AddExternalObject();
-    cone_tip->AddConeSegment(make_float3(0, 0, -3.0 / 4.0 * cone_height), make_float3(0, 0, 1),
-                             1.0 / tip_height, 0.0, cone_height, mat_type_cone, ENTITY_NORMAL_OUTWARD);
+    cone_tip->AddConeSegment(make_float3(0, 0, -3.0 / 4.0 * cone_height), make_float3(0, 0, 1), 1.0 / tip_height, 0.0,
+                             cone_height, mat_type_cone, ENTITY_NORMAL_OUTWARD);
     auto cone_body = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/cyl_r1_h2.obj"), mat_type_cone);
     std::cout << "Total num of mesh triangles: " << cone_body->GetNumTriangles() << std::endl;
 
@@ -93,11 +93,10 @@ int main() {
     // so the local apex is at -3H/4 and the base rim at H/4.
     float cone_mass = 7.8e3 * math_PI * cone_radius * cone_radius * cone_height / 3;
     cone_tip->SetMass(cone_mass);
-    cone_tip->SetMOI(make_float3(cone_mass * (3. / 20. * cone_radius * cone_radius +
-                                              3. / 80. * cone_height * cone_height),
-                                 cone_mass * (3. / 20. * cone_radius * cone_radius +
-                                              3. / 80. * cone_height * cone_height),
-                                 3 * cone_mass * cone_radius * cone_radius / 10));
+    cone_tip->SetMOI(
+        make_float3(cone_mass * (3. / 20. * cone_radius * cone_radius + 3. / 80. * cone_height * cone_height),
+                    cone_mass * (3. / 20. * cone_radius * cone_radius + 3. / 80. * cone_height * cone_height),
+                    3 * cone_mass * cone_radius * cone_radius / 10));
     cone_tip->SetFamily(2);
 
     // The define the body that is connected to the tip

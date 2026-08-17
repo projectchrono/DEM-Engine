@@ -8,14 +8,14 @@
 
 #ifndef USE_HIP
 
-#include "JitKernel.h"
+    #include "JitKernel.h"
 
-// Jitify is in the build tree at ${CMAKE_BINARY_DIR}/src/jitify/
-// Include path is added by CMake target_include_directories
-#include <jitify/jitify.hpp>
-#include <unordered_map>
-#include <stdexcept>
-#include <mutex>
+    // Jitify is in the build tree at ${CMAKE_BINARY_DIR}/src/jitify/
+    // Include path is added by CMake target_include_directories
+    #include <jitify/jitify.hpp>
+    #include <unordered_map>
+    #include <stdexcept>
+    #include <mutex>
 
 namespace deme {
 namespace jit {
