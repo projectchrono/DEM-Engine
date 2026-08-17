@@ -10,6 +10,7 @@
 #include <vector>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <set>
 #include <functional>
 
@@ -23,10 +24,12 @@
 #include "Structs.h"
 #include "AuxClasses.h"
 
-// Forward declare jitify::Program to avoid downstream dependency
-namespace jitify {
+// Forward declare deme::jit::Program
+namespace deme {
+namespace jit {
 class Program;
 }
+}  // namespace deme
 
 namespace deme {
 
@@ -631,7 +634,7 @@ class DEMDynamicThread {
                        const std::vector<std::string>& JitifyOptions);
 
     // Execute this kernel, then return the reduced value
-    float* inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
+    float* inspectCall(const std::shared_ptr<deme::jit::Program>& inspection_kernel,
                        const std::string& kernel_name,
                        INSPECT_ENTITY_TYPE thing_to_insp,
                        CUB_REDUCE_FLAVOR reduce_flavor,
@@ -709,13 +712,13 @@ class DEMDynamicThread {
         const std::function<bool(unsigned int, unsigned int, unsigned int, unsigned int)>& condition);
 
     // Just-in-time compiled kernels
-    std::shared_ptr<jitify::Program> prep_force_kernels;
-    std::shared_ptr<jitify::Program> cal_force_kernels;
-    std::shared_ptr<jitify::Program> collect_force_kernels;
-    std::shared_ptr<jitify::Program> integrator_kernels;
-    // std::shared_ptr<jitify::Program> quarry_stats_kernels;
-    std::shared_ptr<jitify::Program> mod_kernels;
-    std::shared_ptr<jitify::Program> misc_kernels;
+    std::shared_ptr<deme::jit::Program> prep_force_kernels;
+    std::shared_ptr<deme::jit::Program> cal_force_kernels;
+    std::shared_ptr<deme::jit::Program> collect_force_kernels;
+    std::shared_ptr<deme::jit::Program> integrator_kernels;
+    // std::shared_ptr<deme::jit::Program> quarry_stats_kernels;
+    std::shared_ptr<deme::jit::Program> mod_kernels;
+    std::shared_ptr<deme::jit::Program> misc_kernels;
 
     // Adjuster for update freq
     class AccumStepUpdater {

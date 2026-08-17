@@ -3,7 +3,12 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#include <cub/cub.cuh>
+#include <core/utils/cuda_to_hip.h>
+#if defined(USE_HIP)
+    #include <hipcub/hipcub.hpp>
+#else
+    #include <cub/cub.cuh>
+#endif
 #include <algorithms/DEMStaticDeviceSubroutines.h>
 
 #include <core/utils/GpuError.h>

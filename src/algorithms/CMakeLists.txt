@@ -15,10 +15,17 @@ target_include_directories(
 	PUBLIC ${ProjectIncludeGenerated}
 )
 
-target_link_libraries(
-	algorithms
-	PUBLIC CUB::CUB
-)
+if(USE_HIP)
+	target_link_libraries(
+		algorithms
+		PUBLIC hip::hipcub
+	)
+else()
+	target_link_libraries(
+		algorithms
+		PUBLIC CUB::CUB
+	)
+endif()
 
 ### HOST HEADERS ONLY (.h, .hpp) ###
 set(algorithms_interface
@@ -45,23 +52,36 @@ target_sources(
 	PRIVATE ${algorithms_sources}
 )
 
-# Get a list of supported architectures
-include(../../cmake/CudaSupportedArchitectures.cmake)
-cuda_supported_architectures()
+if(USE_HIP)
+	# Mark .cu sources as HIP language
+	set_source_files_properties(${algorithms_sources} PROPERTIES LANGUAGE HIP)
 
-# Convert the cuda supported architectures into their respective CMake properties
-set(virtual_architectures "")
-foreach(arch ${CUDASUP_ARCHITECTURES})
-	list(APPEND virtual_architectures "${arch}-virtual")
-endforeach()
+	set_target_properties(
+		algorithms PROPERTIES
+		POSITION_INDEPENDENT_CODE True
+		CXX_STANDARD ${CXXSTD_SUPPORTED}
+		PUBLIC_HEADER "${algorithms_interface}"
+		HIP_ARCHITECTURES "${CMAKE_HIP_ARCHITECTURES}"
+	)
+else()
+	# Get a list of supported architectures
+	include(../../cmake/CudaSupportedArchitectures.cmake)
+	cuda_supported_architectures()
 
-set_target_properties(
-	algorithms PROPERTIES 
-	POSITION_INDEPENDENT_CODE True
-	CXX_STANDARD ${CXXSTD_SUPPORTED}
-	PUBLIC_HEADER "${algorithms_interface}"
-	CUDA_ARCHITECTURES "${virtual_architectures}"
-)
+	# Convert the cuda supported architectures into their respective CMake properties
+	set(virtual_architectures "")
+	foreach(arch ${CUDASUP_ARCHITECTURES})
+		list(APPEND virtual_architectures "${arch}-virtual")
+	endforeach()
+
+	set_target_properties(
+		algorithms PROPERTIES
+		POSITION_INDEPENDENT_CODE True
+		CXX_STANDARD ${CXXSTD_SUPPORTED}
+		PUBLIC_HEADER "${algorithms_interface}"
+		CUDA_ARCHITECTURES "${virtual_architectures}"
+	)
+endif()
 
 install(
 	TARGETS algorithms

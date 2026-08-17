@@ -3,7 +3,12 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#include <cub/cub.cuh>
+#include <core/utils/cuda_to_hip.h>
+#if defined(USE_HIP)
+    #include <hipcub/hipcub.hpp>
+#else
+    #include <cub/cub.cuh>
+#endif
 // #include <thrust/sort.h>
 #include <kernel/DEMHelperKernels.cuh>
 
@@ -35,11 +40,11 @@ inline void contactEventArraysResize(size_t nContactPairs,
     granData.toDevice();
 }
 
-void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
-                      std::shared_ptr<jitify::Program>& bin_triangle_kernels,
-                      std::shared_ptr<jitify::Program>& sphere_contact_kernels,
-                      std::shared_ptr<jitify::Program>& sphTri_contact_kernels,
-                      std::shared_ptr<jitify::Program>& history_kernels,
+void contactDetection(std::shared_ptr<deme::jit::Program>& bin_sphere_kernels,
+                      std::shared_ptr<deme::jit::Program>& bin_triangle_kernels,
+                      std::shared_ptr<deme::jit::Program>& sphere_contact_kernels,
+                      std::shared_ptr<deme::jit::Program>& sphTri_contact_kernels,
+                      std::shared_ptr<deme::jit::Program>& history_kernels,
                       DualStruct<DEMDataKT>& granData,
                       DualStruct<DEMSimParams>& simParams,
                       SolverFlags& solverFlags,

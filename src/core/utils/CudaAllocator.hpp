@@ -8,7 +8,7 @@
 
 #include <core/ApiVersion.h>
 
-#include <cuda_runtime_api.h>
+#include "cuda_to_hip.h"
 #include <climits>
 #include <iostream>
 #include <memory>

@@ -1370,12 +1370,12 @@ class DEMSolver {
     void PrintKinematicScratchSpaceUsage() const { kT->printScratchSpaceUsage(); }
 
     /// Let dT do this call and return the reduce value of the inspected quantity.
-    float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
+    float dTInspectReduce(const std::shared_ptr<deme::jit::Program>& inspection_kernel,
                           const std::string& kernel_name,
                           INSPECT_ENTITY_TYPE thing_to_insp,
                           CUB_REDUCE_FLAVOR reduce_flavor,
                           bool all_domain);
-    float* dTInspectNoReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
+    float* dTInspectNoReduce(const std::shared_ptr<deme::jit::Program>& inspection_kernel,
                              const std::string& kernel_name,
                              INSPECT_ENTITY_TYPE thing_to_insp,
                              CUB_REDUCE_FLAVOR reduce_flavor,
@@ -1509,7 +1509,9 @@ class DEMSolver {
     int m_updateFreq = 20;
 
     // The extra libs that the kernels need to include.
-    std::string kernel_includes = "#include <curand_kernel.h>\n";
+    // Default: none (curand/hiprand not used by built-in kernels).
+    // Users can add custom includes via SetKernelInclude() if needed.
+    std::string kernel_includes = "";
 
     // If and how we should add boundaries to the simulation world upon initialization. Choose between none, all and
     // top_open.
@@ -1752,11 +1754,11 @@ class DEMSolver {
     // Some float3 quantity that is representitive of a component's initial orientation (such as plane normal, and its
     // meaning can vary among different types)
     std::vector<float3> m_anal_comp_rot;
-    // Some float quantity that is representitive of a component's size (e.g. for a cylinder, top radius)
+    // Some float quantity that is representitive of a component's size (e.g. cylinder radius or cone slope)
     std::vector<float> m_anal_size_1;
-    // Some float quantity that is representitive of a component's size (e.g. for a cylinder, bottom radius)
+    // Some float quantity that is representitive of a component's size (e.g. cone lower axial bound)
     std::vector<float> m_anal_size_2;
-    // Some float quantity that is representitive of a component's size (e.g. for a cylinder, its length)
+    // Some float quantity that is representitive of a component's size (e.g. cone upper axial bound)
     std::vector<float> m_anal_size_3;
     // Component object types
     std::vector<objType_t> m_anal_types;

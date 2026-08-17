@@ -880,34 +880,35 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
                                        const std::vector<std::string>& JitifyOptions) {
     // First one is bin_sphere_kernels kernels, which figure out the bin--sphere touch pairs
     {
-        bin_sphere_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+        bin_sphere_kernels = std::make_shared<deme::jit::Program>(std::move(JitHelper::buildProgram(
             "DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu", Subs, JitifyOptions)));
     }
     // Then CD kernels
     {
-        sphere_contact_kernels = std::make_shared<jitify::Program>(std::move(
+        sphere_contact_kernels = std::make_shared<deme::jit::Program>(std::move(
             JitHelper::buildProgram("DEMContactKernels_SphereSphere",
                                     JitHelper::KERNEL_DIR / "DEMContactKernels_SphereSphere.cu", Subs, JitifyOptions)));
     }
-    // Then triangle--bin intersection-related kernels
-    {
-        bin_triangle_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+    // Mesh kernels are only needed when triangle geometry exists. Analytical
+    // walls/planes use the non-mesh contact path.
+    if (solverFlags.hasMeshes) {
+        bin_triangle_kernels = std::make_shared<deme::jit::Program>(std::move(JitHelper::buildProgram(
             "DEMBinTriangleKernels", JitHelper::KERNEL_DIR / "DEMBinTriangleKernels.cu", Subs, JitifyOptions)));
-    }
-    // Then sphere--triangle contact detection-related kernels
-    {
-        sphTri_contact_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+        sphTri_contact_kernels = std::make_shared<deme::jit::Program>(std::move(JitHelper::buildProgram(
             "DEMContactKernels_SphereTriangle", JitHelper::KERNEL_DIR / "DEMContactKernels_SphereTriangle.cu", Subs,
             JitifyOptions)));
+    } else {
+        bin_triangle_kernels.reset();
+        sphTri_contact_kernels.reset();
     }
     // Then contact history mapping kernels
     {
-        history_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+        history_kernels = std::make_shared<deme::jit::Program>(std::move(JitHelper::buildProgram(
             "DEMHistoryMappingKernels", JitHelper::KERNEL_DIR / "DEMHistoryMappingKernels.cu", Subs, JitifyOptions)));
     }
     // Then misc kernels
     {
-        misc_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+        misc_kernels = std::make_shared<deme::jit::Program>(std::move(JitHelper::buildProgram(
             "DEMMiscKernels", JitHelper::KERNEL_DIR / "DEMMiscKernels.cu", Subs, JitifyOptions)));
     }
 }

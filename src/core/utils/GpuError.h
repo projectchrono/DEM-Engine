@@ -9,7 +9,7 @@
 #include <iostream>
 #include <sstream>
 #include <exception>
-#include <cuda_runtime_api.h>
+#include "cuda_to_hip.h"
 
 #define DEME_GPU_CALL(res) \
     { gpu_assert((res), __FILE__, __LINE__); }

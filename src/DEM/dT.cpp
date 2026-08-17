@@ -532,6 +532,12 @@ void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
             DEME_DUAL_ARRAY_RESIZE(contactTorque_convToForce, cnt_arr_size, make_float3(0));
             DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, cnt_arr_size, make_float3(0));
             DEME_DUAL_ARRAY_RESIZE(contactPointGeometryB, cnt_arr_size, make_float3(0));
+            // The contact point device ranges must be zeroed for the same reason as in
+            // contactEventArraysResize: resize fills host values only, and these two arrays
+            // are never per-step cleared, so entries that no kernel writes (margin-only
+            // pairs) would otherwise expose recycled device memory.
+            DEME_GPU_CALL(cudaMemset(contactPointGeometryA.data(), 0, cnt_arr_size * sizeof(float3)));
+            DEME_GPU_CALL(cudaMemset(contactPointGeometryB.data(), 0, cnt_arr_size * sizeof(float3)));
         }
         // Allocate memory for each wildcard array
         contactWildcards.resize(simParams->nContactWildcards);
@@ -1945,6 +1951,16 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
         DEME_DUAL_ARRAY_RESIZE(contactTorque_convToForce, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, nContactPairs, make_float3(0));
         DEME_DUAL_ARRAY_RESIZE(contactPointGeometryB, nContactPairs, make_float3(0));
+        // DualArray::resize(n, val) fills host values only, so the grown device range holds
+        // whatever the allocator recycled. contactForces and contactTorque_convToForce are
+        // cleared every time step by prepareForceArrays before use, but the contact point
+        // arrays are only ever written for entries whose ContactType is a real contact, and
+        // collectContactForcesAccStyle reads them for ALL entries: cross(garbage, 0) is 0 for
+        // finite garbage but NaN for NaN/inf garbage, which poisons that owner's angular
+        // acceleration and cascades (quaternion -> position -> full-grid bin ranges in kT's
+        // contact detection, presenting as a GPU-pegged stall). Zero them on device here.
+        DEME_GPU_CALL(cudaMemset(contactPointGeometryA.data(), 0, nContactPairs * sizeof(float3)));
+        DEME_GPU_CALL(cudaMemset(contactPointGeometryB.data(), 0, nContactPairs * sizeof(float3)));
     }
 
     // Re-packing pointers now is automatic
@@ -2519,41 +2535,41 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
                                      const std::vector<std::string>& JitifyOptions) {
     // First one is force array preparation kernels
     {
-        prep_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+        prep_force_kernels = std::make_shared<deme::jit::Program>(std::move(JitHelper::buildProgram(
             "DEMPrepForceKernels", JitHelper::KERNEL_DIR / "DEMPrepForceKernels.cu", Subs, JitifyOptions)));
     }
     // Then force calculation kernels
     {
-        cal_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+        cal_force_kernels = std::make_shared<deme::jit::Program>(std::move(JitHelper::buildProgram(
             "DEMCalcForceKernels", JitHelper::KERNEL_DIR / "DEMCalcForceKernels.cu", Subs, JitifyOptions)));
     }
     // Then force accumulation kernels
     if (solverFlags.useCubForceCollect) {
-        collect_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+        collect_force_kernels = std::make_shared<deme::jit::Program>(std::move(JitHelper::buildProgram(
             "DEMCollectForceKernels", JitHelper::KERNEL_DIR / "DEMCollectForceKernels.cu", Subs, JitifyOptions)));
     } else {
-        collect_force_kernels = std::make_shared<jitify::Program>(std::move(
+        collect_force_kernels = std::make_shared<deme::jit::Program>(std::move(
             JitHelper::buildProgram("DEMCollectForceKernels_Compact",
                                     JitHelper::KERNEL_DIR / "DEMCollectForceKernels_Compact.cu", Subs, JitifyOptions)));
     }
     // Then integration kernels
     {
-        integrator_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+        integrator_kernels = std::make_shared<deme::jit::Program>(std::move(JitHelper::buildProgram(
             "DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu", Subs, JitifyOptions)));
     }
     // Then kernels that are... wildcards, which make on-the-fly changes to solver data
     if (solverFlags.canFamilyChangeOnDevice) {
-        mod_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+        mod_kernels = std::make_shared<deme::jit::Program>(std::move(JitHelper::buildProgram(
             "DEMModeratorKernels", JitHelper::KERNEL_DIR / "DEMModeratorKernels.cu", Subs, JitifyOptions)));
     }
     // Then misc kernels
     {
-        misc_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+        misc_kernels = std::make_shared<deme::jit::Program>(std::move(JitHelper::buildProgram(
             "DEMMiscKernels", JitHelper::KERNEL_DIR / "DEMMiscKernels.cu", Subs, JitifyOptions)));
     }
 }
 
-float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
+float* DEMDynamicThread::inspectCall(const std::shared_ptr<deme::jit::Program>& inspection_kernel,
                                      const std::string& kernel_name,
                                      INSPECT_ENTITY_TYPE thing_to_insp,
                                      CUB_REDUCE_FLAVOR reduce_flavor,

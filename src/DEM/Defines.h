@@ -12,7 +12,7 @@
 #include <cmath>
 
 #include "VariableTypes.h"
-#include "cuda_runtime.h"
+#include <core/utils/cuda_to_hip.h>
 
 #define DEME_MIN(a, b) ((a < b) ? a : b)
 #define DEME_MAX(a, b) ((a > b) ? a : b)
@@ -29,7 +29,17 @@ namespace deme {
 #define DEME_TINY_FLOAT 1e-12                ///< Appears to be very sensitive to even smaller values...
 #define DEME_HUGE_FLOAT 1e15
 #define DEME_BITS_PER_BYTE 8
-#define DEME_CUDA_WARP_SIZE 32
+// Wavefront/warp size: 64 only on AMD wave64 device code (gfx8/gfx9 GCN/CDNA); 32 everywhere
+// else (AMD RDNA, NVIDIA, and host code). ROCm 7.2.x does not provide __AMDGCN_WAVEFRONT_SIZE__,
+// so device code keys off the __GFX*__ macros. For JIT kernels the actual device warp size is
+// queried at runtime and substituted.
+#if defined(__HIP_DEVICE_COMPILE__) && (defined(__GFX8__) || defined(__GFX9__))
+    #define DEME_WARP_SIZE 64
+#else
+    #define DEME_WARP_SIZE 32
+#endif
+// Legacy macro for compatibility
+#define DEME_CUDA_WARP_SIZE DEME_WARP_SIZE
 #define DEME_MAX_WILDCARD_NUM 16
 // In bin--triangle intersection scan, all bins are enlarged by a factor of this following constant, so that no triangle
 // lies in between bins and not picked up by any bins.
@@ -47,7 +57,7 @@ constexpr uint8_t VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * DEME_BITS_PER_BYTE;
 constexpr uint8_t VOXEL_COUNT_POWER2 = sizeof(voxelID_t) * DEME_BITS_PER_BYTE;
 constexpr int64_t MAX_SUBVOXEL = (int64_t)1 << VOXEL_RES_POWER2;
 
-#define DEME_NUM_BODIES_PER_BLOCK 1024
+#define DEME_NUM_BODIES_PER_BLOCK 512
 #define DEME_NUM_MODERATORS_PER_BLOCK 512
 
 #define DEME_NUM_TRIANGLE_PER_BLOCK 512
@@ -68,6 +78,8 @@ constexpr clumpComponentOffset_t NUM_ACTIVE_TEMPLATE_LOADING_THREADS =
 const objType_t ANAL_OBJ_TYPE_PLANE = 0;
 const objType_t ANAL_OBJ_TYPE_PLATE = 1;
 const objType_t ANAL_OBJ_TYPE_CYL_INF = 2;
+const objType_t ANAL_OBJ_TYPE_CONE_INF = 3;
+const objType_t ANAL_OBJ_TYPE_CONE = 4;
 const objNormal_t ENTITY_NORMAL_INWARD = 0;
 const objNormal_t ENTITY_NORMAL_OUTWARD = 1;
 

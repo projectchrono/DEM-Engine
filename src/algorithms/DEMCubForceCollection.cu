@@ -3,7 +3,12 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#include <cub/cub.cuh>
+#include <core/utils/cuda_to_hip.h>
+#if defined(USE_HIP)
+    #include <hipcub/hipcub.hpp>
+#else
+    #include <cub/cub.cuh>
+#endif
 // #include <thrust/sort.h>
 #include <kernel/DEMHelperKernels.cuh>
 
@@ -16,7 +21,7 @@
 
 namespace deme {
 
-void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force_kernels,
+void collectContactForcesThruCub(std::shared_ptr<deme::jit::Program>& collect_force_kernels,
                                  DualStruct<DEMDataDT>& granData,
                                  const size_t nContactPairs,
                                  const size_t nClumps,

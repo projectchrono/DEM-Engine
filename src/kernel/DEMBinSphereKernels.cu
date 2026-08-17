@@ -56,6 +56,18 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                 double myBinZ = myPosXYZ.z / simParams->binSize;
                 // How many bins my radius spans (with fractions)?
                 double myRadiusSpan = myRadius / simParams->binSize;
+                // A non-finite position or span makes every comparison in the range clamping
+                // below evaluate false, which silently assigns this sphere the ENTIRE bin grid
+                // and turns the per-bin contact sweep into an all-pairs workload that presents
+                // as a GPU-pegged stall. Erroring out loudly is the only sane option here.
+                if (!isfinite(myBinX) || !isfinite(myBinY) || !isfinite(myBinZ) || !isfinite(myRadiusSpan)) {
+                    DEME_ABORT_KERNEL(
+                        "Sphere %u has a non-finite position or contact margin (bin coordinates %f, %f, %f, radius "
+                        "span %f).\nThis usually means the simulation has diverged (a NaN orientation quaternion or "
+                        "angular velocity is a common cause), and relaxing the physics may help, such as decreasing "
+                        "the step size and modifying material properties.\n",
+                        sphereID, myBinX, myBinY, myBinZ, myRadiusSpan);
+                }
                 // printf("myRadius: %f\n", myRadiusSpan);
                 // Now, figure out how many bins I touch in each direction
                 numX = ((myBinX + myRadiusSpan < (double)simParams->nbX) ? (unsigned int)(myBinX + myRadiusSpan)
