@@ -57,7 +57,7 @@ constexpr uint8_t VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * DEME_BITS_PER_BYTE;
 constexpr uint8_t VOXEL_COUNT_POWER2 = sizeof(voxelID_t) * DEME_BITS_PER_BYTE;
 constexpr int64_t MAX_SUBVOXEL = (int64_t)1 << VOXEL_RES_POWER2;
 
-#define DEME_NUM_BODIES_PER_BLOCK 1024
+#define DEME_NUM_BODIES_PER_BLOCK 512
 #define DEME_NUM_MODERATORS_PER_BLOCK 512
 
 #define DEME_NUM_TRIANGLE_PER_BLOCK 512
