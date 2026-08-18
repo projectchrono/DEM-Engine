@@ -37,8 +37,8 @@
 
 deme::jit::ProgramCache* JitHelper::kcache = nullptr;
 
-const std::filesystem::path JitHelper::KERNEL_DIR = DEMERuntimeDataHelper::data_path / "kernel";
-const std::filesystem::path JitHelper::KERNEL_INCLUDE_DIR = DEMERuntimeDataHelper::include_path;
+std::filesystem::path JitHelper::KERNEL_DIR = DEMERuntimeDataHelper::data_path / "kernel";
+std::filesystem::path JitHelper::KERNEL_INCLUDE_DIR = DEMERuntimeDataHelper::include_path;
 
 JitHelper::Header::Header(const std::filesystem::path& sourcefile) {
     this->_source = JitHelper::loadSourceFile(sourcefile);

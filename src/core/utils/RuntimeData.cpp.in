@@ -14,3 +14,7 @@ std::filesystem::path DEMERuntimeDataHelper::data_path = std::filesystem::path(D
 // This include path is for the included headers in the kernels that need jitification
 std::filesystem::path DEMERuntimeDataHelper::include_path = std::filesystem::path(DEME_RUNTIME_INCLUDE_DIRECTORY);
 
+void DEMERuntimeDataHelper::SetPathPrefix(const std::filesystem::path& path) {
+    data_path = path / "share/DEME";
+    include_path = path / "include";
+}

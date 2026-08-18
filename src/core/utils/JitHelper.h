@@ -38,8 +38,8 @@ class JitHelper {
         std::unordered_map<std::string, std::string> substitutions = std::unordered_map<std::string, std::string>(),
         std::vector<std::string> flags = std::vector<std::string>());
 
-    static const std::filesystem::path KERNEL_DIR;
-    static const std::filesystem::path KERNEL_INCLUDE_DIR;
+    static std::filesystem::path KERNEL_DIR;
+    static std::filesystem::path KERNEL_INCLUDE_DIR;
 
   private:
     static deme::jit::ProgramCache* kcache;

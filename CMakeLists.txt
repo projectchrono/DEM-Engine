@@ -9,10 +9,17 @@
 
 cmake_minimum_required(VERSION 3.18)
 
-# Version information
-set(DEME_VERSION_MAJOR   2)
-set(DEME_VERSION_MINOR   1)
-set(DEME_VERSION_PATCH   0)
+# VERSION is the authoritative release version for CMake and Python packaging.
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" DEME_VERSION LIMIT_COUNT 1)
+string(STRIP "${DEME_VERSION}" DEME_VERSION)
+if(NOT DEME_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+	message(FATAL_ERROR "VERSION must contain a three-component semantic version; found '${DEME_VERSION}'")
+endif()
+
+string(REPLACE "." ";" DEME_VERSION_COMPONENTS "${DEME_VERSION}")
+list(GET DEME_VERSION_COMPONENTS 0 DEME_VERSION_MAJOR)
+list(GET DEME_VERSION_COMPONENTS 1 DEME_VERSION_MINOR)
+list(GET DEME_VERSION_COMPONENTS 2 DEME_VERSION_PATCH)
 
 # HIP/ROCm support option (must be set before project() to select the right language)
 option(USE_HIP "Build with HIP for AMD GPUs" OFF)
@@ -55,6 +62,22 @@ include(FetchContent)
 
 include(cmake/FixNinjaColors.cmake)
 fix_ninja_colors()
+
+option(DEME_BUILD_PYTHON "Build Python bindings for DEME" OFF)
+option(DEME_BUILD_DEMOS "Build DEME demos and modular tests" ON)
+
+if(DEME_BUILD_PYTHON)
+	if(USE_HIP)
+		message(FATAL_ERROR "Python wheels currently support the CUDA backend only")
+	endif()
+	find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
+	if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/pybind11/CMakeLists.txt")
+		add_subdirectory(thirdparty/pybind11 EXCLUDE_FROM_ALL)
+	else()
+		find_package(pybind11 CONFIG REQUIRED)
+	endif()
+	message(STATUS "Python bindings enabled for Python ${Python_VERSION}")
+endif()
 
 
 if(USE_HIP)
@@ -255,6 +278,30 @@ else()
 	)
 endif()
 
+if(DEME_BUILD_PYTHON)
+	pybind11_add_module(_deme
+		src/DEM/PyDEME.cpp
+		$<TARGET_OBJECTS:core>
+		$<TARGET_OBJECTS:DEM>
+		$<TARGET_OBJECTS:algorithms>
+	)
+	target_include_directories(_deme PRIVATE ${ProjectIncludeSource} ${ProjectIncludeGenerated})
+	target_link_libraries(_deme PRIVATE
+		CUDA::cudart
+		CUDA::nvrtc
+		CUDA::cuda_driver
+		DEMERuntimeDataHelper_python
+		pybind11::headers
+	)
+	if(USE_CHPF)
+		target_link_libraries(_deme PRIVATE ${ChPF_IMPORTED_NAME})
+	endif()
+	set_target_properties(_deme PROPERTIES CXX_STANDARD ${CXXSTD_SUPPORTED} POSITION_INDEPENDENT_CODE TRUE)
+	install(TARGETS _deme LIBRARY DESTINATION deme COMPONENT python)
+	install(FILES src/DEM/python/deme/__init__.py DESTINATION deme COMPONENT python)
+	install(FILES src/DEM/python/DEME.py DESTINATION . COMPONENT python)
+endif()
+
 # ---------------------------------------------------------------------------- #
 # Export and Install The Generated Targets 
 # ---------------------------------------------------------------------------- #
@@ -357,5 +404,6 @@ install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/src/kernel/ DESTINATION ${CMAKE_INST
 # ---------------------------------------------------------------------------- #
 # Build embedded demos
 # ---------------------------------------------------------------------------- #
-add_subdirectory(src/demo)
-
+if(DEME_BUILD_DEMOS)
+	add_subdirectory(src/demo)
+endif()

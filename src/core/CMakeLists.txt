@@ -216,3 +216,18 @@ set_target_properties(
 
 # Make sure this target is generated **AFTER** the build-tree version 
 add_dependencies(DEMERuntimeDataHelper_install DEMERuntimeDataHelper)
+
+if(DEME_BUILD_PYTHON)
+	add_library(DEMERuntimeDataHelper_python STATIC)
+	set(DEME_RUNTIME_DATA_DIRECTORY "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/DEME")
+	set(DEME_RUNTIME_INCLUDE_DIRECTORY "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}")
+	configure_file(utils/RuntimeData.cpp.in utils/RuntimeDataPython.cpp @ONLY)
+	target_sources(DEMERuntimeDataHelper_python
+		PRIVATE "${CMAKE_BINARY_DIR}/src/core/utils/RuntimeDataPython.cpp"
+	)
+	target_include_directories(DEMERuntimeDataHelper_python PUBLIC ${ProjectIncludeSource})
+	set_target_properties(DEMERuntimeDataHelper_python PROPERTIES
+		POSITION_INDEPENDENT_CODE TRUE
+		CXX_STANDARD ${CXXSTD_SUPPORTED}
+	)
+endif()

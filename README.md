@@ -59,7 +59,9 @@ You are welcome to discuss _DEME_ on [Project Chrono's forum](https://groups.goo
 
 _DEME_ is now available as a Python package, _pyDEME_. It is quick to install and pick up its usage by trying this Python version. If you want to maximize the performance and use the cutting-edge features, you can instead <a href="#compilation">install the C++ version of _DEME_ from source</a>.
 
-To install _pyDEME_, use a Linux machine, install CUDA if you do not already have it. Useful installation instructions may be found [here](https://developer.nvidia.com/cuda-downloads). 
+> **pyDEME binary-wheel support:** The PyPI package currently supports 64-bit x86 Linux (including Linux under WSL), CPython 3.9 through 3.14, and NVIDIA GPUs through CUDA. Native Windows, macOS, Linux on ARM, PyPy, and AMD ROCm wheels are not currently provided. The CUDA driver and runtime must be installed separately; they are not bundled in the wheel. These restrictions apply to the PyPI package, not necessarily to DEME built from source.
+
+To install _pyDEME_, use a supported Linux environment and install CUDA if you do not already have it. Useful installation instructions may be found [here](https://developer.nvidia.com/cuda-downloads).
 
 - CUDA 12.8 is recommended. Versions older than 12.8 generally work, but note there are scattered bugged versions such as 11.3, 12.1, 12.2, 12.3 etc.
   - Avoid CUDA 13.0+. Currently version 13.0+ results in extremely slow just-in-time compilation. This may be fixed in future versions of DEME.
@@ -70,10 +72,10 @@ Once CUDA is ready, you can `pip` install _pyDEME_. In your conda environement, 
 conda create -n pyDEME python=3.11
 conda activate pyDEME
 conda install cmake
-pip3 install DEME
+pip3 install deme
 ```
 
-`pyDEME` can be replaced with an environement name of your choice. Other older Python versions other than 3.11 should work as well.
+`pyDEME` can be replaced with an environment name of your choice. Any supported CPython version from 3.9 through 3.14 can be used in place of 3.11.
 
 Then [Python scripts](https://github.com/projectchrono/DEM-Engine/tree/pyDEME_demo/src/demo) can be executed in this environment. To understand the content of each Python demo, refer to the explanations of the C++ demos with the same names in <a href="#examples">Numerical examples</a> section.
 
