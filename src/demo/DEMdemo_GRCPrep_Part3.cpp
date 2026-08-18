@@ -85,10 +85,14 @@ int main() {
     }
 
     // Now we load part2 clump locations from a part1 output file
-    auto part2_clump_xyz = DEMSim.ReadClumpXyzFromCsv("./DemoOutput_GRCPrep_Part2/GRC_3e6.csv");
-    auto part2_clump_quaternion = DEMSim.ReadClumpQuatFromCsv("./DemoOutput_GRCPrep_Part2/GRC_3e6.csv");
-    // auto part2_pairs = DEMSim.ReadContactPairsFromCsv("./DemoOutput_GRCPrep_Part2/Contact_pairs_3e6.csv");
-    // auto part2_wcs = DEMSim.ReadContactWildcardsFromCsv("./DemoOutput_GRCPrep_Part2/Contact_pairs_3e6.csv");
+    const auto part2_clump_file =
+        (std::filesystem::current_path() / "DemoOutput_GRCPrep_Part2" / "GRC_3e6.csv").string();
+    auto part2_clump_xyz = DEMSim.ReadClumpXyzFromCsv(part2_clump_file);
+    auto part2_clump_quaternion = DEMSim.ReadClumpQuatFromCsv(part2_clump_file);
+    // const auto part2_contact_file =
+    //     (std::filesystem::current_path() / "DemoOutput_GRCPrep_Part2" / "Contact_pairs_3e6.csv").string();
+    // auto part2_pairs = DEMSim.ReadContactPairsFromCsv(part2_contact_file);
+    // auto part2_wcs = DEMSim.ReadContactWildcardsFromCsv(part2_contact_file);
     std::vector<float3> in_xyz;
     std::vector<float4> in_quat;
     std::vector<std::shared_ptr<DEMClumpTemplate>> in_types;

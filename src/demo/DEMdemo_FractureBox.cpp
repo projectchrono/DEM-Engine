@@ -67,7 +67,7 @@ int main() {
     double bottom = 0;
     double top = 0.10;
 
-    auto walls = DEMSim.AddWavefrontMeshObject("../data/mesh/funnel_left.obj", mat_type_container);
+    auto walls = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/funnel_left.obj"), mat_type_container);
     float3 move = make_float3(0.05, 0.00, 0 - 2 * sphere_rad);  // z
     float4 rot = make_float4(0.7071, 0, 0, 0.7071);
     walls->Scale(make_float3(0.8, 0.1, 2.0));
@@ -117,7 +117,7 @@ int main() {
 
     std::filesystem::path out_dir = std::filesystem::current_path();
     std::string nameOutFolder = "R" + std::to_string(sphere_rad) + "_Int" + std::to_string(fact_radius) + "";
-    out_dir /= "DemoOutput_Fracture_" + nameOutFolder;
+    out_dir /= "DemoOutput_FractureBox_" + nameOutFolder;
     remove_all(out_dir);
     create_directory(out_dir);
 
@@ -151,7 +151,7 @@ int main() {
     double L0;
     double stress;
     std::string nameOutFile = "data_R" + std::to_string(sphere_rad) + "_Int" + std::to_string(fact_radius) + ".csv";
-    std::ofstream csvFile(nameOutFile);
+    std::ofstream csvFile(out_dir / nameOutFile);
 
     DEMSim.SetFamilyContactWildcardValueBoth(1, "initialLength", 0.0);
     // DEMSim.SetFamilyContactWildcardValueBoth(1, "damage", 0.0);
@@ -217,6 +217,6 @@ int main() {
     DEMSim.ShowMemStats();
     std::cout << "----------------------------------------" << std::endl;
     DEMSim.ShowTimingStats();
-    std::cout << "Fracture demo exiting..." << std::endl;
+    std::cout << "DEMdemo_FractureBox exiting..." << std::endl;
     return 0;
 }

@@ -105,16 +105,16 @@ int main() {
 
     // Loaded meshes are by-default fixed
 
-    auto fixed_left = DEMSim.AddWavefrontMeshObject("../data/mesh/funnel_left.obj", mat_type_flume);
+    auto fixed_left = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/funnel_left.obj"), mat_type_flume);
     float3 move = make_float3(-hopperW / 2.0, 0, -0.01);
     float4 rot = make_float4(0.7071, 0, 0, 0.7071);
     fixed_left->Move(move, rot);
 
-    auto fixed_right = DEMSim.AddWavefrontMeshObject("../data/mesh/funnel_left.obj", mat_type_flume);
+    auto fixed_right = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/funnel_left.obj"), mat_type_flume);
     move = make_float3(gateWidth + hopperW / 2.0, 0, -0.01);
     fixed_right->Move(move, rot);
 
-    auto gate = DEMSim.AddWavefrontMeshObject("../data/mesh/funnel_left.obj", mat_type_flume);
+    auto gate = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/funnel_left.obj"), mat_type_flume);
     gate->Move(make_float3(gateWidth / 2, 0, -0.011), rot);
 
     fixed_left->SetFamily(10);

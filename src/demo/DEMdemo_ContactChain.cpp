@@ -40,8 +40,8 @@ int main() {
     float massMultiplier = 5.0;  // Magnitude of the external force
 
     std::cout << "Inner friction: " << innerFriction << "; Mass multiplier: " << massMultiplier << "." << std::endl;
-    path out_dir = "";
-    out_dir += "./ContactChain_out";
+    path out_dir = current_path();
+    out_dir /= "DemoOutput_ContactChain";
     remove_all(out_dir);
     create_directories(out_dir);
 
@@ -77,7 +77,7 @@ int main() {
 
     // Loading the position of the spheres from an external file.
     //! Note that this list does not include the particle located at (0.0,0.0).
-    auto data_xyz = DEMSim.ReadClumpXyzFromCsv("../data/clumps/ContactChain_initial.csv");
+    auto data_xyz = DEMSim.ReadClumpXyzFromCsv(GetDEMEDataFile("clumps/ContactChain_initial.csv"));
     std::vector<float3> input_xyz;
 
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
