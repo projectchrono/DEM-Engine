@@ -86,20 +86,27 @@ deme::jit::Program JitHelper::buildProgram(const std::string& name,
 
     // Common fallbacks
 #if defined(USE_HIP)
-    // Helper: find clang builtin headers by scanning lib/llvm/lib/clang/<version>/include
+    // Helper: find clang builtin headers by scanning <base>/<version>/include.
+    // Linux ROCm keeps them under lib/llvm/lib/clang; the Windows HIP SDK under lib/clang.
     auto add_clang_builtins = [&](const std::filesystem::path& rocm_root) {
-        std::filesystem::path clang_base = rocm_root / "lib" / "llvm" / "lib" / "clang";
-        std::error_code scan_ec;
-        for (const auto& entry : std::filesystem::directory_iterator(clang_base, scan_ec)) {
-            if (entry.is_directory()) {
-                add_inc(entry.path() / "include");
-                break;  // use the first (and typically only) version dir
+        for (const auto& clang_base : {rocm_root / "lib" / "llvm" / "lib" / "clang", rocm_root / "lib" / "clang"}) {
+            std::error_code scan_ec;
+            for (const auto& entry : std::filesystem::directory_iterator(clang_base, scan_ec)) {
+                if (entry.is_directory()) {
+                    add_inc(entry.path() / "include");
+                    break;  // use the first (and typically only) version dir
+                }
             }
         }
     };
 
-    // ROCm include paths for hipRTC
-    if (const char* rocm_path = std::getenv("ROCM_PATH")) {
+    // ROCm include paths for hipRTC. ROCM_PATH is the Linux convention; the Windows HIP SDK
+    // sets HIP_PATH instead, so accept either (hiprtc on Windows has no implicit include path,
+    // which makes this lookup load-bearing there, not just a fallback).
+    const char* rocm_path = std::getenv("ROCM_PATH");
+    if (rocm_path == nullptr || rocm_path[0] == '\0')
+        rocm_path = std::getenv("HIP_PATH");
+    if (rocm_path != nullptr && rocm_path[0] != '\0') {
         add_inc(std::filesystem::path(rocm_path) / "include");
         add_inc(std::filesystem::path(rocm_path) / "include" / "hipcub");
         add_inc(std::filesystem::path(rocm_path) / "include" / "rocprim");
