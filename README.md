@@ -202,6 +202,24 @@ ninja
 
 If `CMAKE_HIP_ARCHITECTURES` is left unset it defaults to `gfx90a`. You can list the architecture of an installed device with `rocminfo`. If the ROCm install is not on CMake's default search path, point `-DCMAKE_PREFIX_PATH` at it (e.g. `/opt/rocm`) so `find_package` can locate hip and hipCUB. The demos are then run exactly as in the **Numerical examples** section.
 
+This backend has also been validated on AMD Instinct data-center GPUs: MI300X (`gfx942`) and MI350X (`gfx950`) nodes running ROCm 7.2.0, configured with `-DCMAKE_HIP_ARCHITECTURES="gfx90a;gfx942;gfx950"`. Note that `CMAKE_HIP_ARCHITECTURES` only governs ahead-of-time compiled code; the simulation kernels are compiled at run time by `hiprtc` for whatever device is present, so one multi-architecture build can serve nodes with different GPUs.
+
+#### AMD GPUs on native Windows
+
+_DEME_ also builds on Windows with the [AMD HIP SDK](https://rocm.docs.amd.com/projects/install-on-windows/en/latest/) (validated with HIP SDK 7.1 on a Radeon 8060S, `gfx1151`). Two Windows-specific points:
+
+- CMake does not support mixing MSVC for C++ with clang for HIP, so use the HIP SDK's own clang for both languages. From a VS 2022 Developer shell:
+
+```
+cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DUSE_HIP=ON -DCMAKE_HIP_ARCHITECTURES=gfx1151 ^
+  -DCMAKE_PREFIX_PATH="C:/Program Files/AMD/ROCm/7.1" ^
+  -DCMAKE_CXX_COMPILER="C:/Program Files/AMD/ROCm/7.1/bin/clang++.exe" ^
+  -DCMAKE_HIP_COMPILER="C:/Program Files/AMD/ROCm/7.1/bin/clang++.exe" ..
+ninja
+```
+
+- At run time, the runtime kernel compilation locates the ROCm headers through the `ROCM_PATH` or `HIP_PATH` environment variable; the HIP SDK installer sets `HIP_PATH`, so no extra setup is normally needed.
+
 ### Windows
 
 The process is similar to [the installation of Chrono](https://api.projectchrono.org/tutorial_install_chrono.html), which you can use as reference. The steps depend on your choice of tools, and what listed here are our recommendation.

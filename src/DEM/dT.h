@@ -6,6 +6,7 @@
 #ifndef DEME_DT
 #define DEME_DT
 
+#include <iostream>
 #include <mutex>
 #include <vector>
 #include <thread>
@@ -317,8 +318,17 @@ class DEMDynamicThread {
         // spawning the child thread.
         DEME_GPU_CALL(cudaStreamCreate(&streamInfo.stream));
 
-        // Launch a worker thread bound to this instance
-        th = std::move(std::thread([this]() { this->workerThread(); }));
+        // Launch a worker thread bound to this instance. An exception escaping a std::thread calls
+        // std::terminate; on some platforms (notably Windows) that prints nothing, so report it here
+        // before dying, otherwise runtime errors like JIT compilation failures are silently swallowed.
+        th = std::move(std::thread([this]() {
+            try {
+                this->workerThread();
+            } catch (const std::exception& e) {
+                std::cerr << "Fatal error in dT worker thread: " << e.what() << std::endl;
+                throw;
+            }
+        }));
     }
     ~DEMDynamicThread() {
         // std::cout << "Dynamic thread closing..." << std::endl;
