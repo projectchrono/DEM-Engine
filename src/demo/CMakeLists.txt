@@ -35,6 +35,7 @@ SET(DEMOS
 		DEMdemo_WheelDPSimplified
 		DEMdemo_WheelSlopeSlip
 		DEMdemo_Indentation
+		DEMdemo_PlateSinkage
 		DEMdemo_SolarSystem
 		DEMdemo_Electrostatic
 		DEMdemo_FlexibleMesh
