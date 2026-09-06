@@ -81,6 +81,10 @@ class DEMDynamicThread {
 
     // dT believes this amount of future drift is ideal
     DualStruct<unsigned int> perhapsIdealFutureDrift = DualStruct<unsigned int>(0);
+    // Finiteness probes for the system state, one per array checked. SUM reductions are used
+    // rather than MAX because a max reduction cannot propagate NaN: IEEE comparisons against
+    // NaN are false, so cub::DeviceReduce::Max silently skips NaN operands.
+    DualStruct<float> stateFiniteProbe = DualStruct<float>(0.f);
 
     // Buffer arrays for storing info from the dT side.
     // kT modifies these arrays; dT uses them only.
@@ -693,6 +697,8 @@ class DEMDynamicThread {
 
     // Change sim params based on dT's experience, if needed
     inline void calibrateParams();
+    // Verifies the integrated state is finite, and reports which component is not.
+    inline void checkStateIsFinite();
 
     // Determine the max vel for this cycle, kT needs it
     inline float* determineSysVel();

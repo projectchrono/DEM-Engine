@@ -7,6 +7,7 @@
 #include <iostream>
 #include <thread>
 #include <algorithm>
+#include <cmath>
 
 #ifdef DEME_USE_CHPF
     #include <chpf.hpp>
@@ -2289,9 +2290,58 @@ inline void DEMDynamicThread::ifProduceFreshThenUseIt() {
     }
 }
 
+
+inline void DEMDynamicThread::checkStateIsFinite() {
+    // WHY THIS EXISTS, AND WHY IT IS HERE RATHER THAN IN kT.
+    // kT has two NaN tests already, and neither one can see angular velocity, because angular
+    // velocity never crosses to kT: it lives here on dT. kT is handed the translational speed
+    // array and the orientation quaternions, so no check placed in kT can cover this at any
+    // strength. That is the whole reason this function is on dT.
+    // The two kT tests, for the record, so nobody re-adds a third one there:
+    //   1. unpackMyBuffer() tests isfinite() on a max-reduced velocity. Weak even on the
+    //      translational side: cub::DeviceReduce::Max compares with >, every comparison against
+    //      NaN is false, so NaN operands are skipped and an all-NaN array reduces to the initial
+    //      value -FLT_MAX, which is finite and passes.
+    //   2. computeMarginFromAbsv() does a per-element isfinite() with DEME_ABORT_KERNEL, which
+    //      is strong, but it reads marginSize, i.e. translational speed. It is also skipped
+    //      entirely when isExpandFactorFixed, since then the margin is not derived from speed.
+    // Measured on a settling bed with the pre-fix tree, 40 runs, automatic margin route active
+    // so test 2 was on duty throughout: three real corruptions, all three naming angular
+    // velocity (x) here, with translational speed still a healthy 0.570, 0.746 and 0.589 m/s and
+    // kinetic energy finite. Test 2 did not fire in any of those 40 runs, nor in 20 more.
+    // A SUM propagates NaN where a MAX does not, so probing each array with one is enough. The
+    // arrays are checked separately so the message can say which part of the state went bad.
+    const size_t n = simParams->nOwnerBodies;
+    const char* which = nullptr;
+    float* const arrays[4] = {pCycleVel, granData->omgBarX, granData->omgBarY, granData->omgBarZ};
+    const char* const names[4] = {"velocity", "angular velocity (x)", "angular velocity (y)",
+                                  "angular velocity (z)"};
+    for (int i = 0; i < 4; i++) {
+        if (!arrays[i])
+            continue;
+        cubSumReduce<float, float>(arrays[i], &(stateFiniteProbe), n, streamInfo.stream, solverScratchSpace);
+        stateFiniteProbe.toHost();
+        if (!std::isfinite(*(stateFiniteProbe))) {
+            which = names[i];
+            break;
+        }
+    }
+    if (which) {
+        DEME_ERROR(
+            "The system state is not finite: the %s array contains NaN or Inf.\nThis usually means the "
+            "simulation diverged. Decreasing the step size, softening material properties, or checking for "
+            "elements initialized inside walls may help.\nNote that a reported max velocity can look "
+            "entirely reasonable while this fires, because a max reduction cannot propagate NaN, and because "
+            "angular velocity is not part of that reduction at all.",
+            which);
+    }
+}
 inline void DEMDynamicThread::calibrateParams() {
     // Unpacking is done; now we can use temp arrays again to derive max velocity and send to kT
     pCycleVel = determineSysVel();
+
+    // Refuse to hand kT a corrupted state, and say so, rather than continuing silently.
+    checkStateIsFinite();
 
     if (solverFlags.autoUpdateFreq) {
         unsigned int comfortable_drift;
