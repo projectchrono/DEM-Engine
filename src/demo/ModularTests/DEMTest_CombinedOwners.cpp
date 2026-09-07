@@ -8,7 +8,8 @@
 //
 // This verifies combined clump instantiation, combined tracking, default
 // intra-group contact suppression, explicit contact re-enable, and rigid
-// member motion re-imposition after member-level acceleration inputs.
+// member motion re-imposition after member-level acceleration inputs. It also
+// checks combined mesh tracking, prescribed translation, and per-member charge.
 // =============================================================================
 
 #include <core/ApiVersion.h>
@@ -157,6 +158,90 @@ MotionResult runMemberAccelerationScenario(bool angular) {
     return result;
 }
 
+// Exercise the electrostatic rod's mesh-template and tracker path with ten adjacent sections.
+// Distinct wildcard values check that runtime charge belongs to each mesh owner independently.
+bool testCombinedMeshRod() {
+    DEMSolver sim;
+    sim.SetVerbosity("ERROR");
+    sim.InstructBoxDomainDimension(10, 10, 10);
+    sim.SetGravitationalAcceleration(make_float3(0));
+    sim.SetCDUpdateFreq(1);
+    sim.SetTimeStepSize(kStepSize);
+    auto model = sim.DefineContactForceModel("force = make_float3(0); Q[AOwner] += 0.f; Q[BOwner] += 0.f;");
+    model->SetPerOwnerWildcards({"Q"});
+    auto mat = sim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}});
+    // Keep a sphere away from the rod to exercise the normal mesh/clump initialization path without contacts.
+    auto sphere = sim.LoadSphereType(kMass, kRadius, mat);
+    sim.AddClumps(sphere, make_float3(-2, 0, 0));
+    constexpr size_t count = 10;
+    constexpr float spacing = 0.05f;
+    constexpr float charge = -2e-7f;
+    auto section = sim.LoadMeshType(GetDEMEDataFile("mesh/cyl_r1_h2.obj"), mat);
+    section->Scale(make_float3(0.01f, 0.01f, spacing / 2));
+    section->SetMass(0.1f);
+    section->SetMOI(make_float3(1e-4f));
+    section->SetFamily(1);
+    sim.SetFamilyFixed(1);
+    std::vector<float3> offsets(count);
+    for (size_t i = 0; i < count; i++) {
+        offsets[i] = make_float3(0, 0, i * spacing);
+    }
+    auto type = sim.LoadCombinedMeshType(std::vector<std::shared_ptr<DEMMesh>>(count, section), offsets);
+    auto rod = sim.AddCombinedFromTemplate(type, kInitPos);
+    auto tracker = sim.Track(rod);
+    sim.Initialize();
+
+    // Initialize clears the solver's setup cache; the retained instance handle holds resolved owner IDs.
+    const auto& members = rod->member_owner_ids;
+    if (!rod->owners_resolved || members.size() != count || rod->GetNumOwners() != count ||
+        rod->master_owner_ids.size() != 1 || rod->master_owner_ids[0] != tracker->GetOwnerID()) {
+        std::cout << "Mesh combined metadata or tracker owner count mismatch" << std::endl;
+        return false;
+    }
+    tracker->SetOwnerWildcardValues("Q", std::vector<float>(count, charge));
+    float total_charge = 0;
+    for (size_t i = 0; i < count; i++) {
+        if (members[i] != tracker->GetOwnerID(i) || !approxEqual(tracker->Pos(i), kInitPos + offsets[i]) ||
+            tracker->GetOwnerWildcardValue("Q", i) != charge) {
+            const auto pos = tracker->Pos(i);
+            std::cout << "Mesh member " << i << " initial state mismatch: position " << pos.x << ", " << pos.y << ", "
+                      << pos.z << "; Q = " << tracker->GetOwnerWildcardValue("Q", i) << std::endl;
+            return false;
+        }
+        total_charge += tracker->GetOwnerWildcardValue("Q", i);
+    }
+    if (std::abs(total_charge - count * charge) > 1e-12f) {
+        std::cout << "Mesh rod total charge mismatch: " << total_charge << std::endl;
+        return false;
+    }
+    tracker->SetOwnerWildcardValue("Q", 2 * charge, count - 1);
+    // Move every section before stepping, then check both immediate poses and fixed-body re-imposition.
+    std::vector<float3> positions(count);
+    for (size_t i = 0; i < count; i++) {
+        positions[i] = make_float3(1, 0.5f, -0.25f) + offsets[i];
+    }
+    tracker->SetPos(positions);
+    for (size_t i = 0; i < count; i++) {
+        if (!approxEqual(tracker->Pos(i), positions[i])) {
+            std::cout << "Mesh member " << i << " prescribed position mismatch" << std::endl;
+            return false;
+        }
+    }
+    // Deliberately displace one slave: the combined mapping must restore it even with no contacts.
+    tracker->SetPos(positions.back() + make_float3(0, 0, 0.01f), count - 1);
+    sim.DoDynamicsThenSync(5 * kStepSize);
+    for (size_t i = 0; i < count; i++) {
+        const float expected_charge = (i == count - 1) ? 2 * charge : charge;
+        if (!approxEqual(tracker->Pos(i), positions[i]) || tracker->GetOwnerWildcardValue("Q", i) != expected_charge) {
+            const auto pos = tracker->Pos(i);
+            std::cout << "Mesh member " << i << " post-step state mismatch: position " << pos.x << ", " << pos.y << ", "
+                      << pos.z << "; Q = " << tracker->GetOwnerWildcardValue("Q", i) << std::endl;
+            return false;
+        }
+    }
+    return true;
+}
+
 void printContacts(const std::vector<std::pair<bodyID_t, bodyID_t>>& contacts) {
     if (contacts.empty()) {
         std::cout << "none";
@@ -302,6 +387,15 @@ int main() {
         std::cout << "PASS: AddAngAcc on one member rotates the combined owner as one rigid body" << std::endl;
     } else {
         std::cout << "FAIL: AddAngAcc on one member introduced non-rigid rotational motion" << std::endl;
+        test_failures++;
+    }
+
+    std::cout << "\n--- Test 10: Combined mesh rod positions and owner charges ---" << std::endl;
+    if (testCombinedMeshRod()) {
+        std::cout << "PASS: Ten mesh sections retain their prescribed layout and independent owner charges"
+                  << std::endl;
+    } else {
+        std::cout << "FAIL: Combined mesh rod tracking, translation, or owner charge mismatch" << std::endl;
         test_failures++;
     }
 

@@ -14,9 +14,10 @@
 // This demo uses the "combined owner" approach: each particle is represented by
 // 6 spheres (from spiky_sphere.csv), and each sphere is its own owner in a
 // combined group. This gives each sphere its own electric charge wildcard (Q),
-// enabling fine-grained charge distribution across the particle's shape. This
-// is in contrast to the old approach where 6 component spheres shared a single
-// owner (and thus a single charge value).
+// enabling fine-grained charge distribution across the particle's shape.
+// The meshed rod likewise uses 10 short cylinders combined rigidly,
+// each carrying its own charge, to better emulate the distribution of charges
+// on the rod.
 //
 // NOTE: If you want to create your own force model, it's probably a good idea
 // to understand the default model in the file FullHertzianForceModel.cu
@@ -133,25 +134,47 @@ int main() {
     // per particle gets its own charge, enabling fine-grained electrostatic distribution.
     particles->AddOwnerWildcard("Q", init_charge);
 
-    // Load in the cone used for this penetration test
-    auto rod_body = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/cyl_r1_h2.obj"), mat_type_rod);
-    unsigned int num_tri = rod_body->GetNumTriangles();
-    std::cout << "Total num of triangles: " << num_tri << std::endl;
+    // Build the rod from short mesh owners so charge is distributed along its length.
+    constexpr size_t num_rod_sections = 10;
+    const double section_length = rod_length / num_rod_sections;
+    auto rod_section = DEMSim.LoadMeshType(GetDEMEDataFile("mesh/cyl_r1_h2.obj"), mat_type_rod);
+    std::cout << "Total num of triangles: " << num_rod_sections * rod_section->GetNumTriangles() << std::endl;
 
-    // The define the properties of the rod
+    // Preserve the original rod's total mass by applying its original mass scaling to each short section.
     float body_mass = 7.8e3 * math_PI;
-    rod_body->SetMass(body_mass);
-    rod_body->SetMOI(make_float3(body_mass * 7 / 12, body_mass * 7 / 12, body_mass / 2));
+    rod_section->SetMass(body_mass);
     // This cyl mesh (h = 2m, r = 1m) has its center at the origin. So the following call actually has no effect...
-    rod_body->InformCentroidPrincipal(make_float3(0, 0, 0), make_float4(0, 0, 0, 1));
-    rod_body->Scale(make_float3(rod_diameter / 2., rod_diameter / 2., rod_length / 2.));
-    rod_body->SetFamily(1);
+    rod_section->InformCentroidPrincipal(make_float3(0, 0, 0), make_float4(0, 0, 0, 1));
+    rod_section->Scale(make_float3(rod_diameter / 2., rod_diameter / 2., section_length / 2.));
+    // Nonuniform Scale only estimates inertia; use the short cylinder's centroidal inertia explicitly.
+    const double radius_squared = rod_diameter * rod_diameter / 4.;
+    const double transverse_moi =
+        rod_section->GetMass() * (3. * radius_squared + section_length * section_length) / 12.;
+    rod_section->SetMOI(make_float3(transverse_moi, transverse_moi, rod_section->GetMass() * radius_squared / 2.));
+    rod_section->SetFamily(1);
+
+    // The bottom section is the master. Combined template poses are relative to that section's center,
+    // so place it half a section above the original rod's lower end to retain the original overall bounds.
+    std::vector<std::shared_ptr<DEMMesh>> rod_templates(num_rod_sections, rod_section);
+    std::vector<float3> section_offsets(num_rod_sections);
+    for (size_t i = 0; i < num_rod_sections; i++) {
+        section_offsets[i] = make_float3(0, 0, i * section_length);
+    }
+    auto rod_type = DEMSim.LoadCombinedMeshType(rod_templates, section_offsets);
+    auto rod_body = DEMSim.AddCombinedFromTemplate(rod_type, make_float3(0, 0, (section_length - rod_length) / 2.));
     // Just fix it: We will manually impose its motion later.
     DEMSim.SetFamilyFixed(1);
-    // We can set the owner wildcard Q here. But we'll instead show how to modify that using a tracker.
-
-    // Track the rod
     auto rod_tracker = DEMSim.Track(rod_body);
+
+    // A combined tracker spans member owners; scalar setters affect only one member. Move all sections
+    // together so contact detection and output see the complete pose before the next rigid re-imposition.
+    std::vector<float3> rod_positions(num_rod_sections);
+    auto set_rod_bottom = [&](double height) {
+        for (size_t i = 0; i < num_rod_sections; i++) {
+            rod_positions[i] = make_float3(0, 0, height + (i + 0.5) * section_length);
+        }
+        rod_tracker->SetPos(rod_positions);
+    };
 
     // Some inspectors
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
@@ -201,18 +224,16 @@ int main() {
     }
     DEMSim.DoDynamicsThenSync(0);
 
-    // Put the cone in place
+    // Put the rod in place
     float terrain_max_z = max_z_finder->GetValue();
     double current_height = terrain_max_z + 0.03;
-    // Its initial position should be right above the granular material (but accounting for the fact that the coordinate
-    // system center of the rod is in its middle)
-    rod_tracker->SetPos(make_float3(0, 0, rod_length / 2. + current_height));
+    // Place the bottom of the assembled rod just above the granular material.
+    set_rod_bottom(current_height);
 
     DEMSim.EnableContactBetweenFamilies(0, 1);
 
-    // We demonstrate using trackers to set an owner wildcard. Q is now set for the rod owner, and it's
-    // the opposite charge to the particles. So the rod should attract the particles.
-    rod_tracker->SetOwnerWildcardValue("Q", -10. * init_charge);
+    // Set every mesh owner to have charge, opposite to the particles so it attracts them.
+    rod_tracker->SetOwnerWildcardValues("Q", std::vector<float>(num_rod_sections, -100.f * init_charge));
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_end; t += step_size, step_count++) {
@@ -236,7 +257,7 @@ int main() {
         } else if (t < 2. / 3. * sim_end) {
             current_height += cone_speed * step_size;
         }  // else the rod does not move
-        rod_tracker->SetPos(make_float3(0, 0, rod_length / 2. + current_height));
+        set_rod_bottom(current_height);
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
