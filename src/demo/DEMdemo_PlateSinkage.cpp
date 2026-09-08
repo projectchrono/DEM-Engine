@@ -117,6 +117,14 @@ int main() {
         auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
         auto total_mass_finder = DEMSim.CreateInspector("clump_mass");
 
+        // Accumulate contact forces onto owners inside the force kernel rather
+        // than in the default separate pass over the contact array. Measured on
+        // this demo at 150k to 600k grains: +21% throughput on a Blackwell GPU,
+        // +99% to +204% on an MI350X (see SetCollectAccRightAfterForceCalc).
+        // This demo reads the plate load through ContactAcc, which is unaffected;
+        // only tracker force-pair queries become unavailable.
+        DEMSim.SetCollectAccRightAfterForceCalc(true);
+
         DEMSim.SetInitTimeStep(step_size);
         DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
         DEMSim.Initialize();
@@ -213,6 +221,9 @@ int main() {
         DEMSim.SetFamilyPrescribedLinVel(1, "0", "0", "-" + to_string_with_precision(plate_speed));
 
         auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
+
+        // Same choice as stage 1, for the same reason.
+        DEMSim.SetCollectAccRightAfterForceCalc(true);
 
         DEMSim.SetInitTimeStep(step_size);
         DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));

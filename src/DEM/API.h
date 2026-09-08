@@ -1056,8 +1056,12 @@ class DEMSolver {
     /// applied to each body through atomic operations.
     void UseCubForceCollection(bool flag = true) { use_cub_to_reduce_force = flag; }
 
-    /// Reduce contact forces to accelerations right after calculating them, in the same kernel. This may give some
-    /// performance boost if you have only polydisperse spheres, no clumps.
+    /// Reduce contact forces to accelerations right after calculating them, in the same kernel, instead of in a
+    /// separate pass over the contact array (the default). Measured on DEMdemo_PlateSinkage with 3-sphere clumps at
+    /// 150k to 600k grains: about +21% throughput on an NVIDIA Blackwell GPU and +99% to +204% on an AMD MI350X,
+    /// where the separate pass is the dominant cost and also slows the concurrent contact detection. Contact-force
+    /// recording and output are unaffected; the only capability given up is tracker force-pair queries, which throw
+    /// while this is on.
     void SetCollectAccRightAfterForceCalc(bool flag = true) { collect_force_in_force_kernel = flag; }
 
     /// Instruct the solver that there is no need to record the contact force (and contact point location etc.) in an
