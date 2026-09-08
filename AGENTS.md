@@ -73,6 +73,12 @@ DEM-Engine is a performance-sensitive CUDA/C++ DEM solver with a Chrono-like pub
 
 ## Git Hygiene
 
+- Always provide a code review block for the agent session, using the native Review button and diff tab when available,
+  so the user can inspect the changes before committing. If the interface cannot provide that control, say so and
+  provide the diff directly instead of claiming a review button was generated.
+- Keep session changes uncommitted until the user explicitly says they are done testing or asks the agent to commit.
+  Passing agent-run tests does not mean the user is done testing, and permission for an earlier commit does not
+  authorize committing later changes.
 - Work on a topic branch when asked. Keep unrelated user changes intact.
 - Do not revert or reformat files outside the task scope.
 - Before handing off, check `git status --short` and summarize the touched files and verification.
