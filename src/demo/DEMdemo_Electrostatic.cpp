@@ -100,7 +100,7 @@ int main() {
 
     // The spiky_sphere.csv defines 6 component spheres. We create individual sphere templates for each,
     // then combine them into a single combined-owner template. Each sphere is an independent owner with
-    // its own charge Q, rather than being mere shape components of a single owner.
+    // its own charge Q and a fixed position relative to the combined group.
     // Sphere data from spiky_sphere.csv: x, y, z, r
     std::vector<float3> sphere_positions = {make_float3(0, 0, 0),         make_float3(0, -0.5, 0.5),
                                             make_float3(0.65, 0.2, 0.55), make_float3(-0.45, 0.25, 0.65),
@@ -140,7 +140,7 @@ int main() {
     auto rod_section = DEMSim.LoadMeshType(GetDEMEDataFile("mesh/cyl_r1_h2.obj"), mat_type_rod);
     std::cout << "Total num of triangles: " << num_rod_sections * rod_section->GetNumTriangles() << std::endl;
 
-    // Preserve the original rod's total mass by applying its original mass scaling to each short section.
+    // Set the reference cylinder mass, then scale it with the volume of each short section.
     float body_mass = 7.8e3 * math_PI;
     rod_section->SetMass(body_mass);
     // This cyl mesh (h = 2m, r = 1m) has its center at the origin. So the following call actually has no effect...
@@ -154,7 +154,7 @@ int main() {
     rod_section->SetFamily(1);
 
     // The bottom section is the master. Combined template poses are relative to that section's center,
-    // so place it half a section above the original rod's lower end to retain the original overall bounds.
+    // so its initial center is half a section above the assembled rod's lower end at -rod_length / 2.
     std::vector<std::shared_ptr<DEMMesh>> rod_templates(num_rod_sections, rod_section);
     std::vector<float3> section_offsets(num_rod_sections);
     for (size_t i = 0; i < num_rod_sections; i++) {
@@ -232,8 +232,9 @@ int main() {
 
     DEMSim.EnableContactBetweenFamilies(0, 1);
 
-    // Set every mesh owner to have charge, opposite to the particles so it attracts them.
-    rod_tracker->SetOwnerWildcardValues("Q", std::vector<float>(num_rod_sections, -100.f * init_charge));
+    // Give each rod section an initial charge of -1000 * init_charge (-2e-5 C).
+    // The total rod charge is -2e-4 C, with opposite sign to the terrain particles so it attracts them.
+    rod_tracker->SetOwnerWildcardValues("Q", std::vector<float>(num_rod_sections, -1000.f * init_charge));
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_end; t += step_size, step_count++) {
