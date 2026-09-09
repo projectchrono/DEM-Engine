@@ -17,30 +17,69 @@ Check `GitHub's current Pages limits
 <https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits>`_
 before choosing it for a larger site.
 
-Suggested setup
-~~~~~~~~~~~~~~~
+Publish with the included workflow
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-#. In the repository's **Settings → Pages**, select **GitHub Actions** as the
-   publishing source.
-#. Create a workflow that checks out the intended documentation branch,
-   installs Doxygen and ``docs/requirements.txt``, and runs ``make -C docs html``.
-#. Upload ``docs/_build/html`` with ``actions/upload-pages-artifact`` and deploy
-   it using ``actions/deploy-pages``. The deployment job needs ``pages: write``
-   and ``id-token: write`` permissions and the ``github-pages`` environment.
-#. Initially deploy by manual dispatch from the reviewed documentation branch.
-   Once the documentation is merged, automatic publishing can track the chosen
-   release branch. Pull requests should build for validation without deploying.
-#. Add the resulting site URL to the root README once the site is live.
+``.github/workflows/docs.yml`` builds both API references and publishes the
+combined site. The repository variable ``DOCS_PUBLISH_BRANCH`` selects the
+publishing branch. Pushes to other branches skip the build and deployment;
+relevant pull requests build an HTML artifact without deploying. An unset
+variable disables publication.
 
-Follow `GitHub's custom workflow instructions
-<https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages>`_
-for the current action versions and deployment configuration. Upload the
-**generated HTML directory**, not the Sphinx source directory ``docs/``.
+One-time GitHub setup
+^^^^^^^^^^^^^^^^^^^^^
 
-A project site normally has the form ``https://<owner>.github.io/DEM-Engine/``.
-For a repository owned by ``Ruochun``, that would be
-``https://ruochun.github.io/DEM-Engine/`` after Pages is configured and deployed.
-This is an example address, not a claim that the site is already published.
+#. Open **Settings → Secrets and variables → Actions → Variables** and create
+   a repository variable named ``DOCS_PUBLISH_BRANCH`` with value
+   ``DEME3_docs``. Use a repository variable, not an environment variable or
+   secret, because the build job checks it before entering an environment.
+#. In **Settings → Pages → Build and deployment → Source**, select
+   **GitHub Actions**.
+#. In **Settings → Environments**, create or open ``github-pages``. Under
+   deployment branches and tags, allow the branch ``DEME3_docs``. If required
+   reviewers are configured, each deployment waits for their approval; omit
+   required reviewers if publication should be fully automatic.
+#. Push the commit containing the workflow and documentation to ``DEME3_docs``.
+   Every subsequent push to that branch builds and publishes the site.
+#. Open **Actions → Build and publish documentation** and inspect the build
+   and deploy jobs. The deployment links to the live site, normally
+   ``https://ruochun.github.io/DEM-Engine/`` for this repository.
+
+If the branch was already pushed before setup, use **Re-run all jobs** on its
+workflow run after configuring Pages and the variable, or push a new commit.
+Keep generated HTML out of Git; the workflow uploads ``docs/_build/html`` as
+an artifact and publishes it only after a successful build.
+
+The workflow also supports **Run workflow**. GitHub requires the workflow file
+to exist on the repository's default branch before manual dispatch is available.
+Until then, use the push trigger on ``DEME3_docs``; changing the repository's
+default branch is unnecessary. Once manual dispatch is available, select the
+branch matching ``DOCS_PUBLISH_BRANCH`` in the branch dropdown.
+
+Switch publication to main later
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+#. Merge the documentation and workflow into ``main``.
+#. Allow ``main`` in the ``github-pages`` environment's deployment branch rules.
+#. Change the repository variable ``DOCS_PUBLISH_BRANCH`` to ``main``.
+#. Push a new commit to ``main``, or manually run the workflow on ``main``.
+   Changing the variable alone does not trigger a build.
+#. Remove ``DEME3_docs`` from the environment's allowed deployment branches
+   when it is no longer used for publication.
+
+No workflow edit is needed. The selected branch must contain the workflow and
+its documentation sources. Builds check out the triggering commit, so a push
+publishes documentation corresponding to that commit rather than a moving
+branch head. The Python API reference must still be regenerated and committed
+when bindings change; see :doc:`documentation`.
+
+See GitHub's official instructions for
+`Pages publishing sources
+<https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site>`_,
+`custom Pages workflows
+<https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages>`_, and
+`manual workflow runs
+<https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow>`_.
 
 Already-compiled documentation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

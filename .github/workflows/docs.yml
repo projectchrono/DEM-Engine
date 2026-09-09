@@ -1,0 +1,83 @@
+name: Build and publish documentation
+
+on:
+  # Branch filters cannot use repository variables. Filter at the job level so
+  # switching DOCS_PUBLISH_BRANCH does not require editing this workflow.
+  push:
+    branches: ["**"]
+  pull_request:
+    paths:
+      - ".github/workflows/docs.yml"
+      - "docs/**"
+      - "src/DEM/**"
+      - "VERSION"
+      - "LICENSE.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # Set this repository variable to DEME3_docs initially, then main when ready.
+    # An unset variable disables publication; PRs still validate the site.
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.ref_type == 'branch' && github.ref_name == vars.DOCS_PUBLISH_BRANCH)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out documentation source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: docs/requirements.txt
+
+      - name: Install documentation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes doxygen
+          python -m pip install -r docs/requirements.txt
+
+      # The committed Python reference avoids importing the CUDA extension on
+      # hosted runners. Doxygen parses public headers without compiling DEME.
+      - name: Build C++ and Python documentation
+        run: make -C docs html
+
+      - name: Upload documentation site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs/_build/html
+
+  deploy:
+    needs: build
+    if: >-
+      github.event_name != 'pull_request' &&
+      github.ref_type == 'branch' && github.ref_name == vars.DOCS_PUBLISH_BRANCH
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    # Serialize publication to this repository's single Pages site. Let an
+    # active deployment finish rather than cancelling it midway through upload.
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Deploy documentation
+        id: deployment
+        uses: actions/deploy-pages@v4
