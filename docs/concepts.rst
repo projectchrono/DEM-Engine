@@ -1,6 +1,12 @@
 Core concepts
 =============
 
+For more information about DEME's design concepts, see the
+`DEM-Engine paper in Computer Physics Communications (2024)
+<https://doi.org/10.1016/j.cpc.2024.109196>`_. This page summarizes the concepts
+used by the current API; the paper provides the background on the solver's
+design and computational approach.
+
 Setup and runtime
 -----------------
 
