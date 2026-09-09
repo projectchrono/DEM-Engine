@@ -1,4 +1,11 @@
-# Building and previewing the DEM-Engine 3 documentation
+# DEM-Engine documentation
+
+Start with the [documentation index](index.rst), [installation](installation.rst),
+or [Python quickstart](python/quickstart.rst). Maintainers can find
+[hosting options](developer/hosting.rst) and [wheel packaging](developer/packaging.rst)
+in the developer guide.
+
+## Building and previewing
 
 The documentation site combines:
 

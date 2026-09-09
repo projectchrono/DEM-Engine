@@ -21,7 +21,8 @@ Core objects
    ``AddClumps`` can be passed to ``Track``.
 
 ``DEMMesh`` and ``DEMExternObj``
-   Represent mesh-based and analytical external geometry.
+   Represent mesh particles/bodies and analytical external geometry. See
+   :doc:`../mesh-particles` for mesh templates and contact scope.
 
 ``Tracker`` (native ``DEMTracker``)
    Reads or modifies a tracked batch/object after initialization. See
@@ -56,6 +57,10 @@ Common task map
      - ``LoadSphereType``, clump-template loaders, ``AddClumps``
    * - Create geometry
      - ``LoadMeshType``, mesh/external-object add methods, ``AddBCPlane``
+   * - Enable mesh–mesh and mesh–analytical contacts
+     - ``SetMeshUniversalContact(True)`` during setup
+   * - Create rigid combined bodies
+     - ``LoadCombinedClumpType``, ``LoadCombinedMeshType``, ``AddCombinedFromTemplate``
    * - Configure motion
      - gravity, family prescriptions, timestep methods
    * - Start simulation

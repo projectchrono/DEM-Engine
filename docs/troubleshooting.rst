@@ -36,7 +36,7 @@ run a small simulation through ``Initialize()`` so NVRTC, kernel resources, and
 the GPU driver are exercised.
 
 Conda ``GLIBCXX`` errors
--------------------------
+------------------------
 
 Build with compilers compatible with the target Conda environment. A wheel
 built against a newer system ``libstdc++`` may import on the build host but fail
@@ -48,3 +48,36 @@ Stale runtime kernels
 After changing kernel or force-model sources, use a clean build or ensure the
 runtime kernel assets have been refreshed. Old copied text sources can make the
 runtime behavior disagree with the compiled host code.
+
+Persistent Jitify startup cache
+-------------------------------
+
+DEME uses Jitify and NVRTC to discover CUDA headers and compile runtime kernels during solver initialization. Workloads
+that repeatedly start fresh DEME processes can persist the discovered header sources and avoid repeating much of that
+startup work. Set ``DEME_PERSISTENT_JITIFY_CACHE`` to a writable cache-file path:
+
+.. code-block:: console
+
+   export DEME_PERSISTENT_JITIFY_CACHE="$HOME/.cache/deme/jitify_header_cache.bin"
+   mkdir -p "$(dirname "$DEME_PERSISTENT_JITIFY_CACHE")"
+
+
+Values such as ``1``, ``true``, ``on``, and ``yes`` select an automatic temporary path. Values such as ``0``, ``false``, ``off``, and
+``no``, as well as an unset variable, disable the persistent cache. The cache is opt-in because an automatic shared
+temporary path can be unsafe on multi-user systems, concurrent writers can contend, and header contents can change
+without their paths or CUDA version changing. Prefer an explicit, user-owned path and remove the file after changing
+CUDA toolchains or headers. An unreadable, incompatible, or unwritable cache falls back to normal Jitify discovery.
+
+
+Custom force models
+-------------------
+
+If a custom force kernel fails to launch, try a smaller block size such as
+``SetForceCalcThreadsPerBlock(128)`` during setup. Large kernels can exceed
+register limits. Check CUDA errors before treating missing contacts or a
+subsequent too-many-geometries-in-bin error as a geometry problem.
+
+For JIT errors involving material arrays or missing wildcard variables,
+compare your model declarations with ``DEMdemo_Electrostatic``. Declare pairwise
+material properties with ``SetMustPairwiseMatProp`` and contact wildcards with
+``SetPerContactWildcards`` before initialization.

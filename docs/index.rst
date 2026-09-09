@@ -15,6 +15,8 @@ kernels.
    installation
    quickstart
    concepts
+   mesh-particles
+   examples
    visualization
    troubleshooting
 
@@ -31,3 +33,6 @@ kernels.
 
    developer/architecture
    developer/documentation
+   developer/packaging
+   developer/hosting
+   project

@@ -63,3 +63,6 @@ Documentation policy
   setup/runtime restrictions, and return values.
 * The HTML build uses warnings-as-errors so broken API references do not
   silently enter published documentation.
+
+See :doc:`hosting` for publication options and source-tree organization, and
+:doc:`packaging` for Python wheel maintenance.

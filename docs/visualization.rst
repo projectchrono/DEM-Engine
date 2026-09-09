@@ -77,3 +77,12 @@ The visualizer can be omitted for a headless source build with:
 .. code-block:: console
 
    cmake -S . -B build -DDEME_BUILD_VISUALIZER=OFF
+
+Postprocessing with ParaView
+----------------------------
+
+Load output ``.vtk`` mesh files directly. For component-sphere CSV output from
+``WriteSphereFile``, apply **Table To Points** using the ``X``, ``Y``, and ``Z``
+columns. Then apply **Glyph**, choose **Sphere**, select ``r`` as the scale
+array, set the scale factor to 2 (radii become diameters), and choose
+**All Points**. Reduce sphere resolution when visualizing large datasets.
