@@ -1,6 +1,9 @@
 Troubleshooting
 ===============
 
+For numeric contact, geometry, and owner codes seen in logs or a debugger,
+see :doc:`developer/type-codes`.
+
 CUDA or PTX mismatch
 --------------------
 

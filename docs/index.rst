@@ -32,6 +32,7 @@ kernels.
    :caption: Development
 
    developer/architecture
+   developer/type-codes
    developer/documentation
    developer/packaging
    developer/hosting
