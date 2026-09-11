@@ -7,6 +7,7 @@
 #define DEME_DT
 
 #include <mutex>
+#include <cstdint>
 #include <vector>
 #include <thread>
 #include <unordered_map>
@@ -379,6 +380,8 @@ class DEMDynamicThread {
     SolverTimers timers = SolverTimers(timer_names);
 
   public:
+    // Invalidates renderer geometry after initialization, insertion, or mesh deformation (not rigid motion).
+    std::uint64_t visualizationRevision = 0;
     friend class DEMSolver;
     friend class DEMKinematicThread;
 

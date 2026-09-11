@@ -99,7 +99,7 @@ if(DEME_BUILD_PYTHON)
 		${CMAKE_CURRENT_SOURCE_DIR}/python/bindings.cpp
 	)
 	if(DEME_BUILD_VISUALIZER)
-		target_sources(_deme PRIVATE $<TARGET_OBJECTS:visualization>)
+		target_sources(_deme PRIVATE $<TARGET_OBJECTS:visualization> $<TARGET_OBJECTS:visualization_bridge>)
 	endif()
 	
 	set_target_properties(_deme PROPERTIES

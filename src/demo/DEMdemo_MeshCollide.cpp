@@ -12,7 +12,7 @@
 #include <DEM/API.h>
 #include <DEM/utils/Samplers.hpp>
 #ifdef DEME_HAS_VISUALIZER
-    #include <DEM/utils/DEMVisualizer.h>
+    #include "VisualizerDemoLoop.h"
 #endif
 
 #include <filesystem>
@@ -69,11 +69,12 @@ int main() {
     DEMSim.Initialize();
 
 #ifdef DEME_HAS_VISUALIZER
-    // Rendering is deliberately frame-driven: the visualizer observes the solver but never advances it.
+    // Display cadence follows wall time so camera input stays responsive between simulation output frames.
     DEMVisualizer visualizer(DEMSim);
     visualizer.SetCameraPosition(make_float3(5.f, 5.f, 3.f));
     visualizer.SetCameraTarget(make_float3(0.f, 0.f, -0.5f));
     visualizer.Initialize();
+    VisualizerDemoLoop viewer_loop;
 #endif
 
     // Ready simulation
@@ -129,15 +130,11 @@ int main() {
             }
             DEMSim.ShowMemStats();
             std::cout << "----------------------------------------" << std::endl;
-
-#ifdef DEME_HAS_VISUALIZER
-            // Closing the window disables subsequent frames without stopping the simulation demo.
-            if (visualizer.Run()) {
-                visualizer.Render();
-            }
-#endif
         }
 
+#ifdef DEME_HAS_VISUALIZER
+        viewer_loop.Update(visualizer);
+#endif
         DEMSim.DoDynamics(step_time);
     }
 

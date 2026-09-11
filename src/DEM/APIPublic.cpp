@@ -1373,6 +1373,63 @@ void DEMSolver::SetSimTime(double time) {
     dT->setSimTime(time);
 }
 
+// Separate immutable local geometry from owner motion so renderers can retain their vertex/instance buffers.
+DEMVisualizationScene DEMSolver::GetVisualizationScene() const {
+    if (!sys_initialized) {
+        DEME_ERROR("GetVisualizationScene requires Initialize() first.");
+    }
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    DEMVisualizationScene scene;
+    scene.revision = dT->visualizationRevision;
+    scene.spheres.reserve(dT->simParams->nSpheresGM);
+    for (size_t i = 0; i < dT->simParams->nSpheresGM; ++i) {
+        const size_t component = dT->solverFlags.useClumpJitify ? dT->clumpComponentOffsetExt[i] : i;
+        scene.spheres.push_back(
+            {make_float3(dT->relPosSphereX[component], dT->relPosSphereY[component], dT->relPosSphereZ[component]),
+             dT->radiiSphere[component], dT->ownerClumpBody[i]});
+    }
+    scene.triangles.reserve(dT->simParams->nTriGM);
+    for (size_t i = 0; i < dT->simParams->nTriGM; ++i) {
+        scene.triangles.push_back({dT->relPosNode1[i], dT->relPosNode2[i], dT->relPosNode3[i], dT->ownerTriMesh[i]});
+    }
+    return scene;
+}
+
+// Decode each owner only once. Reusing the output arrays avoids allocation when the owner count is unchanged.
+void DEMSolver::GetVisualizationFrame(DEMVisualizationFrame& frame, bool include_velocities) const {
+    if (!sys_initialized) {
+        DEME_ERROR("GetVisualizationFrame requires Initialize() first.");
+    }
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->migrateFamilyToHost();
+    dT->migrateClumpPosInfoToHost();
+    if (include_velocities) {
+        dT->vX.toHost();
+        dT->vY.toHost();
+        dT->vZ.toHost();
+    }
+    frame.simulation_time = GetSimTime();
+    frame.revision = dT->visualizationRevision;
+    const size_t count = dT->simParams->nOwnerBodies;
+    frame.positions.resize(count);
+    frame.orientations.resize(count);
+    frame.families.resize(count);
+    frame.velocities.resize(include_velocities ? count : 0);
+    for (size_t i = 0; i < count; ++i) {
+        auto& p = frame.positions[i];
+        voxelIDToPosition<float, voxelID_t, subVoxelPos_t>(p.x, p.y, p.z, dT->voxelID[i], dT->locX[i], dT->locY[i],
+                                                           dT->locZ[i], dT->simParams->nvXp2, dT->simParams->nvYp2,
+                                                           dT->simParams->voxelSize, dT->simParams->l);
+        p.x += dT->simParams->LBFX;
+        p.y += dT->simParams->LBFY;
+        p.z += dT->simParams->LBFZ;
+        frame.orientations[i] = make_float4(dT->oriQx[i], dT->oriQy[i], dT->oriQz[i], dT->oriQw[i]);
+        frame.families[i] = dT->familyID[i];
+        if (include_velocities) {
+            frame.velocities[i] = make_float3(dT->vX[i], dT->vY[i], dT->vZ[i]);
+        }
+    }
+}
 DEMVisualizationSnapshot DEMSolver::GetVisualizationSnapshot(bool include_spheres, bool include_triangles) const {
     if (!sys_initialized) {
         DEME_ERROR("DEMSolver's method GetVisualizationSnapshot can only be called after calling Initialize()");
@@ -3485,6 +3542,7 @@ size_t DEMSolver::ChangeClumpFamily(unsigned int fam_num,
 // of the required simulation information such as the scale of the problem domain, and makes sure these info live in
 // GPU memory.
 void DEMSolver::Initialize(bool dry_run) {
+    ++dT->visualizationRevision;
     // A few checks first
     validateUserInputs();
 
@@ -4271,6 +4329,7 @@ void DEMSolver::refreshCombinedRuntimeResources() {
 }
 
 void DEMSolver::Update() {
+    ++dT->visualizationRevision;
     if (!sys_initialized) {
         DEME_ERROR(std::string(
             "Please call Update only after the system is initialized, because it is for adding additional clumps "

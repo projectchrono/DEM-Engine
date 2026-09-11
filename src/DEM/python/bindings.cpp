@@ -803,6 +803,29 @@ enabled.
              " Set the names for the extra quantities that will be associated with each owner. For example, you can "
              "use this to associate a cohesion parameter to each particle. Only float is supported.");
 
+    // The scene/frame interface also supports external renderers without the optional native viewer library.
+    py::class_<deme::DEMVisualizationScene::Sphere>(obj, "VisualizationSphere")
+        .def_readonly("offset", &deme::DEMVisualizationScene::Sphere::offset)
+        .def_readonly("radius", &deme::DEMVisualizationScene::Sphere::radius)
+        .def_readonly("owner", &deme::DEMVisualizationScene::Sphere::owner);
+    py::class_<deme::DEMVisualizationScene::Triangle>(obj, "VisualizationTriangle")
+        .def_readonly("a", &deme::DEMVisualizationScene::Triangle::a)
+        .def_readonly("b", &deme::DEMVisualizationScene::Triangle::b)
+        .def_readonly("c", &deme::DEMVisualizationScene::Triangle::c)
+        .def_readonly("owner", &deme::DEMVisualizationScene::Triangle::owner);
+    py::class_<deme::DEMVisualizationScene>(obj, "VisualizationScene")
+        .def_readonly("revision", &deme::DEMVisualizationScene::revision)
+        .def_readonly("spheres", &deme::DEMVisualizationScene::spheres)
+        .def_readonly("triangles", &deme::DEMVisualizationScene::triangles);
+    py::class_<deme::DEMVisualizationFrame>(obj, "VisualizationFrame")
+        .def(py::init<>())
+        .def_readonly("simulation_time", &deme::DEMVisualizationFrame::simulation_time)
+        .def_readonly("revision", &deme::DEMVisualizationFrame::revision)
+        .def_readonly("positions", &deme::DEMVisualizationFrame::positions)
+        .def_readonly("orientations", &deme::DEMVisualizationFrame::orientations)
+        .def_readonly("families", &deme::DEMVisualizationFrame::families)
+        .def_readonly("velocities", &deme::DEMVisualizationFrame::velocities);
+
     py::class_<deme::DEMSolver>(
         obj, "DEMSolver",
         R"doc(
@@ -817,6 +840,9 @@ Fixed-size owner CUDA exchange methods validate ranges, capacities, and pointer 
 ``validate=False`` only when those preconditions are guaranteed and avoiding validation overhead matters. Required
 device routing and documented transformations still apply.
 )doc")
+        .def("GetVisualizationScene", &deme::DEMSolver::GetVisualizationScene)
+        .def("GetVisualizationFrame", &deme::DEMSolver::GetVisualizationFrame,
+             py::arg("frame"), py::arg("include_velocities") = false)
         .def(py::init<unsigned int>(), py::arg("nGPUs") = 2,
              R"doc(
 Construct a solver using one or two logical CUDA devices.
@@ -2033,6 +2059,11 @@ enabled. A zero count is a no-op.)doc",
         .def_readwrite("b", &deme::DEMVisualizerColor::b)
         .def_readwrite("a", &deme::DEMVisualizerColor::a);
 
+    py::enum_<deme::DEMVisualizerColorMode>(obj, "VisualizerColorMode")
+        .value("FAMILY", deme::DEMVisualizerColorMode::FAMILY)
+        .value("HEIGHT", deme::DEMVisualizerColorMode::HEIGHT)
+        .value("SPEED", deme::DEMVisualizerColorMode::SPEED);
+
     py::class_<deme::DEMVisualizer>(
         obj, "DEMVisualizer",
         "Step-wise interactive viewer. Render() draws the current solver state without advancing the simulation.")
@@ -2055,7 +2086,20 @@ enabled. A zero count is a no-op.)doc",
         .def("SetRenderTriangles", &deme::DEMVisualizer::SetRenderTriangles, py::arg("render") = true,
              "Enable or disable triangle rendering; enabled by default.")
         .def("IsRenderingSpheres", &deme::DEMVisualizer::IsRenderingSpheres)
-        .def("IsRenderingTriangles", &deme::DEMVisualizer::IsRenderingTriangles);
+        .def("IsRenderingTriangles", &deme::DEMVisualizer::IsRenderingTriangles)
+        .def("ShouldStep", &deme::DEMVisualizer::ShouldStep)
+        .def("SetPaused", &deme::DEMVisualizer::SetPaused, py::arg("paused"))
+        .def("IsPaused", &deme::DEMVisualizer::IsPaused)
+        .def("RequestStep", &deme::DEMVisualizer::RequestStep)
+        .def("SetFamilyVisible", &deme::DEMVisualizer::SetFamilyVisible, py::arg("family"), py::arg("visible"))
+        .def("SetColorMode", &deme::DEMVisualizer::SetColorMode, py::arg("mode"))
+        .def("FrameAll", &deme::DEMVisualizer::FrameAll)
+        .def("FrameSelected", &deme::DEMVisualizer::FrameSelected)
+        .def("PickAt", &deme::DEMVisualizer::PickAt, py::arg("x"), py::arg("y"))
+        .def("GetSelectedOwner", &deme::DEMVisualizer::GetSelectedOwner)
+        .def("GetSelectedGeometryID", &deme::DEMVisualizer::GetSelectedGeometryID)
+        .def("IsSelectedSphere", &deme::DEMVisualizer::IsSelectedSphere)
+        .def("RequestScreenshot", &deme::DEMVisualizer::RequestScreenshot, py::arg("path"));
 #endif
 
     py::class_<deme::DEMMaterial, std::shared_ptr<deme::DEMMaterial>>(

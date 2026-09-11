@@ -4690,6 +4690,7 @@ void DEMDynamicThread::setOwnerFamily(bodyID_t ownerID, family_t fam, bodyID_t n
 }
 
 void DEMDynamicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles) {
+    ++visualizationRevision;
     for (size_t i = 0; i < triangles.size(); i++) {
         relPosNode1[start + i] = triangles[i].p1;
         relPosNode2[start + i] = triangles[i].p2;
@@ -4703,6 +4704,7 @@ void DEMDynamicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTrian
 
 // It's true that this method is never used in either kT or dT
 void DEMDynamicThread::updateTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& updates) {
+    ++visualizationRevision;
     for (size_t i = 0; i < updates.size(); i++) {
         relPosNode1[start + i] += updates[i].p1;
         relPosNode2[start + i] += updates[i].p2;

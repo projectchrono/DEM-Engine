@@ -7,12 +7,14 @@
 #define DEME_VISUALIZER_H
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 
 #include <cuda_runtime.h>
 
 #include "../VariableTypes.h"
+#include "VisualizationData.h"
 
 namespace deme {
 
@@ -31,6 +33,9 @@ struct DEMVisualizerColor {
     std::uint8_t b;
     std::uint8_t a;
 };
+
+/// Owner-based scalar coloring; Height uses the owner's global Z coordinate, Speed uses linear velocity magnitude.
+enum class DEMVisualizerColorMode { FAMILY, HEIGHT, SPEED };
 
 /// Step-wise interactive viewer for the current state of a DEMSolver.
 ///
@@ -70,7 +75,31 @@ class DEMVisualizer {
     bool IsRenderingSpheres() const;
     bool IsRenderingTriangles() const;
 
+    /// Simulation controls are requests: the application must call ShouldStep before advancing its solver.
+    /// ShouldStep consumes one pending step when paused. Render itself never blocks on pause or advances dynamics.
+    bool ShouldStep();
+    void SetPaused(bool paused);
+    bool IsPaused() const;
+    void RequestStep();
+    void SetFamilyVisible(family_t family, bool visible);
+    void SetColorMode(DEMVisualizerColorMode mode);
+    /// Fit visible geometry (or the selected owner) using the last captured frame.
+    void FrameAll();
+    void FrameSelected();
+    /// Pick at logical window coordinates using the last rendered frame. Background clears the selection.
+    void PickAt(int x, int y);
+    bodyID_t GetSelectedOwner() const;
+    /// Global sphere or triangle index, or SIZE_MAX when nothing is selected.
+    size_t GetSelectedGeometryID() const;
+    bool IsSelectedSphere() const;
+    /// Save the next rendered frame, including the inspection UI, to a PNG path.
+    void RequestScreenshot(const std::string& path);
+
   private:
+    // The solver archive supplies the public constructor. Callbacks keep a second copy of the static solver/JIT
+    // globals out of the shared graphics library, where ELF symbol interposition would otherwise double-destroy them.
+    DEMVisualizer(std::function<DEMVisualizationScene()> scene,
+                  std::function<void(DEMVisualizationFrame&, bool)> frame);
     struct Impl;
     std::unique_ptr<Impl> m_impl;
 };

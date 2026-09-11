@@ -133,6 +133,10 @@ class DEMSolver {
     /// simulation and should not be called concurrently with DoDynamics(). Disabled geometry categories are not
     /// transferred into the returned snapshot.
     DEMVisualizationSnapshot GetVisualizationSnapshot(bool include_spheres = true, bool include_triangles = true) const;
+    /// Get cached-renderer geometry in owner-local coordinates. Refresh when the frame revision changes.
+    DEMVisualizationScene GetVisualizationScene() const;
+    /// Fill reusable owner arrays at a synchronized simulation boundary; never call concurrently with dynamics.
+    void GetVisualizationFrame(DEMVisualizationFrame& frame, bool include_velocities = false) const;
     /// @brief Set the strategy for auto-adapting time step size.
     /// @param type "none", "hertz_const", "max_vel" or "int_diff". Currently, only "hertz_const" has behavior; it
     /// computes a fixed setup-time timestep from Hertzian material stiffness, minimum clump mass, and minimum radius.

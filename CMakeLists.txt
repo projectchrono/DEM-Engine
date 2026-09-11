@@ -79,7 +79,7 @@ endif()
 option(DEME_BUILD_PYTHON "Build Python bindings for DEME" OFF)
 option(DEME_BUILD_DEMOS "Build DEME demos and modular tests" ON)
 option(DEME_BUILD_DOCS "Add the Doxygen and Sphinx documentation target" OFF)
-option(DEME_BUILD_VISUALIZER "Build the interactive raylib visualizer" ON)
+option(DEME_BUILD_VISUALIZER "Build the native OpenGL/ImGui visualizer" ON)
 
 # Find Python and pybind11 if building Python bindings
 if(DEME_BUILD_PYTHON)
@@ -213,16 +213,18 @@ set_target_properties(simulator_multi_gpu
 )
 
 if(DEME_BUILD_VISUALIZER)
-	# Keep graphics dependencies out of the solver library. The shared facade resolves raylib internally while the
-	# Python extension embeds the same visualization object code directly.
+	# Keep graphics dependencies out of the solver library. Only its tiny callback bridge belongs in the archive.
+	# Linking the static solver into both the executable and this shared facade duplicates JIT global destructors.
+	target_sources(simulator_multi_gpu PRIVATE $<TARGET_OBJECTS:visualization_bridge>)
 	add_library(DEMEVisualizer SHARED $<TARGET_OBJECTS:visualization>)
-	target_link_libraries(DEMEVisualizer PRIVATE simulator_multi_gpu raylib)
+	target_link_libraries(DEMEVisualizer PRIVATE raylib)
+	target_link_libraries(DEMEVisualizer INTERFACE simulator_multi_gpu)
 	target_include_directories(DEMEVisualizer PUBLIC
 		$<BUILD_INTERFACE:${ProjectIncludeSource}>
 		$<BUILD_INTERFACE:${ProjectIncludeGenerated}>
 		$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 	)
-	set_target_properties(DEMEVisualizer PROPERTIES CXX_STANDARD ${CXXSTD_SUPPORTED})
+	set_target_properties(DEMEVisualizer PROPERTIES CXX_STANDARD ${CXXSTD_SUPPORTED} WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
 endif()
 
 # ---------------------------------------------------------------------------- #
