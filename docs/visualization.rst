@@ -7,52 +7,121 @@ and Python wheels by default. Existing visualizer calls remain supported.
 The viewer does not advance simulation time: each call to ``Render``
 synchronously captures and displays the solver state at that moment.
 
+Recommended scope
+-----------------
+
+Use the interactive viewer for **proof-of-concept (PoC) work and small-scale
+simulations**: checking geometry placement, inspecting motion, and exploring
+solver settings. It is not recommended as an always-on viewer for large
+production runs or throughput benchmarks. For those workloads, run without
+interactive rendering, write output at a suitable interval, and inspect it
+later in ParaView. There is no universal particle-count cutoff: mesh complexity,
+sphere detail, hardware, and display frequency all affect the cost.
+
 Sphere components use a shared instanced mesh. Triangle geometry stays in
 persistent indexed buffers in owner-local coordinates. Each display frame
 uploads owner poses and colors, rather than reconstructing component positions
 and triangle vertices on the CPU. Geometry uploads occur after initialization,
 ``Update()``, mesh deformation (including wear), or a sphere-detail change.
 
+Writing a responsive visualization loop
+---------------------------------------
+
+``Render()`` handles mouse and keyboard input as well as drawing. The target FPS
+is a frame-rate limit, not a background event loop: it cannot make the window
+respond while your application is inside a blocking solver call or file write.
+A simulation-time interval such as ``DoDynamicsThenSync(1.0 / 60.0)`` can take
+seconds of wall time to compute; it does not imply a 60 Hz display.
+
+Use short dynamics advances and a **wall-clock** display deadline, independently
+of simulation-time file-output intervals. The examples below advance one solver
+timestep per call. They check the deadline between calls, keep drawing while
+paused, and consume ``ShouldStep()`` exactly once per intended advance. A paused
+single-step therefore advances one timestep. Check for window closure again
+after rendering so closing the viewer does not advance another step.
+
+Schedule the next deadline **after rendering finishes**. The renderer's FPS
+limiter may sleep for a whole frame; scheduling from the start can make every
+subsequent timestep immediately trigger another render, leaving little time
+for physics. A 16 ms work interval below is a starting point, not a guaranteed
+60 FPS rate. Increase it to favor simulation throughput. Keep your physical
+timestep unchanged when tuning the display frequency.
+
 C++ usage
----------
+~~~~~~~~~
+
+After configuring and initializing ``solver``:
 
 .. code-block:: cpp
 
-   #include <DEM/API.h>
-   #include <DEM/utils/DEMVisualizer.h>
-
-   deme::DEMSolver solver;
-   // Configure the solver, add geometry, then initialize it.
-   solver.Initialize();
+   #include <chrono>
+   #include "DEM/API.h"
+   #include "DEM/utils/DEMVisualizer.h"
 
    deme::DEMVisualizer visualizer(solver);
+   visualizer.SetTargetFPS(60);
    visualizer.Initialize();
 
+   using Clock = std::chrono::steady_clock;
+   auto next_display = Clock::now();
+   const auto work_interval = std::chrono::milliseconds(16);
+   // Match the solver's internal float timestep; a slightly larger double
+   // duration could request an extra step. This example uses a fixed timestep.
+   const float dt = static_cast<float>(solver.GetTimeStepSize());
+
    while (visualizer.Run()) {
-       visualizer.Render();
-       if (visualizer.ShouldStep()) {
-           solver.DoDynamicsThenSync(1.0 / 60.0);
+       if (visualizer.IsPaused() || Clock::now() >= next_display) {
+           visualizer.Render();
+           next_display = Clock::now() + work_interval;
        }
+       if (!visualizer.Run())
+           break;
+       if (visualizer.ShouldStep())
+           solver.DoDynamics(dt);
    }
+   solver.DoDynamicsThenSync(0.0);  // Join both workers at the end.
+   visualizer.Close();
 
 Python usage
-------------
+~~~~~~~~~~~~
+
+After configuring and initializing ``solver``:
 
 .. code-block:: python
 
+   import time
+   import numpy as np
    import deme
 
-   solver = deme.DEMSolver(1)
-   # Configure the solver, add geometry, then initialize it.
-   solver.Initialize()
-
    visualizer = deme.DEMVisualizer(solver)
+   visualizer.SetTargetFPS(60)
    visualizer.Initialize()
 
-   while visualizer.Run():
-       visualizer.Render()
-       if visualizer.ShouldStep():
-           solver.DoDynamicsThenSync(1.0 / 60.0)
+   next_display = time.monotonic()
+   work_interval = 0.016
+   # Round to the internal float timestep before passing a Python float.
+   # This example uses a fixed timestep.
+   dt = float(np.float32(solver.GetTimeStepSize()))
+
+   try:
+       while visualizer.Run():
+           if visualizer.IsPaused() or time.monotonic() >= next_display:
+               visualizer.Render()
+               next_display = time.monotonic() + work_interval
+           if not visualizer.Run():
+               break
+           if visualizer.ShouldStep():
+               solver.DoDynamics(dt)
+   finally:
+       solver.DoDynamicsThenSync(0.0)
+       visualizer.Close()
+
+``DoDynamics`` returns after the dynamic worker finishes the requested advance;
+these loops capture its state on the same application thread afterwards. They
+do not need to reset both workers with ``DoDynamicsThenSync`` at every display
+refresh. Do not run ``Render`` concurrently with dynamics from another thread.
+For a finite simulation, also add your simulation-end condition to the loop.
+If you change the solver timestep at runtime, refresh ``dt`` accordingly.
 
 Spheres and triangles are both rendered by default. They can be controlled
 independently before or during the visualization loop:
@@ -62,9 +131,40 @@ independently before or during the visualization loop:
    visualizer.SetRenderSpheres(False)
    visualizer.SetRenderTriangles(True)
 
-``Render`` performs synchronous device-to-host data movement. Call it at the
-desired display frequency rather than at every solver timestep. Do not call
-``Render`` concurrently with ``DoDynamics`` from another thread.
+Performance tradeoffs
+---------------------
+
+Persistent geometry reduces rebuilding work, but the viewer is not free:
+
+* Each ``Render`` synchronously transfers owner state to the CPU, prepares
+  colors, and uploads frame data to OpenGL. Speed coloring and inspecting a
+  selected owner also request velocity data. Paused redraws still capture state.
+* Sphere detail and mesh facet counts affect drawing cost and GPU memory use.
+  Geometry changes, including mesh deformation and wear, trigger geometry
+  uploads. Hiding geometry reduces drawing work but does not eliminate the
+  frame capture for all owners.
+* Frequent calls across the solver boundary, particularly from Python, add
+  overhead. Drawing, state transfers, and the FPS limiter share the application's
+  time with simulation. More responsive interaction can mean a substantially
+  slower overall run, even with few particles.
+* A long individual solver step, expensive output operation, or large frame
+  transfer can still stall input. The wall-clock deadline is checked only when
+  control returns to the application; rendering is not asynchronous.
+
+Measure representative runs with and without calls to ``Render`` using the
+same physics and output settings. Compare wall time per simulated second,
+not just the viewer's displayed FPS. In one development run,
+``SingleSphereCollide`` took about 287 seconds with output-frame-only rendering
+and 521 seconds with frequent interactive updates (about 1.8 times as long).
+That illustrates the tradeoff, not a portable benchmark or expected slowdown
+for other scenes or machines.
+
+For PoC work, start with a small scene, reduce sphere detail, and lengthen the
+work interval if throughput matters more than camera responsiveness. Pausing
+is useful for inspection, but still incurs redraw costs. For large or long
+runs, omit the viewer loop and use file output and postprocessing instead.
+Removing the viewer at build time is optional; see the headless build option
+below. Moving rendering to a background thread is not a supported shortcut.
 
 Inspection controls
 -------------------
@@ -74,8 +174,8 @@ Inspection controls
 * Right click: select a sphere component or mesh triangle using depth-tested
   geometry IDs. The sidebar reports its owner, family, position, orientation,
   and linear velocity. Hidden geometry cannot be selected.
-* ``Space``: pause/resume. ``.``: request one displayed simulation interval while
-  paused. **The application must honor** ``ShouldStep()`` **as shown above.**
+* ``Space``: pause/resume. ``.``: request one application-defined dynamics advance while
+  paused (one solver timestep in the loops above). **The application must honor** ``ShouldStep()`` **as shown above.**
   It consumes one pending step request; call it once per intended advance.
 * ``F12`` or the screenshot button: save ``deme-screenshot.png`` in the current
   directory. ``RequestScreenshot(path)`` saves the next rendered frame elsewhere.
@@ -104,11 +204,10 @@ Camera settings supplied before initialization are preserved; otherwise the
 first frame automatically fits the scene. The camera, frame buffers, and GUI
 must be used on the thread owning the window. Only one native viewer window
 may be open in a process. Pause does not block ``Render``; keep rendering to
-handle input while paused. The existing C++ demos check a wall-clock display deadline between individual
-solver steps, independently of file-output intervals. Their paused single-step
-control advances one solver timestep. Custom applications should also keep
-dynamics calls short and service the viewer regularly: a long blocking dynamics
-call prevents camera and UI input from being processed, regardless of target FPS.
+handle input while paused. The existing visualizer demos illustrate display
+updates between solver calls, independently of file-output intervals. For
+custom applications, use the loop pattern above and check ``ShouldStep()``
+before every advance, including advances between display deadlines.
 
 Scene/frame interface
 ---------------------

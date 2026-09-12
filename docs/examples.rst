@@ -17,6 +17,10 @@ multi-configuration Release build. Demos can create output files in the working
 directory. Read each source file's introductory comments for inputs, output,
 and any prerequisite terrain preparation.
 
+``SingleSphereCollide``, ``MeshCollide``, and ``MeshFalling`` use the interactive
+viewer when it is enabled. See :doc:`visualization` for responsive loop patterns,
+the recommended PoC/small-scale scope, and simulation-throughput tradeoffs.
+
 Choose a starting point
 -----------------------
 
