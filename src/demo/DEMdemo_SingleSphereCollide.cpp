@@ -124,7 +124,7 @@ int main() {
     // Testing modifying jitify options and force model prerequisites
     auto jitify_options = DEMSim.GetJitifyOptions();
     jitify_options.pop_back();  // Remove C++ std17 option
-    jitify_options.push_back("-std=c++20");
+    jitify_options.push_back("-std=c++14");
     DEMSim.SetJitifyOptions(jitify_options);  // Then set it
     my_force_model->DefineCustomModelPrerequisites(
         "float3 __device__ GetContactForce(float3 AOwner, float3 BOwner, float3 ALinVel, float3 BLinVel, "
