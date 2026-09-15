@@ -52,7 +52,7 @@ hopper flow, soil penetration, wheel–terrain interaction, and granular impact.
 | Understand owners, families, frames, and runtime setup | [Core concepts](docs/concepts.rst) |
 | Use mesh particles, templates, and combined bodies | [Mesh particles](docs/mesh-particles.rst) |
 | Find a demo to adapt | [Examples](docs/examples.rst) · [C++ sources](src/demo) |
-| Use Python | [Python guide](docs/python/index.rst) · [API reference](docs/python/reference.rst) |
+| Use Python | [Python guide](docs/python/index.rst) · [Demos](python/demos/README.md) · [API reference](docs/python/reference.rst) |
 | Look up the C++ API | [C++ reference](docs/cpp-api/index.rst) |
 | Select GPUs or exchange simulation data | [Device selection](docs/python/device-selection.rst) · [Data access](docs/python/data-access.rst) |
 | Visualize results | [Interactive visualization and ParaView](docs/visualization.rst) |
@@ -66,11 +66,18 @@ to browse C++ declarations and Python documentation together.
 
 ## Python in brief
 
-On a supported Linux host with the required NVIDIA driver and CUDA Toolkit:
+On a supported Linux or WSL2 host with a CUDA 12.9-compatible NVIDIA driver:
 
 ```bash
-python -m pip install deme
+python -m pip install "deme[cuda12]"
 ```
+
+The `cuda12` extra installs CUDA runtime libraries, NVRTC, and headers through pip;
+no system CUDA Toolkit installation is needed for Python wheels. This setup applies
+only to the Python extension; standalone C++ applications keep their normal CUDA
+configuration. Use plain `pip install deme` to
+use an existing toolkit. Preview builds from `Mesh_Particles_Py` are published as
+`deme3` (`pip install "deme3[cuda12]"`), with the same `import deme` namespace.
 
 ```python
 import deme

@@ -118,7 +118,7 @@ if(DEME_BUILD_PYTHON)
 		PUBLIC CUDA::cudart
 		PUBLIC CUDA::nvrtc
 		PUBLIC CUDA::cuda_driver
-		PUBLIC core
+		PUBLIC core_python
 		PUBLIC DEMERuntimeDataHelper_python
 		PUBLIC algorithms
 		PUBLIC pybind11::headers
@@ -138,6 +138,7 @@ if(DEME_BUILD_PYTHON)
 	# capitalized import without duplicating the compiled extension.
 	install(FILES
 		${CMAKE_CURRENT_SOURCE_DIR}/python/deme/__init__.py
+		${CMAKE_CURRENT_SOURCE_DIR}/python/deme/_cuda.py
 		DESTINATION deme
 		COMPONENT python
 	)

@@ -30,6 +30,26 @@ The example uses ``DoDynamicsThenSync`` because the position is read
 immediately afterward. For longer simulations, asynchronous ``DoDynamics``
 calls can overlap host work; synchronize before reading results or exiting.
 
+More Python demos
+-----------------
+
+The repository's ``python/demos`` directory includes ports of
+``DEMdemo_SingleSphereCollide``, ``DEMdemo_BallDrop``, and
+``DEMdemo_Centrifuge``. They demonstrate cohesive contact, runtime particle
+insertion, a meshed projectile, and a rotating analytical drum:
+
+.. code-block:: console
+
+   python python/demos/single_sphere_collide.py --smoke-test
+   python python/demos/ball_drop.py --smoke-test
+   python python/demos/centrifuge.py --smoke-test
+
+Run from a checkout with the Python package installed. Each script supports
+``--help``, ``--device``, ``--duration``, and ``--output-dir``. See
+``python/demos/README.md`` for full runs, output visualization, and differences
+from the larger C++ examples. Smoke runs still require a GPU and first-time
+kernel compilation.
+
 Where to go next
 ----------------
 

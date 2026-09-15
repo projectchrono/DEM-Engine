@@ -95,6 +95,29 @@ set_target_properties(
 	PUBLIC_HEADER "${core_headers}"
 )
 
+
+# The Python extension needs import-time CUDA header configuration. Compile its core separately so
+# this hook and its state are absent from native C++ libraries, even when both targets are built.
+if(DEME_BUILD_PYTHON)
+    add_library(core_python OBJECT)
+    target_sources(core_python PRIVATE ${core_sources})
+    target_include_directories(core_python PUBLIC
+        $<BUILD_INTERFACE:${ProjectIncludeSource}>
+        $<BUILD_INTERFACE:${ProjectIncludeGenerated}>
+    )
+    target_link_libraries(core_python PUBLIC CUB::CUB)
+    target_compile_definitions(core_python PRIVATE
+        DEME_PYTHON_JIT
+        DEME_CUDA_TOOLKIT_INCLUDE_DIRS="$<JOIN:${_DEME_CUDA_INC_DIRS},;>"
+    )
+    set_target_properties(core_python PROPERTIES
+        POSITION_INDEPENDENT_CODE True
+        CXX_STANDARD ${CXXSTD_SUPPORTED}
+        CXX_VISIBILITY_PRESET hidden
+        VISIBILITY_INLINES_HIDDEN True
+    )
+endif()
+
 # Install Core Headers
 install(
 	DIRECTORY ${ProjectIncludeSource}/core

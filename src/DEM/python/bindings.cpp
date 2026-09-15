@@ -13,6 +13,7 @@
 #include <memory>
 
 #include "core/utils/RuntimeData.h"
+#include "PythonCudaIncludes.hpp"
 #include "core/utils/DataMigrationHelper.hpp"
 #include "core/utils/DEMEPaths.h"
 #include "core/ApiVersion.h"
@@ -84,6 +85,21 @@ struct type_caster<float4> {
 }  // namespace pybind11
 
 PYBIND11_MODULE(_deme, obj) {
+    // Called once by the package bootstrap, before user code can create a solver. Keep this state
+    // private to the extension so importing Python cannot change a separately launched C++ program.
+    obj.def("_set_cuda_include_paths", [](const std::vector<std::string>& paths) {
+        auto& configured = deme::python::CudaIncludePaths();
+        static bool initialized = false;
+        const std::vector<std::filesystem::path> requested(paths.begin(), paths.end());
+        if (initialized && configured != requested) {
+            throw py::value_error("Python CUDA include paths have already been configured");
+        }
+        if (!initialized) {
+            configured = requested;
+            initialized = true;
+        }
+    });
+
     // Report the same version as the CMake project so Python and C++ callers
     // cannot observe conflicting release versions.
     obj.attr("__version__") = std::to_string(DEME_VERSION_MAJOR) + "." + std::to_string(DEME_VERSION_MINOR) + "." +

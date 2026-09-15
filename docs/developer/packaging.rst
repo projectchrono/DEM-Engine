@@ -93,8 +93,9 @@ This release process uses ``auditwheel repair`` to copy ordinary redistributable
 native dependencies into each wheel and assign the
 ``manylinux_2_28_x86_64`` tag. It explicitly excludes ``libcuda.so.1``,
 ``libcudart.so.12``, and ``libnvrtc.so.12``. DEME runtime-compiles CUDA kernels,
-so a compatible CUDA 12.9 toolkit (including NVRTC, its builtins, and headers)
-and NVIDIA driver must be installed on the deployment host. Bundling a driver
+so NVRTC, its builtins, and headers must be supplied by the ``cuda12`` extra
+or a compatible system CUDA 12.9 toolkit. The NVIDIA driver remains a host
+requirement. Bundling a driver
 stub is incorrect, while bundling NVRTC without all of its dynamically loaded
 resources produces an incomplete runtime. Before publishing, inspect the
 repaired wheel and ``auditwheel show`` output to confirm that CUDA is the only
@@ -110,7 +111,9 @@ or manual dispatch. Every job:
 * checks out Git submodules recursively;
 * builds in the CUDA 12.9 manylinux 2.28 container;
 * repairs the wheel with ``auditwheel``;
-* checks package metadata and the expected Python/platform filename tags; and
+* checks package metadata and the expected Python/platform filename tags;
+* installs the ``cuda12`` extra in a clean Python container and compiles CUDA,
+  CURAND, and CCCL headers with pip-provided NVRTC, without a system toolkit; and
 * uploads the wheel as a workflow artifact for testing or release assembly.
 
 The hosted build runners do not provide a usable NVIDIA GPU. Consequently this
@@ -172,3 +175,23 @@ Before distributing a wheel, record and test at least:
 Until the supported compatibility matrix is published, build and validate
 wheels on the oldest intended deployment platform and test them on each
 supported Python, CUDA/driver, and GPU configuration.
+
+Branch-specific distribution routing
+------------------------------------
+
+The wheel workflow selects ``deme`` with environment ``pypi`` on ``main`` and
+``Mesh_Particles``. On ``Mesh_Particles_Py`` it rewrites the build metadata to
+``deme3`` and publishes through ``pypi-deme3``. This selection is performed at
+build time so merging release packaging changes into the preview branch retains
+its separate PyPI destination. Publication remains an explicit manual dispatch.
+
+Python-only CUDA configuration
+------------------------------
+
+The ``cuda12`` extra supplies NVIDIA component wheels. Before importing the
+extension, ``deme._cuda`` loads the required libraries by absolute path and
+returns their header directories. A private binding configures these directories
+in the Python core variant (``core_python``), before any solver workers start.
+The native ``core`` target does not compile that configuration hook and retains
+its original CUDA header search order. No CUDA environment variable is set, so
+executables launched from Python retain their normal native configuration.

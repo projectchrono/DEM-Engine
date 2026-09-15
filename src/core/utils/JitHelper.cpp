@@ -33,6 +33,10 @@
 #include "JitHelper.h"
 #include "Logger.hpp"
 
+#ifdef DEME_PYTHON_JIT
+    #include "DEM/python/PythonCudaIncludes.hpp"
+#endif
+
 namespace {
 
 constexpr uint64_t kFNVOffset = 0xcbf29ce484222325ULL;
@@ -164,18 +168,39 @@ JitHelper::CachedProgram JitHelper::buildProgram(const std::string& name,
             add_inc(p / "cccl");
             found_matching_cuda_headers = true;
         };
-        for (auto& p : include_paths) {
-            add_cuda_inc(p);
+#ifdef DEME_PYTHON_JIT
+        // Import passes the split NVIDIA wheel directories directly into this extension's core.
+        // Native C++ does not compile this branch or inherit configuration from a Python parent.
+        const auto& python_include_paths = deme::python::CudaIncludePaths();
+        if (!python_include_paths.empty()) {
+            for (const auto& path : python_include_paths) {
+                add_cuda_inc(path);
+            }
+            if (!found_matching_cuda_headers) {
+                DEME_ERROR("The pip CUDA headers do not match loaded NVRTC %d.%d. Use a consistent CUDA environment.",
+                           nvrtc_major, nvrtc_minor);
+            }
+            for (const auto& path : python_include_paths) {
+                add_inc(path);
+            }
+            add_inc(KERNEL_INCLUDE_DIR);
+        } else {
+#endif
+            for (auto& p : include_paths) {
+                add_cuda_inc(p);
+            }
+            add_inc(KERNEL_INCLUDE_DIR);
+            if (const char* cuda_home = std::getenv("CUDA_HOME")) {
+                add_cuda_inc(std::filesystem::path(cuda_home) / "include");
+            }
+            if (nvrtc_major > 0) {
+                add_cuda_inc("/usr/local/cuda-" + std::to_string(nvrtc_major) + "." + std::to_string(nvrtc_minor) +
+                             "/include");
+            }
+            add_cuda_inc("/usr/local/cuda/include");
+#ifdef DEME_PYTHON_JIT
         }
-        add_inc(KERNEL_INCLUDE_DIR);
-        if (const char* cuda_home = std::getenv("CUDA_HOME")) {
-            add_cuda_inc(std::filesystem::path(cuda_home) / "include");
-        }
-        if (nvrtc_major > 0) {
-            add_cuda_inc("/usr/local/cuda-" + std::to_string(nvrtc_major) + "." + std::to_string(nvrtc_minor) +
-                         "/include");
-        }
-        add_cuda_inc("/usr/local/cuda/include");
+#endif
         if (!found_matching_cuda_headers) {
             DEME_ERROR(
                 "NVRTC %d.%d is loaded, but matching CUDA headers were not found. Install that CUDA Toolkit or set "

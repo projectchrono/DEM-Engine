@@ -20,6 +20,7 @@ SET(MODULAR_TESTS
 		DEMTest_ConeGrazingPlane
 		DEMTest_ConeGrazingSphere
 		DEMTest_CylinderCrossRotation
+		DEMTest_CudaHeaderDiscovery
 		DEMTest_DeviceDataRetrieval
 		DEMTest_DeviceSelection
 		DEMTest_MeshBox1Particle

@@ -34,6 +34,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Keep runtime headers, compiler headers, and NVRTC on the wheel build's CUDA minor version.
+cuda12 = [
+    "nvidia-cuda-runtime-cu12>=12.9,<12.10",
+    "nvidia-cuda-nvrtc-cu12>=12.9,<12.10",
+    "nvidia-cuda-nvcc-cu12>=12.9,<12.10",
+    "nvidia-cuda-cccl-cu12>=12.9,<12.10",
+    "nvidia-curand-cu12>=10.3.10,<10.4",
+]
 dev = [
     "pytest>=6.0",
     "pybind11>=2.11.0",
@@ -69,8 +77,8 @@ skip = "*-musllinux_*"
 build-verbosity = 1
 
 [tool.cibuildwheel.linux]
-# Build on glibc 2.28 with CUDA 12.9. DEME runtime-compiles CUDA kernels and therefore requires the matching host CUDA
-# toolkit as well as its driver; never bundle a driver stub or a partial NVRTC installation into the wheel.
+# Build on glibc 2.28 with CUDA 12.9. The cuda12 extra supplies runtime compilation dependencies.
+# Keep NVIDIA components external to this wheel; never bundle the build-time driver stub.
 manylinux-x86_64-image = "quay.io/manylinux_cuda/manylinux_2_28_x86_64_cuda12_9:latest"
 # The current CUDA 12.9 image can omit NVRTC despite providing nvcc and cudart. DEME links NVRTC for runtime kernel
 # compilation, so install both the shared library and its development symlink before any interpreter build starts.

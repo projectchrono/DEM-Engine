@@ -9,7 +9,8 @@ DEME requires:
 * a 64-bit Linux system for the currently supported Python package;
 * an NVIDIA GPU;
 * an NVIDIA driver compatible with the selected CUDA Toolkit;
-* CUDA Toolkit 11 or newer, including NVRTC and CUDA headers;
+* CUDA runtime libraries, NVRTC, and headers (installed by the ``cuda12`` extra,
+  or provided by a compatible system CUDA Toolkit);
 * CMake 3.18 or newer and a CUDA-compatible C++ compiler when building from
   source.
 
@@ -35,7 +36,22 @@ Install a released wheel with:
 
 .. code-block:: console
 
-   python -m pip install deme
+   python -m pip install "deme[cuda12]"
+
+This installation flavor is for the Python package only. It configures the
+private Python extension without changing CUDA environment variables or the
+header discovery used by standalone C++ programs. C++ builds and applications
+continue to use their normal system CUDA Toolkit.
+
+The ``cuda12`` extra installs CUDA 12.9 runtime/compiler libraries and headers
+from NVIDIA wheels. No system CUDA Toolkit is required for binary-wheel users.
+On WSL2, install a compatible NVIDIA driver on Windows; do not install a Linux
+GPU driver inside WSL. A working GPU driver is still required and is not
+installed by pip. Building from source still requires a CUDA development toolkit.
+
+Use plain ``pip install deme`` if you provide a system toolkit yourself.
+Preview builds from ``Mesh_Particles_Py`` use ``pip install "deme3[cuda12]"``;
+both distributions provide the same namespace and should not be installed together.
 
 The canonical import is:
 
