@@ -12,6 +12,7 @@ kernels.
    :maxdepth: 2
    :caption: Getting started
 
+   deme3-new-features
    installation
    quickstart
    concepts

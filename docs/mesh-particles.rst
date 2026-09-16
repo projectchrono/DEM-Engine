@@ -1,6 +1,9 @@
 Mesh particles and combined owners
 ==================================
 
+See :doc:`deme3-new-features` for contact aggregation and migration from
+geometry-wildcard-based constructions to combined bodies.
+
 Contact scope
 -------------
 
