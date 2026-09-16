@@ -2,7 +2,7 @@ Troubleshooting
 ===============
 
 For numeric contact, geometry, and owner codes seen in logs or a debugger,
-see :doc:`developer/type-codes`.
+see `Internal type codes for debugging <developer/type-codes.rst>`__.
 
 CUDA or PTX mismatch
 --------------------

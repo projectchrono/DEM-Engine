@@ -3,7 +3,7 @@ Python API overview
 
 DEME currently preserves its established C++-style method names in Python.
 This page maps common tasks to the principal bound objects; runtime docstrings
-and the :doc:`../cpp-api/index` provide signature-level detail.
+and the `C++ API reference <../cpp-api/index.rst>`__ provide signature-level detail.
 
 Core objects
 ------------
@@ -22,11 +22,11 @@ Core objects
 
 ``DEMMesh`` and ``DEMExternObj``
    Represent mesh particles/bodies and analytical external geometry. See
-   :doc:`../mesh-particles` for mesh templates and contact scope.
+   `Mesh particles and combined owners <../mesh-particles.rst>`__ for mesh templates and contact scope.
 
 ``Tracker`` (native ``DEMTracker``)
    Reads or modifies a tracked batch/object after initialization. See
-   :doc:`data-access`.
+   `Retrieving simulation data <data-access.rst>`__.
 
 ``DEMInspector``
    Queries aggregate or spatial simulation properties.
@@ -37,7 +37,7 @@ Core objects
 
 ``DEMVisualizer``
    Displays the current solver state on each explicit ``Render`` call without
-   advancing the simulation. See :doc:`../visualization`.
+   advancing the simulation. See `Interactive visualization <../visualization.rst>`__.
 
 Common task map
 ---------------

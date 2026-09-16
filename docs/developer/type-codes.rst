@@ -76,7 +76,7 @@ and a mesh can contain many triangles.
 The analytical code is 4, not 3; these values also participate in bitwise
 operations. ``ownerTypes`` stores the internal owner codes. Combined owners
 have no separate ``OWNER_T_COMBINED`` code: rigid grouping does not introduce
-a fourth geometry or owner type. See :doc:`../concepts` for owners and members.
+a fourth geometry or owner type. See `Core concepts <../concepts.rst>`__ for owners and members.
 
 Do not confuse these codes with ``OWNER_TYPE``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

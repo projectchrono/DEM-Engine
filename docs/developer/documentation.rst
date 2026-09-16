@@ -2,7 +2,7 @@ Building the documentation
 ==========================
 
 The concise build, Python-reference regeneration, and local/remote preview
-commands are collected in :download:`docs/README.md <../README.md>`.
+commands are collected in `docs/README.md <../README.md>`__.
 
 Prerequisites
 -------------
@@ -64,5 +64,21 @@ Documentation policy
 * The HTML build uses warnings-as-errors so broken API references do not
   silently enter published documentation.
 
-See :doc:`hosting` for publication options and source-tree organization, and
-:doc:`packaging` for Python wheel maintenance.
+See `Hosting the documentation <hosting.rst>`__ for publication options and source-tree organization, and
+`Python wheel maintenance <packaging.rst>`__ for Python wheel maintenance.
+
+Links in authored guides
+------------------------
+
+Use standard reStructuredText relative hyperlinks to source files, with a
+readable label and the actual extension (for example, ``.rst``). These work
+when readers browse the repository on GitHub. Prefer anonymous hyperlinks
+(two trailing underscores) so repeated labels do not create duplicate targets.
+Sphinx-specific document and download roles are not understood by GitHub.
+
+The local ``repository_links`` extension converts links to ``.rst`` pages into
+Sphinx document references and links to ``.md``, ``.cpp``, and ``.py`` files into
+downloads during the site build. Keep these relative file links free of queries
+and fragments; the adapter leaves external URLs and same-page anchors alone.
+The generated API pages and toctrees still require the Sphinx build for their
+full rendering.

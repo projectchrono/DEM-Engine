@@ -12,7 +12,7 @@ Mesh particles and aggregated mesh contacts
 DEME 3 supports mesh–mesh contacts, allowing triangle meshes to represent
 interacting grains as well as external bodies. Enable mesh contacts with other
 meshes and analytical geometry using ``SetMeshUniversalContact(true)`` before
-initialization. Its default is false; see :doc:`mesh-particles` for setup.
+initialization. Its default is false; see `Mesh particles and combined owners <mesh-particles.rst>`__ for setup.
 
 The clump–mesh contact scheme also changes. Rather than evaluating each
 sphere–triangle contribution as an independent force interaction, the mesh
@@ -30,13 +30,13 @@ per clump–mesh pair, and primitive geometry checks are still needed.
 ``SetSimplePatchCombination`` selects grouping by patch-ID pair; the more
 involved contact-island handling distinguishes contact regions.
 ``SetStablePatchIslandIDs`` controls stabilizing flooded island identities
-across detection steps. Consult :doc:`cpp-api/index` for these controls rather
+across detection steps. Consult `C++ API reference <cpp-api/index.rst>`__ for these controls rather
 than assuming all neighboring triangles are always merged into one contact.
 
 This changes the contact representation used by force models and contact
 history. Revalidate representative forces, torques, and bulk behavior when
 porting a DEME 2 simulation, especially if its custom model relied on separate
-triangle contacts. See :doc:`developer/type-codes` when inspecting primitive
+triangle contacts. See `Internal type codes for debugging <developer/type-codes.rst>`__ when inspecting primitive
 and patch contact arrays.
 
 Using DEME 2-style mesh patches within DEME 3
@@ -103,7 +103,7 @@ parts of the problem.
 Migration is a modeling change, not a mechanical rename of geometry wildcards:
 choose member boundaries and move custom properties to the appropriate owner or
 contact variables. Combined bodies are rigid assemblies, not joints or
-structural deformation models. See :doc:`mesh-particles` and :doc:`concepts`.
+structural deformation models. See `Mesh particles and combined owners <mesh-particles.rst>`__ and `Core concepts <concepts.rst>`__.
 
 On-device coupling
 ------------------
@@ -116,7 +116,7 @@ solvers. Host-based access remains available.
 
 Direct device exchange is not a promise of zero-copy access or asynchronous
 execution: APIs can copy data and synchronize. Follow the pointer, capacity,
-device-selection, and lifetime requirements in :doc:`python/data-access` and
+device-selection, and lifetime requirements in `Retrieving simulation data <python/data-access.rst>`__ and
 the C++ reference. The Python guide includes CuPy and Warp examples.
 
 Persistent compiled-kernel caching
@@ -145,7 +145,7 @@ when that path exists, otherwise ``dem-jit`` in the temporary directory. See
 
 This is separate from ``DEME_PERSISTENT_JITIFY_CACHE``, the opt-in cache of
 CUDA header sources used during Jitify discovery. That header cache has its own
-path and invalidation considerations; see :doc:`troubleshooting`. Clear affected
+path and invalidation considerations; see `Troubleshooting <troubleshooting.rst>`__. Clear affected
 caches after changing included headers if their contents are not otherwise
 reflected in the cache key.
 
@@ -154,11 +154,11 @@ Visualization and Python workflows
 
 The interactive visualizer displays the current simulation state when asked to
 render, making it useful for inspecting geometry and motion during a run. See
-:doc:`visualization` for examples and display requirements.
+`Interactive visualization <visualization.rst>`__ for examples and display requirements.
 
 Python exposes the new mesh, combined-body, visualization, and device-data
-capabilities. Start with :doc:`python/quickstart`, then consult
-:doc:`python/api-overview` and the Python demos under ``python/demos/``. Python
+capabilities. Start with `Python quickstart <python/quickstart.rst>`__, then consult
+`Python API overview <python/api-overview.rst>`__ and the Python demos under ``python/demos/``. Python
 bindings and customizable contact physics also existed in DEME 2; their presence
 alone is not a DEME 3 addition.
 

@@ -54,8 +54,8 @@ other solver-owned handles are in use.
 Reference status
 ----------------
 
-The :doc:`api-overview` inventories the main Python objects and points to the
+The `Python API overview <api-overview.rst>`__ inventories the main Python objects and points to the
 task-oriented guides. The extension also contains runtime pybind11 docstrings;
 use ``help(deme.DEMSolver)`` or ``help(deme.Tracker)`` in an installed
-environment. The generated :doc:`../cpp-api/index` remains the exhaustive
+environment. The generated `C++ API reference <../cpp-api/index.rst>`__ remains the exhaustive
 low-level reference for APIs shared with C++.

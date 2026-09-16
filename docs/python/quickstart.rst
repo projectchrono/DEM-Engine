@@ -23,7 +23,7 @@ Run it with:
 
 The solver constructor initializes CUDA worker resources, so even importing
 successfully is not sufficient to run a simulation without a visible,
-supported NVIDIA GPU. See :doc:`device-selection` when the process can see more
+supported NVIDIA GPU. See `CUDA device selection <device-selection.rst>`__ when the process can see more
 than one GPU.
 
 The example uses ``DoDynamicsThenSync`` because the position is read
@@ -53,9 +53,9 @@ kernel compilation.
 Where to go next
 ----------------
 
-* :doc:`solver-lifecycle` explains which operations belong before and after
+* `Solver lifecycle <solver-lifecycle.rst>`__ explains which operations belong before and after
   ``Initialize()``.
-* :doc:`data-access` covers host-returning tracker methods and direct retrieval
+* `Retrieving simulation data <data-access.rst>`__ covers host-returning tracker methods and direct retrieval
   into CUDA arrays.
-* :doc:`api-overview` maps common tasks to the Python objects and methods that
+* `Python API overview <api-overview.rst>`__ maps common tasks to the Python objects and methods that
   implement them.

@@ -11,10 +11,10 @@ illustrate typical applications.
 Licensing and contributors
 --------------------------
 
-DEME uses the :download:`BSD-3-Clause license <../LICENSE.md>`.
+DEME uses the `BSD-3-Clause license <../LICENSE.md>`__.
 The project is the collective intellectual property of its authors and the
 University of Wisconsin–Madison. Add authors to
-:download:`the contributor list <CONTRIBUTORS.md>` rather than individual
+`the contributor list <CONTRIBUTORS.md>`__ rather than individual
 copyright headers. Include this notice in new or modified source files:
 
 .. code-block:: text

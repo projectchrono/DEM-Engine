@@ -2,7 +2,7 @@ Python wheel maintenance
 ========================
 
 For prerequisites, a single wheel build, and runtime validation, see
-:doc:`../installation`. The commands below run from the repository root unless
+`Installation <../installation.rst>`__. The commands below run from the repository root unless
 a step explicitly changes directory.
 
 Build the complete supported Python matrix

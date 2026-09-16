@@ -8,7 +8,7 @@ GitHub Pages fits this repository's existing static documentation build.
 One site contains the authored guides, the Doxygen/Breathe C++ reference, and
 the committed Python API reference. A normal HTML build does not import the
 native extension, compile the solver, or need a GPU. See
-:doc:`documentation` for the build and reference-regeneration steps.
+`Building the documentation <documentation.rst>`__ for the build and reference-regeneration steps.
 
 Pages is free for public repositories on GitHub Free. Published sites have a
 1 GB size limit and a soft bandwidth limit of 100 GB/month. These should suit
@@ -71,7 +71,7 @@ No workflow edit is needed. The selected branch must contain the workflow and
 its documentation sources. Builds check out the triggering commit, so a push
 publishes documentation corresponding to that commit rather than a moving
 branch head. The Python API reference must still be regenerated and committed
-when bindings change; see :doc:`documentation`.
+when bindings change; see `Building the documentation <documentation.rst>`__.
 
 See GitHub's official instructions for
 `Pages publishing sources
@@ -122,6 +122,6 @@ The root ``LICENSE.md`` and ``AGENTS.md`` remain in place for license discovery
 and agent tooling.
 
 Earlier implementation reports are preserved in
-:download:`the historical notes <../archive/implementation-notes.md>`.
+`the historical notes <../archive/implementation-notes.md>`__.
 They are not current API or installation instructions; update the maintained
 guides and references when behavior changes instead of adding another report.

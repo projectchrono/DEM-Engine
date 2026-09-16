@@ -1,7 +1,7 @@
 Mesh particles and combined owners
 ==================================
 
-See :doc:`deme3-new-features` for contact aggregation and migration from
+See `DEME 3 features and migration considerations <deme3-new-features.rst>`__ for contact aggregation and migration from
 geometry-wildcard-based constructions to combined bodies.
 
 Contact scope
@@ -17,7 +17,7 @@ mesh contacts with other meshes and analytical objects during setup:
 The default is false: meshes then contact clumps only. This option replaces
 the older README's blanket statement that mesh–mesh and mesh–analytical contacts
 are unsupported. Family contact rules and geometry-specific contact settings
-still apply. See :doc:`cpp-api/index` for the public API and :doc:`examples`
+still apply. See `C++ API reference <cpp-api/index.rst>`__ for the public API and `Examples and co-simulation <examples.rst>`__
 for mesh collision and hopper examples.
 
 Mesh templates
@@ -61,7 +61,7 @@ Rigid combined bodies
 member-relative positions and orientations. ``AddCombinedFromTemplate`` places
 a group at a global pose. The selected master member provides the reference
 frame. Combined bodies preserve rigid relative motion; they do not implement
-joints or deformable multibody dynamics. See :doc:`concepts` and the generated
+joints or deformable multibody dynamics. See `Core concepts <concepts.rst>`__ and the generated
 C++ and Python references for units, quaternion ordering, and tracker behavior.
 
 Mesh patches

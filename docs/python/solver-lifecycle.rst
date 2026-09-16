@@ -9,7 +9,7 @@ does not exist yet.
 -----------------------
 
 Choose worker device placement when constructing ``DEMSolver``. Device
-placement cannot be changed later. See :doc:`device-selection`.
+placement cannot be changed later. See `CUDA device selection <device-selection.rst>`__.
 
 2. Describe the system
 ----------------------
@@ -66,7 +66,7 @@ Trackers provide scalar and bulk host access:
    all_positions = tracker.Positions()
 
 They can also write directly to caller-owned CUDA allocations; see
-:doc:`data-access`.
+`Retrieving simulation data <data-access.rst>`__.
 
 Output methods may queue work. Call ``WaitForPendingOutput()`` before relying
 on all requested files being complete. The solver destructor also waits for

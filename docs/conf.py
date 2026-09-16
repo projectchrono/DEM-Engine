@@ -1,6 +1,7 @@
 """Sphinx configuration for the DEM-Engine documentation."""
 
 from pathlib import Path
+import sys
 
 
 DOCS_DIR = Path(__file__).resolve().parent
@@ -13,7 +14,10 @@ copyright = "2021–2026, DEM-Engine contributors"
 version = DEME_RELEASE.split(".", maxsplit=1)[0]
 release = DEME_RELEASE
 
+sys.path.insert(0, str(DOCS_DIR / "_ext"))
+
 extensions = [
+    "repository_links",
     "breathe",
     "sphinx.ext.autosectionlabel",
 ]
