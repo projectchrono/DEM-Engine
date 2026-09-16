@@ -15,12 +15,12 @@ toolkit.
 Runtime JIT compilation cannot find headers
 -------------------------------------------
 
-For binary wheels, install ``"deme[cuda12]"`` (or ``"deme3[cuda12]"`` for
-preview builds) to supply matching libraries and headers. A complete pip CUDA
-installation takes precedence over system CUDA discovery inside the Python
-extension only. It does not export CUDA paths to child processes. If another GPU package
-has already loaded a different NVRTC version, use compatible dependencies in a
-fresh Python process or separate environment.
+For binary wheels, install ``"deme[cuda12]"`` to supply matching libraries and
+headers. A complete pip CUDA installation takes precedence over system CUDA
+discovery inside the Python extension only. It does not export CUDA paths to
+child processes. If another GPU package has already loaded a different NVRTC
+version, use compatible dependencies in a fresh Python process or separate
+environment.
 
 DEME compiles kernels at runtime. Confirm that the CUDA Toolkit headers and the
 ``share/DEME/kernel`` and ``include`` resources installed with DEME are

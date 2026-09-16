@@ -50,8 +50,6 @@ GPU driver inside WSL. A working GPU driver is still required and is not
 installed by pip. Building from source still requires a CUDA development toolkit.
 
 Use plain ``pip install deme`` if you provide a system toolkit yourself.
-Preview builds from ``Mesh_Particles_Py`` use ``pip install "deme3[cuda12]"``;
-both distributions provide the same namespace and should not be installed together.
 
 The canonical import is:
 

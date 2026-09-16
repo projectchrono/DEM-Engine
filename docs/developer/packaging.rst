@@ -176,14 +176,12 @@ Until the supported compatibility matrix is published, build and validate
 wheels on the oldest intended deployment platform and test them on each
 supported Python, CUDA/driver, and GPU configuration.
 
-Branch-specific distribution routing
-------------------------------------
+Release distribution
+--------------------
 
-The wheel workflow selects ``deme`` with environment ``pypi`` on ``main`` and
-``Mesh_Particles``. On ``Mesh_Particles_Py`` it rewrites the build metadata to
-``deme3`` and publishes through ``pypi-deme3``. This selection is performed at
-build time so merging release packaging changes into the preview branch retains
-its separate PyPI destination. Publication remains an explicit manual dispatch.
+The wheel workflow publishes the ``deme`` distribution through the ``pypi``
+environment on ``main`` and ``Mesh_Particles``. Publication remains an explicit
+manual dispatch.
 
 Python-only CUDA configuration
 ------------------------------

@@ -76,9 +76,7 @@ python -m pip install "deme[cuda12]"
 The `cuda12` extra installs CUDA runtime libraries, NVRTC, and headers through pip;
 no system CUDA Toolkit installation is needed for Python wheels. This setup applies
 only to the Python extension; standalone C++ applications keep their normal CUDA
-configuration. Use plain `pip install deme` to
-use an existing toolkit. Preview builds from `Mesh_Particles_Py` are published as
-`deme3` (`pip install "deme3[cuda12]"`), with the same `import deme` namespace.
+configuration. Use plain `pip install deme` to use an existing toolkit.
 
 ```python
 import deme

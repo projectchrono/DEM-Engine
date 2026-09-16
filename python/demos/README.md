@@ -7,8 +7,7 @@ wheel. Install the package into your active environment:
 python -m pip install 'deme[cuda12]'
 ```
 
-On the `Mesh_Particles_Py` preview branch, install `'deme3[cuda12]'` instead;
-the import name is still `deme`. The extra supplies CUDA 12 libraries and headers
+The `cuda12` extra supplies CUDA 12 libraries and headers
 for Linux, including WSL2. A compatible NVIDIA GPU driver is still required.
 First-time solver initialization compiles CUDA kernels and can take tens of
 minutes for these scenes. Cached runs are much faster; a short smoke duration
