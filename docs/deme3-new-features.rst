@@ -39,6 +39,39 @@ porting a DEME 2 simulation, especially if its custom model relied on separate
 triangle contacts. See :doc:`developer/type-codes` when inspecting primitive
 and patch contact arrays.
 
+Using DEME 2-style mesh patches within DEME 3
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Call ``SetDEME2MeshBehavior(true)`` **before loading meshes or mesh templates**
+to assign every triangle of subsequently loaded meshes to its own patch. This
+is useful when comparing an existing triangle-based contact setup with DEME 3's
+normal patch assignments. With a solver, material, and mesh file already
+available, use this setup fragment:
+
+.. code-block:: cpp
+
+   solver.SetDEME2MeshBehavior(true);
+   auto mesh_type = solver.LoadMeshType("surface.obj", material);
+   auto mesh = solver.AddMeshFromTemplate(mesh_type);
+
+The Python equivalent is:
+
+.. code-block:: python
+
+   solver.SetDEME2MeshBehavior(True)
+   mesh_type = solver.LoadMeshType("surface.obj", material)
+   mesh = solver.AddMeshFromTemplate(mesh_type)
+
+The default is false. Calling ``SetDEME2MeshBehavior(false)`` leaves patch
+assignments unchanged for subsequent loads; it does not merge triangles back
+together or undo changes on already loaded meshes/templates. In particular,
+set the option before ``LoadMeshType`` when using templates.
+
+This controls mesh patch assignment only. It neither switches to the DEME 2
+solver nor restores its memory footprint or GPU backends, and it does not
+replace ``SetMeshUniversalContact``. Validate forces and motion when using it
+for migration comparisons.
+
 Rigid combined bodies and geometry-wildcard migration
 -----------------------------------------------------
 

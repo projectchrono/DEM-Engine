@@ -1,6 +1,6 @@
 # SBEL Chrono DEM-Engine
 
-**GPU-accelerated discrete element simulation with C++ and Python APIs.**
+**Now version 3: GPU-accelerated discrete element simulation built for performance, with C++ and Python APIs.**
 
 DEM-Engine (DEME) simulates granular materials using one or two NVIDIA GPUs.
 This branch supports sphere clumps, mesh particles, analytical boundaries,
@@ -116,6 +116,17 @@ import deme
 
 solver = deme.DEMSolver()
 ```
+
+After installation, run a Python demo from the repository root:
+
+```bash
+python python/demos/single_sphere_collide.py --smoke-test
+```
+
+This headless example simulates two colliding spheres over meshes and writes
+visualization files. The first run may take time to compile CUDA kernels.
+See the [Python demos](python/demos/README.md) for more examples, command-line
+options, and instructions for viewing their output.
 
 See [installation requirements](docs/installation.rst) for wheel compatibility
 and source builds. New scripts should use `import deme`; `import DEME` remains
