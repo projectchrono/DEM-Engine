@@ -29,11 +29,11 @@
 // the pairwise material property "Cohesion".
 // =============================================================================
 
-#include <core/ApiVersion.h>
-#include <core/utils/ThreadManager.h>
-#include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
-#include <DEM/utils/Samplers.hpp>
+#include "core/ApiVersion.h"
+#include "core/utils/ThreadManager.h"
+#include "DEM/API.h"
+#include "DEM/utils/HostSideHelpers.hpp"
+#include "DEM/utils/Samplers.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -50,7 +50,7 @@ int main() {
     // ---------------------------------------------------------------------
     // Everything a user might want to change, in one place.
     // ---------------------------------------------------------------------
-    const float plate_diam = 0.35;      // plate diameter, m
+    const float plate_diam = 0.35;  // plate diameter, m
     const float plate_thickness = 0.02;
     const float plate_speed = 0.05;     // press speed, m/s; slow it down for quasi-static work
     const float target_sinkage = 0.06;  // stop once the plate is this deep, m
@@ -80,13 +80,14 @@ int main() {
     // ---------------------------------------------------------------------
     {
         DEMSolver DEMSim;
-        DEMSim.SetVerbosity(INFO);
+        DEMSim.SetVerbosity("INFO");
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
         // QUAT matters: the saved file must carry orientations or the reload
         // in stage 2 cannot restore the packing's interlocking.
         DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ | OUTPUT_CONTENT::QUAT | OUTPUT_CONTENT::VEL);
 
-        auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", 0.5}, {"Crr", 0.01}});
+        auto mat_type_terrain =
+            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", 0.5}, {"Crr", 0.01}});
 
         const double world_size = 2;
         DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
@@ -118,8 +119,8 @@ int main() {
         auto total_mass_finder = DEMSim.CreateInspector("clump_mass");
 
         // Accumulate contact forces onto owners inside the force kernel rather
-        // than in the default separate pass over the contact array. Measured on
-        // this demo at 150k to 600k grains: +21% throughput on a Blackwell GPU,
+        // than in the default separate pass over the contact array. Upstream main
+        // measured this demo at 150k to 600k grains: +21% throughput on a Blackwell GPU,
         // +96% to +204% on an MI350X (see SetCollectAccRightAfterForceCalc).
         // This demo reads the plate load through ContactAcc, which is unaffected;
         // only tracker force-pair queries become unavailable.
@@ -146,7 +147,7 @@ int main() {
     // ---------------------------------------------------------------------
     {
         DEMSolver DEMSim;
-        DEMSim.SetVerbosity(INFO);
+        DEMSim.SetVerbosity("INFO");
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
         DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ | OUTPUT_CONTENT::ABSV);
 
@@ -207,9 +208,10 @@ int main() {
         plate->Scale(make_float3(plate_diam / 2., plate_diam / 2., plate_thickness / 2.));
         float plate_mass = 7.8e3 * math_PI * (plate_diam / 2.) * (plate_diam / 2.) * plate_thickness;
         plate->SetMass(plate_mass);
-        plate->SetMOI(make_float3(plate_mass * (3 * plate_diam * plate_diam / 4. + plate_thickness * plate_thickness) / 12.,
-                                  plate_mass * (3 * plate_diam * plate_diam / 4. + plate_thickness * plate_thickness) / 12.,
-                                  plate_mass * plate_diam * plate_diam / 8.));
+        plate->SetMOI(
+            make_float3(plate_mass * (3 * plate_diam * plate_diam / 4. + plate_thickness * plate_thickness) / 12.,
+                        plate_mass * (3 * plate_diam * plate_diam / 4. + plate_thickness * plate_thickness) / 12.,
+                        plate_mass * plate_diam * plate_diam / 8.));
         float park_z = bed_surface + plate_thickness / 2. + 0.01;
         plate->SetInitPos(make_float3(0, 0, park_z));
         plate->SetFamily(2);
@@ -244,6 +246,10 @@ int main() {
         const float contact_threshold = 1e3;  // Pa
         const float sample_every = 2e-3;      // s
         std::ofstream curve(curve_file);
+        if (!curve) {
+            std::cerr << "Cannot open " << curve_file << std::endl;
+            return 1;
+        }
         curve << "sinkage_m,pressure_Pa" << std::endl;
         double contact_z = 0.;
         bool in_contact = false;
@@ -259,6 +265,15 @@ int main() {
             float3 plate_force = plate_tracker->ContactAcc() * plate_mass;
             float pressure = plate_force.z / plate_area;
 
+            // Stop before the plate reaches the floor, even if the bed never develops the threshold pressure.
+            // This bounds the experiment when users change the fill or material parameters.
+            if (!std::isfinite(pressure) || !std::isfinite(plate_pos.z) ||
+                plate_pos.z - plate_thickness / 2. <= bottom) {
+                std::cerr << "Plate test stopped: non-finite state or floor reached before target sinkage."
+                          << std::endl;
+                DEMSim.DoDynamicsThenSync(0.);
+                return 1;
+            }
             if (!in_contact) {
                 if (pressure >= contact_threshold) {
                     in_contact = true;

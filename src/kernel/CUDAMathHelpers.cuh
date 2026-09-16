@@ -45,7 +45,7 @@
     #undef strtok_r
 #endif
 
-#include <core/utils/cuda_to_hip.h>
+#include "cuda_runtime.h"
 
 #ifndef EXIT_WAIVED
     #define EXIT_WAIVED 2
@@ -54,7 +54,7 @@
 using uint = unsigned int;
 using ushort = unsigned short;
 
-#if !defined(__CUDACC__) && !defined(__HIPCC_RTC__) && !defined(__HIP_DEVICE_COMPILE__)
+#ifndef __CUDACC__
     ////////////////////////////////////////////////////////////////////////////////
     // override implementations of CUDA functions
     ////////////////////////////////////////////////////////////////////////////////
@@ -70,13 +70,10 @@ inline float rsqrtf(float x) {
 #endif
 
 #if defined(CUDART_VERSION) && CUDART_VERSION >= 13000
-///////////////////////////////////////////////////
-// New Toolkits
-using double4_vec = double4_16a;  // or  double4_32a, but 32 byte alignment is not good for GPUs before Blackwell
-                                  // (128bit  --> 256 bit register)
+// CUDA 13 split vector aliases by alignment. Keep DEM-Engine's helper signatures stable while selecting the
+// 16-byte-aligned variant, which avoids requiring newer 32-byte register alignment assumptions.
+using double4_vec = double4_16a;
 #else
-////////////////////////////////////////////////////
-// Old Toolkits
 using double4_vec = double4;
 #endif
 
@@ -241,12 +238,8 @@ inline __host__ __device__ int4 operator-(int4& a) {
 
 ////////////////////////////////////////////////////////////////////////////////
 // addition
-// Note: HIP provides operator+, operator+= for HIP_vector_type in
-// amd_hip_vector_types.h, so we guard vector-vector operators to avoid
-// ambiguity. Scalar versions may still be needed.
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef __HIP_PLATFORM_AMD__
 inline __host__ __device__ float2 operator+(float2 a, float2 b) {
     return make_float2(a.x + b.x, a.y + b.y);
 }
@@ -254,7 +247,6 @@ inline __host__ __device__ void operator+=(float2& a, float2 b) {
     a.x += b.x;
     a.y += b.y;
 }
-#endif
 inline __host__ __device__ float2 operator+(float2 a, float b) {
     return make_float2(a.x + b, a.y + b);
 }
@@ -302,7 +294,6 @@ inline __host__ __device__ void operator+=(uint2& a, uint b) {
     a.y += b;
 }
 
-#ifndef __HIP_PLATFORM_AMD__
 inline __host__ __device__ float3 operator+(float3 a, float3 b) {
     return make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
 }
@@ -311,7 +302,6 @@ inline __host__ __device__ void operator+=(float3& a, float3 b) {
     a.y += b.y;
     a.z += b.z;
 }
-#endif
 inline __host__ __device__ float3 operator+(float3 a, float b) {
     return make_float3(a.x + b, a.y + b, a.z + b);
 }
@@ -365,7 +355,6 @@ inline __host__ __device__ float3 operator+(float b, float3 a) {
     return make_float3(a.x + b, a.y + b, a.z + b);
 }
 
-#ifndef __HIP_PLATFORM_AMD__
 inline __host__ __device__ float4 operator+(float4 a, float4 b) {
     return make_float4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w);
 }
@@ -375,7 +364,6 @@ inline __host__ __device__ void operator+=(float4& a, float4 b) {
     a.z += b.z;
     a.w += b.w;
 }
-#endif
 inline __host__ __device__ float4 operator+(float4 a, float b) {
     return make_float4(a.x + b, a.y + b, a.z + b, a.w + b);
 }
@@ -437,7 +425,6 @@ inline __host__ __device__ void operator+=(uint4& a, uint b) {
 // subtract
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef __HIP_PLATFORM_AMD__
 inline __host__ __device__ float2 operator-(float2 a, float2 b) {
     return make_float2(a.x - b.x, a.y - b.y);
 }
@@ -445,7 +432,6 @@ inline __host__ __device__ void operator-=(float2& a, float2 b) {
     a.x -= b.x;
     a.y -= b.y;
 }
-#endif
 inline __host__ __device__ float2 operator-(float2 a, float b) {
     return make_float2(a.x - b, a.y - b);
 }
@@ -493,7 +479,6 @@ inline __host__ __device__ void operator-=(uint2& a, uint b) {
     a.y -= b;
 }
 
-#ifndef __HIP_PLATFORM_AMD__
 inline __host__ __device__ float3 operator-(float3 a, float3 b) {
     return make_float3(a.x - b.x, a.y - b.y, a.z - b.z);
 }
@@ -502,7 +487,6 @@ inline __host__ __device__ void operator-=(float3& a, float3 b) {
     a.y -= b.y;
     a.z -= b.z;
 }
-#endif
 inline __host__ __device__ float3 operator-(float3 a, float b) {
     return make_float3(a.x - b, a.y - b, a.z - b);
 }
@@ -555,7 +539,6 @@ inline __host__ __device__ void operator-=(uint3& a, uint b) {
     a.z -= b;
 }
 
-#ifndef __HIP_PLATFORM_AMD__
 inline __host__ __device__ float4 operator-(float4 a, float4 b) {
     return make_float4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w);
 }
@@ -565,7 +548,6 @@ inline __host__ __device__ void operator-=(float4& a, float4 b) {
     a.z -= b.z;
     a.w -= b.w;
 }
-#endif
 inline __host__ __device__ float4 operator-(float4 a, float b) {
     return make_float4(a.x - b, a.y - b, a.z - b, a.w - b);
 }
@@ -622,11 +604,8 @@ inline __host__ __device__ void operator-=(uint4& a, uint b) {
 
 ////////////////////////////////////////////////////////////////////////////////
 // multiply
-// Note: HIP provides operator*(floatN, floatN) in amd_hip_vector_types.h
-// so we guard the vector-to-vector operators to avoid ambiguity
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef __HIP_PLATFORM_AMD__
 inline __host__ __device__ float2 operator*(float2 a, float2 b) {
     return make_float2(a.x * b.x, a.y * b.y);
 }
@@ -634,7 +613,6 @@ inline __host__ __device__ void operator*=(float2& a, float2 b) {
     a.x *= b.x;
     a.y *= b.y;
 }
-#endif
 inline __host__ __device__ float2 operator*(float2 a, float b) {
     return make_float2(a.x * b, a.y * b);
 }
@@ -682,7 +660,6 @@ inline __host__ __device__ void operator*=(uint2& a, uint b) {
     a.y *= b;
 }
 
-#ifndef __HIP_PLATFORM_AMD__
 inline __host__ __device__ float3 operator*(float3 a, float3 b) {
     return make_float3(a.x * b.x, a.y * b.y, a.z * b.z);
 }
@@ -691,7 +668,6 @@ inline __host__ __device__ void operator*=(float3& a, float3 b) {
     a.y *= b.y;
     a.z *= b.z;
 }
-#endif
 inline __host__ __device__ float3 operator*(float3 a, float b) {
     return make_float3(a.x * b, a.y * b, a.z * b);
 }
@@ -744,7 +720,6 @@ inline __host__ __device__ void operator*=(uint3& a, uint b) {
     a.z *= b;
 }
 
-#ifndef __HIP_PLATFORM_AMD__
 inline __host__ __device__ float4 operator*(float4 a, float4 b) {
     return make_float4(a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w);
 }
@@ -754,7 +729,6 @@ inline __host__ __device__ void operator*=(float4& a, float4 b) {
     a.z *= b.z;
     a.w *= b.w;
 }
-#endif
 inline __host__ __device__ float4 operator*(float4 a, float b) {
     return make_float4(a.x * b, a.y * b, a.z * b, a.w * b);
 }
@@ -814,10 +788,8 @@ inline __host__ __device__ void operator*=(uint4& a, uint b) {
 
 ////////////////////////////////////////////////////////////////////////////////
 // divide
-// Note: HIP provides operator/(floatN, floatN) in amd_hip_vector_types.h
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef __HIP_PLATFORM_AMD__
 inline __host__ __device__ float2 operator/(float2 a, float2 b) {
     return make_float2(a.x / b.x, a.y / b.y);
 }
@@ -825,7 +797,6 @@ inline __host__ __device__ void operator/=(float2& a, float2 b) {
     a.x /= b.x;
     a.y /= b.y;
 }
-#endif
 inline __host__ __device__ float2 operator/(float2 a, float b) {
     return make_float2(a.x / b, a.y / b);
 }
@@ -837,7 +808,6 @@ inline __host__ __device__ float2 operator/(float b, float2 a) {
     return make_float2(b / a.x, b / a.y);
 }
 
-#ifndef __HIP_PLATFORM_AMD__
 inline __host__ __device__ float3 operator/(float3 a, float3 b) {
     return make_float3(a.x / b.x, a.y / b.y, a.z / b.z);
 }
@@ -846,7 +816,6 @@ inline __host__ __device__ void operator/=(float3& a, float3 b) {
     a.y /= b.y;
     a.z /= b.z;
 }
-#endif
 inline __host__ __device__ float3 operator/(float3 a, float b) {
     return make_float3(a.x / b, a.y / b, a.z / b);
 }
@@ -859,7 +828,6 @@ inline __host__ __device__ float3 operator/(float b, float3 a) {
     return make_float3(b / a.x, b / a.y, b / a.z);
 }
 
-#ifndef __HIP_PLATFORM_AMD__
 inline __host__ __device__ float4 operator/(float4 a, float4 b) {
     return make_float4(a.x / b.x, a.y / b.y, a.z / b.z, a.w / b.w);
 }
@@ -869,7 +837,6 @@ inline __host__ __device__ void operator/=(float4& a, float4 b) {
     a.z /= b.z;
     a.w /= b.w;
 }
-#endif
 inline __host__ __device__ float4 operator/(float4 a, float b) {
     return make_float4(a.x / b, a.y / b, a.z / b, a.w / b);
 }
@@ -1403,8 +1370,6 @@ inline __host__ __device__ float4 operator/(float4 a, double b) {
     return make_float4(a.x / b, a.y / b, a.z / b, a.w / b);
 }
 #if defined(CUDART_VERSION) && CUDART_VERSION >= 13000
-///////////////////////////////////////////////////
-// New Toolkits
 inline __host__ __device__ double4_vec operator/(double4_vec a, float b) {
     return make_double4_16a(a.x / b, a.y / b, a.z / b, a.w / b);
 }
@@ -1412,8 +1377,6 @@ inline __host__ __device__ double4_vec operator/(double4_vec a, double b) {
     return make_double4_16a(a.x / b, a.y / b, a.z / b, a.w / b);
 }
 #else
-////////////////////////////////////////////////////
-// Old Toolkits
 inline __host__ __device__ double4 operator/(double4 a, float b) {
     return make_double4(a.x / b, a.y / b, a.z / b, a.w / b);
 }
@@ -1483,20 +1446,17 @@ inline __host__ __device__ T2 to_real3(const T1& a) {
 }
 
 // Cause an error inside a kernel
-#if defined(__HIP_PLATFORM_AMD__) || defined(USE_HIP)
-    #define DEME_ABORT_KERNEL(...) \
-        {                          \
-            printf(__VA_ARGS__);   \
-            __threadfence();       \
-            __builtin_trap();      \
-        }
-#else
+#if defined(__CUDA_ARCH__) || defined(__CUDACC__)
     #define DEME_ABORT_KERNEL(...) \
         {                          \
             printf(__VA_ARGS__);   \
             __threadfence();       \
             asm volatile("trap;"); \
         }
+#else
+    #define DEME_ABORT_KERNEL(...) \
+        do {                       \
+        } while (0)
 #endif
 
 #endif

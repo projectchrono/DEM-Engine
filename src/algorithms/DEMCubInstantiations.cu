@@ -3,15 +3,9 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#include <core/utils/cuda_to_hip.h>
-#if defined(USE_HIP)
-    #include <hipcub/hipcub.hpp>
-#else
-    #include <cub/cub.cuh>
-#endif
+#include <cub/cub.cuh>
 #include <algorithms/DEMStaticDeviceSubroutines.h>
 
-#include <core/utils/GpuError.h>
 #include <algorithms/DEMCubWrappers.cu>
 
 namespace deme {
@@ -76,6 +70,33 @@ template void cubSumReduceByKey<notStupidBool_t, double>(notStupidBool_t* d_keys
                                                          size_t n,
                                                          cudaStream_t& this_stream,
                                                          DEMSolverScratchData& scratchPad);
+// Special instantiation for float3 (normals etc.) with contactPairs_t keys (for voting)
+template void cubSumReduceByKey<contactPairs_t, float3>(contactPairs_t* d_keys_in,
+                                                        contactPairs_t* d_unique_out,
+                                                        float3* d_vals_in,
+                                                        float3* d_aggregates_out,
+                                                        size_t* d_num_out,
+                                                        size_t n,
+                                                        cudaStream_t& this_stream,
+                                                        DEMSolverScratchData& scratchPad);
+// Special instantiation for double3 (contact points etc.) with contactPairs_t keys (for voting)
+template void cubSumReduceByKey<contactPairs_t, double3>(contactPairs_t* d_keys_in,
+                                                         contactPairs_t* d_unique_out,
+                                                         double3* d_vals_in,
+                                                         double3* d_aggregates_out,
+                                                         size_t* d_num_out,
+                                                         size_t n,
+                                                         cudaStream_t& this_stream,
+                                                         DEMSolverScratchData& scratchPad);
+// Special instantiation for double (area) with contactPairs_t keys (for voting)
+template void cubSumReduceByKey<contactPairs_t, double>(contactPairs_t* d_keys_in,
+                                                        contactPairs_t* d_unique_out,
+                                                        double* d_vals_in,
+                                                        double* d_aggregates_out,
+                                                        size_t* d_num_out,
+                                                        size_t n,
+                                                        cudaStream_t& this_stream,
+                                                        DEMSolverScratchData& scratchPad);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Reduce::Max
@@ -131,6 +152,42 @@ template void cubMaxReduceByKey<notStupidBool_t, double>(notStupidBool_t* d_keys
                                                          size_t n,
                                                          cudaStream_t& this_stream,
                                                          DEMSolverScratchData& scratchPad);
+// Special instantiation for double (penetration) with contactPairs_t keys (for voting zero-area case)
+template void cubMaxReduceByKey<contactPairs_t, double>(contactPairs_t* d_keys_in,
+                                                        contactPairs_t* d_unique_out,
+                                                        double* d_vals_in,
+                                                        double* d_aggregates_out,
+                                                        size_t* d_num_out,
+                                                        size_t n,
+                                                        cudaStream_t& this_stream,
+                                                        DEMSolverScratchData& scratchPad);
+
+////////////////////////////////////////////////////////////////////////////////
+// Reduce::MaxNegative (finds largest negative value, treats positives as very negative)
+////////////////////////////////////////////////////////////////////////////////
+
+template <typename T1, typename T2>
+void cubMaxNegativeReduceByKey(T1* d_keys_in,
+                               T1* d_unique_out,
+                               T2* d_vals_in,
+                               T2* d_aggregates_out,
+                               size_t* d_num_out,
+                               size_t n,
+                               cudaStream_t& this_stream,
+                               DEMSolverScratchData& scratchPad) {
+    CubOpMaxNegative<T2> max_negative_op;
+    cubDEMReduceByKeys<T1, T2, CubOpMaxNegative<T2>>(d_keys_in, d_unique_out, d_vals_in, d_aggregates_out, d_num_out,
+                                                     max_negative_op, n, this_stream, scratchPad);
+}
+// Special instantiation for double (penetration) with contactPairs_t keys (for finding max negative penetration)
+template void cubMaxNegativeReduceByKey<contactPairs_t, double>(contactPairs_t* d_keys_in,
+                                                                contactPairs_t* d_unique_out,
+                                                                double* d_vals_in,
+                                                                double* d_aggregates_out,
+                                                                size_t* d_num_out,
+                                                                size_t n,
+                                                                cudaStream_t& this_stream,
+                                                                DEMSolverScratchData& scratchPad);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Reduce::Min
@@ -210,4 +267,44 @@ template void cubSortByKey<notStupidBool_t, double>(notStupidBool_t* d_keys_in,
                                                     size_t n,
                                                     cudaStream_t& this_stream,
                                                     DEMSolverScratchData& scratchPad);
+
+////////////////////////////////////////////////////////////////////////////////
+// Vector-wise encoding or scanning
+////////////////////////////////////////////////////////////////////////////////
+
+template <typename T1, typename T2>
+void cubRunLengthEncode(T1* d_in,
+                        T1* d_unique_out,
+                        T2* d_counts_out,
+                        size_t* d_num_out,
+                        size_t n,
+                        cudaStream_t& this_stream,
+                        DEMSolverScratchData& scratchPad) {
+    cubDEMRunLengthEncode<T1, T2>(d_in, d_unique_out, d_counts_out, d_num_out, n, this_stream, scratchPad);
+}
+template void cubRunLengthEncode<contact_t, contactPairs_t>(contact_t* d_in,
+                                                            contact_t* d_unique_out,
+                                                            contactPairs_t* d_counts_out,
+                                                            size_t* d_num_out,
+                                                            size_t n,
+                                                            cudaStream_t& this_stream,
+                                                            DEMSolverScratchData& scratchPad);
+template void cubRunLengthEncode<patchIDPair_t, contactPairs_t>(patchIDPair_t* d_in,
+                                                                patchIDPair_t* d_unique_out,
+                                                                contactPairs_t* d_counts_out,
+                                                                size_t* d_num_out,
+                                                                size_t n,
+                                                                cudaStream_t& this_stream,
+                                                                DEMSolverScratchData& scratchPad);
+
+template <typename T1, typename T2>
+void cubPrefixScan(T1* d_in, T2* d_out, size_t n, cudaStream_t& this_stream, DEMSolverScratchData& scratchPad) {
+    cubDEMPrefixScan<T1, T2>(d_in, d_out, n, this_stream, scratchPad);
+}
+template void cubPrefixScan<contactPairs_t, contactPairs_t>(contactPairs_t* d_in,
+                                                            contactPairs_t* d_out,
+                                                            size_t n,
+                                                            cudaStream_t& this_stream,
+                                                            DEMSolverScratchData& scratchPad);
+
 }  // namespace deme

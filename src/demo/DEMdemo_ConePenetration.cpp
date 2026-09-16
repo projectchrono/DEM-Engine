@@ -11,7 +11,6 @@
 // =============================================================================
 
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <chrono>
@@ -26,8 +25,10 @@ using namespace deme;
 const double math_PI = 3.14159;
 
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_ConePenetration ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
@@ -78,19 +79,17 @@ int main() {
     DEMSim.AddClumps(my_template, input_xyz);
     std::cout << "Total num of particles: " << input_xyz.size() << std::endl;
 
-    // Load in the cone used for this penetration test. The penetrating tip is an analytical cone segment so the contact
-    // normal is exact and does not depend on the resolution of a triangle mesh.
-    float tip_height = std::sqrt(3.);
+    // Use an exact analytical cone side for the penetrating tip; the attached cylindrical body remains a mesh.
+    const float tip_height = std::sqrt(3.0f);
     const float cone_radius = cone_diameter / 2;
     const float cone_height = cone_radius * tip_height;
     auto cone_tip = DEMSim.AddExternalObject();
-    cone_tip->AddConeSegment(make_float3(0, 0, -3.0 / 4.0 * cone_height), make_float3(0, 0, 1), 1.0 / tip_height, 0.0,
-                             cone_height, mat_type_cone, ENTITY_NORMAL_OUTWARD);
+    cone_tip->AddConeSegment(make_float3(0, 0, -3.0f / 4.0f * cone_height), make_float3(0, 0, 1), 1.0f / tip_height,
+                             0.0f, cone_height, mat_type_cone, ENTITY_NORMAL_OUTWARD);
     auto cone_body = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/cyl_r1_h2.obj"), mat_type_cone);
     std::cout << "Total num of mesh triangles: " << cone_body->GetNumTriangles() << std::endl;
 
-    // Then set mass properties for the analytical cone segment. Its owner frame is placed at the solid cone centroid,
-    // so the local apex is at -3H/4 and the base rim at H/4.
+    // Set the analytical owner's mass properties about a solid cone centroid located 3H/4 above its apex.
     float cone_mass = 7.8e3 * math_PI * cone_radius * cone_radius * cone_height / 3;
     cone_tip->SetMass(cone_mass);
     cone_tip->SetMOI(
@@ -131,7 +130,7 @@ int main() {
     // -0.3);");
     auto total_mass_finder = DEMSim.CreateInspector("clump_mass");
 
-    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetTimeStepSize(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     // CD freq will be auto-adapted so it does not matter much here.
     DEMSim.SetCDUpdateFreq(20);
@@ -213,11 +212,11 @@ int main() {
     // Put the cone in place
     double starting_height = terrain_max_z + 0.03;
     // Its initial position should be right above the cone tip...
-    body_tracker->SetPos(make_float3(0, 0, 0.5 + cone_height / 4 + starting_height));
+    body_tracker->SetPos(make_float3(0, 0, 0.5 + (cone_diameter / 2 / 4 * tip_height) + starting_height));
     // Note that position of objects is always the location of their centroid
     tip_tracker->SetPos(make_float3(0, 0, starting_height));
     // The tip location, used to measure penetration length
-    double tip_z = -3.0 / 4.0 * cone_height + starting_height;
+    double tip_z = -cone_diameter / 2 * 3 / 4 * tip_height + starting_height;
 
     // Enable cone
     DEMSim.ChangeFamily(2, 1);
@@ -234,7 +233,8 @@ int main() {
     for (float t = 0; t < sim_end; t += frame_time) {
         // float terrain_max_z = max_z_finder->GetValue();
         float3 forces = tip_tracker->ContactAcc();
-        // ContactAcc returns acceleration for the analytical cone owner, so multiply by its assigned mass.
+        // Note cone_mass is not the true mass, b/c we scaled the the cone tip! So we use true mass by using
+        // cone_tip->mass.
         forces *= cone_tip->mass;
         float pressure = std::abs(forces.z) / cone_surf_area;
         if (pressure > 1e-4 && !hit_terrain) {

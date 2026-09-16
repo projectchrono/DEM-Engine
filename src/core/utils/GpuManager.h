@@ -1,16 +1,19 @@
 #ifndef DEME_GPU_MANAGER_H
 #define DEME_GPU_MANAGER_H
 
-#include "cuda_to_hip.h"
+#include <cuda_runtime_api.h>
 #include <vector>
 #include <mutex>
+
+namespace deme {
 
 // A device number manager that evenly distributes the streams needed to all the available devices
 class GpuManager {
   public:
     GpuManager(unsigned int total_streams = 1);
-    // Construct using explicit device IDs (one stream per device ID).
-    GpuManager(const std::vector<int>& device_ids);
+    /// Create one stream record for each explicitly selected CUDA device.
+    /// Repeated device IDs are allowed so multiple workers can share one GPU.
+    explicit GpuManager(const std::vector<int>& stream_devices);
     ~GpuManager();
 
     struct StreamInfo {
@@ -41,13 +44,18 @@ class GpuManager {
     // Mark a stream as unused.
     void setStreamAvailable(const StreamInfo&);
 
-    // Return the number of devices detected.
-    int getNumDevices() { return ndevices; }
+    // Return the number of distinct devices assigned to workers.
+    int getNumDevices() const { return nactive_devices; }
+    // Return the number of logical CUDA devices visible to this process.
+    int getNumVisibleDevices() const { return nvisible_devices; }
 
   private:
-    int ndevices;
+    int nvisible_devices;
+    int nactive_devices;
     std::vector<std::vector<StreamInfo>> streams;
     std::mutex stream_manipulation_mutex;
 };
+
+}  // namespace deme
 
 #endif

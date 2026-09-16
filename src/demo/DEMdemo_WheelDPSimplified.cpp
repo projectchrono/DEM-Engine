@@ -13,7 +13,6 @@
 // =============================================================================
 
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <chrono>
@@ -28,12 +27,14 @@ using namespace deme;
 const double math_PI = 3.1415927;
 
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_WheelDPSimplified ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     std::filesystem::path out_dir = std::filesystem::current_path();
     out_dir /= "DemoOutput_WheelDPSimplified";
     std::filesystem::create_directory(out_dir);
 
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
@@ -144,7 +145,7 @@ int main() {
     auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
 
     // Make ready for simulation
-    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetTimeStepSize(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -G_mag));
     // Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't

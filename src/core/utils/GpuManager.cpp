@@ -5,10 +5,13 @@
 
 #include <core/ApiVersion.h>
 #include "GpuManager.h"
-#include "GpuError.h"
+#include "Logger.hpp"
+
+namespace deme {
 
 GpuManager::GpuManager(unsigned int total_streams) {
-    ndevices = scanNumDevices();
+    nvisible_devices = scanNumDevices();
+    nactive_devices = std::min(static_cast<int>(total_streams), nvisible_devices);
 
     // if (ndevices == 0) {
     //     std::cerr << "No GPU device is detected. Try lspci and see what you get.\nIf you indeed have GPU "
@@ -19,10 +22,10 @@ GpuManager::GpuManager(unsigned int total_streams) {
     //                  "GPU.\nTry allocating 2 GPU devices if possible.\n\n";
     // }
 
-    this->streams.resize(ndevices);
+    this->streams.resize(nvisible_devices);
 
     for (unsigned int current_device = 0; total_streams > 0; total_streams--, current_device++) {
-        if (current_device >= ndevices) {
+        if (current_device >= static_cast<unsigned int>(nvisible_devices)) {
             current_device = 0;
         }
 
@@ -33,22 +36,26 @@ GpuManager::GpuManager(unsigned int total_streams) {
     }
 }
 
-GpuManager::GpuManager(const std::vector<int>& device_ids) {
-    // ndevices counts distinct physical devices in use
-    std::set<int> unique_ids(device_ids.begin(), device_ids.end());
-    ndevices = static_cast<int>(unique_ids.size());
-
-    if (!device_ids.empty()) {
-        int max_id = *std::max_element(device_ids.begin(), device_ids.end());
-        this->streams.resize(max_id + 1);
+GpuManager::GpuManager(const std::vector<int>& stream_devices) {
+    nvisible_devices = scanNumDevices();
+    if (stream_devices.empty()) {
+        DEME_ERROR("GpuManager requires at least one CUDA device assignment.");
     }
 
-    // Each entry in device_ids creates one stream; duplicate device IDs are intentional and result in multiple
-    // streams on the same device (used when both kT and dT threads run on the same physical device).
-    for (int dev_id : device_ids) {
+    this->streams.resize(nvisible_devices);
+    std::set<int> active_devices;
+    for (int device : stream_devices) {
+        if (device < 0 || device >= nvisible_devices) {
+            DEME_ERROR("CUDA device ID %d is out of range. %d CUDA device(s) are visible.", device, nvisible_devices);
+        }
+
         cudaStream_t new_stream = nullptr;
-        this->streams[dev_id].push_back(StreamInfo{dev_id, new_stream, false});
+        // Worker streams currently use CUDA's default stream. Keep a separate record per worker even when both workers
+        // share a device so stream assignment remains deterministic and can adopt non-default streams independently.
+        this->streams[device].push_back(StreamInfo{device, new_stream, false});
+        active_devices.insert(device);
     }
+    nactive_devices = static_cast<int>(active_devices.size());
 }
 
 // TODO: add CUDA error checking
@@ -126,3 +133,5 @@ void GpuManager::setStreamAvailable(const StreamInfo& info) {
         }
     }
 }
+
+}  // namespace deme

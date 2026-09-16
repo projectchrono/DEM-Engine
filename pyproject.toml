@@ -8,7 +8,7 @@ build-backend = "scikit_build_core.build"
 [project]
 name = "deme"
 dynamic = ["version"]
-description = "Python bindings for DEM-Engine 2, a GPU-accelerated discrete element method engine"
+description = "Python bindings for DEM-Engine - a GPU-accelerated Discrete Element Method simulation engine"
 readme = "README.md"
 authors = [
     { name = "Ruochun Zhang", email = "ruochunz@gmail.com" },
@@ -29,10 +29,23 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Physics",
 ]
-dependencies = ["numpy>=1.19.0"]
+dependencies = [
+    "numpy>=1.19.0",
+]
 
 [project.optional-dependencies]
-dev = ["pytest>=6.0", "pybind11>=2.11.0"]
+# Keep runtime headers, compiler headers, and NVRTC on the wheel build's CUDA minor version.
+cuda12 = [
+    "nvidia-cuda-runtime-cu12>=12.9,<12.10",
+    "nvidia-cuda-nvrtc-cu12>=12.9,<12.10",
+    "nvidia-cuda-nvcc-cu12>=12.9,<12.10",
+    "nvidia-cuda-cccl-cu12>=12.9,<12.10",
+    "nvidia-curand-cu12>=10.3.10,<10.4",
+]
+dev = [
+    "pytest>=6.0",
+    "pybind11>=2.11.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/projectchrono/DEM-Engine"
@@ -45,6 +58,7 @@ cmake.verbose = true
 minimum-version = "0.8"
 build-dir = "build/{wheel_tag}"
 
+# Read the distribution version from the same source used by standalone CMake.
 [tool.scikit-build.metadata.version]
 provider = "scikit_build_core.metadata.regex"
 input = "VERSION"
@@ -52,15 +66,21 @@ regex = '''^(?P<value>\d+\.\d+\.\d+)\s*$'''
 
 [tool.scikit-build.cmake.define]
 DEME_BUILD_PYTHON = "ON"
+DEME_BUILD_VISUALIZER = "ON"
+# Demos and modular tests are useful in developer builds but are not wheel content.
 DEME_BUILD_DEMOS = "OFF"
-USE_HIP = "OFF"
 
 [tool.cibuildwheel]
+# DEME contains a CPython extension, so every supported interpreter needs its own wheel.
 build = "cp3{9,10,11,12,13,14}-manylinux_x86_64"
 skip = "*-musllinux_*"
 build-verbosity = 1
 
 [tool.cibuildwheel.linux]
+# Build on glibc 2.28 with CUDA 12.9. The cuda12 extra supplies runtime compilation dependencies.
+# Keep NVIDIA components external to this wheel; never bundle the build-time driver stub.
 manylinux-x86_64-image = "quay.io/manylinux_cuda/manylinux_2_28_x86_64_cuda12_9:latest"
-before-all = "dnf install -y cuda-nvrtc-12-9 cuda-nvrtc-devel-12-9 && dnf clean all"
+# The current CUDA 12.9 image can omit NVRTC despite providing nvcc and cudart. DEME links NVRTC for runtime kernel
+# compilation, so install both the shared library and its development symlink before any interpreter build starts.
+before-all = "dnf install -y cuda-nvrtc-12-9 cuda-nvrtc-devel-12-9 libX11-devel libXrandr-devel libXinerama-devel libXcursor-devel libXi-devel mesa-libGL-devel && dnf clean all"
 repair-wheel-command = "auditwheel repair --plat manylinux_2_28_x86_64 --exclude libcuda.so.1 --exclude libcudart.so.12 --exclude libnvrtc.so.12 -w {dest_dir} {wheel}"

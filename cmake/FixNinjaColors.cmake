@@ -36,7 +36,7 @@ function(fix_ninja_colors)
 		# Fix GCC colors
 		if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
 			#set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-fdiagnostics-color=always" PARENT_SCOPE)
-			string(APPEND CMAKE_CXX_FLAGS " -fdiagnostics-color=always")	
+			string(APPEND CMAKE_CXX_FLAGS " -fdiagnostics-color=always")
 
 		# Fix Clang colors
 		elseif (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")

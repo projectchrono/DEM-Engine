@@ -8,18 +8,18 @@
 
 #include "Defines.h"
 #include "../core/utils/CudaAllocator.hpp"
-#include "../core/utils/ManagedMemory.hpp"
 #include "../core/utils/csv.hpp"
-#include "../core/utils/GpuError.h"
+#include "../core/utils/Logger.hpp"
 #include "../core/utils/DataMigrationHelper.hpp"
 #include "../core/utils/Timer.hpp"
 #include "../core/utils/RuntimeData.h"
 #include "../kernel/DEMHelperKernels.cuh"
-#include "HostSideHelpers.hpp"
+#include "utils/HostSideHelpers.hpp"
 
 #include <sstream>
 #include <exception>
 #include <memory>
+#include <array>
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
@@ -76,24 +76,30 @@ const std::string OUTPUT_FILE_NORMAL_Z_NAME = std::string("n_z");
 const std::string OUTPUT_FILE_SPH_SPH_CONTACT_NAME = std::string("SS");
 const std::string OUTPUT_FILE_SPH_ANAL_CONTACT_NAME = std::string("SA");
 const std::string OUTPUT_FILE_SPH_MESH_CONTACT_NAME = std::string("SM");
+const std::string OUTPUT_FILE_TRIANGLE_TRIANGLE_CONTACT_NAME = std::string("MM");
+const std::string OUTPUT_FILE_MESH_ANAL_CONTACT_NAME = std::string("MA");
 const std::set<std::string> CNT_FILE_KNOWN_COL_NAMES = {
-    OUTPUT_FILE_OWNER_1_NAME,          OUTPUT_FILE_OWNER_2_NAME,          OUTPUT_FILE_COMP_1_NAME,
-    OUTPUT_FILE_COMP_2_NAME,           OUTPUT_FILE_GEO_ID_1_NAME,         OUTPUT_FILE_GEO_ID_2_NAME,
-    OUTPUT_FILE_OWNER_NICKNAME_1_NAME, OUTPUT_FILE_OWNER_NICKNAME_2_NAME, OUTPUT_FILE_CNT_TYPE_NAME,
-    OUTPUT_FILE_FORCE_X_NAME,          OUTPUT_FILE_FORCE_Y_NAME,          OUTPUT_FILE_FORCE_Z_NAME,
-    OUTPUT_FILE_TORQUE_X_NAME,         OUTPUT_FILE_TORQUE_Y_NAME,         OUTPUT_FILE_TORQUE_Z_NAME,
-    OUTPUT_FILE_NORMAL_X_NAME,         OUTPUT_FILE_NORMAL_Y_NAME,         OUTPUT_FILE_NORMAL_Z_NAME,
-    OUTPUT_FILE_SPH_SPH_CONTACT_NAME,  OUTPUT_FILE_SPH_ANAL_CONTACT_NAME, OUTPUT_FILE_SPH_MESH_CONTACT_NAME};
+    OUTPUT_FILE_OWNER_1_NAME,          OUTPUT_FILE_OWNER_2_NAME,
+    OUTPUT_FILE_COMP_1_NAME,           OUTPUT_FILE_COMP_2_NAME,
+    OUTPUT_FILE_GEO_ID_1_NAME,         OUTPUT_FILE_GEO_ID_2_NAME,
+    OUTPUT_FILE_OWNER_NICKNAME_1_NAME, OUTPUT_FILE_OWNER_NICKNAME_2_NAME,
+    OUTPUT_FILE_CNT_TYPE_NAME,         OUTPUT_FILE_FORCE_X_NAME,
+    OUTPUT_FILE_FORCE_Y_NAME,          OUTPUT_FILE_FORCE_Z_NAME,
+    OUTPUT_FILE_TORQUE_X_NAME,         OUTPUT_FILE_TORQUE_Y_NAME,
+    OUTPUT_FILE_TORQUE_Z_NAME,         OUTPUT_FILE_NORMAL_X_NAME,
+    OUTPUT_FILE_NORMAL_Y_NAME,         OUTPUT_FILE_NORMAL_Z_NAME,
+    OUTPUT_FILE_SPH_SPH_CONTACT_NAME,  OUTPUT_FILE_SPH_ANAL_CONTACT_NAME,
+    OUTPUT_FILE_SPH_MESH_CONTACT_NAME, OUTPUT_FILE_TRIANGLE_TRIANGLE_CONTACT_NAME,
+    OUTPUT_FILE_MESH_ANAL_CONTACT_NAME};
 
 // Map contact type identifier to their names
 const std::unordered_map<contact_t, std::string> contact_type_out_name_map = {
     {NOT_A_CONTACT, "fake"},
     {SPHERE_SPHERE_CONTACT, OUTPUT_FILE_SPH_SPH_CONTACT_NAME},
-    {SPHERE_MESH_CONTACT, OUTPUT_FILE_SPH_MESH_CONTACT_NAME},
-    {SPHERE_PLANE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
-    {SPHERE_PLATE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
-    {SPHERE_CYL_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
-    {SPHERE_CONE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME}};
+    {SPHERE_TRIANGLE_CONTACT, OUTPUT_FILE_SPH_MESH_CONTACT_NAME},
+    {SPHERE_ANALYTICAL_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
+    {TRIANGLE_TRIANGLE_CONTACT, OUTPUT_FILE_TRIANGLE_TRIANGLE_CONTACT_NAME},
+    {TRIANGLE_ANALYTICAL_CONTACT, OUTPUT_FILE_MESH_ANAL_CONTACT_NAME}};
 
 // Possible force model ingredients. This map is used to ensure we don't double-add them.
 const std::unordered_map<std::string, bool> force_kernel_ingredient_stats = {{"ts", false},
@@ -114,148 +120,6 @@ const std::unordered_map<std::string, bool> force_kernel_ingredient_stats = {{"t
                                                                              {"force", true},
                                                                              {"torque_only_force", true}};
 
-// Structs defined here will be used by some host classes in DEM.
-// NOTE: Data structs here need to be those complex ones (such as needing to include CudaAllocator.hpp), which may
-// not be jitifiable.
-
-// DEMSolverScratchData mainly contains space allocated as system scratch pad and as thread temporary arrays
-class DEMSolverScratchData {
-  private:
-    // NOTE! The type MUST be scratch_t, since all DEMSolverScratchData's allocation methods use num of bytes as
-    // arguments, but DeviceVectorPool's resize considers number of elements
-    DeviceVectorPool<scratch_t> m_deviceVecPool;
-    DualArrayPool<scratch_t> m_dualArrPool;
-    DualStructPool<size_t> m_dualStructPool;
-
-  public:
-    // Number of contacts in this CD step
-    DualStruct<size_t> numContacts = DualStruct<size_t>(0);
-    // Number of contacts in the previous CD step
-    DualStruct<size_t> numPrevContacts = DualStruct<size_t>(0);
-    // Number of spheres in the previous CD step (in case user added/removed clumps from the system)
-    DualStruct<size_t> numPrevSpheres = DualStruct<size_t>(0);
-
-    DEMSolverScratchData(size_t* external_host_counter = nullptr, size_t* external_device_counter = nullptr)
-        : m_deviceVecPool(external_device_counter), m_dualArrPool(external_host_counter, external_device_counter) {
-        m_deviceVecPool.claim("ScratchSpace", 42);
-    }
-    ~DEMSolverScratchData() { releaseMemory(); }
-
-    // Return raw pointer to swath of device memory that is at least "sizeNeeded" large
-    scratch_t* allocateScratchSpace(size_t sizeNeeded) {
-        m_deviceVecPool.resize("ScratchSpace", sizeNeeded);
-        return m_deviceVecPool.get("ScratchSpace");
-    }
-
-    // This flavor does not prevent you from forgeting to recycle before this time step ends
-    scratch_t* allocateVector(const std::string& name, size_t sizeNeeded) {
-        return m_deviceVecPool.claim(name, sizeNeeded, /*allow_duplicate=*/true);
-    }
-
-    // This flavor prevents you from forgeting to recycle before this time step ends
-    scratch_t* allocateTempVector(const std::string& name, size_t sizeNeeded) {
-        return m_deviceVecPool.claim(name, sizeNeeded);
-    }
-
-    // Dual arrays allocated here will always be temporary. If you need permanent dual array, create it as a member of
-    // your worker.
-    DualArray<scratch_t>* allocateDualArray(const std::string& name, size_t sizeNeeded) {
-        return m_dualArrPool.claim(name, sizeNeeded);
-    }
-    scratch_t* getDualArrayHost(const std::string& name) { return m_dualArrPool.getHost(name); }
-    scratch_t* getDualArrayDevice(const std::string& name) { return m_dualArrPool.getDevice(name); }
-    void syncDualArrayDeviceToHost(const std::string& name) { m_dualArrPool.get(name)->toHost(); }
-    void syncDualArrayHostToDevice(const std::string& name) { m_dualArrPool.get(name)->toDevice(); }
-    // When using these methods, remember the type is scratch_t
-    void syncDualArrayDeviceToHost(const std::string& name, size_t start, size_t n) {
-        m_dualArrPool.get(name)->toHost(start, n);
-    }
-    void syncDualArrayHostToDevice(const std::string& name, size_t start, size_t n) {
-        m_dualArrPool.get(name)->toDevice(start, n);
-    }
-    // Likewise, all DualStruct allocated using this class will be temporary
-    DualStruct<size_t>* allocateDualStruct(const std::string& name) { return m_dualStructPool.claim(name); }
-    size_t* getDualStructHost(const std::string& name) { return m_dualStructPool.getHost(name); }
-    size_t* getDualStructDevice(const std::string& name) { return m_dualStructPool.getDevice(name); }
-    void syncDualStructDeviceToHost(const std::string& name) { m_dualStructPool.get(name)->toHost(); }
-    void syncDualStructHostToDevice(const std::string& name) { m_dualStructPool.get(name)->toDevice(); }
-
-    void finishUsingTempVector(const std::string& name) { m_deviceVecPool.unclaim(name); }
-    void finishUsingVector(const std::string& name) { finishUsingTempVector(name); }
-    void finishUsingDualArray(const std::string& name) { m_dualArrPool.unclaim(name); }
-    void finishUsingDualStruct(const std::string& name) { m_dualStructPool.unclaim(name); }
-
-    // Debug util
-    void printVectorUsage() const {
-        m_deviceVecPool.printStatus();
-        m_dualArrPool.printStatus();
-        m_dualStructPool.printStatus();
-    }
-
-    void releaseMemory() {
-        m_deviceVecPool.releaseAll();
-        m_dualArrPool.releaseAll();
-        m_dualStructPool.releaseAll();
-    }
-};
-
-struct kTStateParams {
-    // The `top speed' of the change of bin size
-    float binTopChangeRate = 0.05;
-    // The `current speed' fo the change of bin size
-    float binCurrentChangeRate = 0.0;
-    // The `acceleration' of bin size change rate, (0, 1]: 1 means each time a change is applied, it's at top speed
-    float binChangeRateAcc = 0.1;
-    // Number of CD steps before the solver makes a decision on how to change the bin size
-    unsigned int binChangeObserveSteps = 25;
-    // Past the point that (this number * error out bin geometry count)-many geometries found in a bin, the solver will
-    // force the bin to shrink
-    float binChangeUpperSafety = 0.25;
-    // Past the point that (this number * max num of bin)-many bins in the domain, the solver will force the bin to
-    // expand
-    float binChangeLowerSafety = 0.3;
-
-    // The max num of geometries in a bin that appeared in the CD process
-    size_t maxSphFoundInBin;
-    size_t maxTriFoundInBin;
-
-    // Num of bins, currently
-    size_t numBins = 0;
-
-    // Current average num of contacts per sphere has.
-    float avgCntsPerSphere = 0.;
-
-    // float maxVel_buffer; // buffer for the current max vel sent by dT
-    DualStruct<float> maxVel = DualStruct<float>(0.f);  // kT's own storage of max vel
-    DualStruct<float> ts_buffer;                        // buffer for the current ts size sent by dT
-    DualStruct<float> ts;                               // kT's own storage of ts size
-    DualStruct<unsigned int> maxDrift_buffer;           // buffer for max dT future drift steps
-    DualStruct<unsigned int> maxDrift;                  // kT's own storage for max future drift
-};
-
-struct dTStateParams {};
-
-inline std::string pretty_format_bytes(size_t bytes) {
-    // set up byte prefixes
-    constexpr size_t KIBI = 1024;
-    constexpr size_t MEBI = KIBI * KIBI;
-    constexpr size_t GIBI = KIBI * KIBI * KIBI;
-    float gibival = float(bytes) / GIBI;
-    float mebival = float(bytes) / MEBI;
-    float kibival = float(bytes) / KIBI;
-    std::stringstream ret;
-    if (gibival > 1) {
-        ret << gibival << " GiB";
-    } else if (mebival > 1) {
-        ret << mebival << " MiB";
-    } else if (kibival > 1) {
-        ret << kibival << " KiB";
-    } else {
-        ret << bytes << " B";
-    }
-    return ret.str();
-}
-
 // =============================================================================
 // SOME HOST-SIDE ENUMS
 // =============================================================================
@@ -265,117 +129,169 @@ enum class INSPECT_ENTITY_TYPE { SPHERE, CLUMP, MESH, MESH_FACET, EVERYTHING };
 // Which reduce operation is needed in an inspection
 enum class CUB_REDUCE_FLAVOR { NONE, MAX, MIN, SUM };
 // Format of the output files
-enum class OUTPUT_FORMAT { CSV, BINARY, CHPF };
+enum class OUTPUT_FORMAT { CSV, BINARY, VTK };
 // Mesh output format
-enum class MESH_FORMAT { VTK, OBJ };
+enum class MESH_FORMAT { VTK, OBJ, STL, PLY };
 // Adaptive time step size methods
-enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
+enum class ADAPT_TS_TYPE { NONE, HERTZ_CONST, MAX_VEL, INT_DIFF };
 
 // =============================================================================
 // NOW DEFINING MACRO COMMANDS USED BY THE DEM MODULE
 // =============================================================================
 
-#define DEME_PRINTF(...)                    \
+#define DEME_PRINTF(...)                   \
+    {                                      \
+        if (verbosity > VERBOSITY_QUIET) { \
+            printf(__VA_ARGS__);           \
+        }                                  \
+    }
+
+// DEME_ERROR, DEME_WARNING, and DEME_INFO are now defined in Logger.hpp
+
+#define DEME_DEBUG_PRINTF(...)              \
     {                                       \
-        if (verbosity > VERBOSITY::QUIET) { \
-            printf(__VA_ARGS__);            \
-        }                                   \
-    }
-
-#define DEME_ERROR(...)                      \
-    {                                        \
-        char error_message[1024];            \
-        sprintf(error_message, __VA_ARGS__); \
-        std::string out = error_message;     \
-        out += "\n";                         \
-        out += "This happened in ";          \
-        out += __func__;                     \
-        out += ".\n";                        \
-        throw std::runtime_error(out);       \
-    }
-
-#define DEME_WARNING(...)                       \
-    {                                           \
-        if (verbosity >= VERBOSITY::WARNING) {  \
-            char warn_message[1024];            \
-            sprintf(warn_message, __VA_ARGS__); \
-            std::string out = "\nWARNING! ";    \
-            out += warn_message;                \
-            out += "\n\n";                      \
-            std::cerr << out;                   \
-        }                                       \
-    }
-
-#define DEME_INFO(...)                      \
-    {                                       \
-        if (verbosity >= VERBOSITY::INFO) { \
+        if (verbosity >= VERBOSITY_DEBUG) { \
             printf(__VA_ARGS__);            \
             printf("\n");                   \
         }                                   \
     }
 
-#define DEME_STEP_ANOMALY(...)                                        \
-    {                                                                 \
-        if (verbosity >= VERBOSITY::STEP_ANOMALY) {                   \
-            char warn_message[1024];                                  \
-            sprintf(warn_message, __VA_ARGS__);                       \
-            std::string out = "\n-------- SIM ANOMALY!!! --------\n"; \
-            out += warn_message;                                      \
-            out += "\n\n";                                            \
-            std::cerr << out;                                         \
-        }                                                             \
-    }
-
-#define DEME_STEP_METRIC(...)                      \
-    {                                              \
-        if (verbosity >= VERBOSITY::STEP_METRIC) { \
-            printf(__VA_ARGS__);                   \
-            printf("\n");                          \
-        }                                          \
-    }
-
-#define DEME_DEBUG_PRINTF(...)               \
-    {                                        \
-        if (verbosity >= VERBOSITY::DEBUG) { \
-            printf(__VA_ARGS__);             \
-            printf("\n");                    \
-        }                                    \
-    }
-
-#define DEME_DEBUG_EXEC(...)                 \
-    {                                        \
-        if (verbosity >= VERBOSITY::DEBUG) { \
-            __VA_ARGS__;                     \
-        }                                    \
-    }
-
-#define DEME_STEP_DEBUG_PRINTF(...)               \
-    {                                             \
-        if (verbosity >= VERBOSITY::STEP_DEBUG) { \
-            printf(__VA_ARGS__);                  \
-            printf("\n");                         \
-        }                                         \
-    }
-
-#define DEME_STEP_DEBUG_EXEC(...)                 \
-    {                                             \
-        if (verbosity >= VERBOSITY::STEP_DEBUG) { \
-            __VA_ARGS__;                          \
-        }                                         \
+#define DEME_DEBUG_EXEC(...)                \
+    {                                       \
+        if (verbosity >= VERBOSITY_DEBUG) { \
+            __VA_ARGS__;                    \
+        }                                   \
     }
 
 // =============================================================================
 // NOW SOME HOST-SIDE SIMPLE STRUCTS USED BY THE DEM MODULE
 // =============================================================================
 
-// Anomalies log
-class WorkerAnomalies {
-  public:
-    WorkerAnomalies() {}
+// Simple CUDA event-backed span timer, used for GPU section timing without forcing host synchronizations.
+struct StreamEventTimerSpan {
+    static constexpr int kQueueDepth = 8;
 
-    bool over_max_vel = false;
+    struct Slot {
+        cudaEvent_t start = nullptr;
+        cudaEvent_t stop = nullptr;
+        bool started = false;
+        bool stopped = false;
+    };
 
-    void Clear() { over_max_vel = false; }
+    std::array<Slot, kQueueDepth> slots{};
+    int head = 0;
+    int count = 0;
+    int active = -1;
+
+    void create(unsigned int flags = cudaEventDefault) {
+        for (auto& slot : slots) {
+            DEME_GPU_CALL(cudaEventCreateWithFlags(&slot.start, flags));
+            DEME_GPU_CALL(cudaEventCreateWithFlags(&slot.stop, flags));
+            slot.started = false;
+            slot.stopped = false;
+        }
+        head = 0;
+        count = 0;
+        active = -1;
+    }
+
+    void destroy() {
+        for (auto& slot : slots) {
+            if (slot.start) {
+                cudaEventDestroy(slot.start);
+                slot.start = nullptr;
+            }
+            if (slot.stop) {
+                cudaEventDestroy(slot.stop);
+                slot.stop = nullptr;
+            }
+            slot.started = false;
+            slot.stopped = false;
+        }
+        head = 0;
+        count = 0;
+        active = -1;
+    }
+
+    void reset() {
+        for (auto& slot : slots) {
+            slot.started = false;
+            slot.stopped = false;
+        }
+        head = 0;
+        count = 0;
+        active = -1;
+    }
+
+    bool hasFreeSlot() const { return count < kQueueDepth; }
+
+    bool begin(cudaStream_t stream, Timer<double>& timer, bool allow_sync) {
+        if (active != -1) {
+            return false;
+        }
+        if (!hasFreeSlot()) {
+            accumulateAll(timer, allow_sync);
+        }
+        if (!hasFreeSlot()) {
+            return false;
+        }
+        const int idx = (head + count) % kQueueDepth;
+        Slot& slot = slots[idx];
+        DEME_GPU_CALL(cudaEventRecord(slot.start, stream));
+        slot.started = true;
+        slot.stopped = false;
+        active = idx;
+        count++;
+        return true;
+    }
+
+    void end(cudaStream_t stream) {
+        if (active < 0) {
+            return;
+        }
+        Slot& slot = slots[active];
+        if (!slot.started) {
+            return;
+        }
+        DEME_GPU_CALL(cudaEventRecord(slot.stop, stream));
+        slot.stopped = true;
+        active = -1;
+    }
+
+    bool accumulate(Timer<double>& timer, bool allow_sync) {
+        if (count == 0) {
+            return false;
+        }
+        Slot& slot = slots[head];
+        if (!slot.started || !slot.stopped) {
+            return false;
+        }
+        // Non-blocking elapsed-time queries can return cudaErrorNotReady if the stop event has not completed yet.
+        cudaError_t q = cudaEventQuery(slot.stop);
+        if (q == cudaErrorNotReady) {
+            if (!allow_sync) {
+                (void)cudaGetLastError();
+                return false;
+            }
+            (void)cudaGetLastError();
+            DEME_GPU_CALL(cudaEventSynchronize(slot.stop));
+        } else {
+            DEME_GPU_CALL(q);
+        }
+        float milliseconds = 0.f;
+        DEME_GPU_CALL(cudaEventElapsedTime(&milliseconds, slot.start, slot.stop));
+        timer.addDuration(milliseconds / 1000.0);
+        slot.started = false;
+        slot.stopped = false;
+        head = (head + 1) % kQueueDepth;
+        count--;
+        return true;
+    }
+
+    void accumulateAll(Timer<double>& timer, bool allow_sync) {
+        while (accumulate(timer, allow_sync)) {
+        }
+    }
 };
 
 // Timers used by kT and dT
@@ -383,14 +299,107 @@ class SolverTimers {
   private:
     const unsigned int num_timers;
     std::unordered_map<std::string, Timer<double>> m_timers;
+    std::unordered_map<std::string, StreamEventTimerSpan> m_gpu_timers;
+    bool gpu_timers_initialized = false;
+    bool defer_gpu_timer_accumulation = true;
 
   public:
     SolverTimers(const std::vector<std::string>& names) : num_timers(names.size()) {
         for (unsigned int i = 0; i < num_timers; i++) {
             m_timers[names.at(i)] = Timer<double>();
+            m_gpu_timers[names.at(i)] = StreamEventTimerSpan();
         }
     }
+
+    void InitGpuEvents(unsigned int flags = cudaEventDefault) {
+        if (gpu_timers_initialized) {
+            return;
+        }
+        for (auto& [name, span] : m_gpu_timers) {
+            span.create(flags);
+        }
+        gpu_timers_initialized = true;
+    }
+
+    void EnableGpuTimers(unsigned int flags = cudaEventDefault) { InitGpuEvents(flags); }
+    void SetDeferGpuTimerAccumulation(bool defer) { defer_gpu_timer_accumulation = defer; }
+    bool GetDeferGpuTimerAccumulation() const { return defer_gpu_timer_accumulation; }
+
+    void DestroyGpuEvents() {
+        if (!gpu_timers_initialized) {
+            return;
+        }
+        for (auto& [name, span] : m_gpu_timers) {
+            span.destroy();
+        }
+        gpu_timers_initialized = false;
+    }
+
     Timer<double>& GetTimer(const std::string& name) { return m_timers.at(name); }
+
+    void StartGpuTimer(const std::string& name, cudaStream_t stream) {
+        if (!gpu_timers_initialized) {
+            return;
+        }
+        auto it = m_gpu_timers.find(name);
+        if (it != m_gpu_timers.end()) {
+            it->second.begin(stream, m_timers.at(name), !defer_gpu_timer_accumulation);
+        }
+    }
+
+    void StopGpuTimer(const std::string& name, cudaStream_t stream) {
+        if (!gpu_timers_initialized) {
+            return;
+        }
+        auto it = m_gpu_timers.find(name);
+        if (it != m_gpu_timers.end()) {
+            it->second.end(stream);
+        }
+    }
+
+    void AccumulateGpuTimer(const std::string& name) {
+        if (!gpu_timers_initialized) {
+            return;
+        }
+        auto it = m_gpu_timers.find(name);
+        if (it != m_gpu_timers.end()) {
+            it->second.accumulateAll(m_timers.at(name), !defer_gpu_timer_accumulation);
+        }
+    }
+
+    void AccumulateGpuTimers(const std::vector<std::string>& names) {
+        for (const auto& name : names) {
+            AccumulateGpuTimer(name);
+        }
+    }
+
+    void FlushGpuTimers() {
+        if (!gpu_timers_initialized) {
+            return;
+        }
+        for (auto& [name, span] : m_gpu_timers) {
+            span.accumulateAll(m_timers.at(name), true);
+        }
+    }
+
+    void ResetGpuTimer(const std::string& name) {
+        if (!gpu_timers_initialized) {
+            return;
+        }
+        auto it = m_gpu_timers.find(name);
+        if (it != m_gpu_timers.end()) {
+            it->second.reset();
+        }
+    }
+
+    void ResetGpuTimers() {
+        if (!gpu_timers_initialized) {
+            return;
+        }
+        for (auto& [name, span] : m_gpu_timers) {
+            span.reset();
+        }
+    }
 };
 
 // Manager of the collabortation between the main thread and worker threads
@@ -480,8 +489,9 @@ class ClumpTemplateFlatten {
 };
 
 struct SolverFlags {
-    // Sort contact pair arrays (based on contact type) before sending to dT
-    bool should_sort_pairs = true;
+    // Sort contact pair arrays (based on contact type) before sending to dT.
+    // NOTE: The current logic requires this to be true. We cannot set it to false now.
+    const bool should_sort_pairs = true;
     // This run is historyless
     bool isHistoryless = false;
     // This run uses contact detection in an async fashion (kT and dT working at different points in simulation time)
@@ -493,19 +503,17 @@ struct SolverFlags {
     // Some output-related flags
     unsigned int outputFlags = OUTPUT_CONTENT::QUAT | OUTPUT_CONTENT::ABSV;
     unsigned int cntOutFlags;
+    unsigned int meshOutFlags = static_cast<unsigned int>(MESH_OUTPUT_CONTENT::XYZ);
     // Time step constant-ness and expand factor constant-ness
     bool isStepConst = true;
     bool isExpandFactorFixed = false;
     // The strategy for selecting the variable time step size
     VAR_TS_STRAT stepSizeStrat = VAR_TS_STRAT::DEME_CONST;
-    // Whether instructed to use jitification for mass properties and clump components (default to no and it is
-    // recommended)
-    bool useClumpJitify = false;
-    bool useMassJitify = false;
-    // Whether the simulation involves meshes
-    bool hasMeshes = false;
-    // Whether the force collection (acceleration calc and reduction) process should be using CUB
-    bool useCubForceCollect = false;
+    // Whether instructed to use jitification for mass properties and clump components
+    bool useClumpJitify = true;
+    bool useMassJitify = true;
+    // Whether meshes can have contacts with entities other than spheres
+    bool meshUniversalContact = false;
     // Does not record contact forces, contact point etc.
     bool useNoContactRecord = false;
     // Collect force (reduce to acc) right in the force calculation kernel
@@ -521,13 +529,20 @@ struct SolverFlags {
     bool autoBinSize = true;
     bool autoUpdateFreq = true;
 
-    // The max number of average contacts per sphere has before the solver errors out. The reason why I didn't use the
-    // number of contacts for the sphere that has the most is that, well, we can have a huge sphere and it just will
-    // have more contacts. But if avg cnt is high, that means probably the contact margin is out of control now.
-    float errOutAvgSphCnts = 100.;
+    // The max average primitive contacts before the solver errors out. We check primitive average rather than the
+    // worst primitive so one legitimately large sphere/triangle patch does not dominate the error policy. A sustained
+    // high average usually means the contact margin or dynamics are out of control.
+    float errOutAvgPrimitiveCnts = 300.;
 
     // Whether there are contacts that can never be removed.
     bool hasPersistentContacts = false;
+    // Whether to use the simple patch ID-based triangle combination. This is the default safe path because it preserves
+    // dT's expected per-contact-type, patch-pair sorted contact-history mapping invariant. Set false only to opt into
+    // the connected-component flooding route.
+    bool useSimplePatchCombination = true;
+    // Whether the opt-in flooding route remaps raw island labels to stable IDs across contact detection steps. This
+    // preserves contact history when the raw representative triangle changes.
+    bool useStablePatchIslandIDs = true;
 };
 
 class DEMMaterial {
@@ -557,21 +572,158 @@ class DEMTriangle {
     float3 p3;
 };
 
+// Structs defined here will be used by some host classes in DEM.
+// NOTE: Data structs here need to be those complex ones (such as needing to include CudaAllocator.hpp), which may
+// not be jitifiable.
+
+// DEMSolverScratchData mainly contains space allocated as system scratch pad and as thread temporary arrays
+class DEMSolverScratchData {
+  private:
+    // NOTE! The type MUST be scratch_t, since all DEMSolverScratchData's allocation methods use num of bytes as
+    // arguments, but DeviceVectorPool's resize considers number of elements
+    DeviceVectorPool<scratch_t> m_deviceVecPool;
+    DualArrayPool<scratch_t> m_dualArrPool;
+    DualStructPool<size_t> m_dualStructPool;
+
+  public:
+    // Number of contacts (in terms of convex patches) in this CD step
+    DualStruct<size_t> numContacts = DualStruct<size_t>(0);
+    // Number of contacts in the previous CD step
+    DualStruct<size_t> numPrevContacts = DualStruct<size_t>(0);
+    // Number of contacts between the primitives (spheres/triangles) in this CD step
+    DualStruct<size_t> numPrimitiveContacts = DualStruct<size_t>(0);
+    // Number of previous step's primitive contacts
+    DualStruct<size_t> numPrevPrimitiveContacts = DualStruct<size_t>(0);
+    // Number of spheres in the previous CD step (in case user added/removed clumps from the system)
+    DualStruct<size_t> numPrevSpheres = DualStruct<size_t>(0);
+    // Prev number of triangles
+    DualStruct<size_t> numPrevTriangles = DualStruct<size_t>(0);
+    // Number of previous step's mesh patches
+    DualStruct<size_t> numPrevMeshPatches = DualStruct<size_t>(0);
+
+    DEMSolverScratchData(size_t* external_host_counter = nullptr, size_t* external_device_counter = nullptr)
+        : m_deviceVecPool(external_device_counter), m_dualArrPool(external_host_counter, external_device_counter) {
+        m_deviceVecPool.claim("ScratchSpace", 42);
+    }
+    ~DEMSolverScratchData() { releaseMemory(); }
+
+    // Return raw pointer to swath of device memory that is at least "sizeNeeded" large
+    scratch_t* allocateScratchSpace(size_t sizeNeeded) {
+        m_deviceVecPool.resize("ScratchSpace", sizeNeeded);
+        return m_deviceVecPool.get("ScratchSpace");
+    }
+
+    // This flavor does not prevent you from forgeting to recycle before this time step ends
+    scratch_t* allocateVector(const std::string& name, size_t sizeNeeded) {
+        return m_deviceVecPool.claim(name, sizeNeeded, /*allow_duplicate=*/true);
+    }
+
+    // This flavor prevents you from forgeting to recycle before this time step ends
+    scratch_t* allocateTempVector(const std::string& name, size_t sizeNeeded) {
+        return m_deviceVecPool.claim(name, sizeNeeded);
+    }
+
+    // Dual arrays allocated here will always be temporary. If you need permanent dual array, create it as a member of
+    // your worker.
+    DualArray<scratch_t>* allocateDualArray(const std::string& name, size_t sizeNeeded) {
+        return m_dualArrPool.claim(name, sizeNeeded);
+    }
+    scratch_t* getDualArrayHost(const std::string& name) { return m_dualArrPool.getHost(name); }
+    scratch_t* getDualArrayDevice(const std::string& name) { return m_dualArrPool.getDevice(name); }
+    void syncDualArrayDeviceToHost(const std::string& name) { m_dualArrPool.get(name)->toHost(); }
+    void syncDualArrayHostToDevice(const std::string& name) { m_dualArrPool.get(name)->toDevice(); }
+    // When using these methods, remember the type is scratch_t
+    void syncDualArrayDeviceToHost(const std::string& name, size_t start, size_t n) {
+        m_dualArrPool.get(name)->toHost(start, n);
+    }
+    void syncDualArrayHostToDevice(const std::string& name, size_t start, size_t n) {
+        m_dualArrPool.get(name)->toDevice(start, n);
+    }
+    // Likewise, all DualStruct allocated using this class will be temporary
+    DualStruct<size_t>* allocateDualStruct(const std::string& name) { return m_dualStructPool.claim(name); }
+    size_t* getDualStructHost(const std::string& name) { return m_dualStructPool.getHost(name); }
+    size_t* getDualStructDevice(const std::string& name) { return m_dualStructPool.getDevice(name); }
+    void syncDualStructDeviceToHost(const std::string& name) { m_dualStructPool.get(name)->toHost(); }
+    void syncDualStructHostToDevice(const std::string& name) { m_dualStructPool.get(name)->toDevice(); }
+
+    void finishUsingTempVector(const std::string& name) { m_deviceVecPool.unclaim(name); }
+    void finishUsingVector(const std::string& name) { finishUsingTempVector(name); }
+    void finishUsingDualArray(const std::string& name) { m_dualArrPool.unclaim(name); }
+    void finishUsingDualStruct(const std::string& name) { m_dualStructPool.unclaim(name); }
+
+    bool existDualArray(const std::string& name) { return m_dualArrPool.exist(name); }
+    bool existDualStruct(const std::string& name) { return m_dualStructPool.exist(name); }
+    bool existTempVector(const std::string& name) { return m_deviceVecPool.exist(name); }
+
+    // Debug util
+    void printVectorUsage() const {
+        m_deviceVecPool.printStatus();
+        m_dualArrPool.printStatus();
+        m_dualStructPool.printStatus();
+    }
+
+    void releaseMemory() {
+        m_deviceVecPool.releaseAll();
+        m_dualArrPool.releaseAll();
+        m_dualStructPool.releaseAll();
+    }
+};
+
+struct kTStateParams {
+    // The `top speed' of the change of bin size
+    float binTopChangeRate = 0.05;
+    // The `current speed' fo the change of bin size
+    float binCurrentChangeRate = 0.0;
+    // The `acceleration' of bin size change rate, (0, 1]: 1 means each time a change is applied, it's at top speed
+    float binChangeRateAcc = 0.1;
+    // Number of CD steps before the solver makes a decision on how to change the bin size
+    unsigned int binChangeObserveSteps = 25;
+    // Past the point that (this number * error out bin geometry count)-many geometries found in a bin, the solver will
+    // force the bin to shrink
+    float binChangeUpperSafety = 0.25;
+    // Past the point that (this number * max num of bin)-many bins in the domain, the solver will force the bin to
+    // expand
+    float binChangeLowerSafety = 0.3;
+
+    // The max num of geometries in a bin that appeared in the CD process
+    size_t maxSphFoundInBin;
+    size_t maxTriFoundInBin;
+
+    // Num of bins, currently
+    size_t numBins = 0;
+
+    // Current average number of contacts per primitive.
+    float avgCntsPerPrimitive = 0.;
+    // Consecutive contact-detection steps above errOutAvgPrimitiveCnts.
+    unsigned int avgCntsOverLimitStreak = 0;
+    // Peak average contacts observed during the current over-limit streak.
+    float avgCntsOverLimitPeak = 0.f;
+
+    // float maxVel_buffer; // buffer for the current max vel sent by dT
+    DualStruct<float> maxVel = DualStruct<float>(0.f);     // kT's own storage of max vel
+    DualStruct<float> maxAngVel = DualStruct<float>(0.f);  // kT's own storage of max ang vel
+    DualStruct<float> ts_buffer;                           // buffer for the current ts size sent by dT
+    DualStruct<float> ts;                                  // kT's own storage of ts size
+    DualStruct<unsigned int> maxDrift_buffer;              // buffer for max dT future drift steps
+    DualStruct<unsigned int> maxDrift;                     // kT's own storage for max future drift
+};
+
 // A struct that defines a `clump' (one of the core concepts of this solver). A clump is typically small which consists
 // of several sphere components, but it can be as large as having thousands of spheres.
 class DEMClumpTemplate {
   private:
     void assertLength(size_t len, const std::string name) {
         if (nComp == 0) {
-            std::cerr << "The settings at the " << name
-                      << " call were applied to 0 sphere components.\nPlease consider using " << name
-                      << " only after loading the clump template." << std::endl;
+            DEME_WARNING(
+                "The settings at the %s call were applied to 0 sphere components.\nPlease consider using %s "
+                "only after loading the clump template.",
+                name.c_str(), name.c_str());
         }
         if (len != nComp) {
-            std::stringstream ss;
-            ss << name << " input argument must have length " << nComp << " (not " << len
-               << "), same as the number of sphere components in the clump template." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(
+                "%s input argument must have length %zu (not %zu), same as the number of sphere components in "
+                "the clump template.",
+                name.c_str(), nComp, len);
         }
     }
 
@@ -585,6 +737,8 @@ class DEMClumpTemplate {
 
     /// Set mass.
     void SetMass(float mass) { this->mass = mass; }
+    /// Get mass.
+    float GetMass() const { return mass; }
     /// Set MOI (in principal frame).
     void SetMOI(float3 MOI) { this->MOI = MOI; }
     /// Set MOI (in principal frame).
@@ -592,6 +746,8 @@ class DEMClumpTemplate {
         assertThreeElements(MOI, "SetMOI", "MOI");
         SetMOI(make_float3(MOI[0], MOI[1], MOI[2]));
     }
+    /// Get MOI (in principal frame).
+    float3 GetMOI() const { return MOI; }
 
     /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
     void SetMaterial(const std::vector<std::shared_ptr<DEMMaterial>>& input) {
@@ -701,6 +857,7 @@ class DEMClumpTemplate {
 // small, and is mainly there for the purpose of pyDEME entry point.
 class DEMInitializer {
   public:
+    virtual ~DEMInitializer() = default;
     // The type of a clump batch is CLUMP (it is used by tracker objs)
     OWNER_TYPE obj_type;
     // Its offset when this obj got loaded into the API-level user raw-input array
@@ -713,10 +870,10 @@ class DEMClumpBatch : public DEMInitializer {
     size_t nExistContacts = 0;
     void assertLength(size_t len, const std::string name) {
         if (len != nClumps) {
-            std::stringstream ss;
-            ss << name << " input argument must have length " << nClumps << " (not " << len
-               << "), same as the number of clumps you originally added via AddClumps." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(
+                "%s input argument must have length %zu (not %zu), same as the number of clumps you originally "
+                "added via AddClumps.",
+                name.c_str(), nClumps, len);
         }
     }
 
@@ -837,17 +994,15 @@ class DEMClumpBatch : public DEMInitializer {
         SetOriQ(Q);
     }
 
-    /// Specify the `family' code for each clump. Then you can specify if they should go with some prescribed motion or
+    /// Specify the "family" code for each clump. Then you can specify if they should use some prescribed motion or
     /// some special physics (for example, being fixed). The default behavior (without specification) for every family
-    /// is using `normal' physics.
+    /// uses "normal" physics.
     void SetFamilies(const std::vector<unsigned int>& input) {
         assertLength(input.size(), "SetFamilies");
         if (any_of(input.begin(), input.end(),
                    [](unsigned int i) { return i > std::numeric_limits<family_t>::max(); })) {
-            std::stringstream ss;
-            ss << "Some clumps are instructed to have a family number larger than the max allowance "
-               << std::numeric_limits<family_t>::max() << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("Some clumps are instructed to have a family number larger than the max allowance %u",
+                       std::numeric_limits<family_t>::max());
         }
         families = input;
         family_isSpecified = true;
@@ -860,44 +1015,39 @@ class DEMClumpBatch : public DEMInitializer {
     }
     void SetExistingContactWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
         if (wildcards.begin()->second.size() != nExistContacts) {
-            std::stringstream ss;
-            ss << "SetExistingContactWildcards needs to be called after SetExistingContacts, with each wildcard array "
-                  "having the same length as the number of contact pairs.\nThis way, each wildcard will have an "
-                  "associated contact pair."
-               << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(std::string(
+                "SetExistingContactWildcards needs to be called after SetExistingContacts, with each wildcard "
+                "array having the same length as the number of contact pairs.\nThis way, each wildcard will have "
+                "an associated contact pair."));
         }
         contact_wildcards = wildcards;
     }
     void AddExistingContactWildcard(const std::string& name, const std::vector<float>& vals) {
         if (vals.size() != nClumps) {
-            std::stringstream ss;
-            ss << "AddExistingContactWildcard needs to be called after SetExistingContacts, with the input wildcard "
-                  "array having the same length as the number of contact pairs.\nThis way, each wildcard will have an "
-                  "associated contact pair."
-               << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(std::string(
+                "AddExistingContactWildcard needs to be called after SetExistingContacts, with the input "
+                "wildcard array having the same length as the number of contact pairs.\nThis way, each wildcard "
+                "will have an associated contact pair."));
         }
         contact_wildcards[name] = vals;
     }
 
     void SetOwnerWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
         if (wildcards.begin()->second.size() != nClumps) {
-            std::stringstream ss;
-            ss << "Input owner wildcard arrays in a SetOwnerWildcards call must all have the same size as the number "
-                  "of clumps in this batch.\nHere, the input array has length "
-               << wildcards.begin()->second.size() << " but this batch has " << nClumps << " clumps." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(
+                "Input owner wildcard arrays in a SetOwnerWildcards call must all have the same size as the "
+                "number of clumps in this batch.\nHere, the input array has length %zu but this batch has %zu "
+                "clumps.",
+                wildcards.begin()->second.size(), nClumps);
         }
         owner_wildcards = wildcards;
     }
     void AddOwnerWildcard(const std::string& name, const std::vector<float>& vals) {
         if (vals.size() != nClumps) {
-            std::stringstream ss;
-            ss << "Input owner wildcard array in a AddOwnerWildcard call must have the same size as the number of "
-                  "clumps in this batch.\nHere, the input array has length "
-               << vals.size() << " but this batch has " << nClumps << " clumps." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(
+                "Input owner wildcard array in a AddOwnerWildcard call must have the same size as the number of "
+                "clumps in this batch.\nHere, the input array has length %zu but this batch has %zu clumps.",
+                vals.size(), nClumps);
         }
         owner_wildcards[name] = vals;
     }
@@ -907,21 +1057,21 @@ class DEMClumpBatch : public DEMInitializer {
 
     void SetGeometryWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
         if (wildcards.begin()->second.size() != nSpheres) {
-            std::stringstream ss;
-            ss << "Input gemometry wildcard arrays in a SetGeometryWildcards call must all have the same size as the "
-                  "number of spheres in this batch.\nHere, the input array has length "
-               << wildcards.begin()->second.size() << " but this batch has " << nSpheres << " spheres." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(
+                "Input gemometry wildcard arrays in a SetGeometryWildcards call must all have the same size as "
+                "the number of spheres in this batch.\nHere, the input array has length %zu but this batch has "
+                "%zu spheres.",
+                wildcards.begin()->second.size(), nSpheres);
         }
         geo_wildcards = wildcards;
     }
     void AddGeometryWildcard(const std::string& name, const std::vector<float>& vals) {
         if (vals.size() != nSpheres) {
-            std::stringstream ss;
-            ss << "Input gemometry wildcard array in a AddGeometryWildcard call must have the same size as the number "
-                  "of spheres in this batch.\nHere, the input array has length "
-               << vals.size() << " but this batch has " << nSpheres << " spheres." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(
+                "Input gemometry wildcard array in a AddGeometryWildcard call must have the same size as the "
+                "number of spheres in this batch.\nHere, the input array has length %zu but this batch has %zu "
+                "spheres.",
+                vals.size(), nSpheres);
         }
         geo_wildcards[name] = vals;
     }
@@ -946,11 +1096,16 @@ class DEMTrackedObj : public DEMInitializer {
     // If this tracked object is broken b/c the owner it points to has been removed from the simulation system
     bool isBroken = false;
     // The offset for its first geometric compoent in the tracked objects. For example, if it is mesh, then this is the
-    // first triangle ID.
+    // first convex patch's ID.
     size_t geoID;
     // The number of geometric entities (sphere components, triangles or analytical components) the tracked objects
     // have.
     size_t nGeos;
+    // If non-zero, override the computed nSpanOwners with this value. Used when tracking CombinedInstances where the
+    // tracker must span all member owners, not just the first member's batch.
+    size_t nSpanOwnersOverride = 0;
+    // If non-zero, override the computed nGeos with this value. Used when tracking CombinedInstances.
+    size_t nGeosOverride = 0;
 };
 
 // General-purpose data container that can hold any type of data, indexed by string keys.
@@ -961,7 +1116,7 @@ class DataContainer {
     template <typename T>
     void Insert(const std::string& key, std::vector<T> vec) {
         if (data_.count(key))
-            throw std::runtime_error("Key already exists: " + key);
+            DEME_ERROR("Key already exists: %s", key.c_str());
         data_[key] = std::make_shared<Holder<T>>(std::move(vec));
         types_[key] = &typeid(T);
     }
@@ -982,7 +1137,7 @@ class DataContainer {
 
     const std::type_info& type_of(const std::string& key) const {
         if (!Contains(key))
-            throw std::runtime_error("Key not found: " + key);
+            DEME_ERROR("Key not found: %s", key.c_str());
         return *types_.at(key);  // dereference the pointer
     }
 
@@ -1007,7 +1162,7 @@ class DataContainer {
     }
     size_t Size() const {
         if (data_.empty()) {
-            throw std::runtime_error("DataContainer is empty.");
+            DEME_ERROR(std::string("DataContainer is empty."));
         }
         return data_.begin()->second->Size();
     }
@@ -1028,9 +1183,7 @@ class DataContainer {
         std::size_t Size() const override { return data.size(); }
     };
 
-    virtual void on_missing_key(const std::string& key) const {
-        throw std::runtime_error("Key not found: '" + key + "'");
-    }
+    virtual void on_missing_key(const std::string& key) const { DEME_ERROR("Key not found: '%s'", key.c_str()); }
 
     template <typename T>
     void check_type(const std::string& key) const {
@@ -1038,7 +1191,7 @@ class DataContainer {
             on_missing_key(key);
         }
         if (*types_.at(key) != typeid(T)) {
-            throw std::runtime_error("Type mismatch for key: " + key);
+            DEME_ERROR("Type mismatch for key: %s", key.c_str());
         }
     }
 
@@ -1097,13 +1250,35 @@ class ContactInfoContainer : public DataContainer {
 
   protected:
     void on_missing_key(const std::string& key) const override {
-        throw std::runtime_error("ContactInfoContainer does not have field: '" + key +
-                                 "', you may need to turn on the output of this field by correctly calling "
-                                 "SetContactOutputContent before Initialize().");
+        DEME_ERROR(
+            "ContactInfoContainer does not have field: '%s', you may need to turn on the output of this field "
+            "by correctly calling SetContactOutputContent before Initialize().",
+            key.c_str());
     }
 
   private:
     unsigned int m_cnt_out_content;
+};
+
+// A map that inherents from std::unordered_map, which has pre-defined contact type keys, and can store type T data
+template <typename T>
+class ContactTypeMap : public std::unordered_map<contact_t, T> {
+  public:
+    ContactTypeMap() {
+        this->emplace(SPHERE_SPHERE_CONTACT, T());
+        this->emplace(SPHERE_TRIANGLE_CONTACT, T());
+        this->emplace(SPHERE_ANALYTICAL_CONTACT, T());
+        this->emplace(TRIANGLE_TRIANGLE_CONTACT, T());
+        this->emplace(TRIANGLE_ANALYTICAL_CONTACT, T());
+    }
+    ContactTypeMap(const T& default_value) : ContactTypeMap() { SetAll(default_value); }
+
+    // Set values of all keys
+    void SetAll(const T& value) {
+        for (auto& [key, val] : *this) {
+            val = value;
+        }
+    }
 };
 
 }  // namespace deme

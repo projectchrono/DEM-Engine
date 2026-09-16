@@ -13,9 +13,10 @@
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <chrono>
 #include <filesystem>
@@ -24,11 +25,12 @@ using namespace deme;
 using namespace std::filesystem;
 
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_Centrifuge ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     DEMSolver DEMSim;
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     // Output family numbers (used to identify the centrifuging effect)
     DEMSim.SetOutputContent(OUTPUT_CONTENT::FAMILY);
-    // DEMSim.SetVerbosity(STEP_METRIC);
 
     // If you don't need individual force information, then this option makes the solver run a bit faster.
     DEMSim.SetNoForceRecord();
@@ -95,7 +97,8 @@ int main() {
     unsigned int drum_family = 100;
     Drum->SetFamily(drum_family);
     // The drum rotates (facing Z direction)
-    DEMSim.SetFamilyPrescribedAngVel(drum_family, "0", "0", "6.0");
+    float DurmRotVel = 6.0;
+    DEMSim.SetFamilyPrescribedAngVel(drum_family, "0", "0", to_string_with_precision(DurmRotVel));
     // Then add planes to `close up' the drum. We add it as another object b/c we want to track the force on it
     // separately.
     auto top_bot_planes = DEMSim.AddExternalObject();
@@ -115,8 +118,10 @@ int main() {
     auto input_material_xyz =
         DEMBoxGridSampler(sample_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight),
                           scaling * std::cbrt(2.0) * 2.1, scaling * std::cbrt(2.0) * 2.1, scaling * 2 * 2.1);
+    // Keep the legacy non-periodic path exactly intact.
     input_xyz.insert(input_xyz.end(), input_material_xyz.begin(), input_material_xyz.end());
     unsigned int num_clumps = input_material_xyz.size();
+
     // Casually select from generated clump types
     for (unsigned int i = 0; i < num_clumps; i++) {
         input_template_type.push_back(clump_types.at(i % clump_types.size()));
@@ -133,14 +138,16 @@ int main() {
     // Make the domain large enough
     DEMSim.InstructBoxDomainDimension(5, 5, 5);
     float step_size = 5e-6;
-    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetTimeStepSize(step_size);
+    DEMSim.SetGPUTimersEnabled(true);
+    // DEMSim.UseHertzConstTimeStep();
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.SetExpandSafetyType("auto");
     // If there is a velocity that an analytical object (i.e. the drum) has that you'd like the solver to take into
     // account in consideration of adding contact margins, you have to specify it here, since the solver's automatic max
     // velocity derivation algorithm currently cannot take analytical object's angular velocity-induced velocity into
     // account.
-    DEMSim.SetExpandSafetyAdder(6.0);
+    DEMSim.SetExpandSafetyAdder(DurmRotVel * CylRad);
     DEMSim.Initialize();
 
     path out_dir = current_path();
@@ -149,41 +156,37 @@ int main() {
 
     float time_end = 20.0;
     unsigned int fps = 20;
-    unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
+    float frame_time = 1.0 / fps;
 
     std::cout << "Output at " << fps << " FPS" << std::endl;
     unsigned int currframe = 0;
-    unsigned int curr_step = 0;
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
-    for (double t = 0; t < (double)time_end; t += step_size, curr_step++) {
-        if (curr_step % out_steps == 0) {
-            std::cout << "Frame: " << currframe << std::endl;
-            DEMSim.ShowThreadCollaborationStats();
-            char filename[100];
-            sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
-            DEMSim.WriteSphereFile(out_dir / filename);
-            currframe++;
-            max_v = max_v_finder->GetValue();
-            std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
+    for (double t = 0; t < (double)time_end; t += frame_time) {
+        std::cout << "Frame: " << currframe << std::endl;
+        DEMSim.ShowThreadCollaborationStats();
+        char filename[100];
+        sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+        DEMSim.WriteSphereFile(out_dir / filename);
+        currframe++;
+        max_v = max_v_finder->GetValue();
+        std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
 
-            // Torque on the side walls are?
-            float3 drum_moi = Drum_tracker->MOI();
-            float3 drum_acc = Drum_tracker->ContactAngAccLocal();
-            float3 drum_torque = drum_acc * drum_moi;
-            std::cout << "Contact torque on the side walls is " << drum_torque.x << ", " << drum_torque.y << ", "
-                      << drum_torque.z << std::endl;
+        // Torque on the side walls are?
+        float3 drum_moi = Drum_tracker->MOI();
+        float3 drum_acc = Drum_tracker->ContactAngAccLocal();
+        float3 drum_torque = drum_acc * drum_moi;
+        std::cout << "Contact torque on the side walls is " << drum_torque.x << ", " << drum_torque.y << ", "
+                  << drum_torque.z << std::endl;
 
-            // The force on the bottom plane?
-            float3 force_on_BC = planes_tracker->ContactAcc() * planes_tracker->Mass();
-            std::cout << "Contact force on bottom plane is " << force_on_BC.z << std::endl;
-        }
+        // The force on the bottom plane?
+        float3 force_on_BC = planes_tracker->ContactAcc() * planes_tracker->Mass();
+        std::cout << "Contact force on bottom plane is " << force_on_BC.z << std::endl;
 
-        DEMSim.DoDynamics(step_size);
+        DEMSim.DoDynamics(frame_time);
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
-    std::cout << (time_sec.count()) / time_end * 10.0 << " seconds (wall time) to finish 10 seconds' simulation"
-              << std::endl;
+    std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
     DEMSim.ShowThreadCollaborationStats();
     DEMSim.ClearThreadCollaborationStats();
 

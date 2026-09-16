@@ -29,14 +29,12 @@ if (overlapDepth > 0) {
         rotVelCPA = cross(ARotVel, locCPA);
         rotVelCPB = cross(BRotVel, locCPB);
         // This is mapping from local rotational velocity to global
-        applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x, AOriQ.y,
-                                                AOriQ.z);
-        applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y,
-                                                BOriQ.z);
+        applyOriQToVector3(rotVelCPA, AOriQ);
+        applyOriQToVector3(rotVelCPB, BOriQ);
     }
 
     // A few re-usables
-    float mass_eff, sqrt_Rd, beta;
+    float mass_eff, cnt_rad, beta;
     float3 vrel_tan;
     float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
 
@@ -56,8 +54,10 @@ if (overlapDepth > 0) {
         }
 
         mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
-        sqrt_Rd = sqrt(overlapDepth * (ARadius * BRadius) / (ARadius + BRadius));
-        const float Sn = 2. * E_cnt * sqrt_Rd;
+        // Derive the equivalent contact radius from the actual overlap geometry so non-spherical contacts use
+        // their measured overlap area rather than an inaccurate analytical radius.
+        cnt_rad = sqrtf(overlapArea / deme::PI);
+        const float Sn = 2. * E_cnt * cnt_rad;
 
         const float loge = (CoR_cnt < DEME_TINY_FLOAT) ? log(DEME_TINY_FLOAT) : log(CoR_cnt);
         beta = loge / sqrt(loge * loge + deme::PI_SQUARED);
@@ -74,7 +74,7 @@ if (overlapDepth > 0) {
         // Figure out if we should apply rolling resistance force
         bool should_add_rolling_resistance = true;
         {
-            const float R_eff = sqrtf((ARadius * BRadius) / (ARadius + BRadius));
+            const float R_eff = (cnt_rad * cnt_rad) / overlapDepth;
             const float kn_simple = deme::FOUR_OVER_THREE * E_cnt * sqrtf(R_eff);
             const float gn_simple = -2.f * sqrtf(deme::FIVE_OVER_THREE * mass_eff * E_cnt) * beta * powf(R_eff, 0.25f);
 
@@ -105,7 +105,7 @@ if (overlapDepth > 0) {
 
     // Tangential force part
     if (mu_cnt > 0.0) {
-        const float kt = 8. * G_cnt * sqrt_Rd;
+        const float kt = 8. * G_cnt * cnt_rad;
         const float gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
         float3 tangent_force = -kt * delta_tan - gt * vrel_tan;
         const float ft = length(tangent_force);
@@ -144,22 +144,19 @@ if (overlapDepth > 0) {
     const float k = 8.99e9;
     const double ABdist2 = dot(bodyAPos - bodyBPos, bodyAPos - bodyBPos);
     // If Q_A and Q_B are the same sign, then the force pushes A away from B, so B2A is the direction.
-    force += k * Q_A[AGeo] * Q_B[BGeo] / ABdist2 * (B2A);
+    force += k * Q[AOwner] * Q[BOwner] / ABdist2 * (B2A);
     // Fun part: we can modify the electric charge on the fly. But we have to use atomic, since multiple contacts
     // can modify the same Q.
     // But this is not recommend unless you understand what you are doing, and there are a lot of details related to it.
-    // For example, although the charges transfer between geometries, the geometries within one clump cannot
-    // re-distribute elec charges among them, since no contact among geometries in one clump. Still, you could write
-    // your own subroutine to further modify those geometry and/or own wildcards in your script, or within the force
-    // model.
+    // You could write your own subroutine to further modify those wildcards in your script, or within the force model.
     // On the other hand, if you do not need to modify the wildcards, you just need to use them for calculating
     // the force, then that is probably easier and with less strings attached to it. I can see this being more
     // useful.
     if (overlapDepth > 0) {  // Exchange the elec charge only in physical contact
-        float avg_Q = (Q_A[AGeo] + Q_B[BGeo]) / 2.;
-        float A_change_dir = (abs(avg_Q - Q_A[AGeo]) > 1e-11) ? (avg_Q - Q_A[AGeo]) / abs(avg_Q - Q_A[AGeo]) : 0.;
+        float avg_Q = (Q[AOwner] + Q[BOwner]) / 2.;
+        float A_change_dir = (abs(avg_Q - Q[AOwner]) > 1e-11) ? (avg_Q - Q[AOwner]) / abs(avg_Q - Q[AOwner]) : 0.;
         // Modify the charge they carry... the rate is 1e-8 per second
-        atomicAdd(Q_A + AGeo, A_change_dir * 1e-8 * ts);
-        atomicAdd(Q_B + BGeo, -A_change_dir * 1e-8 * ts);
+        atomicAdd(Q + AOwner, A_change_dir * 1e-8 * ts);
+        atomicAdd(Q + BOwner, -A_change_dir * 1e-8 * ts);
     }
 }

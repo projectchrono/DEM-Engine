@@ -20,22 +20,16 @@ if (overlapDepth > 0) {
         Cohesion_coeff = Cohesion[bodyAMatType][bodyBMatType];
     }
 
-    float3 rotVelCPA, rotVelCPB;
-    {
-        // We also need the relative velocity between A and B in global frame to use in the damping terms
-        // To get that, we need contact points' rotational velocity in GLOBAL frame
-        // This is local rotational velocity (the portion of linear vel contributed by rotation)
-        rotVelCPA = cross(ARotVel, locCPA);
-        rotVelCPB = cross(BRotVel, locCPB);
-        // This is mapping from local rotational velocity to global
-        applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x, AOriQ.y,
-                                                AOriQ.z);
-        applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y,
-                                                BOriQ.z);
-    }
+    // We also need the relative velocity between A and B in global frame to use in the damping terms
+    // To get that, we need contact points' rotational velocity in GLOBAL frame
+    // This is local rotational velocity (the portion of linear vel contributed by rotation)
+    float3 rotVelCPA = cross(ARotVel, locCPA);
+    float3 rotVelCPB = cross(BRotVel, locCPB);
+    applyOriQToVector3(rotVelCPA, AOriQ);
+    applyOriQToVector3(rotVelCPB, BOriQ);
 
     // A few re-usables
-    float mass_eff, sqrt_Rd, beta;
+    float mass_eff, beta, cnt_rad;
     float3 vrel_tan;
     float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
 
@@ -55,31 +49,34 @@ if (overlapDepth > 0) {
         }
 
         mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
-        sqrt_Rd = sqrt(overlapDepth * (ARadius * BRadius) / (ARadius + BRadius));
-        const float Sn = 2. * E_cnt * sqrt_Rd;
+        // Contact radius (radial distance from contact center axis) called cnt_rad, computed from area
+        cnt_rad = sqrtf(overlapArea / deme::PI);
+        const float Sn = 2.f * E_cnt * cnt_rad;
 
         const float loge = (CoR_cnt < DEME_TINY_FLOAT) ? log(DEME_TINY_FLOAT) : log(CoR_cnt);
         beta = loge / sqrt(loge * loge + deme::PI_SQUARED);
 
-        const float k_n = deme::TWO_OVER_THREE * Sn;
-        const float gamma_n = deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
+        const float k_n = (2.f / 3.f) * Sn;
+        const float gamma_n = (2.f * sqrtf(5.f / 6.f)) * beta * sqrtf(Sn * mass_eff);
 
         force += (k_n * overlapDepth + gamma_n * projection) * B2A;
         // printf("normal force: %f, %f, %f\n", force.x, force.y, force.z);
     }
 
     // Rolling resistance part
-    if (Crr_cnt > 0.0) {
+    if (Crr_cnt > 0.f) {
         // Figure out if we should apply rolling resistance force
         bool should_add_rolling_resistance = true;
         {
-            const float R_eff = sqrtf((ARadius * BRadius) / (ARadius + BRadius));
-            const float kn_simple = deme::FOUR_OVER_THREE * E_cnt * sqrtf(R_eff);
-            const float gn_simple = -2.f * sqrtf(deme::FIVE_OVER_THREE * mass_eff * E_cnt) * beta * powf(R_eff, 0.25f);
+            // Use geometric equivalence R_eff ~= cnt_rad^2 / overlapDepth
+            const float R_eff = (cnt_rad * cnt_rad) / overlapDepth;
+
+            const float kn_simple = (4.f / 3.f) * E_cnt * sqrtf(R_eff);
+            const float gn_simple = -2.f * sqrtf((5.f / 3.f) * mass_eff * E_cnt) * beta * powf(R_eff, 0.25f);
 
             const float d_coeff = gn_simple / (2.f * sqrtf(kn_simple * mass_eff));
 
-            if (d_coeff < 1.0) {
+            if (d_coeff < 1.f) {
                 float t_collision = deme::PI * sqrtf(mass_eff / (kn_simple * (1.f - d_coeff * d_coeff)));
                 if (delta_time <= t_collision) {
                     should_add_rolling_resistance = false;
@@ -104,9 +101,9 @@ if (overlapDepth > 0) {
     }
 
     // Tangential force part
-    if (mu_cnt > 0.0) {
-        const float kt = 8. * G_cnt * sqrt_Rd;
-        const float gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
+    if (mu_cnt > 0.f) {
+        const float kt = 8.f * G_cnt * cnt_rad;
+        const float gt = -2.f * sqrtf(5.f / 3.f) * beta * sqrtf(mass_eff * kt);
         float3 tangent_force = -kt * delta_tan - gt * vrel_tan;
         const float ft = length(tangent_force);
         if (ft > DEME_TINY_FLOAT) {
@@ -124,7 +121,7 @@ if (overlapDepth > 0) {
         // printf("tangent force: %f, %f, %f\n", tangent_force.x, tangent_force.y, tangent_force.z);
     }
 
-    // Make sure we update those wildcards (in this case, contact history)
+    // Finally, make sure we update those wildcards (in this case, contact history)
     delta_tan_x = delta_tan.x;
     delta_tan_y = delta_tan.y;
     delta_tan_z = delta_tan.z;

@@ -1,6 +1,6 @@
 // DEM contact detection-related custom kernels
 #include <DEM/Defines.h>
-#include <DEMHelperKernels.cuh>
+#include <DEMCollisionKernels_SphSph.cuh>
 _kernelIncludes_;
 
 // #include <cub/block/block_load.cuh>
@@ -16,7 +16,7 @@ template <typename T1, typename T2>
 inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
                                             deme::DEMDataKT* granData,
                                             const deme::spheresBinTouches_t& myThreadID,
-                                            const deme::bodyID_t& sphereID,
+                                            const deme::bodyID_t& sphereID_in,
                                             deme::bodyID_t* ownerIDs,
                                             deme::bodyID_t* bodyIDs,
                                             deme::family_t* ownerFamilies,
@@ -24,6 +24,8 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
                                             T2* bodyX,
                                             T2* bodyY,
                                             T2* bodyZ) {
+    deme::bodyID_t sphereID = sphereID_in;
+
     deme::bodyID_t ownerID = granData->ownerClumpBody[sphereID];
     bodyIDs[myThreadID] = sphereID;
     ownerIDs[myThreadID] = ownerID;
@@ -37,17 +39,19 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
     // Use an input named exactly `sphereID' which is the id of this sphere component
     {
         _componentAcqStrat_;
-        myRadius += granData->marginSize[ownerID];
+        myRadius += granData->marginSizeSphere[sphereID];
     }
 
+    // These locations does not include the LBF offset
     voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
         ownerX, ownerY, ownerZ, granData->voxelID[ownerID], granData->locX[ownerID], granData->locY[ownerID],
         granData->locZ[ownerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-    float myOriQw = granData->oriQw[ownerID];
-    float myOriQx = granData->oriQx[ownerID];
-    float myOriQy = granData->oriQy[ownerID];
-    float myOriQz = granData->oriQz[ownerID];
-    applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, myOriQw, myOriQx, myOriQy, myOriQz);
+    float4 myOriQ;
+    myOriQ.w = granData->oriQw[ownerID];
+    myOriQ.x = granData->oriQx[ownerID];
+    myOriQ.y = granData->oriQy[ownerID];
+    myOriQ.z = granData->oriQz[ownerID];
+    applyOriQToVector3(myRelPos, myOriQ);
     bodyX[myThreadID] = ownerX + (double)myRelPos.x;
     bodyY[myThreadID] = ownerY + (double)myRelPos.y;
     bodyZ[myThreadID] = ownerZ + (double)myRelPos.z;
@@ -66,36 +70,27 @@ inline __device__ bool calcContactPoint(deme::DEMSimParams* simParams,
                                         deme::binID_t& binID,
                                         float artificialMarginA,
                                         float artificialMarginB) {
-    double contactPntX;
-    double contactPntY;
-    double contactPntZ;
     bool in_contact;
-    float normX;  // Normal directions are placeholders here
-    float normY;
-    float normZ;
     double overlapDepth;  // overlapDepth is needed for making artificial contacts not too loose.
 
-    //// TODO: I guess <float, float> is fine too.
-    in_contact = checkSpheresOverlap<double, float>(XA, YA, ZA, rA, XB, YB, ZB, rB, contactPntX, contactPntY,
-                                                    contactPntZ, normX, normY, normZ, overlapDepth);
+    in_contact = checkSphereContactOverlapAndBin(XA, YA, ZA, rA, XB, YB, ZB, rB, simParams->dyn.inv_binSize,
+                                                 simParams->nbX, simParams->nbY, overlapDepth, binID);
 
     // The contact needs to be larger than the smaller articifical margin so that we don't double count the artificially
     // added margin. This is a design choice, to avoid having too many contact pairs when adding artificial margins.
     float artificialMargin = (artificialMarginA < artificialMarginB) ? artificialMarginA : artificialMarginB;
     in_contact = in_contact && (overlapDepth > (double)artificialMargin);
-    binID = getPointBinID<deme::binID_t>(contactPntX, contactPntY, contactPntZ, simParams->binSize, simParams->nbX,
-                                         simParams->nbY);
     return in_contact;
 }
 
-__global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
-                                                 deme::DEMDataKT* granData,
-                                                 deme::bodyID_t* sphereIDsEachBinTouches_sorted,
-                                                 deme::binID_t* activeBinIDs,
-                                                 deme::spheresBinTouches_t* numSpheresBinTouches,
-                                                 deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
-                                                 deme::binContactPairs_t* numContactsInEachBin,
-                                                 size_t nActiveBins) {
+DEME_KERNEL void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
+                                                  deme::DEMDataKT* granData,
+                                                  deme::bodyID_t* sphereIDsEachBinTouches_sorted,
+                                                  deme::binID_t* activeBinIDs,
+                                                  deme::spheresBinTouches_t* numSpheresBinTouches,
+                                                  deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
+                                                  deme::binContactPairs_t* numContactsInEachBin,
+                                                  size_t nActiveBins) {
     // shared storage for bodies involved in this bin. Pre-allocated so that each threads can easily use.
     __shared__ deme::bodyID_t ownerIDs[DEME_NUM_SPHERES_PER_CD_BATCH];
     __shared__ deme::bodyID_t bodyIDs[DEME_NUM_SPHERES_PER_CD_BATCH];  // In this kernel, this is not used
@@ -214,7 +209,6 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
                 }
             }
         }
-        __syncthreads();
 
         // Take care of the left-overs. If there are left-overs, then this is a full block. But we still need to do the
         // check, because we could have more threads in a block than max_sphere_num.
@@ -229,7 +223,7 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
                     deme::bodyID_t cur_sphereID = sphereIDsEachBinTouches_sorted[thisBodiesTableEntry + cur_ind];
 
                     // Get the info of this sphere in question here. Note this is a broadcast so should be relatively
-                    // fast.
+                    // fast. And it's not really shared mem filling, just using that function to get the info.
                     fillSharedMemSpheres<float, double>(simParams, granData, 0, cur_sphereID, &cur_ownerID, &cur_bodyID,
                                                         &cur_ownerFamily, &cur_radii, &cur_bodyX, &cur_bodyY,
                                                         &cur_bodyZ);
@@ -265,17 +259,17 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
     }
 }
 
-__global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
-                                                  deme::DEMDataKT* granData,
-                                                  deme::bodyID_t* sphereIDsEachBinTouches_sorted,
-                                                  deme::binID_t* activeBinIDs,
-                                                  deme::spheresBinTouches_t* numSpheresBinTouches,
-                                                  deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
-                                                  deme::contactPairs_t* contactReportOffsets,
-                                                  deme::bodyID_t* idSphA,
-                                                  deme::bodyID_t* idSphB,
-                                                  deme::contact_t* dType,
-                                                  size_t nActiveBins) {
+DEME_KERNEL void populateSphereContactPairsEachBin(deme::DEMSimParams* simParams,
+                                                   deme::DEMDataKT* granData,
+                                                   deme::bodyID_t* sphereIDsEachBinTouches_sorted,
+                                                   deme::binID_t* activeBinIDs,
+                                                   deme::spheresBinTouches_t* numSpheresBinTouches,
+                                                   deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
+                                                   deme::contactPairs_t* contactReportOffsets,
+                                                   deme::bodyID_t* idSphA,
+                                                   deme::bodyID_t* idSphB,
+                                                   deme::contact_t* dType,
+                                                   size_t nActiveBins) {
     // shared storage for bodies involved in this bin. Pre-allocated so that each threads can easily use.
     __shared__ deme::bodyID_t ownerIDs[DEME_NUM_SPHERES_PER_CD_BATCH];
     __shared__ deme::bodyID_t bodyIDs[DEME_NUM_SPHERES_PER_CD_BATCH];
@@ -348,7 +342,7 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
                 unsigned int bodyAFamily = ownerFamilies[bodyA];
                 unsigned int bodyBFamily = ownerFamilies[bodyB];
                 unsigned int maskMatID = locateMaskPair<unsigned int>(bodyAFamily, bodyBFamily);
-                // If marked no contact, skip ths iteration
+                // If marked no contact, skip this iteration
                 if (granData->familyMasks[maskMatID] != deme::DONT_PREVENT_CONTACT) {
                     continue;
                 }
@@ -364,8 +358,26 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
                     // The chance of offset going out-of-bound is very low, lower than sph--bin CD step, but I put it
                     // here anyway
                     if (inBlockOffset < myReportOffset_end) {
-                        idSphA[inBlockOffset] = bodyIDs[bodyA];
-                        idSphB[inBlockOffset] = bodyIDs[bodyB];
+                        // ----------------------------------------------------------------------------
+                        // IMPORTANT NOTE: Here, we don't need to adjust A and B ids to ensure A < B, and it's
+                        // automatically ensured due to 1) The binID--sphereID pairs were generated with an inherent
+                        // order of sphereID, then processed through (stable) radix sort, which preserved the blockwise
+                        // order of sphereID; 2) Then the ordered sphereIDs are loaded to shared mem, and the in-kernel
+                        // contact detection had threads reconstruct shared mem offsets from a recoverCntPair process,
+                        // which also ensures i < j. Therefore, the generated sphere contact pair has A < B. However, a
+                        // change in these processes could affect the ordering, so I added this superfluous check to be
+                        // future-proof.
+                        // ----------------------------------------------------------------------------
+                        const deme::bodyID_t idA = bodyIDs[bodyA];
+                        const deme::bodyID_t idB = bodyIDs[bodyB];
+                        if (idA <= idB) {
+                            // This branch will be reached, always
+                            idSphA[inBlockOffset] = idA;
+                            idSphB[inBlockOffset] = idB;
+                        } else {
+                            idSphA[inBlockOffset] = idB;
+                            idSphB[inBlockOffset] = idA;
+                        }
                         dType[inBlockOffset] = deme::SPHERE_SPHERE_CONTACT;
                     }
                 }
@@ -414,8 +426,16 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
                     // The chance of offset going out-of-bound is very low, lower than sph--bin CD step, but I put it
                     // here anyway
                     if (inBlockOffset < myReportOffset_end) {
-                        idSphA[inBlockOffset] = bodyIDs[myThreadID];
-                        idSphB[inBlockOffset] = cur_bodyID;
+                        const deme::bodyID_t idA = bodyIDs[myThreadID];
+                        const deme::bodyID_t idB = cur_bodyID;
+                        if (idA <= idB) {
+                            // This branch will be reached, always
+                            idSphA[inBlockOffset] = idA;
+                            idSphB[inBlockOffset] = idB;
+                        } else {
+                            idSphA[inBlockOffset] = idB;
+                            idSphB[inBlockOffset] = idA;
+                        }
                         dType[inBlockOffset] = deme::SPHERE_SPHERE_CONTACT;
                     }
                 }

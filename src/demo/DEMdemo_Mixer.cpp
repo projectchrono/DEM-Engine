@@ -11,7 +11,6 @@
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
@@ -22,13 +21,16 @@ using namespace deme;
 using namespace std::filesystem;
 
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_Mixer ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(STEP_METRIC);
-    // For general use cases, you want to set the verbosity to INFO: It's also a bit faster than STEP_METRIC.
-    // DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("METRIC");
+    // For general use cases, you want to set the verbosity to INFO: It's also a bit faster than "METRIC".
+    // DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
+    // DEMSim.SetSimplePatchCombination(true);
 
     // If you don't need individual force information, then this option makes the solver run a bit faster.
     DEMSim.SetNoForceRecord();
@@ -82,21 +84,18 @@ int main() {
     DEMSim.AddClumps(template_granular, input_xyz);
     std::cout << "Total num of particles: " << input_xyz.size() << std::endl;
 
-    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetTimeStepSize(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.SetCDUpdateFreq(40);
-    // Mixer has a big angular velocity-contributed linear speed at its blades, this is something the solver do not
-    // account for, for now. And that means it needs to be added as an estimated value.
-    DEMSim.SetExpandSafetyAdder(2.0);
+    DEMSim.SetErrorOutVelocity(20.);
     // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto bin
     // size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case setting
     // init bin size may save the simulation.
     // DEMSim.SetInitBinSize(25 * granular_rad);
+    // The following parameters control how the solver adapts its update frequency in response to max velocity changes.
+    // For most end users, using the default is fine; here we just show an example.
     DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1.2);
     DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(6);
-    DEMSim.SetSortContactPairs(true);
-    // DEMSim.DisableAdaptiveBinSize();
-    DEMSim.SetErrorOutVelocity(20.);
     // Force the solver to error out if something went crazy. A good practice to add them, but not necessary.
     DEMSim.SetErrorOutAvgContacts(50);
 
@@ -127,11 +126,13 @@ int main() {
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_end; t += frame_time) {
         std::cout << "Frame: " << currframe << std::endl;
-        char filename[100], meshfilename[100], cnt_filename[100];
+        char filename[100], analytical_filename[100], meshfilename[100], cnt_filename[100];
         sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+        sprintf(analytical_filename, "DEMdemo_analytical_%04d.vtk", currframe);
         sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk", currframe);
         sprintf(cnt_filename, "Contact_pairs_%04d.csv", currframe++);
         DEMSim.WriteSphereFile(out_dir / filename);
+        DEMSim.WriteAnalyticalFile(out_dir / analytical_filename);
         DEMSim.WriteMeshFile(out_dir / meshfilename);
         // DEMSim.WriteContactFile(out_dir / cnt_filename);
 

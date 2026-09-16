@@ -23,10 +23,8 @@ if (overlapDepth > 0) {
         rotVelCPA = cross(ARotVel, locCPA);
         rotVelCPB = cross(BRotVel, locCPB);
         // This is mapping from local rotational velocity to global
-        applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x, AOriQ.y,
-                                                AOriQ.z);
-        applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y,
-                                                BOriQ.z);
+        applyOriQToVector3(rotVelCPA, AOriQ);
+        applyOriQToVector3(rotVelCPB, BOriQ);
     }
 
     // The (total) relative linear velocity of A relative to B
@@ -34,8 +32,9 @@ if (overlapDepth > 0) {
     const float projection = dot(velB2A, B2A);
 
     const float mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
-    const float sqrt_Rd = sqrt(overlapDepth * (ARadius * BRadius) / (ARadius + BRadius));
-    const float Sn = 2. * E_cnt * sqrt_Rd;
+    // Use the measured overlap area so the Hertzian response remains meaningful for mesh-mesh contacts.
+    const float cnt_rad = sqrtf(overlapArea / deme::PI);
+    const float Sn = 2. * E_cnt * cnt_rad;
 
     const float loge = (CoR_cnt < DEME_TINY_FLOAT) ? log(DEME_TINY_FLOAT) : log(CoR_cnt);
     const float beta = loge / sqrt(loge * loge + deme::PI_SQUARED);
@@ -52,5 +51,8 @@ if (overlapDepth > 0) {
     const double Gconst = 6.674e-11 * 86400 * 86400 / 1.496e+11 / 1.496e+11 / 1.496e+11;
     const double ABdist2 = dot(bodyAPos - bodyBPos, bodyAPos - bodyBPos);
     // To A, gravity pulls it towards B, so -B2A direction
-    force += Gconst * my_mass_A[AGeo] * my_mass_B[BGeo] / ABdist2 * (-B2A);
+    force += Gconst * my_mass_A[AOwner] * my_mass_B[BOwner] / ABdist2 * (-B2A);
+    // Note that this G force is applied at the contact point which is in general out of the sphere (for non-touching
+    // spheres the contact point is in between them), but the vector of the force still goes through the center of the
+    // sphere so the effect is the same.
 }

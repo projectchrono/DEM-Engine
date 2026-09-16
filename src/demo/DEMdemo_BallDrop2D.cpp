@@ -11,7 +11,6 @@
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
@@ -22,14 +21,9 @@
 using namespace deme;
 using namespace std::filesystem;
 
-double randomBetween0and1() {
-    static std::mt19937 gen(std::random_device{}());                       // Random number generator
-    static std::uniform_real_distribution<double> distribution(0.0, 1.0);  // Uniform distribution between 0 and 1
-
-    return distribution(gen);
-}
-
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_BallDrop2D ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     float ball_density = 6.2e3;
     float H = 0.1;
     double R = 0.0254 / 2.;
@@ -42,6 +36,7 @@ int main() {
     DEMSim.SetOutputFormat("CSV");
     DEMSim.SetOutputContent({"ABSV"});
     DEMSim.SetMeshOutputFormat("VTK");
+    // DEMSim.SetSimplePatchCombination(true);
 
     path out_dir = current_path();
     out_dir /= "DemoOutput_BallDrop2D";
@@ -114,7 +109,7 @@ int main() {
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
     auto total_mass_finder = DEMSim.CreateInspector("clump_mass");
 
-    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetTimeStepSize(step_size);
     DEMSim.SetMaxVelocity(30.);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
 

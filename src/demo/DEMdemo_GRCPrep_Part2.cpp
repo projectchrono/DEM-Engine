@@ -14,7 +14,6 @@
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
@@ -28,8 +27,10 @@ using namespace deme;
 using namespace std::filesystem;
 
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_GRCPrep_Part2 ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     // DEMSim.SetOutputContent(OUTPUT_CONTENT::FAMILY);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ);
@@ -84,13 +85,10 @@ int main() {
     }
 
     // Now we load part1 clump locations from a part1 output file
-    const auto part1_dir = std::filesystem::current_path() / "DemoOutput_GRCPrep_Part1";
-    const auto part1_clump_file = (part1_dir / "GRC_3e5.csv").string();
-    const auto part1_contact_file = (part1_dir / "Contact_pairs_3e5.csv").string();
-    auto part1_clump_xyz = DEMSim.ReadClumpXyzFromCsv(part1_clump_file);
-    auto part1_clump_quaternion = DEMSim.ReadClumpQuatFromCsv(part1_clump_file);
-    auto part1_pairs = DEMSim.ReadContactPairsFromCsv(part1_contact_file);
-    auto part1_wcs = DEMSim.ReadContactWildcardsFromCsv(part1_contact_file);
+    auto part1_clump_xyz = DEMSim.ReadClumpXyzFromCsv("./DemoOutput_GRCPrep_Part1/GRC_3e5.csv");
+    auto part1_clump_quaternion = DEMSim.ReadClumpQuatFromCsv("./DemoOutput_GRCPrep_Part1/GRC_3e5.csv");
+    auto part1_pairs = DEMSim.ReadContactPairsFromCsv("./DemoOutput_GRCPrep_Part1/Contact_pairs_3e5.csv");
+    auto part1_wcs = DEMSim.ReadContactWildcardsFromCsv("./DemoOutput_GRCPrep_Part1/Contact_pairs_3e5.csv");
 
     std::vector<float3> in_xyz;
     std::vector<float4> in_quat;
@@ -178,7 +176,7 @@ int main() {
 
     // Make ready for simulation
     float step_size = 1e-6;
-    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetTimeStepSize(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     // Error out vel is used to force the simulation to abort when something goes wrong.
     DEMSim.SetErrorOutVelocity(15.);

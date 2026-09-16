@@ -11,7 +11,6 @@
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
@@ -22,8 +21,10 @@ using namespace deme;
 using namespace std::filesystem;
 
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_GameOfLife ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("INFO");
     // Output as CSV so no post-processing is needed
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ);
@@ -119,7 +120,7 @@ int main() {
     // init bin size may save the simulation.
     // DEMSim.SetInitBinSize(world_size / 100.);
 
-    DEMSim.SetInitTimeStep(1.);
+    DEMSim.SetTimeStepSize(1.);
     DEMSim.SetCDUpdateFreq(0);
     // Must disable this if you want to run dT and kT synchronizely, or the solver will automatically find a non-zero
     // update frequency that it sees fit to run it in an async fashion.
@@ -132,7 +133,7 @@ int main() {
     create_directory(out_dir);
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < 3000; i++) {
+    for (int i = 0; i < 1000; i++) {
         char filename[100];
         sprintf(filename, "DEMdemo_output_%04d.csv", i);
         DEMSim.WriteSphereFile(out_dir / filename);

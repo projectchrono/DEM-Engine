@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef DEME_INSPECTOR_HPP
-#define DEME_INSPECTOR_HPP
+#ifndef DEME_AUX_CLASSES_HPP
+#define DEME_AUX_CLASSES_HPP
 
 #include <unordered_map>
 
@@ -20,7 +20,7 @@ class DEMDynamicThread;
 /// their simulation entites, in a given region.
 class DEMInspector {
   private:
-    std::shared_ptr<deme::jit::Program> inspection_kernel;
+    std::shared_ptr<JitHelper::CachedProgram> inspection_kernel;
 
     std::string inspection_code;
     std::string in_region_code;
@@ -37,6 +37,10 @@ class DEMInspector {
     // Its parent DEMSolver and dT system
     DEMSolver* sys;
     DEMDynamicThread* dT;
+
+    // Result storage arrays (moved from dT to make inspector self-contained and thread-safe)
+    DualArray<scratch_t> m_reduceResArr;
+    DualArray<scratch_t> m_reduceRes;
 
     // Based on user input...
     void switch_quantity_type(const std::string& quantity);
@@ -59,7 +63,7 @@ class DEMInspector {
         all_domain = false;
     }
     //// TODO: Another overload for region definition
-    ~DEMInspector() {}
+    ~DEMInspector() { ReleaseData(); }
 
     void SetInspectionCode(const std::string& code) { inspection_code = code; }
 
@@ -74,17 +78,31 @@ class DEMInspector {
     /// Get the values of the quantity that you wish to inspect (for non-reduced inspections).
     float* GetValues();
 
+    /// Get the reduce value of the quantity that you wish to inspect (returns device pointer).
+    float GetDeviceValue();
+
+    /// Get the values of the quantity that you wish to inspect (for non-reduced inspections, returns device pointer).
+    float* GetDeviceValues();
+
     /// Get the value (as a vector) of the quantity that you wish to inspect
     // std::vector<float> GetVector();
 
     /// Get value directly within dT (returns host pointer by default)
     float* dT_GetValue();
 
-    /// Get value directly within dT (returns device pointer)
-    float* dT_GetDeviceValue();
+    /// Get values on device without forcing a host sync (internal dT worker use).
+    float* dT_GetDeviceValues();
+
+    /// Manually release the data arrays
+    void ReleaseData();
 };
 
-// A struct to get or set tracked owner entities, mainly for co-simulation
+/// A helper for querying or modifying tracked owners, mainly for co-simulation.
+///
+/// Fixed-size `ToDevice` and `FromDevice` methods validate owner ranges, capacities, and CUDA pointer metadata by
+/// default. Their trailing `validate` argument may be set to false when the caller guarantees those preconditions and
+/// needs to avoid validation overhead. Required device-routing constraints and the documented data transformations,
+/// including quaternion normalization, still apply when validation is disabled.
 class DEMTracker {
   private:
     void assertMesh(const std::string& name);
@@ -114,6 +132,10 @@ class DEMTracker {
     /// Get the positions of all tracked objects.
     std::vector<float3> Positions();
     std::vector<std::vector<float>> GetPositions();
+    /// Fill CUDA-accessible memory with all tracked positions. Capacity is measured in float3 elements.
+    void PositionsToDevice(float3* destination, size_t capacity, int destination_device, bool validate = true);
+    /// Synchronously set all tracked global positions from CUDA memory.
+    void SetPositionsFromDevice(const float3* source, int source_device, bool validate = true);
 
     /// Get the angular velocity of this tracked object in its own local coordinate system. Applying OriQ to it would
     /// give you the ang vel in global frame.
@@ -123,6 +145,13 @@ class DEMTracker {
     /// give you the ang vel in global frame.
     std::vector<float3> AngularVelocitiesLocal();
     std::vector<std::vector<float>> GetAngularVelocitiesLocal();
+    /// Fill CUDA-accessible memory with all tracked local-frame angular velocities.
+    void AngularVelocitiesLocalToDevice(float3* destination,
+                                        size_t capacity,
+                                        int destination_device,
+                                        bool validate = true);
+    /// Synchronously set all tracked local-frame angular velocities from CUDA memory.
+    void SetAngularVelocitiesFromDevice(const float3* source, int source_device, bool validate = true);
 
     /// Get the angular velocity of this tracked object in global coordinate system.
     float3 AngVelGlobal(size_t offset = 0);
@@ -130,6 +159,13 @@ class DEMTracker {
     /// Get the angular velocity of all objects tracked by this tracker, in global coordinate system.
     std::vector<float3> AngularVelocitiesGlobal();
     std::vector<std::vector<float>> GetAngularVelocitiesGlobal();
+    /// Fill CUDA-accessible memory with all tracked global-frame angular velocities.
+    void AngularVelocitiesGlobalToDevice(float3* destination,
+                                         size_t capacity,
+                                         int destination_device,
+                                         bool validate = true);
+    /// Synchronously set all tracked global angular velocities from CUDA memory.
+    void SetAngularVelocitiesGlobalFromDevice(const float3* source, int source_device, bool validate = true);
 
     /// Get the velocity of this tracked object in global frame.
     float3 Vel(size_t offset = 0);
@@ -137,6 +173,10 @@ class DEMTracker {
     /// Get the velocities of all objects tracked by this tracker, in global frame.
     std::vector<float3> Velocities();
     std::vector<std::vector<float>> GetVelocities();
+    /// Fill CUDA-accessible memory with all tracked global-frame velocities.
+    void VelocitiesToDevice(float3* destination, size_t capacity, int destination_device, bool validate = true);
+    /// Synchronously set all tracked global linear velocities from CUDA memory.
+    void SetVelocitiesFromDevice(const float3* source, int source_device, bool validate = true);
 
     /// Get the quaternion that represents the orientation of this tracked object's own coordinate system.
     float4 OriQ(size_t offset = 0);
@@ -150,6 +190,13 @@ class DEMTracker {
     /// @return A vector of 4-float vectors. The order is (x, y, z, w). If compared against Chrono naming convention,
     /// then it is saying our ordering here is (e1, e2, e3, e0).
     std::vector<std::vector<float>> GetOrientationQuaternions();
+    /// Fill CUDA-accessible memory with all tracked public-order (x, y, z, w) quaternions.
+    void OrientationQuaternionsToDevice(float4* destination,
+                                        size_t capacity,
+                                        int destination_device,
+                                        bool validate = true);
+    /// Synchronously set and normalize all tracked public-order (x, y, z, w) quaternions from CUDA memory.
+    void SetOrientationQuaternionsFromDevice(const float4* source, int source_device, bool validate = true);
 
     /// @brief Get the family number of the tracked object.
     /// @param offset The offset of the entites to get family number out of.
@@ -158,6 +205,8 @@ class DEMTracker {
     /// @brief Get the family numbers of all the tracked object.
     /// @return The family numbers as a vector.
     std::vector<unsigned int> GetFamilies();
+    /// Fill CUDA-accessible memory with all tracked family numbers as unsigned integers.
+    void FamiliesToDevice(unsigned int* destination, size_t capacity, int destination_device, bool validate = true);
 
     /// @brief Get the clumps that are in contact with this tracked owner as a vector.
     /// @details No bulk version that gets the contacting clumps for all the entities tracked by this tracker. This is
@@ -178,6 +227,11 @@ class DEMTracker {
     /// @details In most cases, this means the acceleration excluding the gravitational acceleration.
     std::vector<float3> ContactAccelerations();
     std::vector<std::vector<float>> GetContactAccelerations();
+    /// Fill CUDA-accessible memory with all tracked global-frame contact accelerations.
+    void ContactAccelerationsToDevice(float3* destination,
+                                      size_t capacity,
+                                      int destination_device,
+                                      bool validate = true);
 
     /// @brief Get the a portion of the angular acceleration of this tracked object, that is the result of its contact
     /// with other simulation entities. The acceleration is in this object's local frame.
@@ -189,6 +243,11 @@ class DEMTracker {
     /// @details In most cases, this means the angular acceleration excluding the gravitational acceleration.
     std::vector<float3> ContactAngularAccelerationsLocal();
     std::vector<std::vector<float>> GetContactAngularAccelerationsLocal();
+    /// Fill CUDA-accessible memory with all tracked local-frame contact angular accelerations.
+    void ContactAngularAccelerationsLocalToDevice(float3* destination,
+                                                  size_t capacity,
+                                                  int destination_device,
+                                                  bool validate = true);
 
     /// @brief Get the a portion of the angular acceleration of this tracked object, that is the result of its contact
     /// with other simulation entities. The acceleration is in this object's global frame.
@@ -200,6 +259,35 @@ class DEMTracker {
     /// @details In most cases, this means the angular acceleration excluding the gravitational acceleration.
     std::vector<float3> ContactAngularAccelerationsGlobal();
     std::vector<std::vector<float>> GetContactAngularAccelerationsGlobal();
+    /// Fill CUDA-accessible memory with all tracked global-frame contact angular accelerations.
+    void ContactAngularAccelerationsGlobalToDevice(float3* destination,
+                                                   size_t capacity,
+                                                   int destination_device,
+                                                   bool validate = true);
+    /// @brief Get one reduced contact wrench for every owner tracked by this tracker.
+    /// @details Forces are global-frame contact-force resultants. Torques are global-frame moments about each owner's
+    /// current DEME position and include force-generated moments plus force-model-only torque such as rolling
+    /// resistance. The vectors preserve tracker owner order and contain zero for owners without recorded contact. This
+    /// reads the current dT force records without triggering contact detection or force evaluation. Contact recording
+    /// must remain enabled (the default).
+    /// @param forces Output resultant forces, resized to the number of tracked owners.
+    /// @param torques Output resultant torques, resized to the number of tracked owners.
+    void ContactWrenches(std::vector<float3>& forces, std::vector<float3>& torques);
+    /// @brief Write one reduced contact wrench per tracked owner directly to CUDA memory.
+    /// @details This is the device-output counterpart of ContactWrenches and preserves tracker owner order. Forces are
+    /// global-frame contact-force resultants. Torques are global-frame moments about each owner's current DEME position
+    /// and include force-generated moments plus force-model-only torque. Owners without recorded contact receive a zero
+    /// wrench. This reads current dT force records without triggering contact detection or force evaluation. Contact
+    /// recording must remain enabled. The call is synchronous; CUDA selects the available inter-device transfer route
+    /// for cross-device output.
+    /// @param force_destination Writable CUDA memory for one float3 force per tracked owner.
+    /// @param torque_destination Writable CUDA memory for one float3 torque per tracked owner.
+    /// @param capacity Available elements in each destination buffer; must cover every tracked owner.
+    /// @param destination_device Logical CUDA device owning both destination buffers.
+    void ContactWrenchesToDevice(float3* force_destination,
+                                 float3* torque_destination,
+                                 size_t capacity,
+                                 int destination_device);
 
     /// @brief Get the mass of the tracked object.
     /// @param offset The offset to this entites. If first entites, input 0.
@@ -208,6 +296,8 @@ class DEMTracker {
     /// @brief Get the masses of all the tracked objects.
     /// @return Masses as a vector.
     std::vector<float> Masses();
+    /// Fill CUDA-accessible memory with all tracked masses.
+    void MassesToDevice(float* destination, size_t capacity, int destination_device, bool validate = true);
     /// @brief Get the moment of inertia (in principal axis frame) of the tracked object.
     /// @param offset The offset to this entites. If first entites, input 0.
     /// @return The moment of inertia (in principal axis frame).
@@ -217,6 +307,8 @@ class DEMTracker {
     /// @return The moment of inertia (in principal axis frame) of each element as a vector.
     std::vector<float3> MOIs();
     std::vector<std::vector<float>> GetMOIs();
+    /// Fill CUDA-accessible memory with all tracked principal moments of inertia.
+    void MOIsToDevice(float3* destination, size_t capacity, int destination_device, bool validate = true);
 
     /// Get the owner's wildcard value.
     float GetOwnerWildcardValue(const std::string& name, size_t offset = 0);
@@ -224,15 +316,12 @@ class DEMTracker {
     /// @param name Name of the wildcard.
     /// @return All the values.
     std::vector<float> GetOwnerWildcardValues(const std::string& name);
-    /// @brief Get the geometry wildcard values for all the geometry entities tracked by this tracker.
-    /// @param name Name of the wildcard.
-    /// @return All the values.
-    std::vector<float> GetGeometryWildcardValues(const std::string& name);
-    /// @brief Get the geometry wildcard values for a geometry entity tracked by this tracker.
-    /// @param name Name of the wildcard.
-    /// @param offset The offset to this entity (where to start the modification). If first entity, input 0.
-    /// @return The value.
-    float GetGeometryWildcardValue(const std::string& name, size_t offset);
+    /// Fill CUDA-accessible memory with one wildcard value for every tracked owner.
+    void OwnerWildcardValuesToDevice(const std::string& name,
+                                     float* destination,
+                                     size_t capacity,
+                                     int destination_device,
+                                     bool validate = true);
 
     /// @brief Set the position of this tracked object.
     void SetPos(float3 pos, size_t offset = 0);
@@ -260,6 +349,15 @@ class DEMTracker {
     /// Add an extra acc to n consecutive tracked objects, (only) for the next time step. Note if the user intends to
     /// add a persistent external force, then using family prescription is the better method.
     void AddAcc(const std::vector<float3>& acc);
+    /// @brief Queue one global-frame linear acceleration per tracked owner directly from CUDA memory.
+    /// @details This is the device-input counterpart of the vector AddAcc overload. Values preserve tracker owner
+    /// order and replace any previously queued next-step linear-acceleration contribution for those owners. Contact
+    /// acceleration is accumulated on top during the next force/integration step, gravity is applied separately, and
+    /// the queued contribution is consumed after one step. The call is synchronous.
+    /// @param source CUDA memory containing one float3 global-frame acceleration per tracked owner.
+    /// @param source_device Logical CUDA device owning `source`; remote input is copied to dT before unpacking.
+    /// @param validate Whether to validate the owner range and CUDA pointer metadata.
+    void AddAccFromDevice(const float3* source, int source_device, bool validate = true);
 
     /// Add an extra angular acceleration to the tracked body, (only) for the next time step. Note if the user intends
     /// to add a persistent external torque, then using family prescription is the better method.
@@ -267,6 +365,15 @@ class DEMTracker {
     /// Add an extra angular acceleration to n consecutive tracked objects, (only) for the next time step. Note if the
     /// user intends to add a persistent external torque, then using family prescription is the better method.
     void AddAngAcc(const std::vector<float3>& angAcc);
+    /// @brief Queue one local-frame angular acceleration per tracked owner directly from CUDA memory.
+    /// @details This is the device-input counterpart of the vector AddAngAcc overload. Values preserve tracker owner
+    /// order, use each owner's local principal-axis frame, and replace any previously queued next-step angular-
+    /// acceleration contribution. Contact angular acceleration is accumulated on top during the next force/integration
+    /// step, and the queued contribution is consumed after one step. The call is synchronous.
+    /// @param source CUDA memory containing one float3 local-frame angular acceleration per tracked owner.
+    /// @param source_device Logical CUDA device owning `source`; remote input is copied to dT before unpacking.
+    /// @param validate Whether to validate the owner range and CUDA pointer metadata.
+    void AddAngAccFromDevice(const float3* source, int source_device, bool validate = true);
 
     /// @brief Change the family numbers of all the entities tracked by this tracker.
     /// @param fam_num Family number to change to.
@@ -276,9 +383,6 @@ class DEMTracker {
     /// @param offset The offset to this entites. If first entites, input 0.
     void SetFamily(unsigned int fam_num, size_t offset);
     //// TODO: Maybe give a vector-based tracker family number modification method, like what DEMInitializer allows for.
-
-    /// Change the size of clump entities
-    void ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors);
 
     /// @brief Apply the new mesh node positions such that the tracked mesh is replaced by the new_nodes.
     /// @details This affects triangle facets' relative positions wrt the mesh center (CoM) only; mesh's overall
@@ -302,7 +406,7 @@ class DEMTracker {
 
     /// @brief Get a handle for the mesh this tracker is tracking.
     /// @return Pointer to the mesh.
-    std::shared_ptr<DEMMeshConnected>& GetMesh();
+    std::shared_ptr<DEMMesh>& GetMesh();
     /// @brief Get the current locations of all the nodes in the mesh being tracked.
     /// @return A vector of float3 representing the global coordinates of the mesh nodes.
     std::vector<float3> GetMeshNodesGlobal();
@@ -317,16 +421,6 @@ class DEMTracker {
     /// @param wc Wildcard values as a vector (must have same length as the number of tracked owners).
     void SetOwnerWildcardValues(const std::string& name, const std::vector<float>& wc);
 
-    /// @brief Set a wildcard value of the geometry entity this tracker is tracking.
-    /// @param name Name of the wildcard.
-    /// @param wc Wildcard value.
-    /// @param offset The offset to this entity (where to start the modification). If first entity, input 0.
-    void SetGeometryWildcardValue(const std::string& name, float wc, size_t offset = 0);
-    /// @brief Set a wildcard value of the geometry entities this tracker is tracking.
-    /// @param name Name of the wildcard.
-    /// @param wc Wildcard values as a vector (must have same length as the number of tracked geometry entities).
-    void SetGeometryWildcardValues(const std::string& name, const std::vector<float>& wc);
-
     /// @brief Get all contact forces that concern this track object, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
     /// experiences.
@@ -335,6 +429,12 @@ class DEMTracker {
     /// @param offset The offset to this owner (where to start querying). If first entity, input 0.
     /// @return Number of force pairs.
     size_t GetContactForces(std::vector<float3>& points, std::vector<float3>& forces, size_t offset = 0);
+    /// Fill CUDA memory with contact points/forces for one tracked owner. Capacity must cover the total contact count.
+    size_t GetContactForcesToDevice(float3* points,
+                                    float3* forces,
+                                    size_t capacity,
+                                    int destination_device,
+                                    size_t offset = 0);
 
     /// @brief Get all contact forces that concern all objects tracked by this tracker, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
@@ -344,10 +444,12 @@ class DEMTracker {
     /// @param forces The force in XYZ as float3 vector. The force in global frame.
     /// @return Number of force pairs.
     size_t GetContactForcesForAll(std::vector<float3>& points, std::vector<float3>& forces);
+    /// Fill CUDA memory with contact points/forces concerning all tracked owners.
+    size_t GetContactForcesForAllToDevice(float3* points, float3* forces, size_t capacity, int destination_device);
 
     /// @brief Get all contact forces and global torques that concern this track object, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
-    /// experiences. Since we are getting all force pairs, the torque should be considered as `extra torque', since you
+    /// experiences. Since we are getting all force pairs, the torque should be considered as "extra torque", since you
     /// should be able to derive the normal and tangential force-induced torques based on all the force pairs. The extra
     /// torques emerge depending on your force model. For example, in the default force model, rolling friction could
     /// contribute to the torque. But if you do not have rolling friction, then you do not have torque here. The torques
@@ -361,10 +463,17 @@ class DEMTracker {
                                            std::vector<float3>& forces,
                                            std::vector<float3>& torques,
                                            size_t offset = 0);
+    /// Fill CUDA memory with contact points, forces, and global extra torques for one tracked owner.
+    size_t GetContactForcesAndGlobalTorqueToDevice(float3* points,
+                                                   float3* forces,
+                                                   float3* torques,
+                                                   size_t capacity,
+                                                   int destination_device,
+                                                   size_t offset = 0);
 
     /// @brief Get all contact forces and global torques that concern all objects tracked by this tracker, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
-    /// experiences. Since we are getting all force pairs, the torque should be considered as `extra torque', since you
+    /// experiences. Since we are getting all force pairs, the torque should be considered as "extra torque", since you
     /// should be able to derive the normal and tangential force-induced torques based on all the force pairs. The extra
     /// torques emerge depending on your force model. For example, in the default force model, rolling friction could
     /// contribute to the torque. But if you do not have rolling friction, then you do not have torque here. The torques
@@ -378,10 +487,16 @@ class DEMTracker {
     size_t GetContactForcesAndGlobalTorqueForAll(std::vector<float3>& points,
                                                  std::vector<float3>& forces,
                                                  std::vector<float3>& torques);
+    /// Fill CUDA memory with contact points, forces, and global extra torques for all tracked owners.
+    size_t GetContactForcesAndGlobalTorqueForAllToDevice(float3* points,
+                                                         float3* forces,
+                                                         float3* torques,
+                                                         size_t capacity,
+                                                         int destination_device);
 
     /// @brief Get all contact forces and local torques that concern this track object, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
-    /// experiences. Since we are getting all force pairs, the torque should be considered as `extra torque', since you
+    /// experiences. Since we are getting all force pairs, the torque should be considered as "extra torque", since you
     /// should be able to derive the normal and tangential force-induced torques based on all the force pairs. The extra
     /// torques emerge depending on your force model. For example, in the default force model, rolling friction could
     /// contribute to the torque. But if you do not have rolling friction, then you do not have torque here. The torques
@@ -395,10 +510,17 @@ class DEMTracker {
                                           std::vector<float3>& forces,
                                           std::vector<float3>& torques,
                                           size_t offset = 0);
+    /// Fill CUDA memory with contact points, forces, and local extra torques for one tracked owner.
+    size_t GetContactForcesAndLocalTorqueToDevice(float3* points,
+                                                  float3* forces,
+                                                  float3* torques,
+                                                  size_t capacity,
+                                                  int destination_device,
+                                                  size_t offset = 0);
 
     /// @brief Get all contact forces and local torques that concern all objects tracked by this tracker, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
-    /// experiences. Since we are getting all force pairs, the torque should be considered as `extra torque', since you
+    /// experiences. Since we are getting all force pairs, the torque should be considered as "extra torque", since you
     /// should be able to derive the normal and tangential force-induced torques based on all the force pairs. The extra
     /// torques emerge depending on your force model. For example, in the default force model, rolling friction could
     /// contribute to the torque. But if you do not have rolling friction, then you do not have torque here. The torques
@@ -412,6 +534,12 @@ class DEMTracker {
     size_t GetContactForcesAndLocalTorqueForAll(std::vector<float3>& points,
                                                 std::vector<float3>& forces,
                                                 std::vector<float3>& torques);
+    /// Fill CUDA memory with contact points, forces, and local extra torques for all tracked owners.
+    size_t GetContactForcesAndLocalTorqueForAllToDevice(float3* points,
+                                                        float3* forces,
+                                                        float3* torques,
+                                                        size_t capacity,
+                                                        int destination_device);
 };
 
 class DEMForceModel {
@@ -434,9 +562,6 @@ class DEMForceModel {
     // Quatity names that we want to associate each owner with. An array will be allocated for storing this, and it
     // lives and die with its associated owner.
     std::set<std::string> m_owner_wildcards;
-    // Quatity names that we want to associate each owner with. An array will be allocated for storing this, and it
-    // lives and die with its associated geometry representation (most typically a sphere).
-    std::set<std::string> m_geo_wildcards;
 
   public:
     friend class DEMSolver;
@@ -474,10 +599,6 @@ class DEMForceModel {
     /// Set the names for the extra quantities that will be associated with each owner. For example, you can use this to
     /// associate a cohesion parameter to each particle. Only float is supported.
     void SetPerOwnerWildcards(const std::set<std::string>& wildcards);
-    /// Set the names for the extra quantities that will be associated with each geometry. For example, you can use this
-    /// to associate certain electric charges to each particle's each component which represents a distribution of the
-    /// charges. Only float is supported.
-    void SetPerGeometryWildcards(const std::set<std::string>& wildcards);
 };
 
 }  // END namespace deme

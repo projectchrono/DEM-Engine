@@ -48,9 +48,9 @@ class ThreadManager {
     std::atomic<int64_t> kinematicIngredProdDateStamp;  // dT tags this when sending it to kT
     std::atomic<int64_t> kinematicMaxFutureDrift;       // kT tags this to its produce before shipping
 
+    // Single-producer/single-consumer freshness flags and locks for the legacy dT/kT buffer handoff.
     std::atomic<bool> dynamicOwned_Prod2ConsBuffer_isFresh;
     std::atomic<bool> kinematicOwned_Cons2ProdBuffer_isFresh;
-
     std::mutex dynamicOwnedBuffer_AccessCoordination;
     std::mutex kinematicOwnedBuffer_AccessCoordination;
     std::mutex kinematicCanProceed;
@@ -78,8 +78,8 @@ class ThreadManager {
         kinematicIngredProdDateStamp = -1;
         currentStampOfDynamic = 0;
         dynamicDone = false;
-        dynamicOwned_Prod2ConsBuffer_isFresh = false;
-        kinematicOwned_Cons2ProdBuffer_isFresh = false;
+        dynamicOwned_Prod2ConsBuffer_isFresh.store(false, std::memory_order_relaxed);
+        kinematicOwned_Cons2ProdBuffer_isFresh.store(false, std::memory_order_relaxed);
     }
 
     ~ThreadManager() {}

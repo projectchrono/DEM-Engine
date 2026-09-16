@@ -13,7 +13,6 @@
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
@@ -77,7 +76,7 @@ int main() {
 
     // Loading the position of the spheres from an external file.
     //! Note that this list does not include the particle located at (0.0,0.0).
-    auto data_xyz = DEMSim.ReadClumpXyzFromCsv(GetDEMEDataFile("clumps/ContactChain_initial.csv"));
+    auto data_xyz = DEMSim.ReadClumpXyzFromCsv("../data/clumps/ContactChain_initial.csv");
     std::vector<float3> input_xyz;
 
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
@@ -113,7 +112,7 @@ int main() {
 
     std::cout << "Total num of particles: " << (int)input_pile_template_type.size() + 1 << "." << std::endl;
 
-    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetTimeStepSize(step_size);
     DEMSim.SetMaxVelocity(30.);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -gravityMagnitude));
 

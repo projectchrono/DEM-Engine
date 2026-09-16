@@ -6,7 +6,6 @@
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
@@ -28,8 +27,10 @@ using namespace deme;
 using namespace std::filesystem;
 
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_GRCPrep_Part1 ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ);
     // Let the contact output file include "GEO_ID" geoA and geoB (not just owner IDs A and B, but their components)
@@ -105,7 +106,7 @@ int main() {
 
     // Make ready for simulation
     float step_size = 1e-6;
-    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetTimeStepSize(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     // Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
@@ -150,7 +151,7 @@ int main() {
         // Give ground particles a small initial velocity so they `collapse' at the start of the simulation
         heap_particles->SetVel(make_float3(0.00, 0, -0.05));
         heap_particles->SetFamilies(heap_family);
-        DEMSim.UpdateClumps();
+        DEMSim.Update();
         std::cout << "Current number of clumps: " << DEMSim.GetNumClumps() << std::endl;
 
         // Allow for some settling

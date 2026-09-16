@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# Directories to exclude (relative to repo root)
+EXCLUDE_EXTERNAL="./thirdparty"
+EXCLUDE_BUILD="./build"
+
+# Recursively find source files and apply clang-format with -i -style=file
+find . \( \
+    -path "$EXCLUDE_EXTERNAL" -prune \
+    -o -path "${EXCLUDE_BUILD}*" -prune \
+    \) -o \( \
+    -name "*.cpp" -o \
+    -name "*.c"   -o \
+    -name "*.h"   -o \
+    -name "*.hpp" -o \
+    -name "*.cu"  -o \
+    -name "*.cuh" -o \
+    -name "*.cc" \
+    \) -exec clang-format -i -style=file {} +
+
+echo "✔ All matching source files formatted (excluding external and build* folders) with clang-format -style=file"

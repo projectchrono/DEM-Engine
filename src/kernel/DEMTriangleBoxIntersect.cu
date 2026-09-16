@@ -135,240 +135,250 @@
 /* Thanks to David Hunt for finding a ">="-bug!         */
 /********************************************************/
 
-#ifndef DEME_TRI_BOX_INTSCT
-#define DEME_TRI_BOX_INTSCT
+#pragma once
+// Fast triangle-box (cube) overlap predicate for the *union* of two triangles:
+//  - Triangle A: (v0, v1, v2) in box-centered coordinates
+//  - Triangle B: (v0+t, v1+t, v2+t) where t is a constant translation in the same coordinate system
+//
+// Key idea (Option C):
+//  - Compute edges/abs/normal once (from A in box frame).
+//  - For the 2nd triangle, reuse SAT projections by shifting min/max with the translation-induced delta.
+//  - This avoids running a full second SAT for the sandwich triangle.
+//
+// The function supports bounds gating via testA/testB: if one is false it is skipped.
 
-#include <math.h>
-#include <stdio.h>
+#include <cuda_runtime.h>
 
-#define DEME_DIR_X 0
-#define DEME_DIR_Y 1
-#define DEME_DIR_Z 2
+__device__ __forceinline__ bool _deme_sep_axis_fp32(float mn, float mx, float rad, float eps) {
+    // Separating axis exists if interval [mn,mx] is entirely outside [-rad,rad]
+    return (mn > rad + eps) || (mx < -rad - eps);
+}
 
-#define CROSS(dest, v1, v2)                  \
-    dest[0] = v1[1] * v2[2] - v1[2] * v2[1]; \
-    dest[1] = v1[2] * v2[0] - v1[0] * v2[2]; \
-    dest[2] = v1[0] * v2[1] - v1[1] * v2[0];
+__device__ __forceinline__ bool triBoxOverlapBinLocalEdgesUnionShiftFP32(const float3& v0,
+                                                                         const float3& v1,
+                                                                         const float3& v2,
+                                                                         const float3& t,
+                                                                         float h,
+                                                                         bool testA,
+                                                                         bool testB,
+                                                                         float eps = 0.0f) {
+    bool okA = testA;
+    bool okB = testB;
 
-#define DOT(v1, v2) (v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2])
+    if (!okA && !okB)
+        return false;
 
-#define SUB(dest, v1, v2)    \
-    dest[0] = v1[0] - v2[0]; \
-    dest[1] = v1[1] - v2[1]; \
-    dest[2] = v1[2] - v2[2];
+    // Edges in box-centered frame (numerically aligned with reference)
+    const float3 e0 = {v1.x - v0.x, v1.y - v0.y, v1.z - v0.z};
+    const float3 e1 = {v2.x - v1.x, v2.y - v1.y, v2.z - v1.z};
+    const float3 e2 = {v0.x - v2.x, v0.y - v2.y, v0.z - v2.z};
 
-#define SUBTRACT(dest, v1, v2) \
-    dest[0] = v1.x - v2[0];    \
-    dest[1] = v1.y - v2[1];    \
-    dest[2] = v1.z - v2[2];
+    const float3 ae0 = {fabsf(e0.x), fabsf(e0.y), fabsf(e0.z)};
+    const float3 ae1 = {fabsf(e1.x), fabsf(e1.y), fabsf(e1.z)};
+    const float3 ae2 = {fabsf(e2.x), fabsf(e2.y), fabsf(e2.z)};
 
-#define FINDMINMAX(x0, x1, x2, min, max) \
-    min = max = x0;                      \
-    if (x1 < min)                        \
-        min = x1;                        \
-    if (x1 > max)                        \
-        max = x1;                        \
-    if (x2 < min)                        \
-        min = x2;                        \
-    if (x2 > max)                        \
-        max = x2;
+    float p0, p1, p2, mn, mx, rad;
 
-inline __device__ bool planeBoxOverlap(float normal[3], float vert[3], float maxbox[3]) {
-    int q;
-    float vmin[3], vmax[3], v;
-    for (q = DEME_DIR_X; q <= DEME_DIR_Z; q++) {
-        v = vert[q];
-        if (normal[q] > 0.0f) {
-            vmin[q] = -maxbox[q] - v;
-            vmax[q] = maxbox[q] - v;
-        } else {
-            vmin[q] = maxbox[q] - v;
-            vmax[q] = -maxbox[q] - v;
-        }
+    // ---- 9 cross-axis tests ----
+    // Edge e0: X01
+    p0 = e0.z * v0.y - e0.y * v0.z;
+    p2 = e0.z * v2.y - e0.y * v2.z;
+    mn = fminf(p0, p2);
+    mx = fmaxf(p0, p2);
+    rad = h * (ae0.z + ae0.y);
+    if (okA && _deme_sep_axis_fp32(mn, mx, rad, eps))
+        okA = false;
+    if (okB) {
+        const float d = e0.z * t.y - e0.y * t.z;
+        if (_deme_sep_axis_fp32(mn + d, mx + d, rad, eps))
+            okB = false;
     }
-    if (DOT(normal, vmin) > 0.0f)
+    if (!okA && !okB)
         return false;
-    if (DOT(normal, vmax) >= 0.0f)
-        return true;
 
-    return false;
+    // Edge e0: Y02
+    p0 = -e0.z * v0.x + e0.x * v0.z;
+    p2 = -e0.z * v2.x + e0.x * v2.z;
+    mn = fminf(p0, p2);
+    mx = fmaxf(p0, p2);
+    rad = h * (ae0.z + ae0.x);
+    if (okA && _deme_sep_axis_fp32(mn, mx, rad, eps))
+        okA = false;
+    if (okB) {
+        const float d = -e0.z * t.x + e0.x * t.z;
+        if (_deme_sep_axis_fp32(mn + d, mx + d, rad, eps))
+            okB = false;
+    }
+    if (!okA && !okB)
+        return false;
+
+    // Edge e0: Z12
+    p1 = e0.y * v1.x - e0.x * v1.y;
+    p2 = e0.y * v2.x - e0.x * v2.y;
+    mn = fminf(p1, p2);
+    mx = fmaxf(p1, p2);
+    rad = h * (ae0.y + ae0.x);
+    if (okA && _deme_sep_axis_fp32(mn, mx, rad, eps))
+        okA = false;
+    if (okB) {
+        const float d = e0.y * t.x - e0.x * t.y;
+        if (_deme_sep_axis_fp32(mn + d, mx + d, rad, eps))
+            okB = false;
+    }
+    if (!okA && !okB)
+        return false;
+
+    // Edge e1: X01
+    p0 = e1.z * v0.y - e1.y * v0.z;
+    p2 = e1.z * v2.y - e1.y * v2.z;
+    mn = fminf(p0, p2);
+    mx = fmaxf(p0, p2);
+    rad = h * (ae1.z + ae1.y);
+    if (okA && _deme_sep_axis_fp32(mn, mx, rad, eps))
+        okA = false;
+    if (okB) {
+        const float d = e1.z * t.y - e1.y * t.z;
+        if (_deme_sep_axis_fp32(mn + d, mx + d, rad, eps))
+            okB = false;
+    }
+    if (!okA && !okB)
+        return false;
+
+    // Edge e1: Y02
+    p0 = -e1.z * v0.x + e1.x * v0.z;
+    p2 = -e1.z * v2.x + e1.x * v2.z;
+    mn = fminf(p0, p2);
+    mx = fmaxf(p0, p2);
+    rad = h * (ae1.z + ae1.x);
+    if (okA && _deme_sep_axis_fp32(mn, mx, rad, eps))
+        okA = false;
+    if (okB) {
+        const float d = -e1.z * t.x + e1.x * t.z;
+        if (_deme_sep_axis_fp32(mn + d, mx + d, rad, eps))
+            okB = false;
+    }
+    if (!okA && !okB)
+        return false;
+
+    // Edge e1: Z0 (original uses v0 and v1)
+    p0 = e1.y * v0.x - e1.x * v0.y;
+    p1 = e1.y * v1.x - e1.x * v1.y;
+    mn = fminf(p0, p1);
+    mx = fmaxf(p0, p1);
+    rad = h * (ae1.y + ae1.x);
+    if (okA && _deme_sep_axis_fp32(mn, mx, rad, eps))
+        okA = false;
+    if (okB) {
+        const float d = e1.y * t.x - e1.x * t.y;
+        if (_deme_sep_axis_fp32(mn + d, mx + d, rad, eps))
+            okB = false;
+    }
+    if (!okA && !okB)
+        return false;
+
+    // Edge e2: X2 (original uses v0 and v1)
+    p0 = e2.z * v0.y - e2.y * v0.z;
+    p1 = e2.z * v1.y - e2.y * v1.z;
+    mn = fminf(p0, p1);
+    mx = fmaxf(p0, p1);
+    rad = h * (ae2.z + ae2.y);
+    if (okA && _deme_sep_axis_fp32(mn, mx, rad, eps))
+        okA = false;
+    if (okB) {
+        const float d = e2.z * t.y - e2.y * t.z;
+        if (_deme_sep_axis_fp32(mn + d, mx + d, rad, eps))
+            okB = false;
+    }
+    if (!okA && !okB)
+        return false;
+
+    // Edge e2: Y1
+    p0 = -e2.z * v0.x + e2.x * v0.z;
+    p1 = -e2.z * v1.x + e2.x * v1.z;
+    mn = fminf(p0, p1);
+    mx = fmaxf(p0, p1);
+    rad = h * (ae2.z + ae2.x);
+    if (okA && _deme_sep_axis_fp32(mn, mx, rad, eps))
+        okA = false;
+    if (okB) {
+        const float d = -e2.z * t.x + e2.x * t.z;
+        if (_deme_sep_axis_fp32(mn + d, mx + d, rad, eps))
+            okB = false;
+    }
+    if (!okA && !okB)
+        return false;
+
+    // Edge e2: Z12 (original uses v1 and v2)
+    p1 = e2.y * v1.x - e2.x * v1.y;
+    p2 = e2.y * v2.x - e2.x * v2.y;
+    mn = fminf(p1, p2);
+    mx = fmaxf(p1, p2);
+    rad = h * (ae2.y + ae2.x);
+    if (okA && _deme_sep_axis_fp32(mn, mx, rad, eps))
+        okA = false;
+    if (okB) {
+        const float d = e2.y * t.x - e2.x * t.y;
+        if (_deme_sep_axis_fp32(mn + d, mx + d, rad, eps))
+            okB = false;
+    }
+    if (!okA && !okB)
+        return false;
+
+    // ---- Case 1) overlap in X/Y/Z ----
+    float minx = fminf(v0.x, fminf(v1.x, v2.x));
+    float maxx = fmaxf(v0.x, fmaxf(v1.x, v2.x));
+    if (okA && (minx > h + eps || maxx < -h - eps))
+        okA = false;
+    if (okB) {
+        const float minxB = minx + t.x;
+        const float maxxB = maxx + t.x;
+        if (minxB > h + eps || maxxB < -h - eps)
+            okB = false;
+    }
+    if (!okA && !okB)
+        return false;
+
+    float miny = fminf(v0.y, fminf(v1.y, v2.y));
+    float maxy = fmaxf(v0.y, fmaxf(v1.y, v2.y));
+    if (okA && (miny > h + eps || maxy < -h - eps))
+        okA = false;
+    if (okB) {
+        const float minyB = miny + t.y;
+        const float maxyB = maxy + t.y;
+        if (minyB > h + eps || maxyB < -h - eps)
+            okB = false;
+    }
+    if (!okA && !okB)
+        return false;
+
+    float minz = fminf(v0.z, fminf(v1.z, v2.z));
+    float maxz = fmaxf(v0.z, fmaxf(v1.z, v2.z));
+    if (okA && (minz > h + eps || maxz < -h - eps))
+        okA = false;
+    if (okB) {
+        const float minzB = minz + t.z;
+        const float maxzB = maxz + t.z;
+        if (minzB > h + eps || maxzB < -h - eps)
+            okB = false;
+    }
+    if (!okA && !okB)
+        return false;
+
+    // ---- Case 2) plane test ----
+    // normal = cross(e0, v2-v0)
+    const float3 v20 = {v2.x - v0.x, v2.y - v0.y, v2.z - v0.z};
+    const float3 n = {e0.y * v20.z - e0.z * v20.y, e0.z * v20.x - e0.x * v20.z, e0.x * v20.y - e0.y * v20.x};
+
+    const float distA = n.x * v0.x + n.y * v0.y + n.z * v0.z;
+    const float rPlane = h * (fabsf(n.x) + fabsf(n.y) + fabsf(n.z)) + eps;
+
+    if (okA && fabsf(distA) > rPlane)
+        okA = false;
+    if (okB) {
+        const float distB = distA + (n.x * t.x + n.y * t.y + n.z * t.z);
+        if (fabsf(distB) > rPlane)
+            okB = false;
+    }
+
+    return okA || okB;
 }
-
-/*======================== X-tests ========================*/
-#define AXISTEST_X01(a, b, fa, fb)                                     \
-    p0 = a * v0[DEME_DIR_Y] - b * v0[DEME_DIR_Z];                      \
-    p2 = a * v2[DEME_DIR_Y] - b * v2[DEME_DIR_Z];                      \
-    if (p0 < p2) {                                                     \
-        min = p0;                                                      \
-        max = p2;                                                      \
-    } else {                                                           \
-        min = p2;                                                      \
-        max = p0;                                                      \
-    }                                                                  \
-    rad = fa * boxhalfsize[DEME_DIR_Y] + fb * boxhalfsize[DEME_DIR_Z]; \
-    if (min > rad || max < -rad)                                       \
-        return false;
-
-#define AXISTEST_X2(a, b, fa, fb)                                      \
-    p0 = a * v0[DEME_DIR_Y] - b * v0[DEME_DIR_Z];                      \
-    p1 = a * v1[DEME_DIR_Y] - b * v1[DEME_DIR_Z];                      \
-    if (p0 < p1) {                                                     \
-        min = p0;                                                      \
-        max = p1;                                                      \
-    } else {                                                           \
-        min = p1;                                                      \
-        max = p0;                                                      \
-    }                                                                  \
-    rad = fa * boxhalfsize[DEME_DIR_Y] + fb * boxhalfsize[DEME_DIR_Z]; \
-    if (min > rad || max < -rad)                                       \
-        return false;
-
-/*======================== Y-tests ========================*/
-#define AXISTEST_Y02(a, b, fa, fb)                                     \
-    p0 = -a * v0[DEME_DIR_X] + b * v0[DEME_DIR_Z];                     \
-    p2 = -a * v2[DEME_DIR_X] + b * v2[DEME_DIR_Z];                     \
-    if (p0 < p2) {                                                     \
-        min = p0;                                                      \
-        max = p2;                                                      \
-    } else {                                                           \
-        min = p2;                                                      \
-        max = p0;                                                      \
-    }                                                                  \
-    rad = fa * boxhalfsize[DEME_DIR_X] + fb * boxhalfsize[DEME_DIR_Z]; \
-    if (min > rad || max < -rad)                                       \
-        return false;
-
-#define AXISTEST_Y1(a, b, fa, fb)                                      \
-    p0 = -a * v0[DEME_DIR_X] + b * v0[DEME_DIR_Z];                     \
-    p1 = -a * v1[DEME_DIR_X] + b * v1[DEME_DIR_Z];                     \
-    if (p0 < p1) {                                                     \
-        min = p0;                                                      \
-        max = p1;                                                      \
-    } else {                                                           \
-        min = p1;                                                      \
-        max = p0;                                                      \
-    }                                                                  \
-    rad = fa * boxhalfsize[DEME_DIR_X] + fb * boxhalfsize[DEME_DIR_Z]; \
-    if (min > rad || max < -rad)                                       \
-        return false;
-
-/*======================== Z-tests ========================*/
-
-#define AXISTEST_Z12(a, b, fa, fb)                                     \
-    p1 = a * v1[DEME_DIR_X] - b * v1[DEME_DIR_Y];                      \
-    p2 = a * v2[DEME_DIR_X] - b * v2[DEME_DIR_Y];                      \
-    if (p2 < p1) {                                                     \
-        min = p2;                                                      \
-        max = p1;                                                      \
-    } else {                                                           \
-        min = p1;                                                      \
-        max = p2;                                                      \
-    }                                                                  \
-    rad = fa * boxhalfsize[DEME_DIR_X] + fb * boxhalfsize[DEME_DIR_Y]; \
-    if (min > rad || max < -rad)                                       \
-        return false;
-
-#define AXISTEST_Z0(a, b, fa, fb)                                      \
-    p0 = a * v0[DEME_DIR_X] - b * v0[DEME_DIR_Y];                      \
-    p1 = a * v1[DEME_DIR_X] - b * v1[DEME_DIR_Y];                      \
-    if (p0 < p1) {                                                     \
-        min = p0;                                                      \
-        max = p1;                                                      \
-    } else {                                                           \
-        min = p1;                                                      \
-        max = p0;                                                      \
-    }                                                                  \
-    rad = fa * boxhalfsize[DEME_DIR_X] + fb * boxhalfsize[DEME_DIR_Y]; \
-    if (min > rad || max < -rad)                                       \
-        return false;
-
-/**
-* Figure out whether a triangle touches an SD. Function gets hit a lot, very desirable to be fast.
-Input:
-- boxcenter: defines center of the box
-- boxhalfsize: half the size of the box in an axis aligned context
-- vA, vB, vC: the three vertices of the triangle
-Output:
-- "true" if there is overlap; "false" otherwise
-NOTE: This function works with "float" - precision is not paramount.
-*/
-inline __device__ bool check_TriangleBoxOverlap(float boxcenter[3],
-                                                float boxhalfsize[3],
-                                                const float3& vA,
-                                                const float3& vB,
-                                                const float3& vC) {
-    /**    Use the separating axis theorem to test overlap between triangle and box.
-    We test for overlap in these directions:
-    1) the {x,y,z}-directions (actually, since we use the AABB of the triangle we do not even need to test these)
-    2) normal of the triangle
-    3) crossproduct(edge from tri, {x,y,z}-directin) this gives 3x3=9 more tests */
-    float v0[3], v1[3], v2[3];
-    float min, max, p0, p1, p2, rad, fex, fey, fez;
-    float normal[3], e0[3], e1[3], e2[3];
-
-    /* This is the fastest branch on Sun */
-    /* move everything so that the boxcenter is in (0,0,0) */
-    SUBTRACT(v0, vA, boxcenter);
-    SUBTRACT(v1, vB, boxcenter);
-    SUBTRACT(v2, vC, boxcenter);
-
-    /* compute triangle edges */
-    SUB(e0, v1, v0); /* tri edge 0 */
-    SUB(e1, v2, v1); /* tri edge 1 */
-    SUB(e2, v0, v2); /* tri edge 2 */
-
-    /* Case 3)  */
-    /*  test the 9 tests first (this was faster) */
-    fex = fabsf(e0[DEME_DIR_X]);
-    fey = fabsf(e0[DEME_DIR_Y]);
-    fez = fabsf(e0[DEME_DIR_Z]);
-    AXISTEST_X01(e0[DEME_DIR_Z], e0[DEME_DIR_Y], fez, fey);
-    AXISTEST_Y02(e0[DEME_DIR_Z], e0[DEME_DIR_X], fez, fex);
-    AXISTEST_Z12(e0[DEME_DIR_Y], e0[DEME_DIR_X], fey, fex);
-
-    fex = fabsf(e1[DEME_DIR_X]);
-    fey = fabsf(e1[DEME_DIR_Y]);
-    fez = fabsf(e1[DEME_DIR_Z]);
-    AXISTEST_X01(e1[DEME_DIR_Z], e1[DEME_DIR_Y], fez, fey);
-    AXISTEST_Y02(e1[DEME_DIR_Z], e1[DEME_DIR_X], fez, fex);
-    AXISTEST_Z0(e1[DEME_DIR_Y], e1[DEME_DIR_X], fey, fex);
-
-    fex = fabsf(e2[DEME_DIR_X]);
-    fey = fabsf(e2[DEME_DIR_Y]);
-    fez = fabsf(e2[DEME_DIR_Z]);
-    AXISTEST_X2(e2[DEME_DIR_Z], e2[DEME_DIR_Y], fez, fey);
-    AXISTEST_Y1(e2[DEME_DIR_Z], e2[DEME_DIR_X], fez, fex);
-    AXISTEST_Z12(e2[DEME_DIR_Y], e2[DEME_DIR_X], fey, fex);
-
-    /* Case 1) */
-    /*  first test overlap in the {x,y,z}-directions */
-    /*  find min, max of the triangle each direction, and test for overlap in */
-    /*  that direction -- this is equivalent to testing a minimal AABB around */
-    /*  the triangle against the AABB */
-
-    /* test in DEME_DIR_X-direction */
-    FINDMINMAX(v0[DEME_DIR_X], v1[DEME_DIR_X], v2[DEME_DIR_X], min, max);
-    if (min > boxhalfsize[DEME_DIR_X] || max < -boxhalfsize[DEME_DIR_X])
-        return false;
-
-    /* test in DEME_DIR_Y-direction */
-    FINDMINMAX(v0[DEME_DIR_Y], v1[DEME_DIR_Y], v2[DEME_DIR_Y], min, max);
-    if (min > boxhalfsize[DEME_DIR_Y] || max < -boxhalfsize[DEME_DIR_Y])
-        return false;
-
-    /* test in DEME_DIR_Z-direction */
-    FINDMINMAX(v0[DEME_DIR_Z], v1[DEME_DIR_Z], v2[DEME_DIR_Z], min, max);
-    if (min > boxhalfsize[DEME_DIR_Z] || max < -boxhalfsize[DEME_DIR_Z])
-        return false;
-
-    /* Case 2) */
-    /*  test if the box intersects the plane of the triangle */
-    /*  compute plane equation of triangle: normal*x+d=0 */
-    CROSS(normal, e0, e1);
-    if (!planeBoxOverlap(normal, v0, boxhalfsize))
-        return false;
-
-    return true; /* box and triangle overlaps */
-}
-
-#endif

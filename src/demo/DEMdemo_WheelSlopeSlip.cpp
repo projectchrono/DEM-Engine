@@ -13,7 +13,6 @@
 // =============================================================================
 
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <chrono>
@@ -28,6 +27,8 @@ using namespace deme;
 const double math_PI = 3.1415927;
 
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_WheelSlopeSlip ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     std::filesystem::path out_dir = std::filesystem::current_path();
     out_dir /= "DemoOutput_WheelSlopeSlip";
     std::filesystem::create_directory(out_dir);
@@ -54,7 +55,7 @@ int main() {
 
     for (float Slope_deg : Slopes_deg) {
         DEMSolver DEMSim;
-        DEMSim.SetVerbosity(INFO);
+        DEMSim.SetVerbosity("INFO");
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
         DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
         DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
@@ -229,7 +230,7 @@ int main() {
         float3 this_G = make_float3(-G_mag * std::sin(G_ang), 0, -G_mag * std::cos(G_ang));
         DEMSim.SetGravitationalAcceleration(this_G);
 
-        DEMSim.SetInitTimeStep(step_size);
+        DEMSim.SetTimeStepSize(step_size);
         DEMSim.SetCDUpdateFreq(15);
         // Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
         // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't

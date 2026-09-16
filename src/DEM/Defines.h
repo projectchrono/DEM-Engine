@@ -12,7 +12,13 @@
 #include <cmath>
 
 #include "VariableTypes.h"
-#include <core/utils/cuda_to_hip.h>
+#include "cuda_runtime.h"
+
+#ifdef __CUDACC__
+    #define DEME_KERNEL extern "C" __global__
+#else
+    #define DEME_KERNEL
+#endif
 
 #define DEME_MIN(a, b) ((a < b) ? a : b)
 #define DEME_MAX(a, b) ((a > b) ? a : b)
@@ -29,17 +35,7 @@ namespace deme {
 #define DEME_TINY_FLOAT 1e-12                ///< Appears to be very sensitive to even smaller values...
 #define DEME_HUGE_FLOAT 1e15
 #define DEME_BITS_PER_BYTE 8
-// Wavefront/warp size: 64 only on AMD wave64 device code (gfx8/gfx9 GCN/CDNA); 32 everywhere
-// else (AMD RDNA, NVIDIA, and host code). ROCm 7.2.x does not provide __AMDGCN_WAVEFRONT_SIZE__,
-// so device code keys off the __GFX*__ macros. For JIT kernels the actual device warp size is
-// queried at runtime and substituted.
-#if defined(__HIP_DEVICE_COMPILE__) && (defined(__GFX8__) || defined(__GFX9__))
-    #define DEME_WARP_SIZE 64
-#else
-    #define DEME_WARP_SIZE 32
-#endif
-// Legacy macro for compatibility
-#define DEME_CUDA_WARP_SIZE DEME_WARP_SIZE
+#define DEME_CUDA_WARP_SIZE 32
 #define DEME_MAX_WILDCARD_NUM 16
 // In bin--triangle intersection scan, all bins are enlarged by a factor of this following constant, so that no triangle
 // lies in between bins and not picked up by any bins.
@@ -62,7 +58,6 @@ constexpr int64_t MAX_SUBVOXEL = (int64_t)1 << VOXEL_RES_POWER2;
 
 #define DEME_NUM_TRIANGLE_PER_BLOCK 512
 #define DEME_MAX_THREADS_PER_BLOCK 1024
-#define DEME_INIT_CNT_MULTIPLIER 1
 // If there are more than this number of analytical geometry, we may have difficulty jitify them all
 #define DEME_THRESHOLD_TOO_MANY_ANAL_GEO 64
 // If a clump has more than this number of sphere components, it is automatically considered a non-jitifiable big clump
@@ -70,11 +65,91 @@ constexpr int64_t MAX_SUBVOXEL = (int64_t)1 << VOXEL_RES_POWER2;
 // If there are more than this number of sphere components across all clumps (excluding the clumps that are considered
 // big clumps), then some of them may have to stay in global memory, rather than being jitified
 #define DEME_THRESHOLD_TOO_MANY_SPHERE_COMP 512
+// Mesh mass/MOI jitification should stay template-like. If a run needs more distinct mesh template mass/MOI entries
+// than this, the solver falls back to flattened mass/MOI instead of emitting a very large constant-memory table.
+#define DEME_THRESHOLD_TOO_MANY_MESH_TEMPLATES 512
 // It should generally just be the warp size. When a block is launched, at least min(these_numbers) threads will be
 // launched so the template loading is always safe.
 constexpr clumpComponentOffset_t NUM_ACTIVE_TEMPLATE_LOADING_THREADS =
     DEME_MIN(DEME_MIN(DEME_CUDA_WARP_SIZE, DEME_KT_CD_NTHREADS_PER_BLOCK), DEME_NUM_BODIES_PER_BLOCK);
 
+// Codes for owner types. We just have a handful of types...
+const ownerType_t NOT_A_OWNER = 0;
+const ownerType_t OWNER_T_CLUMP = 1;
+const ownerType_t OWNER_T_MESH = 2;
+const ownerType_t OWNER_T_ANALYTICAL = 4;  ///< Must be 4, not 3, as used in bitwise operations
+
+const geoType_t NOT_A_GEO = 0;
+const geoType_t GEO_T_SPHERE = 1;
+const geoType_t GEO_T_TRIANGLE = 2;
+const geoType_t GEO_T_ANALYTICAL = 4;  ///< Analytical components
+
+// Templated encode function that packs two values into one. The order matters.
+// For contact types: uses 4 bits per value (8 bits total, stored in contact_t/uint8_t)
+// For patch IDs: uses 32 bits per value (64 bits total, stored in patchIDPair_t/uint64_t)
+template <typename ReturnType = contact_t, typename InputType = geoType_t>
+inline __device__ __host__ constexpr ReturnType encodeType(InputType typeA, InputType typeB) {
+    constexpr size_t bits_per_value = sizeof(ReturnType) * DEME_BITS_PER_BYTE / 2;
+    return static_cast<ReturnType>(
+        (static_cast<ReturnType>(typeA) << bits_per_value) |
+        (static_cast<ReturnType>(typeB) & ((static_cast<ReturnType>(1) << bits_per_value) - 1)));
+}
+
+// Templated decode function for typeA (in high bits)
+template <typename InputType = contact_t, typename ReturnType = geoType_t>
+inline __device__ __host__ constexpr ReturnType decodeTypeA(InputType id) {
+    constexpr size_t bits_per_value = sizeof(InputType) * 8 / 2;
+    return static_cast<ReturnType>(id >> bits_per_value);
+}
+
+// Templated decode function for typeB (in low bits)
+template <typename InputType = contact_t, typename ReturnType = geoType_t>
+inline __device__ __host__ constexpr ReturnType decodeTypeB(InputType id) {
+    constexpr size_t bits_per_value = sizeof(InputType) * 8 / 2;
+    return static_cast<ReturnType>(id & ((static_cast<InputType>(1) << bits_per_value) - 1));
+}
+
+// If you modify this, you are responsible for updating NUM_SUPPORTED_CONTACT_TYPES accordingly, and mind the order of
+// the two types, as encodeType(GEO_T_SPHERE, GEO_T_TRIANGLE) != encodeType(GEO_T_TRIANGLE, GEO_T_SPHERE).
+constexpr contact_t NOT_A_CONTACT = 0;
+constexpr contact_t SPHERE_SPHERE_CONTACT = encodeType(GEO_T_SPHERE, GEO_T_SPHERE);
+constexpr contact_t SPHERE_TRIANGLE_CONTACT = encodeType(GEO_T_SPHERE, GEO_T_TRIANGLE);
+// Preserve the legacy public name. A DEM mesh is represented by triangles, so this is intentionally the exact same
+// contact identifier rather than an additional supported contact type.
+constexpr contact_t SPHERE_MESH_CONTACT = SPHERE_TRIANGLE_CONTACT;
+constexpr contact_t SPHERE_ANALYTICAL_CONTACT = encodeType(GEO_T_SPHERE, GEO_T_ANALYTICAL);
+constexpr contact_t TRIANGLE_TRIANGLE_CONTACT = encodeType(GEO_T_TRIANGLE, GEO_T_TRIANGLE);
+constexpr contact_t TRIANGLE_ANALYTICAL_CONTACT = encodeType(GEO_T_TRIANGLE, GEO_T_ANALYTICAL);
+constexpr contact_t NUM_SUPPORTED_CONTACT_TYPES = 5;
+inline __host__ __device__ constexpr bool isSupportedContactType(contact_t type) {
+    return type == SPHERE_SPHERE_CONTACT || type == SPHERE_TRIANGLE_CONTACT || type == SPHERE_ANALYTICAL_CONTACT ||
+           type == TRIANGLE_TRIANGLE_CONTACT || type == TRIANGLE_ANALYTICAL_CONTACT;
+}
+// Stable flooded-island history currently applies only to mesh-related contacts. SS and SA patch IDs are already
+// determined unambiguously by their primitive IDs, so rewriting their island labels adds work without improving
+// identity. If sphere/clump-side patching is introduced later, extend this predicate to opt those types back in.
+inline __host__ __device__ constexpr bool usesStablePatchIslandHistory(contact_t type) {
+    return type == SPHERE_TRIANGLE_CONTACT || type == TRIANGLE_TRIANGLE_CONTACT || type == TRIANGLE_ANALYTICAL_CONTACT;
+}
+constexpr contact_t ALL_CONTACT_TYPES[NUM_SUPPORTED_CONTACT_TYPES] = {
+    SPHERE_SPHERE_CONTACT, SPHERE_TRIANGLE_CONTACT, SPHERE_ANALYTICAL_CONTACT, TRIANGLE_TRIANGLE_CONTACT,
+    TRIANGLE_ANALYTICAL_CONTACT};
+
+// Device version of getting geo owner ID
+#define DEME_GET_GEO_OWNER_ID(geo, type)                                  \
+    ((type) == deme::GEO_T_SPHERE       ? granData->ownerClumpBody[(geo)] \
+     : (type) == deme::GEO_T_TRIANGLE   ? granData->ownerTriMesh[(geo)]   \
+     : (type) == deme::GEO_T_ANALYTICAL ? granData->ownerAnalBody[(geo)]  \
+                                        : deme::NULL_BODYID)
+
+// Device version of getting patch owner ID
+#define DEME_GET_PATCH_OWNER_ID(patchID, type)                                \
+    ((type) == deme::GEO_T_SPHERE       ? granData->ownerClumpBody[(patchID)] \
+     : (type) == deme::GEO_T_TRIANGLE   ? granData->ownerPatchMesh[(patchID)] \
+     : (type) == deme::GEO_T_ANALYTICAL ? granData->ownerAnalBody[(patchID)]  \
+                                        : deme::NULL_BODYID)
+
+// Can be seen as even finer grain type identifiers of the analytical component type
 const objType_t ANAL_OBJ_TYPE_PLANE = 0;
 const objType_t ANAL_OBJ_TYPE_PLATE = 1;
 const objType_t ANAL_OBJ_TYPE_CYL_INF = 2;
@@ -83,23 +158,8 @@ const objType_t ANAL_OBJ_TYPE_CONE = 4;
 const objNormal_t ENTITY_NORMAL_INWARD = 0;
 const objNormal_t ENTITY_NORMAL_OUTWARD = 1;
 
-const contact_t NOT_A_CONTACT = 0;
-const contact_t SPHERE_SPHERE_CONTACT = 1;
-const contact_t SPHERE_MESH_CONTACT = 2;
-// Aux contact types (contact with analytical objects) must be larger than SPHERE_ANALYTICAL_CONTACT!
-const contact_t SPHERE_ANALYTICAL_CONTACT = 10;
-const contact_t SPHERE_PLANE_CONTACT = 11;
-const contact_t SPHERE_PLATE_CONTACT = 12;
-const contact_t SPHERE_CYL_CONTACT = 13;
-const contact_t SPHERE_CONE_CONTACT = 14;
-
 const notStupidBool_t DONT_PREVENT_CONTACT = 0;
 const notStupidBool_t PREVENT_CONTACT = 1;
-
-// Codes for owner types. We just have a handful of types...
-const ownerType_t OWNER_T_CLUMP = 1;
-const ownerType_t OWNER_T_ANALYTICAL = 2;
-const ownerType_t OWNER_T_MESH = 4;
 
 // Contact persistency marker consts...
 const notStupidBool_t CONTACT_NOT_PERSISTENT = 0;
@@ -129,31 +189,20 @@ constexpr inertiaOffset_t RESERVED_INERTIA_OFFSET = ((size_t)1 << (sizeof(inerti
 // kernel, instead have to be brought from the global memory
 constexpr clumpComponentOffset_t RESERVED_CLUMP_COMPONENT_OFFSET =
     ((size_t)1 << (sizeof(clumpComponentOffset_t) * DEME_BITS_PER_BYTE)) - 1;
+constexpr size_t NULL_MESH_TEMPLATE_MARK = ((size_t)1 << (sizeof(size_t) * DEME_BITS_PER_BYTE - 1)) +
+                                           (((size_t)1 << (sizeof(size_t) * DEME_BITS_PER_BYTE - 1)) - 1);
 // Used to be compared against, so we know if some of the sphere components need to stay in global memory
-constexpr unsigned int THRESHOLD_CANT_JITIFY_ALL_COMP =
-    DEME_MIN(DEME_MIN(RESERVED_CLUMP_COMPONENT_OFFSET, DEME_THRESHOLD_BIG_CLUMP), DEME_THRESHOLD_TOO_MANY_SPHERE_COMP);
+constexpr unsigned int THRESHOLD_CANT_JITIFY_ALL_MESH_TEMPLATES =
+    DEME_MIN(RESERVED_INERTIA_OFFSET, DEME_THRESHOLD_TOO_MANY_MESH_TEMPLATES);
+constexpr unsigned int THRESHOLD_CANT_JITIFY_ALL_COMP = DEME_MIN(
+    DEME_MIN(DEME_MIN(RESERVED_CLUMP_COMPONENT_OFFSET, DEME_THRESHOLD_BIG_CLUMP), DEME_THRESHOLD_TOO_MANY_SPHERE_COMP),
+    THRESHOLD_CANT_JITIFY_ALL_MESH_TEMPLATES);
 // Max size change the bin auto-adjust algorithm can apply to the bin size per step
 constexpr float BIN_SIZE_MAX_CHANGE_RATE = 0.2;
-
-// Device version of getting geo owner ID
-#define DEME_GET_GEO_OWNER_ID(geoB, type)                                 \
-    ((type) == NOT_A_CONTACT           ? NULL_BODYID                      \
-     : (type) == SPHERE_SPHERE_CONTACT ? granData->ownerClumpBody[(geoB)] \
-     : (type) == SPHERE_MESH_CONTACT   ? granData->ownerMesh[(geoB)]      \
-                                       : granData->ownerAnalBody[(geoB)])
+// Safety factor for hertz_const adaptive time step estimates.
+constexpr double N_DT = 16.0;
 
 // Some enums...
-// Verbosity
-enum VERBOSITY {
-    QUIET = 0,
-    ERR = 10,
-    WARNING = 20,
-    INFO = 30,
-    STEP_ANOMALY = 32,
-    STEP_METRIC = 35,
-    DEBUG = 40,
-    STEP_DEBUG = 50
-};
 // Stepping method
 enum class TIME_INTEGRATOR { FORWARD_EULER, CENTERED_DIFFERENCE, EXTENDED_TAYLOR, CHUNG };
 // Owner types
@@ -173,11 +222,37 @@ enum OUTPUT_CONTENT {
     FAMILY = 128,
     MAT = 256,
     OWNER_WILDCARD = 512,
-    GEO_WILDCARD = 1024,
-    // How much this clump expanded in size via ChangeClumpSizes, compared to its `vanilla' template. Can be useful if
-    // the user imposed some fine-grain clump size control.
-    EXP_FACTOR = 2048
+    GEO_WILDCARD = 1024
 };
+// Per-triangle fields that can accompany mesh geometry in VTK output. XYZ is always written and intentionally has no
+// bit set, preserving the historical geometry-only default.
+enum class MESH_OUTPUT_CONTENT : unsigned int {
+    XYZ = 0,
+    QUAT = 1,
+    ABSV = 2,
+    VEL = 4,
+    ANG_VEL = 8,
+    ABS_ACC = 16,
+    ACC = 32,
+    ANG_ACC = 64,
+    FAMILY = 128,
+    MAT = 256,
+    OWNER_WILDCARD = 512,
+    GEO_WILDCARD = 1024,
+    OWNER = 2048,
+    MESH_ID = 4096,
+    TRI_ID = 8192,
+    PATCH_ID = 16384
+};
+constexpr unsigned int operator|(MESH_OUTPUT_CONTENT lhs, MESH_OUTPUT_CONTENT rhs) {
+    return static_cast<unsigned int>(lhs) | static_cast<unsigned int>(rhs);
+}
+constexpr unsigned int operator|(unsigned int lhs, MESH_OUTPUT_CONTENT rhs) {
+    return lhs | static_cast<unsigned int>(rhs);
+}
+constexpr unsigned int operator|(MESH_OUTPUT_CONTENT lhs, unsigned int rhs) {
+    return static_cast<unsigned int>(lhs) | rhs;
+}
 // Output particles as individual (component) spheres, or as owner clumps (clump CoMs for location, as an example)?
 enum class SPATIAL_DIR { X, Y, Z, NONE };
 // The info that should be present in the contact pair output files
@@ -202,7 +277,26 @@ enum CNT_OUTPUT_CONTENT {
 // NOTE: All data structs here need to be simple enough to jitify. In general, if you need to include something much
 // more complex than DEMDefines for example, then do it in Structs.h.
 
-// A structure for storing simulation parameters.
+// A structure for storing frequently updated simulation parameters.
+struct DEMSimParamsDynamic {
+    // The edge length and inverse edge length of a bin (for contact detection)
+    double binSize;
+    double inv_binSize;
+    // Time step size
+    float h;
+    // Time elappsed since start of simulation
+    double timeElapsed = 0;
+    // Sphere radii/geometry thickness inflation amount (for safer contact detection)
+    float beta;
+    // Max velocity, user approximated, we verify during simulation
+    float approxMaxVel;
+    // Expand safety parameter (multiplier for the max vel)
+    float expSafetyMulti;
+    // Expand safety parameter (adder for the max vel)
+    float expSafetyAdder;
+};
+
+// A structure for storing mostly static simulation parameters.
 struct DEMSimParams {
     // Number of voxels in the X direction, expressed as a power of 2
     unsigned char nvXp2;
@@ -220,11 +314,12 @@ struct DEMSimParams {
     double l;
     // Double-precision single voxel size
     double voxelSize;
-    // The edge length of a bin (for contact detection)
-    double binSize;
+    // Frequently updated parameters (kept inline for device access)
+    DEMSimParamsDynamic dyn;
     // Number of clumps, spheres, triangles, mesh-represented objects, analytical components, external objs...
     bodyID_t nSpheresGM;
     bodyID_t nTriGM;
+    bodyID_t nMeshPatches;
     objID_t nAnalGM;
     bodyID_t nOwnerBodies;
     bodyID_t nOwnerClumps;
@@ -248,32 +343,44 @@ struct DEMSimParams {
     // User's box size
     float3 userBoxMin;
     float3 userBoxMax;
-    // Time step size
-    float h;
-    // Time elappsed since start of simulation
-    double timeElapsed = 0;
-    // Sphere radii/geometry thickness inflation amount (for safer contact detection)
-    float beta;
-    // Max velocity, user approximated, we verify during simulation
-    float approxMaxVel;
-    // Expand safety parameter (multiplier for the max vel)
-    float expSafetyMulti;
-    // Expand safety parameter (adder for the max vel)
-    float expSafetyAdder;
     // Stepping method
     TIME_INTEGRATOR stepping = TIME_INTEGRATOR::FORWARD_EULER;
+    // Whether needs to store the contact normal
+    bool storeNormal = false;
 
     // Number of wildcards (extra property) arrays associated with contacts and owners and geometries
     unsigned int nContactWildcards;
     unsigned int nOwnerWildcards;
     unsigned int nGeoWildcards;
 
+    // Max tri-tri penetration margin (to prevent super large margins from being added)
+    double capTriTriPenetration = DEME_HUGE_FLOAT;
+
+    // Ratio threshold for rejecting suspicious tri-tri contacts: a contact is rejected when the penetration depth
+    // exceeds this fraction of the distance from the contact point to a mesh's geometric center.
+    float triTriContactRejectionRatio = 0.8f;
+
     // The max vel at which the solver errors out
     float errOutVel = DEME_HUGE_FLOAT;
+    // The max ang vel at which the solver errors out
+    float errOutAngVel = DEME_HUGE_FLOAT;
     // The max num of spheres per bin before solver errors out
     unsigned int errOutBinSphNum = 32768;
     // The max num of triangles per bin before solver errors out
     unsigned int errOutBinTriNum = 32768;
+    // Whether angular velocity contributes to contact margin sizing (and sphere--sphere rot. velocity use).
+    notStupidBool_t useAngVelMargin = 1;
+
+    // When true, the per-triangle maxTriTriPenetration array is neither computed (atomic max skipped in force kernel),
+    // nor transferred to kT, nor used to guard finalMargin in computeMarginFromAbsv. This saves compute time when the
+    // user knows that meshed particles have a low polygon count (e.g. box with 12 triangles, tetrahedron with 4) and
+    // mesh-mesh contacts are always SAT-traceable, i.e. no triangle can be completely submerged inside another mesh.
+    bool meshParticlesLowPoly = false;
+
+    // Number of owners currently participating in combined-owner rigid groups.
+    bodyID_t nCombinedOwners = 0;
+    // If 1, contact detection keeps contacts among owners that share the same combined master.
+    notStupidBool_t allowIntraCombinedOwnerContacts = 0;
 };
 
 // A struct that holds pointers to data arrays that dT uses
@@ -315,18 +422,34 @@ struct DEMDataDT {
     notStupidBool_t* accSpecified;
     notStupidBool_t* angAccSpecified;
 
-    bodyID_t* idGeometryA;
-    bodyID_t* idGeometryB;
-    contact_t* contactType;
+    bodyID_t* idPrimitiveA;
+    bodyID_t* idPrimitiveB;
+    contact_t* contactTypePrimitive;
+    contactPairs_t* geomToPatchMap;
+
+    // NEW: Separate patch IDs and mapping array
+    bodyID_t* idPatchA;
+    bodyID_t* idPatchB;
+    contact_t* contactTypePatch;
+    bodyID_t* contactPatchIsland;
     contactPairs_t* contactMapping;
 
     // Family mask
     notStupidBool_t* familyMasks;
     // Extra margin size
     float* familyExtraMarginSize;
+    // Combined-owner mapping (owner -> master owner, NULL_BODYID when not in a combined group)
+    bodyID_t* ownerCombinedMaster = nullptr;
+    // Member-fixed transforms in master frame (indexed by owner; ignored for non-members and masters)
+    float3* ownerCombinedRelPos = nullptr;
+    float4* ownerCombinedRelOriQ = nullptr;
+    // Per-master equivalent mass/MOI for combined-group integration.
+    float* ownerCombinedMasterMass = nullptr;
+    float3* ownerCombinedMasterMOI = nullptr;
 
     // Some dT's own work array pointers
     float3* contactForces;
+    float3* contactNormals;
     float3* contactTorque_convToForce;
     float3* contactPointGeometryA;
     float3* contactPointGeometryB;
@@ -338,16 +461,31 @@ struct DEMDataDT {
     clumpComponentOffset_t* clumpComponentOffset;
     clumpComponentOffsetExt_t* clumpComponentOffsetExt;
     materialsOffset_t* sphereMaterialOffset;
-    bodyID_t* ownerMesh;
+    bodyID_t* ownerTriMesh;
+    bodyID_t* ownerPatchMesh;
     bodyID_t* ownerAnalBody;
+    // Mesh-owner flags used by primitive mesh contact handling.
+    notStupidBool_t* ownerMeshConvex = nullptr;
+    notStupidBool_t* ownerMeshNeverWinner = nullptr;
+    notStupidBool_t* ownerMeshWatertight = nullptr;
+    float* ownerMeshShellHalfThickness = nullptr;
+    bodyID_t* triPatchID;
+    // Map global triangle ID -> compact neighbor index (NULL_BODYID if neighbors are not stored).
+    bodyID_t* triNeighborIndex = nullptr;
+    bodyID_t* triNeighbor1 = nullptr;
+    bodyID_t* triNeighbor2 = nullptr;
+    bodyID_t* triNeighbor3 = nullptr;
     float3* relPosNode1;
     float3* relPosNode2;
     float3* relPosNode3;
-    materialsOffset_t* triMaterialOffset;
+    float3* relPosPatch;
+    materialsOffset_t* patchMaterialOffset;
+    float* maxTriTriPenetration = nullptr;
 
     // pointer to remote buffer where kinematic thread stores work-order data provided by the dynamic thread
     unsigned int* pKTOwnedBuffer_maxDrift = nullptr;
     float* pKTOwnedBuffer_absVel = nullptr;
+    float* pKTOwnedBuffer_absAngVel = nullptr;
     float* pKTOwnedBuffer_ts = nullptr;
     voxelID_t* pKTOwnedBuffer_voxelID = nullptr;
     subVoxelPos_t* pKTOwnedBuffer_locX = nullptr;
@@ -361,6 +499,7 @@ struct DEMDataDT {
     float3* pKTOwnedBuffer_relPosNode1 = nullptr;
     float3* pKTOwnedBuffer_relPosNode2 = nullptr;
     float3* pKTOwnedBuffer_relPosNode3 = nullptr;
+    float* pKTOwnedBuffer_maxTriTriPenetration = nullptr;
 
     // The collection of pointers to DEM template arrays such as radiiSphere, still useful when there are template info
     // not directly jitified into the kernels
@@ -396,40 +535,73 @@ struct DEMDataKT {
     oriQ_t* oriQx;
     oriQ_t* oriQy;
     oriQ_t* oriQz;
-    // Derived from absv which is for determining contact margin size.
-    float* marginSize;
+    // Derived from absv which is for determining contact margin size. Each type of primitive geometry has its own size.
+    float* marginSizeSphere;
+    float* marginSizeAnalytical;
+    float* marginSizeTriangle;
 
     // Family mask
     notStupidBool_t* familyMasks;
     // Extra margin size
     float* familyExtraMarginSize;
+    // Combined-owner mapping (owner -> master owner, NULL_BODYID when not in a combined group)
+    bodyID_t* ownerCombinedMaster = nullptr;
 
     // The offset info that indexes into the template arrays
     bodyID_t* ownerClumpBody;
     clumpComponentOffset_t* clumpComponentOffset;
     clumpComponentOffsetExt_t* clumpComponentOffsetExt;
-    bodyID_t* ownerMesh;
+    bodyID_t* ownerTriMesh;
     bodyID_t* ownerAnalBody;
+    notStupidBool_t* ownerMeshConvex = nullptr;
+    notStupidBool_t* ownerMeshNeverWinner = nullptr;
+    float* ownerMeshShellHalfThickness = nullptr;
+    bodyID_t* triPatchID;
+    // Map global triangle ID -> compact neighbor index (NULL_BODYID if neighbors are not stored).
+    bodyID_t* triNeighborIndex = nullptr;
+    bodyID_t* triNeighbor1 = nullptr;
+    bodyID_t* triNeighbor2 = nullptr;
+    bodyID_t* triNeighbor3 = nullptr;
     float3* relPosNode1;
     float3* relPosNode2;
     float3* relPosNode3;
+    float* maxTriTriPenetration = nullptr;
 
     // kT produces contact info, and stores it, temporarily
-    bodyID_t* idGeometryA;
-    bodyID_t* idGeometryB;
-    contact_t* contactType;
+    bodyID_t* idPrimitiveA;
+    bodyID_t* idPrimitiveB;
+    contact_t* contactTypePrimitive;
     notStupidBool_t* contactPersistency;
-    bodyID_t* previous_idGeometryA;
-    bodyID_t* previous_idGeometryB;
-    contact_t* previous_contactType;
+    bodyID_t* previous_idPrimitiveA;
+    bodyID_t* previous_idPrimitiveB;
+    contact_t* previous_contactTypePrimitive;
     contactPairs_t* contactMapping;
 
+    // NEW: Separate patch IDs and mapping array (kT work arrays)
+    bodyID_t* idPatchA;
+    bodyID_t* idPatchB;
+    bodyID_t* previous_idPatchA;
+    bodyID_t* previous_idPatchB;
+    contact_t* contactTypePatch;
+    contact_t* previous_contactTypePatch;
+    bodyID_t* contactPatchIsland;
+    bodyID_t* previous_contactPatchIsland;
+    contactPairs_t* geomToPatchMap;
+
     // data pointers that is kT's transfer destination
-    size_t* pDTOwnedBuffer_nContactPairs = nullptr;
-    bodyID_t* pDTOwnedBuffer_idGeometryA = nullptr;
-    bodyID_t* pDTOwnedBuffer_idGeometryB = nullptr;
+    size_t* pDTOwnedBuffer_nPrimitiveContacts = nullptr;
+    size_t* pDTOwnedBuffer_nPatchContacts = nullptr;
+    bodyID_t* pDTOwnedBuffer_idPrimitiveA = nullptr;
+    bodyID_t* pDTOwnedBuffer_idPrimitiveB = nullptr;
     contact_t* pDTOwnedBuffer_contactType = nullptr;
     contactPairs_t* pDTOwnedBuffer_contactMapping = nullptr;
+
+    // NEW: Buffer pointers for separate patch arrays
+    bodyID_t* pDTOwnedBuffer_idPatchA = nullptr;
+    bodyID_t* pDTOwnedBuffer_idPatchB = nullptr;
+    contact_t* pDTOwnedBuffer_contactTypePatch = nullptr;
+    bodyID_t* pDTOwnedBuffer_contactPatchIsland = nullptr;
+    contactPairs_t* pDTOwnedBuffer_geomToPatchMap = nullptr;
 
     // The collection of pointers to DEM template arrays such as radiiSphere, still useful when there are template info
     // not directly jitified into the kernels
@@ -459,6 +631,13 @@ const unsigned int NUM_STEPS_RESERVED_AFTER_RENEWING_FREQ_TUNER = 10;
 const float DEFAULT_BOX_DOMAIN_SIZE = 20.;
 // The enlargement ratio we apply to the target sim world size when we construct it.
 const float DEFAULT_BOX_DOMAIN_ENLARGE_RATIO = 0.2;
+// Initial contact array size; does not matter that much as they can be resized anytime in simulation
+const contactPairs_t INITIAL_CONTACT_ARRAY_SIZE = 1024;
+// Inclusive bin range on one axis. An empty range is represented by imax < imin.
+struct AxisBounds {
+    int imin;
+    int imax;
+};
 
 // #ifndef CUB_IGNORE_DEPRECATED_API
 // #define CUB_IGNORE_DEPRECATED_API

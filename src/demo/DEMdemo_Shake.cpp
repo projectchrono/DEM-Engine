@@ -8,7 +8,6 @@
 // =============================================================================
 
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <chrono>
@@ -23,8 +22,10 @@ using namespace deme;
 const double math_PI = 3.14159;
 
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_Shake ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
@@ -106,7 +107,7 @@ int main() {
     auto total_mass_finder = DEMSim.CreateInspector("clump_mass");
     auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
 
-    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetTimeStepSize(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.Initialize();
 

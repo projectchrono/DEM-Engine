@@ -8,12 +8,46 @@
 
 #include <cassert>
 #include <optional>
+#include <utility>
 #include <unordered_map>
 
-#include "GpuError.h"
+#include "Logger.hpp"
+#include "BaseClasses.hpp"
+#include "CudaAllocator.hpp"
 #include "../../DEM/VariableTypes.h"
 
 namespace deme {
+
+// Temporarily select the device that owns a CUDA allocation or stream. CUDA's current device is thread-local, so API
+// calls made by the solver's main thread may otherwise inherit the device selected by the other worker.
+class ScopedCudaDevice {
+  public:
+    explicit ScopedCudaDevice(int device) {
+        DEME_GPU_CALL(cudaGetDevice(&m_previous_device));
+        if (m_previous_device != device) {
+            DEME_GPU_CALL(cudaSetDevice(device));
+            m_restore = true;
+        }
+    }
+
+    ~ScopedCudaDevice() {
+        if (m_restore) {
+            // Destructors must not throw while unwinding an error from the guarded CUDA operation.
+            (void)cudaSetDevice(m_previous_device);
+        }
+    }
+
+  private:
+    int m_previous_device = -1;
+    bool m_restore = false;
+};
+
+template <typename T>
+class DualArray;
+template <typename T>
+class DeviceArray;
+template <typename T>
+bool swap_device_buffer(DualArray<T>& lhs, DeviceArray<T>& rhs);
 
 // A to-device memcpy wrapper
 template <typename T>
@@ -68,12 +102,6 @@ inline void HostPtrAlloc(T*& ptr, size_t size) {
     DEME_GPU_CALL(cudaMallocHost((void**)&ptr, size * sizeof(T)));
 }
 
-// Managed advise doesn't seem to do anything...
-#define DEME_ADVISE_DEVICE(vec, device) \
-    { advise(vec, ManagedAdvice::PREFERRED_LOC, device); }
-#define DEME_MIGRATE_TO_DEVICE(vec, device, stream) \
-    { migrate(vec, device, stream); }
-
 // DEME_DUAL_ARRAY_RESIZE is a reminder for developers that a work array is resized, and this may automatically change
 // the external device pointer this array's bound to. Therefore, after this call, syncing the data pointer bundle
 // (granData) to device may be needed, and you remember to cudaSetDevice beforehand so it allocates to correct places.
@@ -89,36 +117,30 @@ inline void HostPtrAlloc(T*& ptr, size_t size) {
 // Use (void) to silence unused warnings.
 // #define assertm(exp, msg) assert(((void)msg, exp))
 
+// Used for wrapping data structures so they become usable on GPU.
 // We protect GPU-related data types with NonCopyable, because the device pointers inside these data types are too
 // fragile for copying. If say a shallow copy is enforced to our array types in a vector-of-arrays resizing, then if you
 // check the copied array's pointer from host, CUDA might not recognize it properly. The best practice is just using
 // unique_ptr to manage these array classes if you expect to put them in places where some under-the-hood copying could
 // happen.
-class NonCopyable {
-  protected:
-    NonCopyable() = default;
-    ~NonCopyable() = default;
-
-    NonCopyable(const NonCopyable&) = delete;
-    NonCopyable& operator=(const NonCopyable&) = delete;
-};
-
-// Used for wrapping data structures so they become usable on GPU
 template <typename T>
 class DualStruct : private NonCopyable {
   private:
     T* host_data;           // Pointer to host memory (pinned)
     T* device_data;         // Pointer to device memory
+    int device;             // Device that owns device_data
     bool modified_on_host;  // Flag to track if host data has been modified
   public:
     // Constructor: Initialize and allocate memory for both host and device
     DualStruct() : modified_on_host(false) {
+        DEME_GPU_CALL(cudaGetDevice(&device));
         DEME_GPU_CALL(cudaMallocHost((void**)&host_data, sizeof(T)));
         DEME_GPU_CALL(cudaMalloc((void**)&device_data, sizeof(T)));
     }
 
     // Constructor: Initialize and allocate memory for both host and device with init values
     DualStruct(T init_val) : modified_on_host(false) {
+        DEME_GPU_CALL(cudaGetDevice(&device));
         DEME_GPU_CALL(cudaMallocHost((void**)&host_data, sizeof(T)));
         DEME_GPU_CALL(cudaMalloc((void**)&device_data, sizeof(T)));
 
@@ -131,34 +153,77 @@ class DualStruct : private NonCopyable {
     ~DualStruct() { free(); }
 
     void free() {
-        HostPtrDealloc(host_data);      // Free pinned memory
+        HostPtrDealloc(host_data);  // Free pinned memory
+        ScopedCudaDevice device_scope(device);
         DevicePtrDealloc(device_data);  // Free device memory
     }
 
     // Synchronize changes from host to device
     void toDevice() {
+        ScopedCudaDevice device_scope(device);
         DEME_GPU_CALL(cudaMemcpy(device_data, host_data, sizeof(T), cudaMemcpyHostToDevice));
         modified_on_host = false;
     }
 
+    // Asynchronous host->device copy on a user stream. Host memory is pinned (cudaMallocHost),
+    // so the caller must ensure host_data isn't modified until the copy completes.
+    void toDeviceAsync(cudaStream_t stream) {
+        ScopedCudaDevice device_scope(device);
+        DEME_GPU_CALL_ASYNC(cudaMemcpyAsync(device_data, host_data, sizeof(T), cudaMemcpyHostToDevice, stream), stream);
+        modified_on_host = false;
+    }
+
     // Synchronize changes from device to host
-    void toHost() { DEME_GPU_CALL(cudaMemcpy(host_data, device_data, sizeof(T), cudaMemcpyDeviceToHost)); }
+    void toHost() {
+        ScopedCudaDevice device_scope(device);
+        DEME_GPU_CALL(cudaMemcpy(host_data, device_data, sizeof(T), cudaMemcpyDeviceToHost));
+        modified_on_host = false;
+    }
 
-    // // Synchronize change of one field of the struct to device
-    // template <typename MemberType>
-    // void syncMemberToDevice(ptrdiff_t offset) {
-    //     DEME_GPU_CALL(cudaMemcpy(reinterpret_cast<char*>(device_data) + offset,
-    //                              reinterpret_cast<char*>(host_data) + offset, sizeof(MemberType),
-    //                              cudaMemcpyHostToDevice));
-    // }
+    // Asynchronous device->host copy on a user stream. Host memory is pinned (cudaMallocHost).
+    void toHostAsync(cudaStream_t stream) {
+        ScopedCudaDevice device_scope(device);
+        DEME_GPU_CALL_ASYNC(cudaMemcpyAsync(host_data, device_data, sizeof(T), cudaMemcpyDeviceToHost, stream), stream);
+        modified_on_host = false;
+    }
 
-    // // Synchronize change of one field of the struct to host
-    // template <typename MemberType>
-    // void syncMemberToHost(ptrdiff_t offset) {
-    //     DEME_GPU_CALL(cudaMemcpy(reinterpret_cast<char*>(host_data) + offset,
-    //                              reinterpret_cast<char*>(device_data) + offset, sizeof(MemberType),
-    //                              cudaMemcpyDeviceToHost));
-    // }
+    // Synchronize change of one field of the struct to device
+    template <typename MemberType>
+    void syncMemberToDevice(ptrdiff_t offset) {
+        ScopedCudaDevice device_scope(device);
+        DEME_GPU_CALL(cudaMemcpy(reinterpret_cast<char*>(device_data) + offset,
+                                 reinterpret_cast<char*>(host_data) + offset, sizeof(MemberType),
+                                 cudaMemcpyHostToDevice));
+    }
+
+    // Asynchronous partial host->device copy on a user stream.
+    template <typename MemberType>
+    void syncMemberToDeviceAsync(ptrdiff_t offset, cudaStream_t stream) {
+        ScopedCudaDevice device_scope(device);
+        DEME_GPU_CALL_ASYNC(
+            cudaMemcpyAsync(reinterpret_cast<char*>(device_data) + offset, reinterpret_cast<char*>(host_data) + offset,
+                            sizeof(MemberType), cudaMemcpyHostToDevice, stream),
+            stream);
+    }
+
+    // Synchronize change of one field of the struct to host
+    template <typename MemberType>
+    void syncMemberToHost(ptrdiff_t offset) {
+        ScopedCudaDevice device_scope(device);
+        DEME_GPU_CALL(cudaMemcpy(reinterpret_cast<char*>(host_data) + offset,
+                                 reinterpret_cast<char*>(device_data) + offset, sizeof(MemberType),
+                                 cudaMemcpyDeviceToHost));
+    }
+
+    // Asynchronous partial device->host copy on a user stream.
+    template <typename MemberType>
+    void syncMemberToHostAsync(ptrdiff_t offset, cudaStream_t stream) {
+        ScopedCudaDevice device_scope(device);
+        DEME_GPU_CALL_ASYNC(
+            cudaMemcpyAsync(reinterpret_cast<char*>(host_data) + offset, reinterpret_cast<char*>(device_data) + offset,
+                            sizeof(MemberType), cudaMemcpyDeviceToHost, stream),
+            stream);
+    }
 
     // Check if host data has been modified and not synced
     bool checkNoPendingModification() { return !modified_on_host; }
@@ -198,12 +263,13 @@ class DualStruct : private NonCopyable {
     size_t getNumBytes() const { return sizeof(T); }
 };
 
-#ifndef DEME_USE_MANAGED_ARRAYS
-// CPU--GPU unified array, leveraging pinned memory
+// Paired host/device array, leveraging pinned host memory
 template <typename T>
 class DualArray : private NonCopyable {
   public:
     using PinnedVector = std::vector<T, PinnedAllocator<T>>;
+    template <typename U>
+    friend bool swap_device_buffer(DualArray<U>& lhs, DeviceArray<U>& rhs);
 
     explicit DualArray(size_t* host_external_counter = nullptr, size_t* device_external_counter = nullptr)
         : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {
@@ -234,17 +300,10 @@ class DualArray : private NonCopyable {
         const size_t old_size = size();
         resizeHost(n);
         resizeDevice(n);
-        // New elements must be defined on BOTH residences. resizeHost value-initialises
-        // the host tail, but resizeDevice never initialises grown elements: on
-        // reallocation it copies forward only pre-existing data, and when capacity
-        // already suffices it returns without touching memory (so the tail would hold
-        // stale bytes). Push the host tail down so device [old_size, n) is defined.
-        // Precondition: device [0, old_size) is already defined, which holds whenever all
-        // prior growth went through resize(); this method does not repair a host-only
-        // prefix created by growing through resizeHost() directly (no in-tree caller
-        // does that). Shrink and same-size calls return without touching device memory:
-        // device capacity >= logical size is the invariant, and device bytes beyond the
-        // new logical size are dead, not cleared.
+        // resizeHost value-initializes the host tail, while resizeDevice only preserves the old device prefix.
+        // Define the newly grown device range without overwriting device-authoritative values in that prefix.
+        // This assumes prior growth also used resize(); shrink and same-size calls intentionally leave device storage
+        // untouched, and bytes beyond the logical size are not considered live array elements.
         if (n > old_size) {
             toDevice(old_size, n - old_size);
         }
@@ -255,12 +314,8 @@ class DualArray : private NonCopyable {
         const size_t old_size = size();
         resizeHost(n, val);
         resizeDevice(n);
-        // Same as resize(n) above: without this push, the device tail [old_size, n) is
-        // undefined on both growth paths while every caller reasonably believes it holds
-        // `val`. Only the grown tail is copied; device data in [0, old_size) stays
-        // authoritative and is never overwritten by host state here. The same
-        // preconditions as resize(n) apply: an already-defined device prefix, and
-        // shrink/same-size calls leave device memory untouched.
+        // Keep the fill-value contract symmetric across host and device residences. Only the grown tail is copied so
+        // existing device data remains authoritative. The same growth and shrink preconditions as resize(n) apply.
         if (n > old_size) {
             toDevice(old_size, n - old_size);
         }
@@ -351,8 +406,9 @@ class DualArray : private NonCopyable {
         size_t count = size();
         if (count > m_device_capacity)
             resizeDevice(count);
-        DEME_GPU_CALL(
-            cudaMemcpyAsync(m_device_ptr, m_host_vec_ptr->data(), count * sizeof(T), cudaMemcpyHostToDevice, stream));
+        DEME_GPU_CALL_ASYNC(
+            cudaMemcpyAsync(m_device_ptr, m_host_vec_ptr->data(), count * sizeof(T), cudaMemcpyHostToDevice, stream),
+            stream);
         m_host_dirty = false;
     }
 
@@ -361,8 +417,9 @@ class DualArray : private NonCopyable {
     void toDeviceAsync(cudaStream_t& stream, size_t start, size_t n) {
         assert(m_host_vec_ptr && m_device_ptr);
         // Partial flavor aims for speed, no size check
-        DEME_GPU_CALL(cudaMemcpyAsync(m_device_ptr + start, m_host_vec_ptr->data() + start, n * sizeof(T),
-                                      cudaMemcpyHostToDevice, stream));
+        DEME_GPU_CALL_ASYNC(cudaMemcpyAsync(m_device_ptr + start, m_host_vec_ptr->data() + start, n * sizeof(T),
+                                            cudaMemcpyHostToDevice, stream),
+                            stream);
     }
 
     void toHost() {
@@ -379,16 +436,18 @@ class DualArray : private NonCopyable {
 
     void toHostAsync(cudaStream_t& stream) {
         assert(m_host_vec_ptr && m_device_ptr);
-        DEME_GPU_CALL(
-            cudaMemcpyAsync(m_host_vec_ptr->data(), m_device_ptr, size() * sizeof(T), cudaMemcpyDeviceToHost, stream));
+        DEME_GPU_CALL_ASYNC(
+            cudaMemcpyAsync(m_host_vec_ptr->data(), m_device_ptr, size() * sizeof(T), cudaMemcpyDeviceToHost, stream),
+            stream);
         m_host_dirty = false;
     }
 
     void toHostAsync(cudaStream_t& stream, size_t start, size_t n) {
         assert(m_host_vec_ptr && m_device_ptr);
         // Async partial flavor aims for speed, no size check
-        DEME_GPU_CALL(cudaMemcpyAsync(m_host_vec_ptr->data() + start, m_device_ptr + start, n * sizeof(T),
-                                      cudaMemcpyDeviceToHost, stream));
+        DEME_GPU_CALL_ASYNC(cudaMemcpyAsync(m_host_vec_ptr->data() + start, m_device_ptr + start, n * sizeof(T),
+                                            cudaMemcpyDeviceToHost, stream),
+                            stream);
     }
 
     T getVal(size_t start) {
@@ -509,190 +568,13 @@ class DualArray : private NonCopyable {
             *m_device_mem_counter += delta;
     }
 };
-#else
-// CPU--GPU unified array, leveraging managed memory
-template <typename T>
-class DualArray : private NonCopyable {
-  public:
-    using ManagedVector = std::vector<T, ManagedAllocator<T>>;
-
-    explicit DualArray(size_t* host_external_counter = nullptr, size_t* device_external_counter = nullptr)
-        : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {
-        ensureHostVector();
-    }
-
-    DualArray(size_t n, size_t* host_external_counter = nullptr, size_t* device_external_counter = nullptr)
-        : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {
-        resize(n);
-    }
-
-    DualArray(size_t n, T val, size_t* host_external_counter = nullptr, size_t* device_external_counter = nullptr)
-        : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {
-        resize(n, val);
-    }
-
-    ~DualArray() { free(); }
-
-    void resize(size_t n) {
-        assert(m_host_vec_ptr == m_pinned_vec.get() && "resize() requires internal host ownership");
-        resizeHost(n);
-        resizeDevice(n);
-    }
-
-    // Managed memory is a single allocation seen by host and device alike, so the
-    // host-side fill in resizeHost already defines what kernels read; no explicit
-    // host-to-device push is needed here (contrast with the pinned variant).
-    void resize(size_t n, const T& val) {
-        assert(m_host_vec_ptr == m_pinned_vec.get() && "resize() requires internal host ownership");
-        resizeHost(n, val);
-        resizeDevice(n);
-    }
-
-    void resizeHost(size_t n) {
-        ensureHostVector();  // allocates pinned vec if null
-        size_t old_bytes = m_host_vec_ptr->size() * sizeof(T);
-        m_host_vec_ptr->resize(n);
-        size_t new_bytes = m_host_vec_ptr->size() * sizeof(T);
-        updateMemCounter(static_cast<ssize_t>(new_bytes) - static_cast<ssize_t>(old_bytes));
-        updateBoundDevicePointer();
-    }
-
-    void resizeHost(size_t n, const T& val) {
-        ensureHostVector();  // allocates pinned vec if null
-        size_t old_bytes = m_host_vec_ptr->size() * sizeof(T);
-        m_host_vec_ptr->resize(n, val);
-        size_t new_bytes = m_host_vec_ptr->size() * sizeof(T);
-        updateMemCounter(static_cast<ssize_t>(new_bytes) - static_cast<ssize_t>(old_bytes));
-        updateBoundDevicePointer();
-    }
-
-    // m_device_capacity is allocated memory, not array usable data range
-    void resizeDevice(size_t n, bool allow_shrink = false) {}
-
-    void freeHost() {
-        if (m_host_vec_ptr) {
-            updateMemCounter(-(ssize_t)(m_host_vec_ptr->size() * sizeof(T)));
-        }
-        m_pinned_vec.reset();
-        m_host_vec_ptr = nullptr;
-        updateBoundDevicePointer();
-    }
-
-    void freeDevice() {}
-
-    void free() {
-        freeDevice();
-        freeHost();
-    }
-
-    void toDevice() {}
-
-    void toDevice(size_t start, size_t n) {}
-
-    void toDeviceAsync(cudaStream_t& stream) {}
-
-    void toDeviceAsync(cudaStream_t& stream, size_t start, size_t n) {}
-
-    void toHost() {}
-
-    void toHost(size_t start, size_t n) {}
-
-    void toHostAsync(cudaStream_t& stream) {}
-
-    void toHostAsync(cudaStream_t& stream, size_t start, size_t n) {}
-
-    T getVal(size_t start) { return (*m_host_vec_ptr)[start]; }
-
-    std::vector<T> getVal(size_t start, size_t n) {
-        return std::vector<T>(m_host_vec_ptr->begin() + start, m_host_vec_ptr->begin() + start + n);
-    }
-
-    void setVal(const T& data, size_t start) { (*m_host_vec_ptr)[start] = data; }
-
-    void setVal(const std::vector<T>& data, size_t start, size_t n = 0) {
-        size_t count = (n > 0) ? n : data.size();
-        std::copy(data.begin(), data.begin() + count, m_host_vec_ptr->begin() + start);
-    }
-
-    void setVal(cudaStream_t& stream, const T& data, size_t start) { (*m_host_vec_ptr)[start] = data; }
-
-    void setVal(cudaStream_t& stream, const std::vector<T>& data, size_t start, size_t n = 0) {
-        size_t count = (n > 0) ? n : data.size();
-        std::copy(data.begin(), data.begin() + count, m_host_vec_ptr->begin() + start);
-    }
-
-    void markHostModified() { m_host_dirty = true; }
-    void unmarkHostModified() { m_host_dirty = false; }
-
-    // Array's in-use data range is always stored on host by size()
-    size_t size() const { return m_host_vec_ptr ? m_host_vec_ptr->size() : 0; }
-
-    // Get host or device size in bytes
-    size_t getNumBytes() const { return m_host_vec_ptr ? m_host_vec_ptr->size() * sizeof(T) : 0; }
-
-    T* host() { return m_host_vec_ptr ? m_host_vec_ptr->data() : nullptr; }
-
-    T* device() { return host(); }
-
-    // Overloaded operator& for device pointer access
-    T* operator&() const { return host(); }
-
-    // data() returns device data for the ease of packing pointers
-    T* data() { return host(); }
-
-    ManagedVector& getHostVector() { return *m_host_vec_ptr; }
-
-    void bindDevicePointer(T** external_ptr_to_ptr) {
-        m_bound_device_ptr = external_ptr_to_ptr;
-        updateBoundDevicePointer();
-    }
-
-    void unbindDevicePointer() { m_bound_device_ptr = nullptr; }
-
-    void setHostMemoryCounter(size_t* counter) { m_host_mem_counter = counter; }
-    void setDeviceMemoryCounter(size_t* counter) { m_device_mem_counter = counter; }
-    // You can use nullptr to unbind
-
-    T& operator[](size_t i) { return (*m_host_vec_ptr)[i]; }
-    const T& operator[](size_t i) const { return (*m_host_vec_ptr)[i]; }
-    T operator()(size_t i) { return getVal(i); }
-
-  private:
-    std::unique_ptr<ManagedVector> m_pinned_vec = nullptr;
-    ManagedVector* m_host_vec_ptr = nullptr;
-
-    size_t* m_host_mem_counter = nullptr;
-    size_t* m_device_mem_counter = nullptr;
-
-    T** m_bound_device_ptr = nullptr;
-
-    bool m_host_dirty = false;
-
-    void ensureHostVector(size_t n = 0) {
-        if (!m_host_vec_ptr) {
-            m_pinned_vec = std::make_unique<ManagedVector>(n);
-            m_host_vec_ptr = m_pinned_vec.get();
-        }
-    }
-
-    void updateBoundDevicePointer() {
-        if (m_bound_device_ptr)
-            *m_bound_device_ptr = host();
-    }
-
-    void updateMemCounter(ssize_t delta) {
-        if (m_host_mem_counter)
-            *m_host_mem_counter += delta;
-        if (m_device_mem_counter)
-            *m_device_mem_counter += delta;
-    }
-};
-#endif
 
 // Pure device data type, usually used for scratching space
 template <typename T>
 class DeviceArray : private NonCopyable {
   public:
+    template <typename U>
+    friend bool swap_device_buffer(DualArray<U>& lhs, DeviceArray<U>& rhs);
     DeviceArray(size_t* external_counter = nullptr) : m_mem_counter(external_counter) {}
 
     explicit DeviceArray(size_t n, size_t* external_counter = nullptr) : m_mem_counter(external_counter) { resize(n); }
@@ -716,6 +598,7 @@ class DeviceArray : private NonCopyable {
         DevicePtrDealloc(m_data);
 
         m_data = new_device_ptr;
+        updateBoundDevicePointer();
 
         updateMemCounter(static_cast<ssize_t>(n * sizeof(T)));
         m_capacity = n;
@@ -726,7 +609,14 @@ class DeviceArray : private NonCopyable {
         updateMemCounter(-(ssize_t)(m_capacity * sizeof(T)));
         m_data = nullptr;
         m_capacity = 0;
+        updateBoundDevicePointer();
     }
+
+    void bindDevicePointer(T** external_ptr_to_ptr) {
+        m_bound_device_ptr = external_ptr_to_ptr;
+        updateBoundDevicePointer();
+    }
+    void unbindDevicePointer() { m_bound_device_ptr = nullptr; }
 
     size_t size() const { return m_capacity; }
 
@@ -741,14 +631,29 @@ class DeviceArray : private NonCopyable {
 
   private:
     T* m_data = nullptr;
+    T** m_bound_device_ptr = nullptr;
     size_t m_capacity = 0;
     size_t* m_mem_counter = nullptr;
+
+    void updateBoundDevicePointer() {
+        if (m_bound_device_ptr)
+            *m_bound_device_ptr = m_data;
+    }
 
     void updateMemCounter(ssize_t delta) {
         if (m_mem_counter)
             *m_mem_counter += delta;
     }
 };
+
+template <typename T>
+inline bool swap_device_buffer(DualArray<T>& lhs, DeviceArray<T>& rhs) {
+    using std::swap;
+    swap(lhs.m_device_ptr, rhs.m_data);
+    swap(lhs.m_device_capacity, rhs.m_capacity);
+    lhs.updateBoundDevicePointer();
+    return true;
+}
 
 /// @brief General abstraction of vector pool
 /// @tparam T Array data type
@@ -766,9 +671,18 @@ class ResourcePool : private NonCopyable {
     void resize(const std::string& name, size_t new_size) {
         auto it = name_to_index.find(name);
         if (it == name_to_index.end()) {
-            throw std::runtime_error("Cannot resize: name not found");
+            DEME_ERROR(std::string("Cannot resize: name not found"));
         }
         vectors[it->second]->resize(new_size);
+    }
+
+    bool exist(const std::string& name) {
+        auto it = this->name_to_index.find(name);
+        if (it == this->name_to_index.end()) {
+            return false;
+        } else {
+            return true;
+        }
     }
 
     void unclaim(const std::string& name) {
@@ -782,7 +696,7 @@ class ResourcePool : private NonCopyable {
     void release(const std::string& name) {
         auto it = name_to_index.find(name);
         if (it == name_to_index.end()) {
-            throw std::runtime_error("Cannot release: name not found");
+            DEME_ERROR("Cannot release: name not found");
         }
         vectors[it->second]->free();
         in_use[it->second] = std::nullopt;
@@ -829,7 +743,7 @@ class DeviceVectorPool : public ResourcePool<T, DeviceArray<T>> {
                 Base::vectors[index]->resize(size);
                 return Base::vectors[index]->data();
             } else {
-                throw std::runtime_error("Name already claimed: " + name);
+                DEME_ERROR("Name already claimed: %s", name.c_str());
             }
         }
 
@@ -852,7 +766,7 @@ class DeviceVectorPool : public ResourcePool<T, DeviceArray<T>> {
     T* get(const std::string& name) {
         auto it = this->name_to_index.find(name);
         if (it == this->name_to_index.end())
-            throw std::runtime_error("Name not found: " + name);
+            DEME_ERROR("Name not found: %s", name.c_str());
         return this->vectors[it->second]->data();
     }
 
@@ -885,7 +799,7 @@ class DualArrayPool : public ResourcePool<T, DualArray<T>> {
                 Base::vectors[index]->resize(size);
                 return Base::vectors[index].get();
             } else {
-                throw std::runtime_error("Name already claimed: " + name);
+                DEME_ERROR("Name already claimed: %s", name.c_str());
             }
         }
 
@@ -908,21 +822,21 @@ class DualArrayPool : public ResourcePool<T, DualArray<T>> {
     DualArray<T>* get(const std::string& name) {
         auto it = this->name_to_index.find(name);
         if (it == this->name_to_index.end())
-            throw std::runtime_error("Name not found: " + name);
+            DEME_ERROR("Name not found: %s", name.c_str());
         return this->vectors[it->second].get();
     }
 
     T* getHost(const std::string& name) {
         auto it = this->name_to_index.find(name);
         if (it == this->name_to_index.end())
-            throw std::runtime_error("Name not found: " + name);
+            DEME_ERROR("Name not found: %s", name.c_str());
         return this->vectors[it->second]->host();
     }
 
     T* getDevice(const std::string& name) {
         auto it = this->name_to_index.find(name);
         if (it == this->name_to_index.end())
-            throw std::runtime_error("Name not found: " + name);
+            DEME_ERROR("Name not found: %s", name.c_str());
         return this->vectors[it->second]->device();
     }
 
@@ -956,7 +870,7 @@ class DualStructPool : public ResourcePool<T, DualStruct<T>> {
                 size_t index = Base::name_to_index[name];
                 return Base::vectors[index].get();
             } else {
-                throw std::runtime_error("Name already claimed: " + name);
+                DEME_ERROR("Name already claimed: %s", name.c_str());
             }
         }
 
@@ -978,21 +892,21 @@ class DualStructPool : public ResourcePool<T, DualStruct<T>> {
     DualStruct<T>* get(const std::string& name) {
         auto it = this->name_to_index.find(name);
         if (it == this->name_to_index.end())
-            throw std::runtime_error("Name not found: " + name);
+            DEME_ERROR("Name not found: %s", name.c_str());
         return this->vectors[it->second].get();
     }
 
     T* getHost(const std::string& name) {
         auto it = this->name_to_index.find(name);
         if (it == this->name_to_index.end())
-            throw std::runtime_error("Name not found: " + name);
+            DEME_ERROR("Name not found: %s", name.c_str());
         return this->vectors[it->second]->getHostPointer();
     }
 
     T* getDevice(const std::string& name) {
         auto it = this->name_to_index.find(name);
         if (it == this->name_to_index.end())
-            throw std::runtime_error("Name not found: " + name);
+            DEME_ERROR("Name not found: %s", name.c_str());
         return this->vectors[it->second]->getDevicePointer();
     }
 };
@@ -1003,6 +917,178 @@ class DualStructPool : public ResourcePool<T, DualStruct<T>> {
 // status or work arrays are "device-major", meaning the device copy is believed to be more fresh. So, we copy from
 // device to host more freely and concern-free, but when copying from host to device, that's either in a centrialized
 // initialization stage, or we do piecemeal and fine-grain copying which reflects the user's forced system updates only.
+
+namespace xfer {  // Memory Transfer Bundle Manager
+
+enum class XferMode { Same, Peer, Stage };
+
+struct HostBounce {
+    void* ptr = nullptr;
+    size_t cap = 0;
+    ~HostBounce() {
+        if (ptr)
+            cudaFreeHost(ptr);
+    }
+    inline void ensure(size_t need) {
+        if (cap >= need)
+            return;
+        if (ptr)
+            cudaFreeHost(ptr);
+        DEME_GPU_CALL(cudaMallocHost(&ptr, need));  // pinned
+        cap = need;
+    }
+};
+
+struct PeerCache {
+    int dst{-1}, src{-1};
+    int can{-1};
+};  // -1 unknown, 0 no, 1 yes
+static thread_local HostBounce __bounce;
+static thread_local PeerCache __pc;
+
+inline XferMode plan_mode(int dstDev, int srcDev) {
+    if (dstDev == srcDev)
+        return XferMode::Same;
+
+    if (__pc.dst != dstDev || __pc.src != srcDev || __pc.can < 0) {
+        __pc.dst = dstDev;
+        __pc.src = srcDev;
+        __pc.can = 0;
+        int can = 0;
+        DEME_GPU_CALL(cudaDeviceCanAccessPeer(&can, dstDev, srcDev));
+        if (can) {
+            int cur = -1;
+            DEME_GPU_CALL(cudaGetDevice(&cur));
+            if (cur != dstDev)
+                DEME_GPU_CALL(cudaSetDevice(dstDev));
+            cudaError_t st = cudaDeviceEnablePeerAccess(srcDev, 0);
+            if (st == cudaErrorPeerAccessAlreadyEnabled)
+                (void)cudaGetLastError();
+            else if (st != cudaSuccess)
+                can = 0;
+            if (cur != dstDev)
+                DEME_GPU_CALL(cudaSetDevice(cur));
+        }
+        __pc.can = can ? 1 : 0;
+    }
+    return __pc.can ? XferMode::Peer : XferMode::Stage;
+}
+
+inline size_t __sum_bytes(const size_t* bytes, int n) {
+    size_t t = 0;
+    for (int i = 0; i < n; ++i)
+        t += bytes[i];
+    return t;
+}
+inline size_t __max_bytes(const size_t* bytes, int n) {
+    size_t m = 0;
+    for (int i = 0; i < n; ++i)
+        m = std::max(m, bytes[i]);
+    return m;
+}
+
+// Same device: D2D
+inline void xfer_same(int dev,
+                      void* const* dst,
+                      const void* const* src,
+                      const size_t* bytes,
+                      int n,
+                      cudaStream_t stream) {
+    int cur = -1;
+    DEME_GPU_CALL(cudaGetDevice(&cur));
+    int dev_sw = (cur != dev) ? 1 : 0;
+    if (dev_sw)
+        DEME_GPU_CALL(cudaSetDevice(dev));
+
+    for (int i = 0; i < n; ++i)
+        if (bytes[i]) {
+            DEME_GPU_CALL_ASYNC(cudaMemcpyAsync(dst[i], src[i], bytes[i], cudaMemcpyDeviceToDevice, stream), stream);
+        }
+    if (dev_sw)
+        DEME_GPU_CALL(cudaSetDevice(cur));
+}
+
+// Peer: cudaMemcpyPeer
+inline void xfer_peer(int dstDev,
+                      int srcDev,
+                      void* const* dst,
+                      const void* const* src,
+                      const size_t* bytes,
+                      int n,
+                      cudaStream_t stream) {
+    int cur = -1;
+    DEME_GPU_CALL(cudaGetDevice(&cur));
+    int dev_sw = (cur != dstDev) ? 1 : 0;
+    if (dev_sw)
+        DEME_GPU_CALL(cudaSetDevice(dstDev));
+    for (int i = 0; i < n; ++i)
+        if (bytes[i]) {
+            DEME_GPU_CALL_ASYNC(cudaMemcpyPeerAsync(dst[i], dstDev, src[i], srcDev, bytes[i], stream), stream);
+        }
+    if (dev_sw)
+        DEME_GPU_CALL(cudaSetDevice(cur));
+}
+
+// Stage== No Peer
+inline void xfer_stage_as_d2d(int dstDev,
+                              int srcDev,
+                              void* const* dst,
+                              const void* const* src,
+                              const size_t* bytes,
+                              int n,
+                              cudaStream_t /*stream*/) {
+    for (int i = 0; i < n; ++i)
+        if (bytes[i]) {
+            DEME_GPU_CALL(cudaMemcpy(dst[i], src[i], bytes[i], cudaMemcpyDeviceToDevice));
+        }
+}
+
+// Frontend
+inline void D2D_bundle(int dstDev,
+                       int srcDev,
+                       void* const* dst,
+                       const void* const* src,
+                       const size_t* bytes,
+                       int n,
+                       cudaStream_t stream = 0) {
+    if (n <= 0)
+        return;
+    XferMode mode = plan_mode(dstDev, srcDev);
+
+    switch (mode) {
+        case XferMode::Same:
+            xfer_same(srcDev, dst, src, bytes, n, stream);
+            break;
+        case XferMode::Peer:
+            xfer_peer(dstDev, srcDev, dst, src, bytes, n, stream);
+            break;
+        case XferMode::Stage:
+            xfer_stage_as_d2d(dstDev, srcDev, dst, src, bytes, n, stream);
+            break;
+    }
+}
+
+// Builder
+struct XferList {
+    static constexpr int MAX = 16;
+    void* dst[MAX]{};
+    const void* src[MAX]{};
+    size_t sz[MAX]{};
+    int n{0};
+    inline void add(void* d, const void* s, size_t b) {
+        if (b && n < MAX) {
+            dst[n] = d;
+            src[n] = s;
+            sz[n] = b;
+            ++n;
+        }
+    }
+    inline void run(int dstDev, int srcDev, cudaStream_t stream = 0) {
+        D2D_bundle(dstDev, srcDev, dst, src, sz, n, stream);
+    }
+};
+
+}  // namespace xfer
 
 }  // namespace deme
 

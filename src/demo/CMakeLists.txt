@@ -19,27 +19,37 @@ SET(DEMOS
 		DEMdemo_Plow
 		DEMdemo_Sieve
 		DEMdemo_SingleSphereCollide
+		DEMdemo_MeshCollide
+		DEMdemo_MeshFalling
 		DEMdemo_TestPack
+		DEMdemo_TestRestart
 		DEMdemo_RotatingDrum
 		DEMdemo_Centrifuge
+		DEMdemo_DrumCubes
+		DEMdemo_DrumCubesSmall
+		DEMdemo_ResponseAngleMesh
 		DEMdemo_GameOfLife
 		DEMdemo_BallDrop
 		DEMdemo_BallDrop2D
 		DEMdemo_Mixer
+		DEMdemo_MixerCubes
+		DEMdemo_PolydisperseGeneration
+		DEMdemo_RoverWheel
 		DEMdemo_GRCPrep_Part1
 		DEMdemo_GRCPrep_Part2
 		DEMdemo_GRCPrep_Part3
+		DEMdemo_PlateSinkage
 		DEMdemo_ConePenetration
 		DEMdemo_Shake
 		DEMdemo_WheelDP
 		DEMdemo_WheelDPSimplified
 		DEMdemo_WheelSlopeSlip
 		DEMdemo_Indentation
-		DEMdemo_PlateSinkage
 		DEMdemo_SolarSystem
 		DEMdemo_Electrostatic
 		DEMdemo_FlexibleMesh
 		DEMdemo_HopperSphereCylinder
+		DEMdemo_HopperSphereMeshedCylinder
 		DEMdemo_FractureBox
 )
 
@@ -80,13 +90,22 @@ FOREACH(PROGRAM ${DEMOS})
 			PUBLIC ${LIBRARIES}
 			PUBLIC ${EXTERNAL_LIBRARIES}
 		)
+		if(DEME_BUILD_VISUALIZER AND
+		   (PROGRAM STREQUAL "DEMdemo_SingleSphereCollide" OR PROGRAM STREQUAL "DEMdemo_MeshCollide" OR
+		    PROGRAM STREQUAL "DEMdemo_MeshFalling"))
+			target_link_libraries(${PROGRAM} PUBLIC DEMEVisualizer)
+			target_compile_definitions(${PROGRAM} PRIVATE DEME_HAS_VISUALIZER=1)
+		endif()
 		
 		add_dependencies(${PROGRAM} ${LIBRARIES})
+		add_dependencies(${PROGRAM} sync_kernels)
 
-		set_target_properties(
-			${PROGRAM} PROPERTIES
-			CXX_STANDARD ${CXXSTD_SUPPORTED}
-		)
+		if (CXXSTD_SUPPORTED)
+			set_target_properties(
+				${PROGRAM} PROPERTIES
+				CXX_STANDARD ${CXXSTD_SUPPORTED}
+			)
+		endif()
 
 		# install(TARGETS ${PROGRAM} DESTINATION ${DEME_INSTALL_DEMO})
 

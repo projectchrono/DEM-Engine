@@ -11,7 +11,6 @@
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
@@ -22,9 +21,11 @@ using namespace deme;
 using namespace std::filesystem;
 
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_Sieve ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     DEMSolver DEMSim;
-    // I generally use this demo to inspect if I have "lost contact pairs", so the verbosity is set to STEP_METRIC...
-    DEMSim.SetVerbosity(STEP_METRIC);
+    // I generally use this demo to inspect if I have "lost contact pairs", so the verbosity is set to METRIC...
+    DEMSim.SetVerbosity("METRIC");
 
     // If you don't need individual force information, then this option makes the solver run a bit faster.
     DEMSim.SetNoForceRecord();
@@ -141,14 +142,13 @@ int main() {
 
     float step_size = 1e-5;
     DEMSim.InstructBoxDomainDimension(12, 12, 25);
-    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetTimeStepSize(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEMSim.SetCDUpdateFreq(30);
+    // Usually, the end user do not have to manually set expand safety parameters.
     DEMSim.SetExpandSafetyMultiplier(1.0);
     DEMSim.SetExpandSafetyAdder(1.0);
-    // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto bin
-    // size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case setting
-    // init bin size may save the simulation.
+    // You usually don't have to worry about initial bin size. Using the automatic adaptive size by default is fine.
     // DEMSim.SetInitBinSize(0.1);
     // DEMSim.DisableAdaptiveBinSize();
 

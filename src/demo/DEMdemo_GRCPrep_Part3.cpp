@@ -6,7 +6,6 @@
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
@@ -20,8 +19,10 @@ using namespace deme;
 using namespace std::filesystem;
 
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_GRCPrep_Part3 ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ);
 
@@ -85,14 +86,10 @@ int main() {
     }
 
     // Now we load part2 clump locations from a part1 output file
-    const auto part2_clump_file =
-        (std::filesystem::current_path() / "DemoOutput_GRCPrep_Part2" / "GRC_3e6.csv").string();
-    auto part2_clump_xyz = DEMSim.ReadClumpXyzFromCsv(part2_clump_file);
-    auto part2_clump_quaternion = DEMSim.ReadClumpQuatFromCsv(part2_clump_file);
-    // const auto part2_contact_file =
-    //     (std::filesystem::current_path() / "DemoOutput_GRCPrep_Part2" / "Contact_pairs_3e6.csv").string();
-    // auto part2_pairs = DEMSim.ReadContactPairsFromCsv(part2_contact_file);
-    // auto part2_wcs = DEMSim.ReadContactWildcardsFromCsv(part2_contact_file);
+    auto part2_clump_xyz = DEMSim.ReadClumpXyzFromCsv("./DemoOutput_GRCPrep_Part2/GRC_3e6.csv");
+    auto part2_clump_quaternion = DEMSim.ReadClumpQuatFromCsv("./DemoOutput_GRCPrep_Part2/GRC_3e6.csv");
+    // auto part2_pairs = DEMSim.ReadContactPairsFromCsv("./DemoOutput_GRCPrep_Part2/Contact_pairs_3e6.csv");
+    // auto part2_wcs = DEMSim.ReadContactWildcardsFromCsv("./DemoOutput_GRCPrep_Part2/Contact_pairs_3e6.csv");
     std::vector<float3> in_xyz;
     std::vector<float4> in_quat;
     std::vector<std::shared_ptr<DEMClumpTemplate>> in_types;
@@ -165,7 +162,7 @@ int main() {
 
     // Make ready for simulation
     double step_size = 2e-6;
-    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetTimeStepSize(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.SetErrorOutVelocity(20.);
     // DEMSim.SetInitBinSize(scales.at(1));
@@ -184,8 +181,8 @@ int main() {
     DEMSim.DoDynamicsThenSync(0.3);
     // Doing this won't change the step size (and we don't need to in this demo),
     // but if the physics of the simulation changes significantly at some point,
-    // you can UpdateStepSize after a DoDynamicsThenSync call.
-    DEMSim.UpdateStepSize(step_size);
+    // You can change the step size after a DoDynamicsThenSync call.
+    DEMSim.SetTimeStepSize(step_size);
 
     // Now compress it
     DEMSim.EnableContactBetweenFamilies(0, 1);

@@ -10,7 +10,6 @@
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
@@ -28,7 +27,7 @@ inline bool is_near(float a, float b, float t = 1e-6) {
 }
 
 void SetSolverProp(DEMSolver& DEMSim) {
-    DEMSim.SetVerbosity(DEBUG);
+    DEMSim.SetVerbosity("DEBUG");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
 
     DEMSim.InstructBoxDomainDimension(25, 25, 10);
@@ -41,7 +40,6 @@ void SetSolverProp(DEMSolver& DEMSim) {
     // Testing non-jitified clump templates here in this demo...
     DEMSim.DisableJitifyClumpTemplates();
     DEMSim.DisableJitifyMassProperties();
-    DEMSim.UseCubForceCollection();
 }
 
 void EllpsiodFallingOver() {
@@ -70,7 +68,7 @@ void EllpsiodFallingOver() {
     ellipsoid->SetVel(tang_dir * 0.3);
     auto ellipsoid_tracker = DEMSim.Track(ellipsoid);
 
-    DEMSim.SetInitTimeStep(1e-4);
+    DEMSim.SetTimeStepSize(1e-4);
     // DEMSim.SetIntegrator(TIME_INTEGRATOR::FORWARD_EULER);
     DEMSim.Initialize();
 
@@ -121,7 +119,7 @@ void SphereRollUpIncline() {
         auto sphere_tracker = DEMSim.Track(sphere);
 
         float step_time = 1e-4;
-        DEMSim.SetInitTimeStep(step_time);
+        DEMSim.SetTimeStepSize(step_time);
         DEMSim.Initialize();
 
         path out_dir = current_path();
@@ -153,7 +151,7 @@ void SphereRollUpIncline() {
         for (float Crr = 0.0; Crr <= 0.3; Crr += 0.01) {
             DEMSolver DEMSim;
             SetSolverProp(DEMSim);
-            DEMSim.SetVerbosity(QUIET);
+            DEMSim.SetVerbosity("QUIET");
 
             auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu}, {"Crr", Crr}});
             // A ball
@@ -171,7 +169,7 @@ void SphereRollUpIncline() {
             auto sphere_tracker = DEMSim.Track(sphere);
 
             float step_time = 1e-4;
-            DEMSim.SetInitTimeStep(step_time);
+            DEMSim.SetTimeStepSize(step_time);
             DEMSim.SetCDUpdateFreq(50);
             DEMSim.SetMaxVelocity(2.0);
             DEMSim.Initialize();
@@ -239,7 +237,7 @@ void SphereStack() {
                 auto sphere_tracker = DEMSim.Track(sphere_top);
 
                 float step_time = 1e-5;
-                DEMSim.SetInitTimeStep(step_time);
+                DEMSim.SetTimeStepSize(step_time);
                 // Just do CD once and we are all good
                 DEMSim.SetCDUpdateFreq(-1);
                 DEMSim.SetMaxVelocity(1.0);
@@ -288,6 +286,8 @@ void SphereStack() {
 }
 
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_TestPack ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     // Choose a validation test by uncommenting it
     SphereRollUpIncline();
     // EllpsiodFallingOver();

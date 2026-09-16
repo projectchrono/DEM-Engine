@@ -20,10 +20,10 @@ float3 rotVelCPA, rotVelCPB;
     rotVelCPA = cross(ARotVel, locCPA);
     rotVelCPB = cross(BRotVel, locCPB);
     // This is mapping from local rotational velocity to global
-    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x, AOriQ.y, AOriQ.z);
-    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
+    applyOriQToVector3(rotVelCPA, AOriQ);
+    applyOriQToVector3(rotVelCPB, BOriQ);
 }
-float mass_eff, sqrt_Rd, beta;
+float mass_eff, beta;
 float3 vrel_tan;
 float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
 
@@ -131,14 +131,12 @@ if (unbroken > DEME_TINY_FLOAT) {
                 rotVelCPA = cross(ARotVel, locCPA);
                 rotVelCPB = cross(BRotVel, locCPB);
                 // This is mapping from local rotational velocity to global
-                applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x,
-                                                        AOriQ.y, AOriQ.z);
-                applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x,
-                                                        BOriQ.y, BOriQ.z);
+                applyOriQToVector3(rotVelCPA, AOriQ);
+                applyOriQToVector3(rotVelCPB, BOriQ);
             }
 
             // A few re-usables
-            float mass_eff, sqrt_Rd, beta;
+            float mass_eff, cnt_rad, beta;
             float3 vrel_tan;
             float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
 
@@ -158,8 +156,9 @@ if (unbroken > DEME_TINY_FLOAT) {
                 }
 
                 mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
-                sqrt_Rd = sqrt(temp * (ARadius * BRadius) / (ARadius + BRadius));
-                const float Sn = 2. * E_cnt * sqrt_Rd;
+                // Broken bonds fall back to ordinary Hertzian contact, based on the measured overlap geometry.
+                cnt_rad = sqrtf(overlapArea / deme::PI);
+                const float Sn = 2. * E_cnt * cnt_rad;
 
                 const float loge = (CoR_cnt < DEME_TINY_FLOAT) ? log(DEME_TINY_FLOAT) : log(CoR_cnt);
                 beta = loge / sqrt(loge * loge + deme::PI_SQUARED);
@@ -176,7 +175,7 @@ if (unbroken > DEME_TINY_FLOAT) {
                 // Figure out if we should apply rolling resistance force
                 bool should_add_rolling_resistance = true;
                 {
-                    const float R_eff = sqrtf((ARadius * BRadius) / (ARadius + BRadius));
+                    const float R_eff = (cnt_rad * cnt_rad) / overlapDepth;
                     const float kn_simple = deme::FOUR_OVER_THREE * E_cnt * sqrtf(R_eff);
                     const float gn_simple =
                         -2.f * sqrtf(deme::FIVE_OVER_THREE * mass_eff * E_cnt) * beta * powf(R_eff, 0.25f);
@@ -210,7 +209,7 @@ if (unbroken > DEME_TINY_FLOAT) {
 
             // Tangential force part
             if (mu_cnt > 0.0) {
-                const float kt = 8. * G_cnt * sqrt_Rd;
+                const float kt = 8. * G_cnt * cnt_rad;
                 const float gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
                 float3 tangent_force = -kt * delta_tan - gt * vrel_tan;
                 const float ft = length(tangent_force);

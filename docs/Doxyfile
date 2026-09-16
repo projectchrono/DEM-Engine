@@ -1,0 +1,71 @@
+# DEM-Engine public C++ API documentation.
+#
+# Run this file from the docs directory. Sphinx consumes the generated XML
+# through Breathe and presents it alongside the user and Python guides.
+
+PROJECT_NAME           = "DEM-Engine"
+PROJECT_NUMBER         = "3"
+PROJECT_BRIEF          = "GPU-accelerated discrete element method solver"
+
+OUTPUT_DIRECTORY       = _build/doxygen
+CREATE_SUBDIRS         = NO
+ALLOW_UNICODE_NAMES    = YES
+OUTPUT_LANGUAGE        = English
+
+INPUT                  = ../src/DEM/API.h \
+                         ../src/DEM/AuxClasses.h \
+                         ../src/DEM/BdrsAndObjs.h \
+                         ../src/DEM/Models.h \
+                         ../src/DEM/Structs.h \
+                         ../src/DEM/VariableTypes.h \
+                         ../src/DEM/utils/ClumpMassProperties.hpp \
+                         ../src/DEM/utils/MeshUtils.hpp \
+                         ../src/DEM/utils/Samplers.hpp
+FILE_PATTERNS          = *.h *.hpp
+RECURSIVE              = NO
+EXCLUDE                = ../src/DEM/dT.h ../src/DEM/kT.h
+
+EXTRACT_ALL            = NO
+EXTRACT_PRIVATE        = NO
+EXTRACT_PACKAGE        = NO
+EXTRACT_STATIC         = NO
+HIDE_UNDOC_MEMBERS     = YES
+HIDE_UNDOC_CLASSES     = YES
+HIDE_FRIEND_COMPOUNDS  = YES
+INTERNAL_DOCS          = NO
+
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = YES
+MARKDOWN_SUPPORT       = NO
+MULTILINE_CPP_IS_BRIEF = NO
+INHERIT_DOCS           = YES
+SEPARATE_MEMBER_PAGES  = NO
+SORT_MEMBER_DOCS       = YES
+SORT_BRIEF_DOCS        = YES
+
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+SKIP_FUNCTION_MACROS   = YES
+PREDEFINED             = __host__= __device__= __global__= \
+                         __forceinline__= __shared__= __align__(x)= \
+                         __launch_bounds__(x)=
+
+GENERATE_HTML          = NO
+GENERATE_LATEX         = NO
+GENERATE_XML           = YES
+XML_OUTPUT             = xml
+XML_PROGRAMLISTING     = NO
+
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+WARN_IF_INCOMPLETE_DOC = YES
+WARN_NO_PARAMDOC       = NO
+WARN_LOGFILE           = _build/doxygen-warnings.log
+
+STRIP_FROM_PATH        = ..
+FULL_PATH_NAMES        = YES
+REFERENCES_RELATION    = YES
+REFERENCED_BY_RELATION = YES
+SOURCE_BROWSER         = NO

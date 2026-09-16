@@ -6,7 +6,10 @@
 #include <core/ApiVersion.h>
 #include "API.h"
 #include "Defines.h"
-#include "HostSideHelpers.hpp"
+#include "utils/AnalyticalOutput.hpp"
+#include "utils/CombinedOwnerUtils.hpp"
+#include "utils/HostSideHelpers.hpp"
+#include "utils/MeshUtils.hpp"
 #include "AuxClasses.h"
 #include "../kernel/DEMHelperKernels.cuh"
 
@@ -17,102 +20,78 @@
 #include <cstring>
 #include <limits>
 #include <algorithm>
+#include <vector>
+#include <cmath>
+#include <unordered_set>
 
 namespace deme {
 
 DEMSolver::DEMSolver(unsigned int nGPUs) {
-    if (nGPUs == 0) {
-        DEME_ERROR("DEMSolver was set to use 0 GPUs and that is currently not supported.");
+    if (nGPUs == 0 || nGPUs > 2) {
+        DEME_ERROR("DEMSolver supports one or two GPU devices, but %u was requested.", nGPUs);
     }
 
-    dTkT_InteractionManager = std::make_unique<ThreadManager>();
-    kTMain_InteractionManager = std::make_unique<WorkerReportChannel>();
-    dTMain_InteractionManager = std::make_unique<WorkerReportChannel>();
-
-    // Set default solver params
-    setDefaultSolverParams();
-
-    // Determine which device IDs to use: scan available GPUs, use at most 2
-    int detected = GpuManager::scanNumDevices();
-    if (nGPUs > 2) {
-        DEME_WARNING("DEMSolver was requested to use %u GPUs, but at most 2 are supported. Using 2 GPUs.", nGPUs);
-        nGPUs = 2;
+    int visible_devices = 0;
+    DEME_GPU_CALL(cudaGetDeviceCount(&visible_devices));
+    if (visible_devices < 1) {
+        DEME_ERROR("DEMSolver requires at least one visible CUDA device.");
     }
-    // Build a 2-element device ID list (one per thread); both threads share the same device when using 1 GPU
-    unsigned int nToUse = std::min((unsigned int)detected, nGPUs);
-    std::vector<int> device_ids;
-    if (nToUse >= 2) {
-        device_ids = {0, 1};
+
+    if (nGPUs == 2 && visible_devices >= 2) {
+        constructWorkers({0, 1});
     } else {
-        device_ids = {0, 0};
+        if (nGPUs == 2) {
+            DEME_WARNING(
+                "Two GPUs were requested, but only one CUDA device is visible. Both DEME workers will use device 0.");
+        }
+        constructWorkers({0});
     }
-    // Always use id list to avoid GpuManager deciding device usage by itself
-    dTkT_GpuManager = std::make_unique<GpuManager>(device_ids);
-
-    // Thread-based worker creation may be needed as the workers allocate DualStructs on construction
-    std::thread dT_construct([&]() {
-        // Get a device/stream ID to use from the GPU Manager
-        const GpuManager::StreamInfo dT_stream_info = dTkT_GpuManager->getAvailableStream();
-        DEME_GPU_CALL(cudaSetDevice(dT_stream_info.device));
-        dT = std::make_unique<DEMDynamicThread>(dTMain_InteractionManager.get(), dTkT_InteractionManager.get(),
-                                                dT_stream_info);
-    });
-
-    std::thread kT_construct([&]() {
-        const GpuManager::StreamInfo kT_stream_info = dTkT_GpuManager->getAvailableStream();
-        DEME_GPU_CALL(cudaSetDevice(kT_stream_info.device));
-        kT = std::make_unique<DEMKinematicThread>(kTMain_InteractionManager.get(), dTkT_InteractionManager.get(),
-                                                  kT_stream_info);
-    });
-
-    dT_construct.join();
-    kT_construct.join();
-
-    // Make friends
-    dT->kT = kT.get();
-    kT->dT = dT.get();
 }
 
-DEMSolver::DEMSolver(std::vector<int> device_ids) {
+DEMSolver::DEMSolver(const std::vector<int>& device_ids) {
+    constructWorkers(device_ids);
+}
+
+void DEMSolver::constructWorkers(const std::vector<int>& device_ids) {
+    if (device_ids.empty() || device_ids.size() > 2) {
+        DEME_ERROR("DEMSolver device selection requires one or two CUDA device IDs; received %zu.", device_ids.size());
+    }
+
+    int visible_devices = 0;
+    DEME_GPU_CALL(cudaGetDeviceCount(&visible_devices));
+    if (visible_devices < 1) {
+        DEME_ERROR("DEMSolver requires at least one visible CUDA device.");
+    }
+    for (int device : device_ids) {
+        if (device < 0 || device >= visible_devices) {
+            DEME_ERROR("CUDA device ID %d is out of range. %d CUDA device(s) are visible.", device, visible_devices);
+        }
+    }
+
+    const int dT_device = device_ids[0];
+    const int kT_device = device_ids.size() == 1 ? device_ids[0] : device_ids[1];
+    m_gpu_device_ids = {dT_device, kT_device};
+
     dTkT_InteractionManager = std::make_unique<ThreadManager>();
     kTMain_InteractionManager = std::make_unique<WorkerReportChannel>();
     dTMain_InteractionManager = std::make_unique<WorkerReportChannel>();
 
+    // There is one stream record per worker. Repeated IDs intentionally place both workers on the same GPU.
+    dTkT_GpuManager = std::make_unique<GpuManager>(m_gpu_device_ids);
+
     // Set default solver params
     setDefaultSolverParams();
 
-    // Validate device IDs against the number of physically available GPUs
-    int detected = GpuManager::scanNumDevices();
-    if (device_ids.empty()) {
-        DEME_ERROR("DEMSolver was given an empty device ID list. Please provide at least one device ID.");
-    }
-    for (int id : device_ids) {
-        if (id < 0 || id >= detected) {
-            DEME_ERROR("DEMSolver was given device ID %d, but only %d GPU device(s) are available.", id, detected);
-        }
-    }
-    if (device_ids.size() > 2) {
-        DEME_WARNING("DEMSolver was given %zu device IDs, but at most 2 are supported. Using only the first 2.",
-                     device_ids.size());
-        device_ids.resize(2);
-    }
-    // When only one device is specified, both threads run on that device
-    if (device_ids.size() == 1) {
-        device_ids = {device_ids[0], device_ids[0]};
-    }
-    // Always use id list to avoid GpuManager deciding device usage by itself
-    dTkT_GpuManager = std::make_unique<GpuManager>(device_ids);
-
     // Thread-based worker creation may be needed as the workers allocate DualStructs on construction
     std::thread dT_construct([&]() {
-        const GpuManager::StreamInfo dT_stream_info = dTkT_GpuManager->getAvailableStream();
+        const GpuManager::StreamInfo dT_stream_info = dTkT_GpuManager->getAvailableStreamFromDevice(dT_device);
         DEME_GPU_CALL(cudaSetDevice(dT_stream_info.device));
         dT = std::make_unique<DEMDynamicThread>(dTMain_InteractionManager.get(), dTkT_InteractionManager.get(),
                                                 dT_stream_info);
     });
 
     std::thread kT_construct([&]() {
-        const GpuManager::StreamInfo kT_stream_info = dTkT_GpuManager->getAvailableStream();
+        const GpuManager::StreamInfo kT_stream_info = dTkT_GpuManager->getAvailableStreamFromDevice(kT_device);
         DEME_GPU_CALL(cudaSetDevice(kT_stream_info.device));
         kT = std::make_unique<DEMKinematicThread>(kTMain_InteractionManager.get(), dTkT_InteractionManager.get(),
                                                   kT_stream_info);
@@ -127,6 +106,7 @@ DEMSolver::DEMSolver(std::vector<int> device_ids) {
 }
 
 DEMSolver::~DEMSolver() {
+    WaitForPendingOutput();
     if (sys_initialized)
         DoDynamicsThenSync(0.0);
     kT.reset();
@@ -137,37 +117,100 @@ DEMSolver::~DEMSolver() {
     dTkT_GpuManager.reset();
 }
 
+void DEMSolver::SetGravitationalAcceleration(float3 g) {
+    G = g;
+    if (!sys_initialized) {
+        return;
+    }
+
+    // Gravity is read directly by device kernels, so keep both workers' host mirrors and device copies coherent.
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->simParams->Gx = g.x;
+        dT->simParams->Gy = g.y;
+        dT->simParams->Gz = g.z;
+        dT->simParams.toDevice();
+    }
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->simParams->Gx = g.x;
+        kT->simParams->Gy = g.y;
+        kT->simParams->Gz = g.z;
+        kT->simParams.toDevice();
+    }
+}
+
+void DEMSolver::SetTimeStepSize(double ts_size) {
+    m_ts_size = ts_size;
+    if (!sys_initialized) {
+        return;
+    }
+
+    // The device representation is currently float; narrow only at the host/device boundary.
+    const float device_ts = static_cast<float>(ts_size);
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->simParams->dyn.h = device_ts;
+        dT->simParams.toDevice();
+    }
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->simParams->dyn.h = device_ts;
+        kT->simParams.toDevice();
+    }
+}
+
+void DEMSolver::SetVerbosity(verbosity_t verbose) {
+    switch (verbose) {
+        case VERBOSITY_QUIET:
+            Logger::GetInstance().SetVerbosity(VERBOSITY_QUIET);
+            break;
+        case VERBOSITY_ERROR:
+            Logger::GetInstance().SetVerbosity(VERBOSITY_ERROR);
+            break;
+        case VERBOSITY_WARNING:
+            Logger::GetInstance().SetVerbosity(VERBOSITY_WARNING);
+            break;
+        case VERBOSITY_INFO:
+            Logger::GetInstance().SetVerbosity(VERBOSITY_INFO);
+            break;
+        case VERBOSITY_METRIC:
+            Logger::GetInstance().SetVerbosity(VERBOSITY_METRIC);
+            break;
+        case VERBOSITY_DEBUG:
+            Logger::GetInstance().SetVerbosity(VERBOSITY_DEBUG);
+            break;
+        default:
+            DEME_ERROR("Verbosity-level %d is unknown in SetVerbosity call.", verbose);
+    }
+    verbosity = verbose;
+}
+
 void DEMSolver::SetVerbosity(const std::string& verbose) {
-    std::string u_verbose = str_to_upper(verbose);
-    switch (hash_charr(u_verbose.c_str())) {
-        case ("QUIET"_):
-            verbosity = VERBOSITY::QUIET;
+    switch (hash_charr(str_to_upper(verbose).c_str())) {
+        case "QUIET"_:
+            SetVerbosity(VERBOSITY_QUIET);
             break;
-        case ("ERROR"_):
-            verbosity = VERBOSITY::ERR;
+        case "ERROR"_:
+            SetVerbosity(VERBOSITY_ERROR);
             break;
-        case ("WARNING"_):
-            verbosity = VERBOSITY::WARNING;
+        case "WARNING"_:
+            SetVerbosity(VERBOSITY_WARNING);
             break;
-        case ("INFO"_):
-            verbosity = VERBOSITY::INFO;
+        case "INFO"_:
+            SetVerbosity(VERBOSITY_INFO);
             break;
-        case ("STEP_ANOMALY"_):
-            verbosity = VERBOSITY::STEP_ANOMALY;
+        case "METRIC"_:
+            SetVerbosity(VERBOSITY_METRIC);
             break;
-        case ("STEP_METRIC"_):
-            verbosity = VERBOSITY::STEP_METRIC;
-            break;
-        case ("DEBUG"_):
-            verbosity = VERBOSITY::DEBUG;
-            break;
-        case ("STEP_DEBUG"_):
-            verbosity = VERBOSITY::STEP_DEBUG;
+        case "DEBUG"_:
+            SetVerbosity(VERBOSITY_DEBUG);
             break;
         default:
             DEME_ERROR("Instruction %s is unknown in SetVerbosity call.", verbose.c_str());
     }
 }
+
 void DEMSolver::SetOutputFormat(const std::string& format) {
     std::string u_format = str_to_upper(format);
     switch (hash_charr(u_format.c_str())) {
@@ -177,13 +220,9 @@ void DEMSolver::SetOutputFormat(const std::string& format) {
         case ("BINARY"_):
             m_out_format = OUTPUT_FORMAT::BINARY;
             break;
-        case ("CHPF"_):
-#ifdef DEME_USE_CHPF
-            m_out_format = OUTPUT_FORMAT::CHPF;
+        case ("VTK"_):
+            m_out_format = OUTPUT_FORMAT::VTK;
             break;
-#else
-            DEME_ERROR("ChPF is not enabled when the code was compiled.");
-#endif
         default:
             DEME_ERROR("Instruction %s is unknown in SetOutputFormat call.", format.c_str());
     }
@@ -197,13 +236,6 @@ void DEMSolver::SetContactOutputFormat(const std::string& format) {
         case ("BINARY"_):
             m_cnt_out_format = OUTPUT_FORMAT::BINARY;
             break;
-        case ("CHPF"_):
-#ifdef DEME_USE_CHPF
-            m_cnt_out_format = OUTPUT_FORMAT::CHPF;
-            break;
-#else
-            DEME_ERROR("ChPF is not enabled when the code was compiled.");
-#endif
         default:
             DEME_ERROR("Instruction %s is unknown in SetContactOutputFormat call.", format.c_str());
     }
@@ -216,6 +248,12 @@ void DEMSolver::SetMeshOutputFormat(const std::string& format) {
             break;
         case ("OBJ"_):
             m_mesh_out_format = MESH_FORMAT::OBJ;
+            break;
+        case ("STL"_):
+            m_mesh_out_format = MESH_FORMAT::STL;
+            break;
+        case ("PLY"_):
+            m_mesh_out_format = MESH_FORMAT::PLY;
             break;
         default:
             DEME_ERROR("Instruction %s is unknown in SetMeshOutputFormat call.", format.c_str());
@@ -263,14 +301,70 @@ void DEMSolver::SetOutputContent(const std::vector<std::string>& content) {
             case ("OWNER_WILDCARD"_):
                 m_out_content = m_out_content | OUTPUT_CONTENT::OWNER_WILDCARD;
                 break;
-            case ("GEO_WILDCARD"_):
-                m_out_content = m_out_content | OUTPUT_CONTENT::GEO_WILDCARD;
-                break;
             default:
                 DEME_ERROR("Instruction %s is unknown in SetOutputContent call.", content[i].c_str());
         }
     }
 }
+
+void DEMSolver::SetMeshOutputContent(const std::vector<std::string>& content) {
+    m_mesh_out_content = static_cast<unsigned int>(MESH_OUTPUT_CONTENT::XYZ);
+    for (const auto& field : content) {
+        const std::string upper_field = str_to_upper(field);
+        switch (hash_charr(upper_field.c_str())) {
+            case ("XYZ"_):
+                break;
+            case ("QUAT"_):
+                m_mesh_out_content |= static_cast<unsigned int>(MESH_OUTPUT_CONTENT::QUAT);
+                break;
+            case ("ABSV"_):
+                m_mesh_out_content |= static_cast<unsigned int>(MESH_OUTPUT_CONTENT::ABSV);
+                break;
+            case ("VEL"_):
+                m_mesh_out_content |= static_cast<unsigned int>(MESH_OUTPUT_CONTENT::VEL);
+                break;
+            case ("ANG_VEL"_):
+                m_mesh_out_content |= static_cast<unsigned int>(MESH_OUTPUT_CONTENT::ANG_VEL);
+                break;
+            case ("ABS_ACC"_):
+                m_mesh_out_content |= static_cast<unsigned int>(MESH_OUTPUT_CONTENT::ABS_ACC);
+                break;
+            case ("ACC"_):
+                m_mesh_out_content |= static_cast<unsigned int>(MESH_OUTPUT_CONTENT::ACC);
+                break;
+            case ("ANG_ACC"_):
+                m_mesh_out_content |= static_cast<unsigned int>(MESH_OUTPUT_CONTENT::ANG_ACC);
+                break;
+            case ("FAMILY"_):
+                m_mesh_out_content |= static_cast<unsigned int>(MESH_OUTPUT_CONTENT::FAMILY);
+                break;
+            case ("MAT"_):
+                m_mesh_out_content |= static_cast<unsigned int>(MESH_OUTPUT_CONTENT::MAT);
+                break;
+            case ("OWNER_WILDCARD"_):
+                m_mesh_out_content |= static_cast<unsigned int>(MESH_OUTPUT_CONTENT::OWNER_WILDCARD);
+                break;
+            case ("GEO_WILDCARD"_):
+                m_mesh_out_content |= static_cast<unsigned int>(MESH_OUTPUT_CONTENT::GEO_WILDCARD);
+                break;
+            case ("OWNER"_):
+                m_mesh_out_content |= static_cast<unsigned int>(MESH_OUTPUT_CONTENT::OWNER);
+                break;
+            case ("MESH_ID"_):
+                m_mesh_out_content |= static_cast<unsigned int>(MESH_OUTPUT_CONTENT::MESH_ID);
+                break;
+            case ("TRI_ID"_):
+                m_mesh_out_content |= static_cast<unsigned int>(MESH_OUTPUT_CONTENT::TRI_ID);
+                break;
+            case ("PATCH_ID"_):
+                m_mesh_out_content |= static_cast<unsigned int>(MESH_OUTPUT_CONTENT::PATCH_ID);
+                break;
+            default:
+                DEME_ERROR("Instruction %s is unknown in SetMeshOutputContent call.", field.c_str());
+        }
+    }
+}
+
 void DEMSolver::SetContactOutputContent(const std::vector<std::string>& content) {
     std::vector<std::string> u_content(content.size());
     for (unsigned int i = 0; i < content.size(); i++) {
@@ -315,20 +409,63 @@ void DEMSolver::SetContactOutputContent(const std::vector<std::string>& content)
     }
 }
 
+void DEMSolver::SetMeshUniversalContact(bool use) {
+    kT->solverFlags.meshUniversalContact = use;
+    dT->solverFlags.meshUniversalContact = use;
+}
+
+void DEMSolver::SetPersistentContact(bool use) {
+    kT->solverFlags.hasPersistentContacts = use;
+    dT->solverFlags.hasPersistentContacts = use;
+}
+
+void DEMSolver::SetSimplePatchCombination(bool use) {
+    kT->solverFlags.useSimplePatchCombination = use;
+    dT->solverFlags.useSimplePatchCombination = use;
+}
+
+void DEMSolver::SetStablePatchIslandIDs(bool use) {
+    kT->solverFlags.useStablePatchIslandIDs = use;
+    dT->solverFlags.useStablePatchIslandIDs = use;
+}
+
+void DEMSolver::SetMeshParticlesLowPoly(bool use) {
+    kT->simParams->meshParticlesLowPoly = use;
+    dT->simParams->meshParticlesLowPoly = use;
+    if (sys_initialized) {
+        // This toggle is read inside both workers' device kernels, so on-the-fly changes must update device simParams.
+        {
+            ScopedCudaDevice device_scope(kT->streamInfo.device);
+            kT->simParams.toDevice();
+        }
+        {
+            ScopedCudaDevice device_scope(dT->streamInfo.device);
+            dT->simParams.toDevice();
+        }
+    }
+}
+
 void DEMSolver::SyncMemoryTransfer() {
-    dT->syncMemoryTransfer();
-    kT->syncMemoryTransfer();
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->syncMemoryTransfer();
+    }
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->syncMemoryTransfer();
+    }
 }
 
 std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     // Is this owner a clump?
     ownerType_t this_type = dT->ownerTypes[ownerID];  // ownerTypes has no way to change on device
     std::vector<bodyID_t> geo_to_watch;               // geo IDs that need to scan
 
     // Get device-major info to host first
-    dT->idGeometryA.toHostAsync(dT->streamInfo.stream);
-    dT->idGeometryB.toHostAsync(dT->streamInfo.stream);
-    dT->contactType.toHostAsync(dT->streamInfo.stream);
+    dT->idPatchA.toHostAsync(dT->streamInfo.stream);
+    dT->idPatchB.toHostAsync(dT->streamInfo.stream);
+    dT->contactTypePatch.toHostAsync(dT->streamInfo.stream);
 
     // These arrays can't change on device
     switch (this_type) {
@@ -345,8 +482,8 @@ std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
             }
             break;
         case OWNER_T_MESH:
-            for (bodyID_t i = 0; i < nTriGM; i++) {
-                if (ownerID == dT->ownerMesh[i])
+            for (bodyID_t i = 0; i < nMeshPatches; i++) {
+                if (ownerID == dT->ownerPatchMesh[i])
                     geo_to_watch.push_back(i);
             }
             break;
@@ -356,38 +493,19 @@ std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
     dT->syncMemoryTransfer();
 
     std::vector<bodyID_t> clumps_in_cnt;
-    // If this is not clump, then checking idB for it is enough
-    if (this_type != OWNER_T_CLUMP) {
-        for (size_t i = 0; i < dT->getNumContacts(); i++) {
-            auto idA = dT->idGeometryA[i];
-            auto idB = dT->idGeometryB[i];
-            if (!check_exist(geo_to_watch, idB))
-                continue;
-            auto cnt_type = dT->contactType[i];
-            // If it is a mesh facet, then contact type needs to match
-            if (this_type == OWNER_T_MESH) {
-                if (cnt_type == SPHERE_MESH_CONTACT) {
-                    clumps_in_cnt.push_back(dT->ownerClumpBody[idA]);
-                }
-            } else {  // If analytical, then contact type larger than PLANE is fine
-                if (cnt_type >= SPHERE_PLANE_CONTACT) {
-                    clumps_in_cnt.push_back(dT->ownerClumpBody[idA]);
-                }
-            }
-        }
-    } else {  // If a clump, then both idA and idB need to be checked
-        for (size_t i = 0; i < dT->getNumContacts(); i++) {
-            auto idA = dT->idGeometryA[i];
-            auto idB = dT->idGeometryB[i];
-            auto cnt_type = dT->contactType[i];
+    for (size_t i = 0; i < dT->getNumContacts(); i++) {
+        auto idA = dT->idPatchA[i];
+        auto idB = dT->idPatchB[i];
+        auto cnt_type = dT->contactTypePatch[i];
+        // Using decode to get the A and B type
+        auto typeA = decodeTypeA(cnt_type);
+        auto typeB = decodeTypeB(cnt_type);
+        // Ensure it's a clump-related contact
+        if (typeA == GEO_T_SPHERE || typeB == GEO_T_SPHERE) {
             if (check_exist(geo_to_watch, idA)) {
-                if (cnt_type == SPHERE_SPHERE_CONTACT) {
-                    clumps_in_cnt.push_back(dT->ownerClumpBody[idB]);
-                }
+                clumps_in_cnt.push_back(dT->getPatchOwnerID(idB, typeB));
             } else if (check_exist(geo_to_watch, idB)) {
-                if (cnt_type == SPHERE_SPHERE_CONTACT) {
-                    clumps_in_cnt.push_back(dT->ownerClumpBody[idA]);
-                }
+                clumps_in_cnt.push_back(dT->getPatchOwnerID(idA, typeA));
             }
         }
     }
@@ -408,6 +526,11 @@ std::shared_ptr<DEMClumpBatch> DEMSolver::Duplicate(const std::shared_ptr<DEMClu
     // Make a copy
     DEMClumpBatch obj = *ptr;
     return this->AddClumps(obj);
+}
+std::shared_ptr<DEMMesh> DEMSolver::Duplicate(const std::shared_ptr<DEMMesh>& ptr) {
+    // Make a copy
+    DEMMesh obj = *ptr;
+    return this->AddMesh(obj);
 }
 
 std::vector<std::pair<bodyID_t, bodyID_t>> DEMSolver::GetClumpContacts() const {
@@ -531,29 +654,387 @@ std::vector<std::pair<bodyID_t, bodyID_t>> DEMSolver::GetContacts(
 }
 
 std::shared_ptr<ContactInfoContainer> DEMSolver::GetContactDetailedInfo(float force_thres) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     return dT->generateContactInfo(force_thres);
 }
 
 std::vector<float3> DEMSolver::GetOwnerPosition(bodyID_t ownerID, bodyID_t n) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     return dT->getOwnerPos(ownerID, n);
 }
+std::vector<float3> DEMSolver::GetClumpPositionsHandover() const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    return dT->getOwnerPos(0, nOwnerClumps);
+}
 std::vector<float3> DEMSolver::GetOwnerAngVel(bodyID_t ownerID, bodyID_t n) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     return dT->getOwnerAngVel(ownerID, n);
 }
 std::vector<float3> DEMSolver::GetOwnerVelocity(bodyID_t ownerID, bodyID_t n) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     return dT->getOwnerVel(ownerID, n);
 }
 std::vector<float4> DEMSolver::GetOwnerOriQ(bodyID_t ownerID, bodyID_t n) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     return dT->getOwnerOriQ(ownerID, n);
 }
 std::vector<float3> DEMSolver::GetOwnerAcc(bodyID_t ownerID, bodyID_t n) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     return dT->getOwnerAcc(ownerID, n);
 }
 std::vector<float3> DEMSolver::GetOwnerAngAcc(bodyID_t ownerID, bodyID_t n) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     return dT->getOwnerAngAcc(ownerID, n);
 }
 std::vector<unsigned int> DEMSolver::GetOwnerFamily(bodyID_t ownerID, bodyID_t n) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     return dT->getOwnerFamily(ownerID, n);
+}
+
+void DEMSolver::GetOwnerPositionToDevice(float3* destination,
+                                         size_t capacity,
+                                         int destination_device,
+                                         bodyID_t ownerID,
+                                         bodyID_t n,
+                                         bool validate) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->getOwnerDataToDevice(destination, capacity, destination_device, ownerID, n, OwnerDataField::POSITION, 0,
+                             validate);
+}
+
+void DEMSolver::GetOwnerVelocityToDevice(float3* destination,
+                                         size_t capacity,
+                                         int destination_device,
+                                         bodyID_t ownerID,
+                                         bodyID_t n,
+                                         bool validate) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->getOwnerDataToDevice(destination, capacity, destination_device, ownerID, n, OwnerDataField::VELOCITY, 0,
+                             validate);
+}
+
+void DEMSolver::GetOwnerAngVelLocalToDevice(float3* destination,
+                                            size_t capacity,
+                                            int destination_device,
+                                            bodyID_t ownerID,
+                                            bodyID_t n,
+                                            bool validate) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->getOwnerDataToDevice(destination, capacity, destination_device, ownerID, n,
+                             OwnerDataField::ANGULAR_VELOCITY_LOCAL, 0, validate);
+}
+
+void DEMSolver::GetOwnerAngVelGlobalToDevice(float3* destination,
+                                             size_t capacity,
+                                             int destination_device,
+                                             bodyID_t ownerID,
+                                             bodyID_t n,
+                                             bool validate) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->getOwnerDataToDevice(destination, capacity, destination_device, ownerID, n,
+                             OwnerDataField::ANGULAR_VELOCITY_GLOBAL, 0, validate);
+}
+
+void DEMSolver::GetOwnerOriQToDevice(float4* destination,
+                                     size_t capacity,
+                                     int destination_device,
+                                     bodyID_t ownerID,
+                                     bodyID_t n,
+                                     bool validate) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->getOwnerDataToDevice(destination, capacity, destination_device, ownerID, n, OwnerDataField::ORIENTATION, 0,
+                             validate);
+}
+
+void DEMSolver::GetOwnerAccToDevice(float3* destination,
+                                    size_t capacity,
+                                    int destination_device,
+                                    bodyID_t ownerID,
+                                    bodyID_t n,
+                                    bool validate) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->getOwnerDataToDevice(destination, capacity, destination_device, ownerID, n,
+                             OwnerDataField::CONTACT_ACCELERATION, 0, validate);
+}
+
+void DEMSolver::GetOwnerAngAccLocalToDevice(float3* destination,
+                                            size_t capacity,
+                                            int destination_device,
+                                            bodyID_t ownerID,
+                                            bodyID_t n,
+                                            bool validate) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->getOwnerDataToDevice(destination, capacity, destination_device, ownerID, n,
+                             OwnerDataField::CONTACT_ANGULAR_ACCELERATION_LOCAL, 0, validate);
+}
+
+void DEMSolver::GetOwnerAngAccGlobalToDevice(float3* destination,
+                                             size_t capacity,
+                                             int destination_device,
+                                             bodyID_t ownerID,
+                                             bodyID_t n,
+                                             bool validate) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->getOwnerDataToDevice(destination, capacity, destination_device, ownerID, n,
+                             OwnerDataField::CONTACT_ANGULAR_ACCELERATION_GLOBAL, 0, validate);
+}
+
+void DEMSolver::GetOwnerContactWrench(std::vector<float3>& forces,
+                                      std::vector<float3>& torques,
+                                      bodyID_t ownerID,
+                                      bodyID_t count) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->getOwnerContactWrench(forces, torques, ownerID, count);
+}
+
+void DEMSolver::GetOwnerContactWrenchToDevice(float3* force_destination,
+                                              float3* torque_destination,
+                                              size_t capacity,
+                                              int destination_device,
+                                              bodyID_t ownerID,
+                                              bodyID_t count) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->getOwnerContactWrenchToDevice(force_destination, torque_destination, capacity, destination_device, ownerID,
+                                      count);
+}
+
+void DEMSolver::GetOwnerFamilyToDevice(unsigned int* destination,
+                                       size_t capacity,
+                                       int destination_device,
+                                       bodyID_t ownerID,
+                                       bodyID_t n,
+                                       bool validate) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->getOwnerDataToDevice(destination, capacity, destination_device, ownerID, n, OwnerDataField::FAMILY, 0,
+                             validate);
+}
+
+void DEMSolver::RequestContactUpdate() {
+    assertSysInit("RequestContactUpdate");
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->announceCritical();
+}
+
+void DEMSolver::SetTrianglePVTrackingOwners(const std::vector<bodyID_t>& mesh_owner_ids) {
+    assertSysInit("SetTrianglePVTrackingOwners");
+    m_user_tri_pv_tracking_owners = mesh_owner_ids;
+    refreshTrianglePVTrackingOwners();
+}
+
+void DEMSolver::DisableTrianglePVTracking() {
+    assertSysInit("DisableTrianglePVTracking");
+    m_user_tri_pv_tracking_owners.clear();
+    refreshTrianglePVTrackingOwners();
+}
+
+bool DEMSolver::GetTrackedOwnerTrianglePV(bodyID_t ownerID,
+                                          std::vector<float>& avgP,
+                                          std::vector<float>& avgV,
+                                          std::vector<float>& avgPV,
+                                          bool reset_window) {
+    assertSysInit("GetTrackedOwnerTrianglePV");
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    const bool ok = dT->getTrackedOwnerTrianglePV(ownerID, avgP, avgV, avgPV, reset_window);
+    if (!ok) {
+        return false;
+    }
+    // Wear consumes and resets the live tracking window inside DoDynamics; keep the last averaged window available for
+    // display-style queries that do not request a reset.
+    if (!reset_window && dT->triPVWindowSteps == 0) {
+        auto it = m_last_tri_pv_snapshot.find(ownerID);
+        if (it != m_last_tri_pv_snapshot.end()) {
+            avgP = it->second.avgP;
+            avgV = it->second.avgV;
+            avgPV = it->second.avgPV;
+        }
+    }
+    return true;
+}
+
+void DEMSolver::EnableMeshWearModel(bodyID_t ownerID,
+                                    double wear_rate,
+                                    double update_interval,
+                                    double start_time,
+                                    double end_time,
+                                    float normal_sign) {
+    assertSysInit("EnableMeshWearModel");
+    if (ownerID >= nOwnerBodies) {
+        DEME_ERROR("Owner ID %zu is out of range [0, %zu).", (size_t)ownerID, (size_t)nOwnerBodies);
+    }
+    if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
+        DEME_ERROR("Owner ID %zu is not a mesh owner. Wear model supports mesh owners only.", (size_t)ownerID);
+    }
+    if (!(std::isfinite(wear_rate) && wear_rate >= 0.0)) {
+        DEME_ERROR("Wear rate must be finite and non-negative (got %.9g).", wear_rate);
+    }
+    if (!(std::isfinite(update_interval) && update_interval > 0.0)) {
+        DEME_ERROR("Wear update interval must be finite and > 0 (got %.9g).", update_interval);
+    }
+    const double min_interval = static_cast<double>(dT->simParams->dyn.h);
+    if (update_interval + 1e-15 < min_interval) {
+        DEME_ERROR("Wear update interval %.9g is smaller than current solver step %.9g.", update_interval,
+                   min_interval);
+    }
+    if (!(std::isfinite(start_time) && start_time >= 0.0)) {
+        DEME_ERROR("Wear start time must be finite and >= 0 (got %.9g).", start_time);
+    }
+    if (std::isfinite(end_time) && end_time >= 0.0 && !(end_time > start_time)) {
+        DEME_ERROR("Wear end time %.9g must be > start time %.9g.", end_time, start_time);
+    }
+    if (!std::isfinite(normal_sign) || std::abs(normal_sign) <= DEME_TINY_FLOAT) {
+        DEME_ERROR("Wear normal_sign must be finite and non-zero (got %.9g).", (double)normal_sign);
+    }
+
+    size_t tri_start = 0;
+    size_t tri_count = 0;
+    if (!findOwnerTriangleRange(ownerID, tri_start, tri_count)) {
+        DEME_ERROR("Cannot determine triangle range for mesh owner %zu.", (size_t)ownerID);
+    }
+    auto mesh_it = m_owner_mesh_map.find(ownerID);
+    auto& mesh = m_meshes.at(mesh_it->second);
+    const auto& faces = mesh->GetIndicesVertexes();
+    if (faces.size() != tri_count) {
+        DEME_ERROR("Wear model triangle count mismatch for owner %zu (range=%zu, mesh=%zu).", (size_t)ownerID,
+                   tri_count, faces.size());
+    }
+    const auto& vertices = mesh->GetCoordsVertices();
+    if (vertices.empty()) {
+        DEME_ERROR("Mesh owner %zu has no vertices; wear model cannot be enabled.", (size_t)ownerID);
+    }
+
+    MeshWearModelState state;
+    state.wear_rate = wear_rate;
+    state.update_interval = update_interval;
+    state.start_time = start_time;
+    state.end_time = end_time;
+    state.normal_sign = (normal_sign >= 0.f) ? 1.f : -1.f;
+    state.tri_start = tri_start;
+    state.tri_count = tri_count;
+    state.pending_depth.assign(tri_count, 0.f);
+
+    const double eps = computeVertexQuantEps(vertices);
+    state.vertex_to_canon = buildCanonicalVertexMap(vertices, eps);
+    if (state.vertex_to_canon.size() != vertices.size()) {
+        DEME_ERROR("Failed to build canonical vertex map for wear model owner %zu.", (size_t)ownerID);
+    }
+    size_t max_group = 0;
+    for (size_t g : state.vertex_to_canon) {
+        max_group = std::max(max_group, g);
+    }
+    state.n_canon_vertices = max_group + 1;
+
+    constexpr double kWearCapFractionOfMedianEdge = 2.0;
+    state.max_depth_fraction_of_median_edge = static_cast<float>(kWearCapFractionOfMedianEdge);
+    state.ref_tri_normals.assign(tri_count, make_float3(0.f));
+    auto cross3 = [](const float3& a, const float3& b) {
+        return make_float3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+    };
+    std::vector<float> edge_lengths;
+    edge_lengths.reserve(tri_count * 3);
+    double sum_edge_len = 0.0;
+    size_t n_edges = 0;
+    for (size_t tri = 0; tri < tri_count; tri++) {
+        const int3& f = faces[tri];
+        if (f.x < 0 || f.y < 0 || f.z < 0) {
+            continue;
+        }
+        const size_t i0 = static_cast<size_t>(f.x);
+        const size_t i1 = static_cast<size_t>(f.y);
+        const size_t i2 = static_cast<size_t>(f.z);
+        if (i0 >= vertices.size() || i1 >= vertices.size() || i2 >= vertices.size()) {
+            continue;
+        }
+        const float3 v0 = vertices[i0];
+        const float3 v1 = vertices[i1];
+        const float3 v2 = vertices[i2];
+        const float3 n_raw = cross3(v1 - v0, v2 - v0);
+        const float n_len = length(n_raw);
+        if (n_len > DEME_TINY_FLOAT && std::isfinite(n_len)) {
+            state.ref_tri_normals[tri] = n_raw / n_len;
+        }
+        const float e01 = length(v1 - v0);
+        const float e12 = length(v2 - v1);
+        const float e20 = length(v0 - v2);
+        if (e01 > DEME_TINY_FLOAT && std::isfinite(e01)) {
+            edge_lengths.push_back(e01);
+        }
+        if (e12 > DEME_TINY_FLOAT && std::isfinite(e12)) {
+            edge_lengths.push_back(e12);
+        }
+        if (e20 > DEME_TINY_FLOAT && std::isfinite(e20)) {
+            edge_lengths.push_back(e20);
+        }
+        sum_edge_len += static_cast<double>(e01 + e12 + e20);
+        n_edges += 3;
+    }
+
+    double median_edge = 0.0;
+    if (!edge_lengths.empty()) {
+        const size_t n = edge_lengths.size();
+        const size_t mid = n / 2;
+        auto mid_it = edge_lengths.begin() + mid;
+        std::nth_element(edge_lengths.begin(), mid_it, edge_lengths.end());
+        median_edge = static_cast<double>(*mid_it);
+        if (n % 2 == 0) {
+            const auto max_lower_it = std::max_element(edge_lengths.begin(), mid_it);
+            if (max_lower_it != mid_it) {
+                median_edge = 0.5 * (median_edge + static_cast<double>(*max_lower_it));
+            }
+        }
+    }
+    if (!(median_edge > 0.0) || !std::isfinite(median_edge)) {
+        median_edge = (n_edges > 0) ? (sum_edge_len / static_cast<double>(n_edges)) : 0.0;
+    }
+    state.median_edge_length = static_cast<float>(std::max(0.0, median_edge));
+    state.max_depth_per_update = static_cast<float>(std::max(1e-8, median_edge * kWearCapFractionOfMedianEdge));
+
+    m_mesh_wear_models[ownerID] = std::move(state);
+    refreshTrianglePVTrackingOwners();
+}
+
+void DEMSolver::DisableMeshWearModel(bodyID_t ownerID) {
+    assertSysInit("DisableMeshWearModel");
+    auto it = m_mesh_wear_models.find(ownerID);
+    if (it == m_mesh_wear_models.end()) {
+        return;
+    }
+    m_mesh_wear_models.erase(it);
+    refreshTrianglePVTrackingOwners();
+}
+
+void DEMSolver::DisableAllMeshWearModels() {
+    assertSysInit("DisableAllMeshWearModels");
+    if (m_mesh_wear_models.empty()) {
+        return;
+    }
+    m_mesh_wear_models.clear();
+    refreshTrianglePVTrackingOwners();
+}
+
+void DEMSolver::FlushMeshWearModels() {
+    assertSysInit("FlushMeshWearModels");
+    if (m_mesh_wear_models.empty()) {
+        return;
+    }
+
+    std::vector<bodyID_t> owners_to_apply;
+    owners_to_apply.reserve(m_mesh_wear_models.size());
+    for (const auto& kv : m_mesh_wear_models) {
+        if (hasPendingWear(kv.second.pending_depth)) {
+            owners_to_apply.push_back(kv.first);
+        }
+    }
+    if (!owners_to_apply.empty()) {
+        WaitForPendingOutput();
+    }
+    for (bodyID_t owner : owners_to_apply) {
+        auto it = m_mesh_wear_models.find(owner);
+        if (it == m_mesh_wear_models.end()) {
+            continue;
+        }
+        applyMeshWearModel(owner, it->second);
+        it->second.pending_time = 0.0;
+    }
 }
 
 std::vector<float> DEMSolver::GetOwnerWildcardValue(bodyID_t ownerID, const std::string& name, bodyID_t n) {
@@ -564,7 +1045,27 @@ std::vector<float> DEMSolver::GetOwnerWildcardValue(bodyID_t ownerID, const std:
             "SetPerOwnerWildcards first.",
             name.c_str());
     }
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     return dT->getOwnerWildcardValue(ownerID, m_owner_wc_num.at(name), n);
+}
+
+void DEMSolver::GetOwnerWildcardValueToDevice(float* destination,
+                                              size_t capacity,
+                                              int destination_device,
+                                              bodyID_t ownerID,
+                                              const std::string& name,
+                                              bodyID_t n,
+                                              bool validate) {
+    assertSysInit("GetOwnerWildcardValueToDevice");
+    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
+        DEME_ERROR(
+            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerOwnerWildcards first.",
+            name.c_str());
+    }
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->getOwnerDataToDevice(destination, capacity, destination_device, ownerID, n, OwnerDataField::WILDCARD,
+                             m_owner_wc_num.at(name), validate);
 }
 
 std::vector<float> DEMSolver::GetAllOwnerWildcardValue(const std::string& name) {
@@ -576,6 +1077,7 @@ std::vector<float> DEMSolver::GetAllOwnerWildcardValue(const std::string& name) 
             name.c_str());
     }
     std::vector<float> res;
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->getAllOwnerWildcardValue(res, m_owner_wc_num.at(name));
     return res;
 }
@@ -589,52 +1091,15 @@ std::vector<float> DEMSolver::GetFamilyOwnerWildcardValue(unsigned int N, const 
             name.c_str());
     }
     std::vector<float> res;
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->getFamilyOwnerWildcardValue(res, N, m_owner_wc_num.at(name));
-    return res;
-}
-
-std::vector<float> DEMSolver::GetTriWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
-    assertSysInit("GetTriWildcardValue");
-    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
-        DEME_ERROR(
-            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerGeometryWildcards in the force model first.",
-            name.c_str());
-    }
-    std::vector<float> res;
-    dT->getTriWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
-    return res;
-}
-
-std::vector<float> DEMSolver::GetSphereWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
-    assertSysInit("GetSphereWildcardValue");
-    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
-        DEME_ERROR(
-            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerGeometryWildcards in the force model first.",
-            name.c_str());
-    }
-    std::vector<float> res;
-    dT->getSphereWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
-    return res;
-}
-
-std::vector<float> DEMSolver::GetAnalWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
-    assertSysInit("GetAnalWildcardValue");
-    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
-        DEME_ERROR(
-            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerGeometryWildcards in the force model first.",
-            name.c_str());
-    }
-    std::vector<float> res;
-    dT->getAnalWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
     return res;
 }
 
 size_t DEMSolver::GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
                                         std::vector<float3>& points,
                                         std::vector<float3>& forces) {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     return dT->getOwnerContactForces(ownerIDs, points, forces);
 }
 size_t DEMSolver::GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
@@ -642,7 +1107,30 @@ size_t DEMSolver::GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
                                         std::vector<float3>& forces,
                                         std::vector<float3>& torques,
                                         bool torque_in_local) {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     return dT->getOwnerContactForces(ownerIDs, points, forces, torques, torque_in_local);
+}
+
+size_t DEMSolver::GetOwnerContactForcesToDevice(const std::vector<bodyID_t>& ownerIDs,
+                                                float3* points,
+                                                float3* forces,
+                                                size_t capacity,
+                                                int destination_device) {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    return dT->getOwnerContactForcesToDevice(ownerIDs, points, forces, nullptr, capacity, destination_device, false,
+                                             false);
+}
+
+size_t DEMSolver::GetOwnerContactForcesToDevice(const std::vector<bodyID_t>& ownerIDs,
+                                                float3* points,
+                                                float3* forces,
+                                                float3* torques,
+                                                size_t capacity,
+                                                int destination_device,
+                                                bool torque_in_local) {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    return dT->getOwnerContactForcesToDevice(ownerIDs, points, forces, torques, capacity, destination_device, true,
+                                             torque_in_local);
 }
 
 std::vector<float> DEMSolver::GetOwnerMass(bodyID_t ownerID, bodyID_t n) const {
@@ -679,34 +1167,134 @@ std::vector<float3> DEMSolver::GetOwnerMOI(bodyID_t ownerID, bodyID_t n) const {
     return res;
 }
 
+void DEMSolver::GetOwnerMassToDevice(float* destination,
+                                     size_t capacity,
+                                     int destination_device,
+                                     bodyID_t ownerID,
+                                     bodyID_t n,
+                                     bool validate) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->getOwnerDataToDevice(destination, capacity, destination_device, ownerID, n, OwnerDataField::MASS, 0, validate);
+}
+
+void DEMSolver::GetOwnerMOIToDevice(float3* destination,
+                                    size_t capacity,
+                                    int destination_device,
+                                    bodyID_t ownerID,
+                                    bodyID_t n,
+                                    bool validate) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->getOwnerDataToDevice(destination, capacity, destination_device, ownerID, n, OwnerDataField::MOI, 0, validate);
+}
+
 void DEMSolver::AddOwnerNextStepAcc(bodyID_t ownerID, const std::vector<float3>& acc) {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->addOwnerNextStepAcc(ownerID, acc);
 }
 void DEMSolver::AddOwnerNextStepAngAcc(bodyID_t ownerID, const std::vector<float3>& angAcc) {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->addOwnerNextStepAngAcc(ownerID, angAcc);
 }
+void DEMSolver::AddOwnerNextStepAccFromDevice(bodyID_t ownerID,
+                                              const float3* source,
+                                              int source_device,
+                                              size_t count,
+                                              bool validate) {
+    assertSysInit("AddOwnerNextStepAccFromDevice");
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->setOwnerDataFromDevice(ownerID, source, count, source_device, OwnerStateField::NEXT_STEP_ACCELERATION,
+                               validate);
+}
+void DEMSolver::AddOwnerNextStepAngAccFromDevice(bodyID_t ownerID,
+                                                 const float3* source,
+                                                 int source_device,
+                                                 size_t count,
+                                                 bool validate) {
+    assertSysInit("AddOwnerNextStepAngAccFromDevice");
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->setOwnerDataFromDevice(ownerID, source, count, source_device,
+                               OwnerStateField::NEXT_STEP_ANGULAR_ACCELERATION_LOCAL, validate);
+}
 void DEMSolver::SetOwnerPosition(bodyID_t ownerID, const std::vector<float3>& pos) {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->setOwnerPos(ownerID, pos);
 }
 void DEMSolver::SetOwnerAngVel(bodyID_t ownerID, const std::vector<float3>& angVel) {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->setOwnerAngVel(ownerID, angVel);
 }
 void DEMSolver::SetOwnerVelocity(bodyID_t ownerID, const std::vector<float3>& vel) {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->setOwnerVel(ownerID, vel);
 }
 void DEMSolver::SetOwnerOriQ(bodyID_t ownerID, const std::vector<float4>& oriQ) {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->setOwnerOriQ(ownerID, oriQ);
+}
+void DEMSolver::SetOwnerPositionFromDevice(bodyID_t ownerID,
+                                           const float3* source,
+                                           int source_device,
+                                           size_t count,
+                                           bool validate) {
+    assertSysInit("SetOwnerPositionFromDevice");
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->setOwnerDataFromDevice(ownerID, source, count, source_device, OwnerStateField::POSITION, validate);
+}
+void DEMSolver::SetOwnerOriQFromDevice(bodyID_t ownerID,
+                                       const float4* source,
+                                       int source_device,
+                                       size_t count,
+                                       bool validate) {
+    assertSysInit("SetOwnerOriQFromDevice");
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->setOwnerDataFromDevice(ownerID, source, count, source_device, OwnerStateField::ORIENTATION, validate);
+}
+void DEMSolver::SetOwnerVelocityFromDevice(bodyID_t ownerID,
+                                           const float3* source,
+                                           int source_device,
+                                           size_t count,
+                                           bool validate) {
+    assertSysInit("SetOwnerVelocityFromDevice");
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->setOwnerDataFromDevice(ownerID, source, count, source_device, OwnerStateField::VELOCITY, validate);
+}
+void DEMSolver::SetOwnerAngVelFromDevice(bodyID_t ownerID,
+                                         const float3* source,
+                                         int source_device,
+                                         size_t count,
+                                         bool validate) {
+    assertSysInit("SetOwnerAngVelFromDevice");
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->setOwnerDataFromDevice(ownerID, source, count, source_device, OwnerStateField::ANGULAR_VELOCITY_LOCAL,
+                               validate);
+}
+void DEMSolver::SetOwnerAngVelGlobalFromDevice(bodyID_t ownerID,
+                                               const float3* source,
+                                               int source_device,
+                                               size_t count,
+                                               bool validate) {
+    assertSysInit("SetOwnerAngVelGlobalFromDevice");
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->setOwnerDataFromDevice(ownerID, source, count, source_device, OwnerStateField::ANGULAR_VELOCITY_GLOBAL,
+                               validate);
 }
 void DEMSolver::SetOwnerFamily(bodyID_t ownerID, unsigned int fam, bodyID_t n) {
     if (fam > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You called SetOwnerFamily with family number %u, but family number should not be larger than %u.",
                    fam, std::numeric_limits<family_t>::max());
     }
-    kT->setOwnerFamily(ownerID, static_cast<family_t>(fam), n);
-    dT->setOwnerFamily(ownerID, static_cast<family_t>(fam), n);
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->setOwnerFamily(ownerID, static_cast<family_t>(fam), n);
+    }
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->setOwnerFamily(ownerID, static_cast<family_t>(fam), n);
+    }
 }
 
 void DEMSolver::SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& new_nodes) {
+    WaitForPendingOutput();
     auto& mesh = m_meshes.at(m_owner_mesh_map.at(owner));
     if (mesh->GetNumNodes() != new_nodes.size()) {
         DEME_ERROR(
@@ -722,6 +1310,7 @@ void DEMSolver::SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<f
     for (size_t i = 0; i < mesh->GetNumTriangles(); i++) {
         new_triangles[i] = mesh->GetTriangle(i);
     }
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->setTriNodeRelPos(triID, new_triangles);
     dT->solverFlags.willMeshDeform = true;
 
@@ -729,6 +1318,7 @@ void DEMSolver::SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<f
     // kT->setTriNodeRelPos(triID, new_triangles);
 }
 void DEMSolver::UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& updates) {
+    WaitForPendingOutput();
     auto& mesh = m_meshes.at(m_owner_mesh_map.at(owner));
     if (mesh->GetNumNodes() != updates.size()) {
         DEME_ERROR(
@@ -746,19 +1336,21 @@ void DEMSolver::UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vecto
         new_triangles[i] = mesh->GetTriangle(i);
     }
     // This is correct to use setTriNodeRelPos, as mesh is already modified in this method
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->setTriNodeRelPos(triID, new_triangles);
     dT->solverFlags.willMeshDeform = true;
 
     // kT just receives update from dT, to avoid mem hazards
     // kT->setTriNodeRelPos(triID, new_triangles);
 }
-std::shared_ptr<DEMMeshConnected>& DEMSolver::GetCachedMesh(bodyID_t ownerID) {
+std::shared_ptr<DEMMesh>& DEMSolver::GetCachedMesh(bodyID_t ownerID) {
     if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
         DEME_ERROR("Owner %zu is not a mesh, you therefore cannot retrive a handle to mesh using it.", (size_t)ownerID);
     }
     return m_meshes.at(m_owner_mesh_map.at(ownerID));
 }
 std::vector<float3> DEMSolver::GetMeshNodesGlobal(bodyID_t ownerID) {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
         DEME_ERROR("Owner %zu is not a mesh, you therefore cannot get its nodes' coordinates.", (size_t)ownerID);
     }
@@ -772,14 +1364,135 @@ std::vector<float3> DEMSolver::GetMeshNodesGlobal(bodyID_t ownerID) {
 }
 
 double DEMSolver::GetSimTime() const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     return dT->getSimTime();
 }
 
 void DEMSolver::SetSimTime(double time) {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->setSimTime(time);
 }
 
+// Separate immutable local geometry from owner motion so renderers can retain their vertex/instance buffers.
+DEMVisualizationScene DEMSolver::GetVisualizationScene() const {
+    if (!sys_initialized) {
+        DEME_ERROR("GetVisualizationScene requires Initialize() first.");
+    }
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    DEMVisualizationScene scene;
+    scene.revision = dT->visualizationRevision;
+    scene.spheres.reserve(dT->simParams->nSpheresGM);
+    for (size_t i = 0; i < dT->simParams->nSpheresGM; ++i) {
+        const size_t component = dT->solverFlags.useClumpJitify ? dT->clumpComponentOffsetExt[i] : i;
+        scene.spheres.push_back(
+            {make_float3(dT->relPosSphereX[component], dT->relPosSphereY[component], dT->relPosSphereZ[component]),
+             dT->radiiSphere[component], dT->ownerClumpBody[i]});
+    }
+    scene.triangles.reserve(dT->simParams->nTriGM);
+    for (size_t i = 0; i < dT->simParams->nTriGM; ++i) {
+        scene.triangles.push_back({dT->relPosNode1[i], dT->relPosNode2[i], dT->relPosNode3[i], dT->ownerTriMesh[i]});
+    }
+    return scene;
+}
+
+// Decode each owner only once. Reusing the output arrays avoids allocation when the owner count is unchanged.
+void DEMSolver::GetVisualizationFrame(DEMVisualizationFrame& frame, bool include_velocities) const {
+    if (!sys_initialized) {
+        DEME_ERROR("GetVisualizationFrame requires Initialize() first.");
+    }
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->migrateFamilyToHost();
+    dT->migrateClumpPosInfoToHost();
+    if (include_velocities) {
+        dT->vX.toHost();
+        dT->vY.toHost();
+        dT->vZ.toHost();
+    }
+    frame.simulation_time = GetSimTime();
+    frame.revision = dT->visualizationRevision;
+    const size_t count = dT->simParams->nOwnerBodies;
+    frame.positions.resize(count);
+    frame.orientations.resize(count);
+    frame.families.resize(count);
+    frame.velocities.resize(include_velocities ? count : 0);
+    for (size_t i = 0; i < count; ++i) {
+        auto& p = frame.positions[i];
+        voxelIDToPosition<float, voxelID_t, subVoxelPos_t>(p.x, p.y, p.z, dT->voxelID[i], dT->locX[i], dT->locY[i],
+                                                           dT->locZ[i], dT->simParams->nvXp2, dT->simParams->nvYp2,
+                                                           dT->simParams->voxelSize, dT->simParams->l);
+        p.x += dT->simParams->LBFX;
+        p.y += dT->simParams->LBFY;
+        p.z += dT->simParams->LBFZ;
+        frame.orientations[i] = make_float4(dT->oriQx[i], dT->oriQy[i], dT->oriQz[i], dT->oriQw[i]);
+        frame.families[i] = dT->familyID[i];
+        if (include_velocities) {
+            frame.velocities[i] = make_float3(dT->vX[i], dT->vY[i], dT->vZ[i]);
+        }
+    }
+}
+DEMVisualizationSnapshot DEMSolver::GetVisualizationSnapshot(bool include_spheres, bool include_triangles) const {
+    if (!sys_initialized) {
+        DEME_ERROR("DEMSolver's method GetVisualizationSnapshot can only be called after calling Initialize()");
+    }
+
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->migrateFamilyToHost();
+    dT->migrateClumpPosInfoToHost();
+
+    DEMVisualizationSnapshot snapshot;
+    snapshot.simulation_time = GetSimTime();
+
+    // Convert DEME's voxel/sub-voxel owner representation once per requested geometry. The visualization boundary is
+    // deliberately host-side so renderers never depend on dT storage or worker synchronization details.
+    auto owner_pos = [this](bodyID_t owner) {
+        float3 position;
+        voxelIDToPosition<float, voxelID_t, subVoxelPos_t>(
+            position.x, position.y, position.z, dT->voxelID[owner], dT->locX[owner], dT->locY[owner], dT->locZ[owner],
+            dT->simParams->nvXp2, dT->simParams->nvYp2, dT->simParams->voxelSize, dT->simParams->l);
+        position.x += dT->simParams->LBFX;
+        position.y += dT->simParams->LBFY;
+        position.z += dT->simParams->LBFZ;
+        return position;
+    };
+    auto owner_ori = [this](bodyID_t owner) {
+        return make_float4(dT->oriQx[owner], dT->oriQy[owner], dT->oriQz[owner], dT->oriQw[owner]);
+    };
+
+    if (include_spheres) {
+        snapshot.spheres.reserve(dT->simParams->nSpheresGM);
+        for (size_t sphere_id = 0; sphere_id < dT->simParams->nSpheresGM; ++sphere_id) {
+            const bodyID_t owner = dT->ownerClumpBody[sphere_id];
+            const size_t component =
+                dT->solverFlags.useClumpJitify ? dT->clumpComponentOffsetExt[sphere_id] : sphere_id;
+            float3 position =
+                make_float3(dT->relPosSphereX[component], dT->relPosSphereY[component], dT->relPosSphereZ[component]);
+            applyFrameTransformLocalToGlobal(position, owner_pos(owner), owner_ori(owner));
+            snapshot.spheres.push_back(
+                DEMVisualizationSphere{position, dT->radiiSphere[component], dT->familyID[owner], owner});
+        }
+    }
+
+    if (include_triangles) {
+        snapshot.triangles.reserve(dT->simParams->nTriGM);
+        for (size_t triangle_id = 0; triangle_id < dT->simParams->nTriGM; ++triangle_id) {
+            const bodyID_t owner = dT->ownerTriMesh[triangle_id];
+            const float3 position = owner_pos(owner);
+            const float4 orientation = owner_ori(owner);
+            float3 a = dT->relPosNode1[triangle_id];
+            float3 b = dT->relPosNode2[triangle_id];
+            float3 c = dT->relPosNode3[triangle_id];
+            applyFrameTransformLocalToGlobal(a, position, orientation);
+            applyFrameTransformLocalToGlobal(b, position, orientation);
+            applyFrameTransformLocalToGlobal(c, position, orientation);
+            snapshot.triangles.push_back(DEMVisualizationTriangle{a, b, c, dT->familyID[owner], owner});
+        }
+    }
+
+    return snapshot;
+}
+
 float DEMSolver::GetUpdateFreq() const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     return dT->getUpdateFreq();
 }
 
@@ -801,16 +1514,22 @@ void DEMSolver::SetIntegrator(const std::string& intg) {
 }
 
 void DEMSolver::SetAdaptiveTimeStepType(const std::string& type) {
-    DEME_WARNING(
-        "SetAdaptiveTimeStepType is currently not implemented and has no effect, time step size is still fixed.");
     switch (hash_charr(type.c_str())) {
         case ("none"_):
             adapt_ts_type = ADAPT_TS_TYPE::NONE;
             break;
+        case ("hertz_const"_):
+            DEME_WARNING(
+                "SetAdaptiveTimeStepType(\"hertz_const\") is a beta setup-time estimate. It computes one fixed "
+                "timestep from Hertzian stiffness, minimum clump mass, and minimum radius.");
+            adapt_ts_type = ADAPT_TS_TYPE::HERTZ_CONST;
+            break;
         case ("max_vel"_):
+            DEME_WARNING("SetAdaptiveTimeStepType(\"max_vel\") is not implemented yet and has no runtime effect.");
             adapt_ts_type = ADAPT_TS_TYPE::MAX_VEL;
             break;
         case ("int_diff"_):
+            DEME_WARNING("SetAdaptiveTimeStepType(\"int_diff\") is not implemented yet and has no runtime effect.");
             adapt_ts_type = ADAPT_TS_TYPE::INT_DIFF;
             break;
         default:
@@ -833,12 +1552,166 @@ void DEMSolver::SetMaxVelocity(float max_vel) {
     m_approx_max_vel = max_vel;
 }
 
+void DEMSolver::SetMaxTriTriPenetration(double max_margin) {
+    if (max_margin < 0.0) {
+        DEME_WARNING("SetMaxTriTriPenetration called with negative value %.6g. Setting to 0.", max_margin);
+        max_margin = 0.0;
+    }
+    m_max_tritri_penetration = max_margin;
+    if (!sys_initialized) {
+        return;
+    }
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->simParams->capTriTriPenetration = max_margin;
+        dT->simParams.toDevice();
+    }
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->simParams->capTriTriPenetration = max_margin;
+        kT->simParams.toDevice();
+    }
+}
+
+void DEMSolver::SetTriTriContactRejectionRatio(float ratio) {
+    m_triTriContactRejectionRatio = ratio;
+    if (!sys_initialized) {
+        return;
+    }
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->simParams->triTriContactRejectionRatio = ratio;
+        dT->simParams.toDevice();
+    }
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->simParams->triTriContactRejectionRatio = ratio;
+        kT->simParams.toDevice();
+    }
+}
+
+void DEMSolver::SetMaxSphereInBin(unsigned int max_sph) {
+    threshold_too_many_spheres_in_bin = max_sph;
+    if (!sys_initialized) {
+        return;
+    }
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->simParams->errOutBinSphNum = max_sph;
+        dT->simParams.toDevice();
+    }
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->simParams->errOutBinSphNum = max_sph;
+        kT->simParams.toDevice();
+    }
+}
+
+void DEMSolver::SetMaxTriangleInBin(unsigned int max_tri) {
+    threshold_too_many_tri_in_bin = max_tri;
+    if (!sys_initialized) {
+        return;
+    }
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->simParams->errOutBinTriNum = max_tri;
+        dT->simParams.toDevice();
+    }
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->simParams->errOutBinTriNum = max_tri;
+        kT->simParams.toDevice();
+    }
+}
+
+void DEMSolver::SetErrorOutVelocity(float vel) {
+    threshold_error_out_vel = vel;
+    if (!sys_initialized) {
+        return;
+    }
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->simParams->errOutVel = vel;
+        dT->simParams.toDevice();
+    }
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->simParams->errOutVel = vel;
+        kT->simParams.toDevice();
+    }
+}
+
+void DEMSolver::SetErrorOutAngularVelocity(float ang_vel) {
+    threshold_error_out_angvel = ang_vel;
+    if (!sys_initialized) {
+        return;
+    }
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->simParams->errOutAngVel = ang_vel;
+        dT->simParams.toDevice();
+    }
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->simParams->errOutAngVel = ang_vel;
+        kT->simParams.toDevice();
+    }
+}
+
+void DEMSolver::SetErrorOutAvgContacts(float num_cnts) {
+    threshold_error_out_num_cnts = num_cnts;
+    if (!sys_initialized) {
+        return;
+    }
+    dT->solverFlags.errOutAvgPrimitiveCnts = num_cnts;
+    kT->solverFlags.errOutAvgPrimitiveCnts = num_cnts;
+}
+
+void DEMSolver::SetTriTriPenetration(double penetration) {
+    if (penetration < 0.0) {
+        DEME_WARNING("SetTriTriPenetration called with negative value %.6g. Setting to 0.", penetration);
+        penetration = 0.0;
+    }
+    if (!sys_initialized) {
+        DEME_WARNING(std::string(
+            "SetTriTriPenetration called before system initialization. This has no effect until after Initialize()."));
+        return;
+    }
+    size_t nTriGM = dT->maxTriTriPenetration.size();
+    if (nTriGM == 0) {
+        return;
+    }
+
+    std::vector<float> hostBuf(nTriGM, static_cast<float>(penetration));
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    DEME_GPU_CALL(
+        cudaMemcpy(dT->maxTriTriPenetration.data(), hostBuf.data(), nTriGM * sizeof(float), cudaMemcpyHostToDevice));
+}
+
 void DEMSolver::SetExpandSafetyType(const std::string& insp_type) {
     if (insp_type == "auto") {
         m_max_v_finder_type = MARGIN_FINDER_TYPE::DEFAULT;
         use_user_defined_expand_factor = false;
     } else {
         DEME_ERROR("Unknown string input \"%s\" for SetExpandSafetyType.", insp_type.c_str());
+    }
+}
+
+void DEMSolver::SetUseAngularVelocityMargin(bool use) {
+    m_use_angvel_margin = use;
+    m_use_angvel_margin_user_set = true;
+    if (!sys_initialized) {
+        return;
+    }
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->simParams->useAngVelMargin = use ? 1 : 0;
+        dT->simParams.toDevice();
+    }
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->simParams->useAngVelMargin = use ? 1 : 0;
+        kT->simParams.toDevice();
     }
 }
 
@@ -973,8 +1846,14 @@ void DEMSolver::ChangeFamily(unsigned int ID_from, unsigned int ID_to) {
             ID_from, ID_to, std::numeric_limits<family_t>::max());
     }
 
-    dT->changeFamily(ID_from, ID_to);
-    kT->changeFamily(ID_from, ID_to);
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->changeFamily(ID_from, ID_to);
+    }
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->changeFamily(ID_from, ID_to);
+    }
 }
 
 void DEMSolver::SetFamilyFixed(unsigned int ID) {
@@ -1334,8 +2213,8 @@ void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string
     // Make sure there is return
     if (!match_whole_word(q_formula, "return")) {
         DEME_ERROR(
-            "CorrectFamilyQuaternion call must supply a code string that returns a float4, like 'return "
-            "make_float4(0,0,0,1)'.");
+            std::string("CorrectFamilyQuaternion call must supply a code string that returns a float4, like 'return "
+                        "make_float4(0,0,0,1)'."));
     }
 
     preInfo.oriQ = q_formula;
@@ -1497,8 +2376,8 @@ void DEMSolver::CorrectFamilyQuaternion(unsigned int ID, const std::string& q_fo
     // Make sure there is return
     if (!match_whole_word(q_formula, "return")) {
         DEME_ERROR(
-            "CorrectFamilyQuaternion call must supply a code string that returns a float4, like 'return "
-            "make_float4(0,0,0,1)'.");
+            std::string("CorrectFamilyQuaternion call must supply a code string that returns a float4, like 'return "
+                        "make_float4(0,0,0,1)'."));
     }
 
     preInfo.oriQ = q_formula;
@@ -1509,39 +2388,6 @@ void DEMSolver::CorrectFamilyQuaternion(unsigned int ID, const std::string& q_fo
     m_input_family_prescription.push_back(preInfo);
 }
 
-void DEMSolver::SetTriWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals) {
-    assertSysInit("SetTriWildcardValue");
-    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
-        DEME_ERROR(
-            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerGeometryWildcards in the force model first.",
-            name.c_str());
-    }
-    dT->setTriWildcardValue(geoID, m_geo_wc_num.at(name), vals);
-}
-
-void DEMSolver::SetSphereWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals) {
-    assertSysInit("SetSphereWildcardValue");
-    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
-        DEME_ERROR(
-            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerGeometryWildcards in the force model first.",
-            name.c_str());
-    }
-    dT->setSphWildcardValue(geoID, m_geo_wc_num.at(name), vals);
-}
-
-void DEMSolver::SetAnalWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals) {
-    assertSysInit("SetAnalWildcardValue");
-    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
-        DEME_ERROR(
-            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerGeometryWildcards in the force model first.",
-            name.c_str());
-    }
-    dT->setAnalWildcardValue(geoID, m_geo_wc_num.at(name), vals);
-}
-
 void DEMSolver::SetOwnerWildcardValue(bodyID_t ownerID, const std::string& name, const std::vector<float>& vals) {
     assertSysInit("SetOwnerWildcardValue");
     if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
@@ -1550,6 +2396,7 @@ void DEMSolver::SetOwnerWildcardValue(bodyID_t ownerID, const std::string& name,
             "SetPerOwnerWildcards in the force model first.",
             name.c_str());
     }
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->setOwnerWildcardValue(ownerID, m_owner_wc_num.at(name), vals);
 }
 
@@ -1561,6 +2408,7 @@ void DEMSolver::SetFamilyContactWildcardValueEither(unsigned int N, const std::s
             "SetPerContactWildcards in the force model first.",
             name.c_str());
     }
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->setFamilyContactWildcardValueEither(N, m_cnt_wc_num.at(name), val);
 }
 void DEMSolver::SetFamilyContactWildcardValueBoth(unsigned int N, const std::string& name, float val) {
@@ -1571,6 +2419,7 @@ void DEMSolver::SetFamilyContactWildcardValueBoth(unsigned int N, const std::str
             "SetPerContactWildcards in the force model first.",
             name.c_str());
     }
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->setFamilyContactWildcardValueBoth(N, m_cnt_wc_num.at(name), val);
 }
 void DEMSolver::SetFamilyContactWildcardValue(unsigned int N1, unsigned int N2, const std::string& name, float val) {
@@ -1581,6 +2430,7 @@ void DEMSolver::SetFamilyContactWildcardValue(unsigned int N1, unsigned int N2, 
             "SetPerContactWildcards in the force model first.",
             name.c_str());
     }
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->setFamilyContactWildcardValue(N1, N2, m_cnt_wc_num.at(name), val);
 }
 void DEMSolver::SetContactWildcardValue(const std::string& name, float val) {
@@ -1591,15 +2441,18 @@ void DEMSolver::SetContactWildcardValue(const std::string& name, float val) {
             "SetPerContactWildcards in the force model first.",
             name.c_str());
     }
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->setContactWildcardValue(m_cnt_wc_num.at(name), val);
 }
 
 void DEMSolver::SetFamilyClumpMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat) {
     assertSysInit("SetFamilyClumpMaterial");
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->setFamilyClumpMaterial(N, mat->load_order);
 }
 void DEMSolver::SetFamilyMeshMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat) {
     assertSysInit("SetFamilyMeshMaterial");
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->setFamilyMeshMaterial(N, mat->load_order);
 }
 
@@ -1611,6 +2464,7 @@ void DEMSolver::SetFamilyOwnerWildcardValue(unsigned int N, const std::string& n
             "SetPerOwnerWildcards first.",
             name.c_str());
     }
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->setFamilyOwnerWildcardValue(N, m_owner_wc_num.at(name), vals);
 }
 
@@ -1620,10 +2474,6 @@ void DEMSolver::SetContactWildcards(const std::set<std::string>& wildcards) {
 
 void DEMSolver::SetOwnerWildcards(const std::set<std::string>& wildcards) {
     m_force_model->SetPerOwnerWildcards(wildcards);
-}
-
-void DEMSolver::SetGeometryWildcards(const std::set<std::string>& wildcards) {
-    m_force_model->SetPerGeometryWildcards(wildcards);
 }
 
 void DEMSolver::DisableFamilyOutput(unsigned int ID) {
@@ -1821,6 +2671,16 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadSphereType(float mass,
                          std::vector<std::shared_ptr<DEMMaterial>>(1, material));
 }
 
+std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadSphereType(float mass,
+                                                            float moi,
+                                                            float radius,
+                                                            const std::shared_ptr<DEMMaterial>& material) {
+    float3 I = make_float3(moi);
+    float3 pos = make_float3(0);
+    return LoadClumpType(mass, I, std::vector<float>(1, radius), std::vector<float3>(1, pos),
+                         std::vector<std::shared_ptr<DEMMaterial>>(1, material));
+}
+
 std::shared_ptr<DEMExternObj> DEMSolver::AddExternalObject() {
     DEMExternObj an_obj;
     std::shared_ptr<DEMExternObj> ptr = std::make_shared<DEMExternObj>(std::move(an_obj));
@@ -1856,8 +2716,14 @@ void DEMSolver::DisableContactBetweenFamilies(unsigned int ID1, unsigned int ID2
     } else {
         // If initialized, directly pass this info to workers
         unsigned int posInMat = locateMaskPair<unsigned int>(ID1, ID2);
-        kT->familyMaskMatrix.setVal(PREVENT_CONTACT, posInMat);
-        dT->familyMaskMatrix.setVal(PREVENT_CONTACT, posInMat);
+        {
+            ScopedCudaDevice device_scope(kT->streamInfo.device);
+            kT->familyMaskMatrix.setVal(PREVENT_CONTACT, posInMat);
+        }
+        {
+            ScopedCudaDevice device_scope(dT->streamInfo.device);
+            dT->familyMaskMatrix.setVal(PREVENT_CONTACT, posInMat);
+        }
     }
 }
 
@@ -1869,14 +2735,20 @@ void DEMSolver::EnableContactBetweenFamilies(unsigned int ID1, unsigned int ID2)
             ID1, ID2, std::numeric_limits<family_t>::max());
     }
     if (!sys_initialized) {
-        DEME_ERROR(
+        DEME_ERROR(std::string(
             "There is no need to call EnableContactBetweenFamilies before system initialization.\nAll families have "
-            "contacts with each other by default. Just do not disable them if you need that contact.");
+            "contacts with each other by default. Just do not disable them if you need that contact."));
     } else {
         // If initialized, directly pass this info to workers
         unsigned int posInMat = locateMaskPair<unsigned int>(ID1, ID2);
-        kT->familyMaskMatrix.setVal(DONT_PREVENT_CONTACT, posInMat);
-        dT->familyMaskMatrix.setVal(DONT_PREVENT_CONTACT, posInMat);
+        {
+            ScopedCudaDevice device_scope(kT->streamInfo.device);
+            kT->familyMaskMatrix.setVal(DONT_PREVENT_CONTACT, posInMat);
+        }
+        {
+            ScopedCudaDevice device_scope(dT->streamInfo.device);
+            dT->familyMaskMatrix.setVal(DONT_PREVENT_CONTACT, posInMat);
+        }
     }
 }
 
@@ -1889,14 +2761,21 @@ void DEMSolver::SetFamilyExtraMargin(unsigned int N, float extra_size) {
         DEME_ERROR("You are adding an extra margin of size %.7g, but the size should not be smaller than 0.",
                    extra_size);
     }
-    kT->familyExtraMarginSize.setVal(extra_size, N);
-    dT->familyExtraMarginSize.setVal(extra_size, N);
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->familyExtraMarginSize.setVal(extra_size, N);
+    }
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->familyExtraMarginSize.setVal(extra_size, N);
+    }
 }
 
 void DEMSolver::ClearCache() {
     deallocate_array(cached_input_clump_batches);
     deallocate_array(cached_extern_objs);
     deallocate_array(cached_mesh_objs);
+    deallocate_array(cached_combined_instances);
 
     // m_input_no_contact_pairs can be removed, if the system is initialized. After initialization, family mask can be
     // directly transferred to workers on user call.
@@ -1908,6 +2787,7 @@ void DEMSolver::ClearCache() {
     // Rigth now, there is no way to re-define the following arrays without re-starting the simulation
     // m_loaded_materials;
     // m_templates;
+    // m_mesh_templates;
     // m_input_family_prescription;
     // m_no_output_families;
     // m_family_change_pairs;
@@ -1917,7 +2797,7 @@ void DEMSolver::ClearCache() {
 std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(DEMClumpBatch& input_batch) {
     // load_order should be its position in the cache array, not nBatchClumpsLoad
     input_batch.load_order = cached_input_clump_batches.size();
-    // But we still need to record a batch loaded
+    // But we still need to record a batch load operation
     nBatchClumpsLoad++;
     cached_input_clump_batches.push_back(std::make_shared<DEMClumpBatch>(std::move(input_batch)));
 
@@ -1932,7 +2812,7 @@ std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(DEMClumpBatch& input_batch) 
 std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& input_types,
                                                     const std::vector<float3>& input_xyz) {
     if (input_types.size() != input_xyz.size()) {
-        DEME_ERROR("Arrays in the call AddClumps must all have the same length.");
+        DEME_ERROR(std::string("Arrays in the call AddClumps must all have the same length."));
     }
     size_t nClumps = input_types.size();
     // We did not create defaults for families, and if the user did not specify families then they will be added at
@@ -1944,26 +2824,71 @@ std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(const std::vector<std::share
     return AddClumps(a_batch);
 }
 
-std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(DEMMeshConnected& mesh) {
+std::shared_ptr<DEMMesh> DEMSolver::AddMesh(DEMMesh& mesh) {
     if (mesh.GetNumTriangles() == 0) {
-        DEME_WARNING("It seems that a mesh contains 0 triangle facet at the time it is loaded.");
+        DEME_WARNING(std::string("It seems that a mesh contains 0 triangle facet at the time it is loaded."));
+    }
+    if (mesh.mesh_template_mark == NULL_MESH_TEMPLATE_MARK) {
+        mesh.mesh_template_mark = nMeshTemplateMarks++;
+    }
+    if (use_deme2_mesh_behavior) {
+        mesh.SetEachTriangleAsPatch();
+    }
+    if (!mesh.mass_specified || !mesh.moi_specified) {
+        double volume = 0.0;
+        float3 center = make_float3(0, 0, 0);
+        float3 unit_inertia = make_float3(0, 0, 0);
+        mesh.ComputeMassProperties(volume, center, unit_inertia);
+        if (volume > 1e-20 && std::isfinite(volume) && length(unit_inertia) > 1e-20 &&
+            std::isfinite(length(unit_inertia))) {
+            if (!mesh.mass_specified) {
+                mesh.mass = static_cast<float>(volume);
+            }
+            if (!mesh.moi_specified) {
+                const float scale = static_cast<float>(mesh.mass / volume);
+                mesh.MOI = unit_inertia * scale;
+            }
+        } else if (!mesh.mass_specified || !mesh.moi_specified) {
+            DEME_WARNING(
+                "Mesh %s requested auto mass/MOI, but geometric mass properties could not be computed (volume: %.9g, "
+                "unit MOI magnitude: %.9g).",
+                mesh.filename.empty() ? "<in-memory mesh>" : mesh.filename.c_str(), volume, length(unit_inertia));
+        }
+    }
+    if (!mesh.IsShell()) {
+        size_t boundary_edges = 0;
+        size_t nonmanifold_edges = 0;
+        if (!mesh.IsWatertight(&boundary_edges, &nonmanifold_edges)) {
+            const char* mesh_name = mesh.filename.empty() ? "<in-memory mesh>" : mesh.filename.c_str();
+            DEME_WARNING(
+                "Mesh %s is not watertight (boundary edges: %zu, non-manifold edges: %zu). Volume/MOI may be "
+                "inaccurate.",
+                mesh_name, boundary_edges, nonmanifold_edges);
+        }
     }
     // load_order should be its position in the cache array, not nTriObjLoad
     mesh.load_order = cached_mesh_objs.size();
 
-    // But we still need to record a tri-mesh loaded
+    // But we still need to record a tri-mesh load operation
     nTriObjLoad++;
 
-    cached_mesh_objs.push_back(std::make_shared<DEMMeshConnected>(std::move(mesh)));
+    cached_mesh_objs.push_back(std::make_shared<DEMMesh>(std::move(mesh)));
     return cached_mesh_objs.back();
 }
 
-std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
-                                                                    const std::shared_ptr<DEMMaterial>& mat,
-                                                                    bool load_normals,
-                                                                    bool load_uv) {
-    DEMMeshConnected mesh;
-    bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
+std::shared_ptr<DEMMesh> DEMSolver::AddShellMesh(DEMMesh& mesh, float shell_thickness) {
+    // Shell meshes reuse the regular mesh loading/cache path; the finite thickness is stored on the mesh and later
+    // flattened into per-owner shell metadata for kT binning and dT primitive force kernels.
+    mesh.SetShellThickness(shell_thickness);
+    return AddMesh(mesh);
+}
+
+std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
+                                                           const std::shared_ptr<DEMMaterial>& mat,
+                                                           bool load_normals,
+                                                           bool load_uv) {
+    DEMMesh mesh;
+    bool flag = loadMeshByExtension(mesh, filename, load_normals, load_uv);
     if (!flag) {
         DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
     }
@@ -1971,129 +2896,575 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::s
     return AddWavefrontMeshObject(mesh);
 }
 
-std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
-                                                                    bool load_normals,
-                                                                    bool load_uv) {
-    DEMMeshConnected mesh;
-    bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
+std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontShellObject(const std::string& filename,
+                                                            const std::shared_ptr<DEMMaterial>& mat,
+                                                            float shell_thickness,
+                                                            bool load_normals,
+                                                            bool load_uv) {
+    DEMMesh mesh;
+    bool flag = loadMeshByExtension(mesh, filename, load_normals, load_uv);
+    if (!flag) {
+        DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
+    }
+    mesh.SetMaterial(mat);
+    return AddShellMesh(mesh, shell_thickness);
+}
+
+std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
+                                                           bool load_normals,
+                                                           bool load_uv) {
+    DEMMesh mesh;
+    bool flag = loadMeshByExtension(mesh, filename, load_normals, load_uv);
     if (!flag) {
         DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
     }
     return AddWavefrontMeshObject(mesh);
 }
 
+std::shared_ptr<DEMMesh> DEMSolver::AddWavefrontShellObject(const std::string& filename,
+                                                            float shell_thickness,
+                                                            bool load_normals,
+                                                            bool load_uv) {
+    DEMMesh mesh;
+    bool flag = loadMeshByExtension(mesh, filename, load_normals, load_uv);
+    if (!flag) {
+        DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
+    }
+    return AddShellMesh(mesh, shell_thickness);
+}
+
+std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(DEMMesh& mesh) {
+    if (mesh.GetNumTriangles() == 0) {
+        DEME_WARNING(std::string("It seems that a mesh template contains 0 triangle facet at the time it is loaded."));
+    }
+    if (use_deme2_mesh_behavior) {
+        mesh.SetEachTriangleAsPatch();
+    }
+    mesh.mesh_template_mark = nMeshTemplateMarks++;
+
+    // Store as a template (not in cached_mesh_objs)
+    std::shared_ptr<DEMMesh> ptr = std::make_shared<DEMMesh>(std::move(mesh));
+    m_mesh_templates.push_back(ptr);
+    nMeshTemplateLoad++;
+    return m_mesh_templates.back();
+}
+
+std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(const std::string& filename,
+                                                 const std::shared_ptr<DEMMaterial>& mat,
+                                                 bool load_normals,
+                                                 bool load_uv) {
+    DEMMesh mesh;
+    bool flag = loadMeshByExtension(mesh, filename, load_normals, load_uv);
+    if (!flag) {
+        DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
+    }
+    mesh.SetMaterial(mat);
+    return LoadMeshType(mesh);
+}
+
+std::shared_ptr<DEMMesh> DEMSolver::LoadMeshType(const std::string& filename, bool load_normals, bool load_uv) {
+    DEMMesh mesh;
+    bool flag = loadMeshByExtension(mesh, filename, load_normals, load_uv);
+    if (!flag) {
+        DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
+    }
+    return LoadMeshType(mesh);
+}
+
+std::shared_ptr<DEMMesh> DEMSolver::AddMeshFromTemplate(const std::shared_ptr<DEMMesh>& mesh_template,
+                                                        const float3& init_pos) {
+    if (!mesh_template) {
+        DEME_ERROR("AddMeshFromTemplate received a null mesh template.");
+    }
+    if (mesh_template->mesh_template_mark == NULL_MESH_TEMPLATE_MARK) {
+        DEME_ERROR(
+            "AddMeshFromTemplate expects a mesh template returned by LoadMeshType. Use LoadMeshType first, then add "
+            "mesh particles with AddMeshFromTemplate so repeated instances share template-level mass/MOI "
+            "jitification.");
+    }
+    // Create a copy of the template
+    DEMMesh mesh = *mesh_template;
+
+    // Set the initial position
+    mesh.SetInitPos(init_pos);
+
+    // Add the mesh instance to the simulation
+    return AddMesh(mesh);
+}
+
+std::shared_ptr<DEMCombinedTemplate> DEMSolver::LoadCombinedClumpType(
+    const std::vector<std::shared_ptr<DEMClumpTemplate>>& component_templates,
+    const std::vector<float3>& component_rel_pos,
+    const std::vector<float4>& component_rel_oriQ,
+    size_t master_component) {
+    assertSysNotInit("LoadCombinedClumpType");
+    if (component_templates.empty()) {
+        DEME_ERROR("LoadCombinedClumpType requires at least one component template.");
+    }
+    if (component_templates.size() != component_rel_pos.size()) {
+        DEME_ERROR(
+            "LoadCombinedClumpType requires component template and relative-position arrays to have equal size.");
+    }
+    if (!component_rel_oriQ.empty() && component_rel_oriQ.size() != component_templates.size()) {
+        DEME_ERROR("LoadCombinedClumpType requires relative-orientation array size to match component count.");
+    }
+    if (master_component >= component_templates.size()) {
+        DEME_ERROR("LoadCombinedClumpType master component index %zu is out of range [0, %zu).", master_component,
+                   component_templates.size());
+    }
+
+    auto ptr = std::make_shared<DEMCombinedTemplate>();
+    ptr->member_type = OWNER_TYPE::CLUMP;
+    ptr->master_member = master_component;
+    ptr->clump_templates = component_templates;
+    ptr->rel_pos.resize(component_templates.size());
+    ptr->rel_oriQ.resize(component_templates.size(), make_float4(0, 0, 0, 1));
+    if (!component_rel_oriQ.empty()) {
+        ptr->rel_oriQ = component_rel_oriQ;
+    }
+    for (size_t i = 0; i < ptr->rel_oriQ.size(); i++) {
+        ptr->rel_oriQ[i] = quatNormalizeSafe(ptr->rel_oriQ[i]);
+    }
+
+    const float3 master_pos = component_rel_pos[master_component];
+    const float4 master_q = ptr->rel_oriQ[master_component];
+    const float4 master_q_conj = quatConjugate(master_q);
+    for (size_t i = 0; i < component_rel_pos.size(); i++) {
+        float3 rel = component_rel_pos[i];
+        rel -= master_pos;
+        applyOriQToVector3(rel, master_q_conj);
+        ptr->rel_pos[i] = rel;
+        ptr->rel_oriQ[i] = quatNormalizeSafe(hostHamiltonProduct(master_q_conj, ptr->rel_oriQ[i]));
+    }
+    ptr->rel_pos[master_component] = make_float3(0);
+    ptr->rel_oriQ[master_component] = make_float4(0, 0, 0, 1);
+
+    ptr->load_order = m_combined_templates.size();
+    m_combined_templates.push_back(ptr);
+    nCombinedTemplateLoad++;
+    m_combined_runtime_dirty = true;
+    return m_combined_templates.back();
+}
+
+std::shared_ptr<DEMCombinedTemplate> DEMSolver::LoadCombinedMeshType(
+    const std::vector<std::shared_ptr<DEMMesh>>& component_templates,
+    const std::vector<float3>& component_rel_pos,
+    const std::vector<float4>& component_rel_oriQ,
+    size_t master_component) {
+    assertSysNotInit("LoadCombinedMeshType");
+    if (component_templates.empty()) {
+        DEME_ERROR("LoadCombinedMeshType requires at least one component template.");
+    }
+    if (component_templates.size() != component_rel_pos.size()) {
+        DEME_ERROR("LoadCombinedMeshType requires component template and relative-position arrays to have equal size.");
+    }
+    if (!component_rel_oriQ.empty() && component_rel_oriQ.size() != component_templates.size()) {
+        DEME_ERROR("LoadCombinedMeshType requires relative-orientation array size to match component count.");
+    }
+    if (master_component >= component_templates.size()) {
+        DEME_ERROR("LoadCombinedMeshType master component index %zu is out of range [0, %zu).", master_component,
+                   component_templates.size());
+    }
+
+    auto ptr = std::make_shared<DEMCombinedTemplate>();
+    ptr->member_type = OWNER_TYPE::MESH;
+    ptr->master_member = master_component;
+    ptr->mesh_templates = component_templates;
+    ptr->rel_pos.resize(component_templates.size());
+    ptr->rel_oriQ.resize(component_templates.size(), make_float4(0, 0, 0, 1));
+    if (!component_rel_oriQ.empty()) {
+        ptr->rel_oriQ = component_rel_oriQ;
+    }
+    for (size_t i = 0; i < ptr->rel_oriQ.size(); i++) {
+        ptr->rel_oriQ[i] = quatNormalizeSafe(ptr->rel_oriQ[i]);
+    }
+
+    const float3 master_pos = component_rel_pos[master_component];
+    const float4 master_q = ptr->rel_oriQ[master_component];
+    const float4 master_q_conj = quatConjugate(master_q);
+    for (size_t i = 0; i < component_rel_pos.size(); i++) {
+        float3 rel = component_rel_pos[i];
+        rel -= master_pos;
+        applyOriQToVector3(rel, master_q_conj);
+        ptr->rel_pos[i] = rel;
+        ptr->rel_oriQ[i] = quatNormalizeSafe(hostHamiltonProduct(master_q_conj, ptr->rel_oriQ[i]));
+    }
+    ptr->rel_pos[master_component] = make_float3(0);
+    ptr->rel_oriQ[master_component] = make_float4(0, 0, 0, 1);
+
+    ptr->load_order = m_combined_templates.size();
+    m_combined_templates.push_back(ptr);
+    nCombinedTemplateLoad++;
+    m_combined_runtime_dirty = true;
+    return m_combined_templates.back();
+}
+
+std::shared_ptr<DEMCombinedInstances> DEMSolver::AddCombinedFromTemplate(
+    const std::shared_ptr<DEMCombinedTemplate>& combined_template,
+    const std::vector<float3>& init_pos,
+    const std::vector<float4>& init_oriQ) {
+    assertSysNotInit("AddCombinedFromTemplate");
+    if (!combined_template) {
+        DEME_ERROR("AddCombinedFromTemplate received a null combined template handle.");
+    }
+    if (init_pos.empty()) {
+        DEME_ERROR("AddCombinedFromTemplate received an empty position vector.");
+    }
+
+    const size_t n_instances = init_pos.size();
+    // If orientations not supplied, default to identity quaternion for each instance.
+    std::vector<float4> oriQ_vec = init_oriQ;
+    if (oriQ_vec.empty()) {
+        oriQ_vec.assign(n_instances, make_float4(0, 0, 0, 1));
+    }
+    if (oriQ_vec.size() != n_instances) {
+        DEME_ERROR("AddCombinedFromTemplate: init_pos and init_oriQ must have the same length (got %zu and %zu).",
+                   n_instances, oriQ_vec.size());
+    }
+
+    const size_t n_members = (combined_template->member_type == OWNER_TYPE::CLUMP)
+                                 ? combined_template->clump_templates.size()
+                                 : combined_template->mesh_templates.size();
+    if (n_members == 0) {
+        DEME_ERROR("AddCombinedFromTemplate encountered a combined template with zero components.");
+    }
+    if (combined_template->rel_pos.size() != n_members || combined_template->rel_oriQ.size() != n_members) {
+        DEME_ERROR("AddCombinedFromTemplate found inconsistent fixed-transform arrays in the combined template.");
+    }
+    if (combined_template->master_member >= n_members) {
+        DEME_ERROR("AddCombinedFromTemplate master component index %zu is out of range [0, %zu).",
+                   combined_template->master_member, n_members);
+    }
+
+    auto inst = std::make_shared<DEMCombinedInstances>();
+    inst->type = combined_template;
+    inst->n_instances = n_instances;
+    const size_t total_members = n_instances * n_members;
+    inst->member_mass.resize(total_members, 0.f);
+    inst->member_moi.resize(total_members, make_float3(0));
+    inst->master_equiv_mass.resize(n_instances, 0.f);
+    inst->master_equiv_moi.resize(n_instances, make_float3(0));
+    inst->master_owner_ids.resize(n_instances, NULL_BODYID);
+    inst->member_objs.reserve(total_members);
+
+    // Outer: combined template instances; inner: template members.
+    // This way, one combined owner's member owners are together in memory.
+    for (size_t k = 0; k < n_instances; k++) {
+        const float4 init_q = quatNormalizeSafe(oriQ_vec[k]);
+
+        for (size_t i = 0; i < n_members; i++) {
+            const size_t flat_idx = k * n_members + i;
+            float3 world_pos = combined_template->rel_pos[i];
+            applyFrameTransformLocalToGlobal(world_pos, init_pos[k], init_q);
+            const float4 world_q = quatNormalizeSafe(hostHamiltonProduct(init_q, combined_template->rel_oriQ[i]));
+
+            if (combined_template->member_type == OWNER_TYPE::CLUMP) {
+                auto clump_type = combined_template->clump_templates[i];
+                auto batch = AddClumps(clump_type, world_pos);
+                batch->SetOriQ(world_q);
+                inst->member_objs.push_back(batch);
+                inst->member_mass[flat_idx] = clump_type->GetMass();
+                inst->member_moi[flat_idx] = clump_type->GetMOI();
+            } else if (combined_template->member_type == OWNER_TYPE::MESH) {
+                DEMMesh mesh = *(combined_template->mesh_templates[i]);
+                mesh.SetInitPos(world_pos);
+                mesh.SetInitQuat(world_q);
+                auto mesh_inst = AddMesh(mesh);
+                inst->member_objs.push_back(mesh_inst);
+                inst->member_mass[flat_idx] = mesh.mass;
+                inst->member_moi[flat_idx] = mesh.MOI;
+            } else {
+                DEME_ERROR("AddCombinedFromTemplate only supports same-type CLUMP or MESH templates.");
+            }
+            inst->master_equiv_mass[k] += inst->member_mass[flat_idx];
+            inst->master_equiv_moi[k] += inst->member_moi[flat_idx];
+        }
+    }
+
+    cached_combined_instances.push_back(inst);
+    m_combined_runtime_dirty = true;
+    return cached_combined_instances.back();
+}
+
+void DEMSolver::SetAllowIntraCombinedOwnerContacts(bool allow) {
+    m_allow_intra_combined_owner_contacts = allow;
+    if (sys_initialized) {
+        {
+            ScopedCudaDevice device_scope(dT->streamInfo.device);
+            dT->simParams->allowIntraCombinedOwnerContacts = allow ? 1 : 0;
+            dT->simParams.toDevice();
+        }
+        {
+            ScopedCudaDevice device_scope(kT->streamInfo.device);
+            kT->simParams->allowIntraCombinedOwnerContacts = allow ? 1 : 0;
+            kT->simParams.toDevice();
+        }
+    }
+}
+
+bool DEMSolver::GetCombinedInstanceInfo(size_t combined_instance_id,
+                                        bodyID_t& master_owner_id,
+                                        std::vector<bodyID_t>& member_owner_ids,
+                                        std::vector<float3>& member_rel_pos,
+                                        std::vector<float4>& member_rel_oriQ) {
+    if (combined_instance_id >= cached_combined_instances.size()) {
+        return false;
+    }
+    // Ensure owner IDs are resolved (and runtime mapping refreshed if needed) before returning metadata.
+    resolveCombinedOwners();
+    const auto& inst = cached_combined_instances[combined_instance_id];
+    if (!inst->owners_resolved || inst->n_instances == 0) {
+        return false;
+    }
+    // Return info for the first instantiation in this batch entry.
+    master_owner_id = inst->master_owner_ids[0];
+    const size_t n_members_per_inst = (inst->type->member_type == OWNER_TYPE::CLUMP)
+                                          ? inst->type->clump_templates.size()
+                                          : inst->type->mesh_templates.size();
+    if (n_members_per_inst > inst->member_owner_ids.size()) {
+        return false;
+    }
+    member_owner_ids.assign(inst->member_owner_ids.begin(),
+                            inst->member_owner_ids.begin() + static_cast<ptrdiff_t>(n_members_per_inst));
+    member_rel_pos = inst->type->rel_pos;
+    member_rel_oriQ = inst->type->rel_oriQ;
+    return true;
+}
+
 std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity) {
-    DEMInspector insp(this, this->dT.get(), quantity);
-    m_inspectors.push_back(std::make_shared<DEMInspector>(std::move(insp)));
+    m_inspectors.push_back(std::make_shared<DEMInspector>(this, dT.get(), quantity));
     return m_inspectors.back();
 }
 
 std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity, const std::string& region) {
-    DEMInspector insp(this, this->dT.get(), quantity, region);
-    m_inspectors.push_back(std::make_shared<DEMInspector>(std::move(insp)));
+    m_inspectors.push_back(std::make_shared<DEMInspector>(this, dT.get(), quantity, region));
     return m_inspectors.back();
 }
 
 void DEMSolver::WriteSphereFile(const std::string& outfilename) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    WaitForPendingOutput();
     switch (m_out_format) {
-#ifdef DEME_USE_CHPF
-        case (OUTPUT_FORMAT::CHPF): {
-            std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
-            dT->writeSpheresAsChpf(ptFile);
-            ptFile.close();
-            break;
-        }
-#endif
         case (OUTPUT_FORMAT::CSV): {
-            std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeSpheresAsCsv(ptFile);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateClumpHighOrderInfoToHost();
+            dT->migrateOwnerWildcardToHost();
+            dT->migrateSphGeoWildcardToHost();
+            m_output_thread = std::thread([this, outfilename]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeSpheresAsCsvFromHost(ptFile);
+            });
             break;
         }
         case (OUTPUT_FORMAT::BINARY): {
             // std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
             //// TODO: Implement it
-            std::ofstream ptFile(outfilename, std::ios::out);
-            DEME_WARNING("Binary sphere output is not implemented yet, using CSV...");
-            dT->writeSpheresAsCsv(ptFile);
-            ptFile.close();
+            DEME_WARNING(std::string("Binary sphere output is not implemented yet, using CSV..."));
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateClumpHighOrderInfoToHost();
+            dT->migrateOwnerWildcardToHost();
+            dT->migrateSphGeoWildcardToHost();
+            m_output_thread = std::thread([this, outfilename]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeSpheresAsCsvFromHost(ptFile);
+            });
+            break;
+        }
+        case (OUTPUT_FORMAT::VTK): {
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateClumpHighOrderInfoToHost();
+            dT->migrateOwnerWildcardToHost();
+            dT->migrateSphGeoWildcardToHost();
+            m_output_thread = std::thread([this, outfilename]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeSpheresAsVtkFromHost(ptFile);
+            });
             break;
         }
         default:
-            DEME_ERROR("Sphere output file format is unknown. Please set it via SetOutputFormat.");
+            DEME_ERROR(std::string("Sphere output file format is unknown. Please set it via SetOutputFormat."));
     }
 }
 
-void DEMSolver::WriteClumpFile(const std::string& outfilename, unsigned int accuracy) const {
-    switch (m_out_format) {
-#ifdef DEME_USE_CHPF
-        case (OUTPUT_FORMAT::CHPF): {
-            std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
-            dT->writeClumpsAsChpf(ptFile, accuracy);
-            ptFile.close();
-            break;
+void DEMSolver::WriteAnalyticalFile(const std::string& outfilename, unsigned int circumferential_resolution) const {
+    if (circumferential_resolution < 3) {
+        DEME_ERROR("WriteAnalyticalFile circumferential resolution must be at least 3, not %u.",
+                   circumferential_resolution);
+    }
+
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    WaitForPendingOutput();
+    dT->migrateFamilyToHost();
+    dT->migrateClumpPosInfoToHost();
+
+    // Snapshot current owner transforms before launching the asynchronous writer. Component definitions are setup-time
+    // data, while an analytical owner's pose can change on every dynamics step.
+    std::vector<AnalyticalOutputComponent> components;
+    components.reserve(m_anal_output_definitions.size());
+    for (size_t i = 0; i < m_anal_output_definitions.size(); i++) {
+        const auto& definition = m_anal_output_definitions[i];
+        const bodyID_t owner = dT->ownerAnalBody[i];
+        const family_t family = dT->familyID[owner];
+        if (dT->familiesNoOutput.find(family) != dT->familiesNoOutput.end()) {
+            continue;
         }
-#endif
+
+        float3 owner_pos;
+        voxelIDToPosition<float, voxelID_t, subVoxelPos_t>(
+            owner_pos.x, owner_pos.y, owner_pos.z, dT->voxelID[owner], dT->locX[owner], dT->locY[owner],
+            dT->locZ[owner], dT->simParams->nvXp2, dT->simParams->nvYp2, dT->simParams->voxelSize, dT->simParams->l);
+        owner_pos += make_float3(dT->simParams->LBFX, dT->simParams->LBFY, dT->simParams->LBFZ);
+        const float4 owner_ori = make_float4(dT->oriQx[owner], dT->oriQy[owner], dT->oriQz[owner], dT->oriQw[owner]);
+        float3 component_pos = definition.position;
+        applyFrameTransformLocalToGlobal(component_pos, owner_pos, owner_ori);
+        float3 component_axis = definition.axis;
+        applyOriQToVector3<float, float>(component_axis.x, component_axis.y, component_axis.z, dT->oriQw[owner],
+                                         dT->oriQx[owner], dT->oriQy[owner], dT->oriQz[owner]);
+        components.push_back({definition.type, component_pos, component_axis, definition.size_1, definition.size_2,
+                              definition.size_3, definition.normal_sign, owner, family});
+    }
+
+    const float3 domain_min = m_user_box_min;
+    const float3 domain_max = m_user_box_max;
+    m_output_thread = std::thread(
+        [outfilename, components = std::move(components), domain_min, domain_max, circumferential_resolution]() {
+            std::ofstream file(outfilename, std::ios::out);
+            writeAnalyticalAsVtk(file, components, domain_min, domain_max, circumferential_resolution);
+        });
+}
+
+void DEMSolver::WriteClumpFile(const std::string& outfilename, unsigned int accuracy) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    WaitForPendingOutput();
+    switch (m_out_format) {
         case (OUTPUT_FORMAT::CSV): {
-            std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeClumpsAsCsv(ptFile, accuracy);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateClumpHighOrderInfoToHost();
+            dT->migrateOwnerWildcardToHost();
+            m_output_thread = std::thread([this, outfilename, accuracy]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeClumpsAsCsvFromHost(ptFile, accuracy);
+            });
             break;
         }
         case (OUTPUT_FORMAT::BINARY): {
             // std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
             //// TODO: Implement it
-            std::ofstream ptFile(outfilename, std::ios::out);
-            DEME_WARNING("Binary clump output is not implemented yet, using CSV...");
-            dT->writeClumpsAsCsv(ptFile, accuracy);
-            ptFile.close();
+            DEME_WARNING(std::string("Binary clump output is not implemented yet, using CSV..."));
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateClumpHighOrderInfoToHost();
+            dT->migrateOwnerWildcardToHost();
+            m_output_thread = std::thread([this, outfilename, accuracy]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeClumpsAsCsvFromHost(ptFile, accuracy);
+            });
             break;
         }
         default:
-            DEME_ERROR("Clump output file format is unknown. Please set it via SetOutputFormat.");
+            DEME_ERROR(std::string("Clump output file format is unknown. Please set it via SetOutputFormat."));
     }
 }
 
 void DEMSolver::WriteContactFile(const std::string& outfilename, float force_thres) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    WaitForPendingOutput();
     if (no_recording_contact_forces) {
-        DEME_WARNING(
+        DEME_WARNING(std::string(
             "The solver is instructed to not record contact force info, so no work is done in a WriteContactFile "
-            "call.");
+            "call."));
         return;
     }
     switch (m_cnt_out_format) {
         case (OUTPUT_FORMAT::CSV): {
-            std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeContactsAsCsv(ptFile, force_thres);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateContactInfoToHost();
+            m_output_thread = std::thread([this, outfilename, force_thres]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeContactsAsCsvFromHost(ptFile, force_thres);
+            });
             break;
         }
         case (OUTPUT_FORMAT::BINARY): {
             // std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
             //// TODO: Implement it
-            DEME_WARNING("Binary contact pair output is not implemented yet, using CSV...");
-            std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeContactsAsCsv(ptFile, force_thres);
-            ptFile.close();
+            DEME_WARNING(std::string("Binary contact pair output is not implemented yet, using CSV..."));
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            dT->migrateContactInfoToHost();
+            m_output_thread = std::thread([this, outfilename, force_thres]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeContactsAsCsvFromHost(ptFile, force_thres);
+            });
             break;
         }
         default:
             DEME_ERROR(
-                "Contact pair output file format is unknown or not implemented. Please re-set it via SetOutputFormat.");
+                std::string("Contact pair output file format is unknown or not implemented. Please re-set it via "
+                            "SetOutputFormat."));
     }
 }
 
 void DEMSolver::WriteMeshFile(const std::string& outfilename) const {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    WaitForPendingOutput();
     switch (m_mesh_out_format) {
         case (MESH_FORMAT::VTK): {
-            std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeMeshesAsVtk(ptFile);
-            ptFile.close();
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            const unsigned int flags = dT->solverFlags.meshOutFlags;
+            const unsigned int high_order_flags = static_cast<unsigned int>(MESH_OUTPUT_CONTENT::ABSV) |
+                                                  MESH_OUTPUT_CONTENT::VEL | MESH_OUTPUT_CONTENT::ANG_VEL |
+                                                  MESH_OUTPUT_CONTENT::ABS_ACC | MESH_OUTPUT_CONTENT::ACC |
+                                                  MESH_OUTPUT_CONTENT::ANG_ACC;
+            if (flags & high_order_flags) {
+                dT->migrateClumpHighOrderInfoToHost();
+            }
+            if (flags & static_cast<unsigned int>(MESH_OUTPUT_CONTENT::OWNER_WILDCARD)) {
+                dT->migrateOwnerWildcardToHost();
+            }
+            if (flags & static_cast<unsigned int>(MESH_OUTPUT_CONTENT::GEO_WILDCARD)) {
+                dT->migrateTriGeoWildcardToHost();
+            }
+            m_output_thread = std::thread([this, outfilename]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeMeshesAsVtkFromHost(ptFile);
+            });
+            break;
+        }
+        case (MESH_FORMAT::STL): {
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            m_output_thread = std::thread([this, outfilename]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeMeshesAsStlFromHost(ptFile);
+            });
+            break;
+        }
+        case (MESH_FORMAT::PLY): {
+            dT->migrateFamilyToHost();
+            dT->migrateClumpPosInfoToHost();
+            const bool patch_colors = m_mesh_out_ply_patch_colors;
+            m_output_thread = std::thread([this, outfilename, patch_colors]() {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeMeshesAsPlyFromHost(ptFile, patch_colors);
+            });
             break;
         }
         default:
-            DEME_ERROR(
-                "Mesh output file format is unknown or not implemented. Please re-set it via SetMeshOutputFormat.");
+            DEME_ERROR(std::string(
+                "Mesh output file format is unknown or not implemented. Please re-set it via SetMeshOutputFormat."));
+    }
+}
+
+void DEMSolver::WaitForPendingOutput() const {
+    if (m_output_thread.joinable()) {
+        m_output_thread.join();
     }
 }
 
@@ -2107,14 +3478,20 @@ size_t DEMSolver::ChangeClumpFamily(unsigned int fam_num,
     size_t count = 0;
 
     // And get those device-major data from device
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        if (dT->solverFlags.canFamilyChangeOnDevice) {
+            dT->familyID.toHost();
+        }
+        dT->voxelID.toHost();
+        dT->locX.toHost();
+        dT->locY.toHost();
+        dT->locZ.toHost();
+    }
     if (dT->solverFlags.canFamilyChangeOnDevice) {
-        dT->familyID.toHost();
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
         kT->familyID.toHost();
     }
-    dT->voxelID.toHost();
-    dT->locX.toHost();
-    dT->locY.toHost();
-    dT->locZ.toHost();
 
     for (bodyID_t ownerID = 0; ownerID < nOwnerBodies; ownerID++) {
         // ownerTypes has no way to change on device
@@ -2150,8 +3527,14 @@ size_t DEMSolver::ChangeClumpFamily(unsigned int fam_num,
         }
     }
 
-    dT->familyID.toDevice();
-    kT->familyID.toDevice();
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->familyID.toDevice();
+    }
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->familyID.toDevice();
+    }
     return count;
 }
 
@@ -2159,6 +3542,7 @@ size_t DEMSolver::ChangeClumpFamily(unsigned int fam_num,
 // of the required simulation information such as the scale of the problem domain, and makes sure these info live in
 // GPU memory.
 void DEMSolver::Initialize(bool dry_run) {
+    ++dT->visualizationRevision;
     // A few checks first
     validateUserInputs();
 
@@ -2197,12 +3581,21 @@ void DEMSolver::Initialize(bool dry_run) {
     // Initialization is critical
     dT->announceCritical();
 
-    // Always clear cache after init
-    ClearCache();
-
     //// TODO: Give a warning if sys_initialized is true and the system is re-initialized: in that case, the user should
     /// know what they are doing
     sys_initialized = true;
+    m_combined_runtime_dirty = true;
+    resolveCombinedOwners(0);
+
+    // Always clear cache after init
+    ClearCache();
+
+    // m_gpu_timers_enabled defaults to true, so create the corresponding CUDA events once the initialized solver is
+    // ready to run. Otherwise the public flag can report enabled timing while StartGpuTimer/StopGpuTimer are no-ops,
+    // producing mostly zero dT GPU timing statistics unless the user explicitly calls SetGPUTimersEnabled(true).
+    if (m_gpu_timers_enabled) {
+        SetGPUTimersEnabled(true);
+    }
 
     if (dry_run) {
         // Do a dry-run: It establishes contact pairs. It helps to locate obvious problems at the start (like, too many
@@ -2213,6 +3606,17 @@ void DEMSolver::Initialize(bool dry_run) {
 }
 
 void DEMSolver::ShowTimingStats() {
+    // If accumulation is deferred, flush any pending GPU timer spans before reading values.
+    if (m_gpu_timers_enabled) {
+        {
+            ScopedCudaDevice device_scope(dT->streamInfo.device);
+            dT->timers.FlushGpuTimers();
+        }
+        {
+            ScopedCudaDevice device_scope(kT->streamInfo.device);
+            kT->timers.FlushGpuTimers();
+        }
+    }
     std::vector<std::string> kT_timer_names, dT_timer_names;
     std::vector<double> kT_timer_vals, dT_timer_vals;
     double kT_total_time, dT_total_time;
@@ -2239,6 +3643,31 @@ void DEMSolver::ShowTimingStats() {
     DEME_PRINTF("--------------------------\n");
 }
 
+void DEMSolver::SetGPUTimersEnabled(bool enabled) {
+    m_gpu_timers_enabled = enabled;
+
+    // SolverTimers uses cudaEventCreate/Destroy, which are device-scoped.
+    if (enabled) {
+        {
+            ScopedCudaDevice device_scope(dT->streamInfo.device);
+            dT->timers.EnableGpuTimers();
+        }
+        {
+            ScopedCudaDevice device_scope(kT->streamInfo.device);
+            kT->timers.EnableGpuTimers();
+        }
+    } else {
+        {
+            ScopedCudaDevice device_scope(dT->streamInfo.device);
+            dT->timers.DestroyGpuEvents();
+        }
+        {
+            ScopedCudaDevice device_scope(kT->streamInfo.device);
+            kT->timers.DestroyGpuEvents();
+        }
+    }
+}
+
 void DEMSolver::ClearTimingStats() {
     kT->resetTimers();
     dT->resetTimers();
@@ -2256,6 +3685,8 @@ void DEMSolver::ReleaseFlattenedArrays() {
     deallocate_array(m_input_mesh_obj_xyz);
     deallocate_array(m_input_mesh_obj_rot);
     deallocate_array(m_input_mesh_obj_family);
+    deallocate_array(m_input_mesh_obj_convex);
+    deallocate_array(m_input_mesh_obj_never_winner);
 
     deallocate_array(m_unique_family_prescription);
     deallocate_array(m_input_clump_family);
@@ -2270,8 +3701,13 @@ void DEMSolver::ReleaseFlattenedArrays() {
     deallocate_array(m_anal_normals);
 
     deallocate_array(m_mesh_facet_owner);
-    deallocate_array(m_mesh_facet_materials);
+    deallocate_array(m_mesh_facet_patch);
+    deallocate_array(m_mesh_facet_neighbor1);
+    deallocate_array(m_mesh_facet_neighbor2);
+    deallocate_array(m_mesh_facet_neighbor3);
     deallocate_array(m_mesh_facets);
+    deallocate_array(m_mesh_patch_owner);
+    deallocate_array(m_mesh_patch_materials);
 
     deallocate_array(m_template_clump_mass);
     deallocate_array(m_template_clump_moi);
@@ -2286,6 +3722,9 @@ void DEMSolver::ReleaseFlattenedArrays() {
 
     deallocate_array(m_mesh_obj_mass);
     deallocate_array(m_mesh_obj_moi);
+    deallocate_array(m_mesh_mass_jit);
+    deallocate_array(m_mesh_moi_jit);
+    deallocate_array(m_mesh_mass_offsets);
 
     nExtraContacts = 0;
 }
@@ -2325,8 +3764,11 @@ void DEMSolver::UpdateSimParams() {
     std::thread dT_build([&]() {
         DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
         // Jitify max vel finder, in case the policy there changed
-        m_approx_max_vel_func->Initialize(m_subs, m_jitify_options, true);
-        dT->approxMaxVelFunc = m_approx_max_vel_func;
+        m_approx_vel_func->Initialize(m_subs, m_jitify_options, true);
+        dT->approxVelFunc = m_approx_vel_func;
+        // Jitify angular velocity magnitude finder
+        m_approx_angvel_func->Initialize(m_subs, m_jitify_options, true);
+        dT->approxAngVelFunc = m_approx_angvel_func;
         // Updating sim environment is critical
         dT->announceCritical();
     });
@@ -2334,43 +3776,586 @@ void DEMSolver::UpdateSimParams() {
 }
 
 void DEMSolver::UpdateStepSize(double ts) {
-    m_ts_size = ts;
-    // We for now store ts as float on devices...
-    dT->simParams->h = ts;
-    kT->simParams->h = ts;
-    // dT->simParams.syncMemberToDevice<float>(offsetof(DEMSimParams, h));
-    // kT->simParams.syncMemberToDevice<float>(offsetof(DEMSimParams, h));
-    dT->simParams.toDevice();
-    kT->simParams.toDevice();
+    SetTimeStepSize(ts);
 }
 
-void DEMSolver::UpdateClumps() {
+bool DEMSolver::findOwnerTriangleRange(bodyID_t ownerID, size_t& tri_start, size_t& tri_count) {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    tri_start = 0;
+    tri_count = 0;
+    dT->ownerTriMesh.toHost();
+
+    bool found = false;
+    size_t last_tri = 0;
+    bool contiguous = true;
+    for (size_t tri = 0; tri < dT->ownerTriMesh.size(); tri++) {
+        if (dT->ownerTriMesh[tri] != ownerID) {
+            continue;
+        }
+        if (!found) {
+            found = true;
+            tri_start = tri;
+            last_tri = tri;
+        } else {
+            if (tri != last_tri + 1) {
+                contiguous = false;
+            }
+            last_tri = tri;
+        }
+        tri_count++;
+    }
+
+    if (!found) {
+        return false;
+    }
+    if (!contiguous) {
+        DEME_ERROR("Mesh owner %zu has non-contiguous triangle IDs; mesh deformation update expects contiguous layout.",
+                   (size_t)ownerID);
+    }
+    return true;
+}
+
+void DEMSolver::refreshTrianglePVTrackingOwners() {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    std::vector<bodyID_t> merged;
+    merged.reserve(m_user_tri_pv_tracking_owners.size() + m_mesh_wear_models.size());
+    std::unordered_set<bodyID_t> seen;
+    seen.reserve(merged.capacity() + 1);
+
+    for (bodyID_t owner : m_user_tri_pv_tracking_owners) {
+        if (seen.insert(owner).second) {
+            merged.push_back(owner);
+        }
+    }
+    for (const auto& kv : m_mesh_wear_models) {
+        if (seen.insert(kv.first).second) {
+            merged.push_back(kv.first);
+        }
+    }
+
+    if (merged.empty()) {
+        dT->disableTrianglePVTracking();
+    } else {
+        dT->configureTrianglePVTracking(merged);
+    }
+    m_last_tri_pv_snapshot.clear();
+}
+
+void DEMSolver::cacheTrackedTrianglePVWindow() {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    m_last_tri_pv_snapshot.clear();
+    if (!dT->triPVTrackingEnabled) {
+        return;
+    }
+
+    if (dT->triPVWindowSteps > 0) {
+        dT->triPVAccumP.toHost();
+        dT->triPVAccumPV.toHost();
+    }
+    const float inv_steps = (dT->triPVWindowSteps > 0) ? (1.f / static_cast<float>(dT->triPVWindowSteps)) : 0.f;
+
+    for (const auto& kv : dT->triPVOwnerToSlot) {
+        const bodyID_t owner = kv.first;
+        const size_t slot = kv.second;
+        if (slot >= dT->triPVOwnerOffsets.size() || slot >= dT->triPVOwnerCounts.size()) {
+            continue;
+        }
+        const size_t offset = dT->triPVOwnerOffsets[slot];
+        const size_t count = dT->triPVOwnerCounts[slot];
+        TrianglePVSnapshot snap;
+        snap.avgP.assign(count, 0.f);
+        snap.avgV.assign(count, 0.f);
+        snap.avgPV.assign(count, 0.f);
+        if (count > 0 && dT->triPVWindowSteps > 0) {
+            for (size_t i = 0; i < count; i++) {
+                float p = dT->triPVAccumP[offset + i] * inv_steps;
+                float pv = dT->triPVAccumPV[offset + i] * inv_steps;
+                if (!std::isfinite(p) || p < 0.f) {
+                    p = 0.f;
+                }
+                if (!std::isfinite(pv) || pv < 0.f) {
+                    pv = 0.f;
+                }
+                float v = (p > DEME_TINY_FLOAT) ? (pv / p) : 0.f;
+                if (!std::isfinite(v) || v < 0.f) {
+                    v = 0.f;
+                }
+                snap.avgP[i] = p;
+                snap.avgV[i] = v;
+                snap.avgPV[i] = pv;
+            }
+        }
+        m_last_tri_pv_snapshot.emplace(owner, std::move(snap));
+    }
+}
+
+bool DEMSolver::applyMeshWearModel(bodyID_t ownerID, MeshWearModelState& model) {
+    auto mesh_it = m_owner_mesh_map.find(ownerID);
+    if (mesh_it == m_owner_mesh_map.end()) {
+        DEME_ERROR("Wear model owner %zu is not a mesh owner.", (size_t)ownerID);
+    }
+    auto& mesh = m_meshes.at(mesh_it->second);
+    const auto& faces = mesh->GetIndicesVertexes();
+    const size_t n_tri = faces.size();
+    if (n_tri != model.tri_count) {
+        DEME_ERROR("Wear model triangle count mismatch for owner %zu (expected %zu, got %zu).", (size_t)ownerID,
+                   model.tri_count, n_tri);
+    }
+    if (model.pending_depth.size() != n_tri) {
+        DEME_ERROR("Wear depth buffer size mismatch for owner %zu (expected %zu, got %zu).", (size_t)ownerID, n_tri,
+                   model.pending_depth.size());
+    }
+
+    auto& vertices = mesh->GetCoordsVertices();
+    const bool use_canon_groups = (model.vertex_to_canon.size() == vertices.size()) && (model.n_canon_vertices > 0);
+    const size_t n_vertex_groups = use_canon_groups ? model.n_canon_vertices : vertices.size();
+    const float depth_cap = (model.max_depth_per_update > 0.f && std::isfinite(model.max_depth_per_update))
+                                ? model.max_depth_per_update
+                                : std::numeric_limits<float>::infinity();
+    std::vector<float3> weighted_disp(n_vertex_groups, make_float3(0.f));
+    std::vector<float> weighted_sum(n_vertex_groups, 0.f);
+    std::vector<float3> node_updates(vertices.size(), make_float3(0.f));
+
+    auto cross3 = [](const float3& a, const float3& b) {
+        return make_float3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+    };
+    auto group_of_vertex = [&](size_t vid) -> size_t { return use_canon_groups ? model.vertex_to_canon[vid] : vid; };
+
+    size_t n_cap_clipped = 0;
+    float max_requested_depth = 0.f;
+    float max_discarded_depth = 0.f;
+    bool has_any_wear = false;
+    for (size_t tri = 0; tri < n_tri; tri++) {
+        const float pending_depth = model.pending_depth[tri];
+        if (!(pending_depth > 0.f) || !std::isfinite(pending_depth)) {
+            continue;
+        }
+        max_requested_depth = std::max(max_requested_depth, pending_depth);
+        const float depth_chunk = std::min(pending_depth, depth_cap);
+        if (!(depth_chunk > 0.f) || !std::isfinite(depth_chunk)) {
+            continue;
+        }
+        if (depth_chunk + DEME_TINY_FLOAT < pending_depth) {
+            n_cap_clipped++;
+            max_discarded_depth = std::max(max_discarded_depth, pending_depth - depth_chunk);
+        }
+
+        const int3& f = faces[tri];
+        if (f.x < 0 || f.y < 0 || f.z < 0) {
+            continue;
+        }
+        const size_t i0 = static_cast<size_t>(f.x);
+        const size_t i1 = static_cast<size_t>(f.y);
+        const size_t i2 = static_cast<size_t>(f.z);
+        if (i0 >= vertices.size() || i1 >= vertices.size() || i2 >= vertices.size()) {
+            continue;
+        }
+
+        const float3 v0 = vertices[i0];
+        const float3 v1 = vertices[i1];
+        const float3 v2 = vertices[i2];
+        const float3 n_raw = cross3(v1 - v0, v2 - v0);
+        const float n_len = length(n_raw);
+        if (!(n_len > DEME_TINY_FLOAT) || !std::isfinite(n_len)) {
+            continue;
+        }
+        float3 n_unit = n_raw / n_len;
+        if (model.ref_tri_normals.size() == n_tri) {
+            const float3 n_ref = model.ref_tri_normals[tri];
+            const float n_ref_len = length(n_ref);
+            if (n_ref_len > DEME_TINY_FLOAT && std::isfinite(n_ref_len)) {
+                n_unit = n_ref / n_ref_len;
+            }
+        }
+        const float3 disp = n_unit * (depth_chunk * model.normal_sign);
+        const float tri_area = 0.5f * n_len;
+        const size_t g0 = group_of_vertex(i0);
+        const size_t g1 = group_of_vertex(i1);
+        const size_t g2 = group_of_vertex(i2);
+        if (g0 >= n_vertex_groups || g1 >= n_vertex_groups || g2 >= n_vertex_groups) {
+            DEME_ERROR("Wear canonical-vertex map out of range for owner %zu.", (size_t)ownerID);
+        }
+
+        weighted_disp[g0] += disp * tri_area;
+        weighted_disp[g1] += disp * tri_area;
+        weighted_disp[g2] += disp * tri_area;
+        weighted_sum[g0] += tri_area;
+        weighted_sum[g1] += tri_area;
+        weighted_sum[g2] += tri_area;
+        has_any_wear = true;
+    }
+
+    if (n_cap_clipped > 0) {
+        model.cap_warning_count++;
+        DEME_WARNING(
+            "Mesh-wear cap reached for owner %zu: %zu triangle(s) exceeded the per-update cap. Excess wear depth is "
+            "discarded. Current cap: %.6g (%.6g * median edge %.6g). Max requested depth: %.6g; max discarded depth: "
+            "%.6g.",
+            (size_t)ownerID, n_cap_clipped, (double)model.max_depth_per_update,
+            (double)model.max_depth_fraction_of_median_edge, (double)model.median_edge_length,
+            (double)max_requested_depth, (double)max_discarded_depth);
+    }
+
+    auto clear_pending_depth = [&]() { std::fill(model.pending_depth.begin(), model.pending_depth.end(), 0.f); };
+    if (!has_any_wear) {
+        clear_pending_depth();
+        return false;
+    }
+
+    bool has_any_node_update = false;
+    for (size_t i = 0; i < vertices.size(); i++) {
+        const size_t g = group_of_vertex(i);
+        if (g >= n_vertex_groups || !(weighted_sum[g] > DEME_TINY_FLOAT)) {
+            continue;
+        }
+        node_updates[i] = weighted_disp[g] / weighted_sum[g];
+        if (length(node_updates[i]) > DEME_TINY_FLOAT) {
+            has_any_node_update = true;
+        }
+    }
+
+    if (!has_any_node_update) {
+        clear_pending_depth();
+        return false;
+    }
+    UpdateTriNodeRelPos(ownerID, model.tri_start, node_updates);
+    clear_pending_depth();
+    return true;
+}
+
+void DEMSolver::updateMeshWearModels(double call_start_time, double call_end_time) {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    if (m_mesh_wear_models.empty() || !(call_end_time > call_start_time)) {
+        return;
+    }
+    if (!dT->triPVTrackingEnabled || dT->triPVWindowSteps == 0) {
+        return;
+    }
+
+    struct WearEval {
+        bodyID_t owner = NULL_BODYID;
+        MeshWearModelState* model = nullptr;
+        size_t offset = 0;
+        size_t count = 0;
+        double active_dt = 0.0;
+        bool ended_this_call = false;
+    };
+    std::vector<WearEval> evals;
+    evals.reserve(m_mesh_wear_models.size());
+    bool has_active_wear = false;
+
+    for (auto& kv : m_mesh_wear_models) {
+        const bodyID_t owner = kv.first;
+        MeshWearModelState& model = kv.second;
+        auto it_slot = dT->triPVOwnerToSlot.find(owner);
+        if (it_slot == dT->triPVOwnerToSlot.end()) {
+            continue;
+        }
+        const size_t slot = it_slot->second;
+        const size_t offset = dT->triPVOwnerOffsets[slot];
+        const size_t count = dT->triPVOwnerCounts[slot];
+        if (count != model.tri_count) {
+            DEME_ERROR("Wear model tracked-triangle mismatch for owner %zu (expected %zu, got %zu).", (size_t)owner,
+                       model.tri_count, count);
+        }
+
+        double active_dt = 0.0;
+        bool ended_this_call = false;
+        if (model.end_time >= 0.0) {
+            active_dt = overlapDuration(call_start_time, call_end_time, model.start_time, model.end_time);
+            ended_this_call = (call_start_time < model.end_time && call_end_time >= model.end_time);
+        } else if (call_end_time > model.start_time) {
+            active_dt = call_end_time - std::max(call_start_time, model.start_time);
+        }
+        if (active_dt > 0.0) {
+            has_active_wear = true;
+        }
+
+        evals.push_back(WearEval{owner, &model, offset, count, active_dt, ended_this_call});
+    }
+
+    if (evals.empty() || !has_active_wear) {
+        cacheTrackedTrianglePVWindow();
+        dT->resetTrackedTrianglePVWindow();
+        return;
+    }
+
+    dT->triPVAccumPV.toHost();
+    const float inv_steps = 1.f / static_cast<float>(dT->triPVWindowSteps);
+    std::vector<bodyID_t> owners_to_apply;
+    owners_to_apply.reserve(evals.size());
+
+    for (const auto& ev : evals) {
+        MeshWearModelState& model = *ev.model;
+        if (ev.active_dt > 0.0) {
+            const float depth_scale = static_cast<float>(model.wear_rate * ev.active_dt) * inv_steps;
+            for (size_t i = 0; i < ev.count; i++) {
+                const float avg_pv = dT->triPVAccumPV[ev.offset + i];
+                const float depth_inc = avg_pv * depth_scale;
+                if (depth_inc > 0.f && std::isfinite(depth_inc)) {
+                    model.pending_depth[i] += depth_inc;
+                }
+            }
+            model.pending_time += ev.active_dt;
+        }
+
+        const bool due = (model.pending_time + 1e-15 >= model.update_interval);
+        if (due || ev.ended_this_call) {
+            if (hasPendingWear(model.pending_depth)) {
+                owners_to_apply.push_back(ev.owner);
+            } else {
+                model.pending_time = 0.0;
+            }
+        }
+    }
+
+    cacheTrackedTrianglePVWindow();
+    dT->resetTrackedTrianglePVWindow();
+
+    if (!owners_to_apply.empty()) {
+        WaitForPendingOutput();
+    }
+    for (bodyID_t owner : owners_to_apply) {
+        auto it = m_mesh_wear_models.find(owner);
+        if (it == m_mesh_wear_models.end()) {
+            continue;
+        }
+        applyMeshWearModel(owner, it->second);
+        it->second.pending_time = 0.0;
+    }
+}
+
+void DEMSolver::resolveCombinedOwners(size_t nExistOwners) {
+    // Combined-member owner IDs are only meaningful after Initialize/Update assigned owner numbering.
+    // This method resolves cached member initializer handles to stable owner IDs exactly once per combined instance,
+    // then triggers a runtime metadata refresh for kT/dT if anything new was resolved.
     if (!sys_initialized) {
-        DEME_ERROR(
-            "Please call UpdateClumps only after the system is initialized, because it is for adding additional clumps "
-            "to an initialized DEM system.");
+        return;
+    }
+
+    std::vector<size_t> prescans_batch_size;
+    prescans_batch_size.push_back(0);
+    for (const auto& a_batch : cached_input_clump_batches) {
+        prescans_batch_size.push_back(prescans_batch_size.back() + a_batch->GetNumClumps());
+    }
+
+    for (auto& inst : cached_combined_instances) {
+        if (!inst || inst->owners_resolved || !inst->type) {
+            continue;
+        }
+        const size_t total_members = inst->member_objs.size();
+        const size_t n_members_per_inst = (inst->type->member_type == OWNER_TYPE::CLUMP)
+                                              ? inst->type->clump_templates.size()
+                                              : inst->type->mesh_templates.size();
+        inst->member_owner_ids.resize(total_members, NULL_BODYID);
+
+        bool ok = true;
+        for (size_t i = 0; i < total_members; i++) {
+            const auto& member_obj = inst->member_objs[i];
+            if (!member_obj) {
+                ok = false;
+                break;
+            }
+            if (member_obj->obj_type == OWNER_TYPE::CLUMP) {
+                const size_t load_order = member_obj->load_order;
+                if (load_order >= cached_input_clump_batches.size()) {
+                    ok = false;
+                    break;
+                }
+                inst->member_owner_ids[i] = static_cast<bodyID_t>(nExistOwners + prescans_batch_size[load_order]);
+            } else if (member_obj->obj_type == OWNER_TYPE::MESH) {
+                const size_t load_order = member_obj->load_order;
+                if (load_order >= cached_mesh_objs.size()) {
+                    ok = false;
+                    break;
+                }
+                const size_t owner_id =
+                    nExistOwners + cached_extern_objs.size() + prescans_batch_size.back() + load_order;
+                inst->member_owner_ids[i] = static_cast<bodyID_t>(owner_id);
+            } else {
+                ok = false;
+                break;
+            }
+        }
+
+        if (!ok || n_members_per_inst == 0 || inst->type->master_member >= n_members_per_inst) {
+            continue;
+        }
+        // Resolve master owner IDs for each instantiation in the batch.
+        for (size_t k = 0; k < inst->n_instances; k++) {
+            inst->master_owner_ids[k] = inst->member_owner_ids[k * n_members_per_inst + inst->type->master_member];
+        }
+        inst->owners_resolved = true;
+        m_combined_runtime_dirty = true;
+    }
+
+    // If no new instance was resolved, this call is a no-op due to m_combined_runtime_dirty check.
+    refreshCombinedRuntimeResources();
+}
+
+void DEMSolver::refreshCombinedRuntimeResources() {
+    // Refresh flattened combined-owner runtime arrays that device-side code consumes every step.
+    // This is intentionally host-driven and batched (Initialize/Update/getter resolution),
+    // not re-built inside high-frequency DoDynamics calls.
+    if (!sys_initialized || !m_combined_runtime_dirty) {
+        return;
+    }
+
+    const auto clear_combined_runtime_resources = [&]() {
+        {
+            // DualArray allocations do not track their owning CUDA device, so free and repack each worker's resources
+            // while that worker's device is current.
+            ScopedCudaDevice device_scope(dT->streamInfo.device);
+            dT->ownerCombinedMaster.free();
+            dT->ownerCombinedRelPos.free();
+            dT->ownerCombinedRelOriQ.free();
+            dT->ownerCombinedMasterMass.free();
+            dT->ownerCombinedMasterMOI.free();
+            dT->granData.toDevice();
+        }
+        {
+            ScopedCudaDevice device_scope(kT->streamInfo.device);
+            kT->ownerCombinedMaster.free();
+            kT->granData.toDevice();
+        }
+
+        dT->simParams->nCombinedOwners = 0;
+        kT->simParams->nCombinedOwners = 0;
+        dT->simParams->allowIntraCombinedOwnerContacts = m_allow_intra_combined_owner_contacts ? 1 : 0;
+        kT->simParams->allowIntraCombinedOwnerContacts = m_allow_intra_combined_owner_contacts ? 1 : 0;
+        dT->simParams.toDevice();
+        kT->simParams.toDevice();
+    };
+
+    if (cached_combined_instances.empty()) {
+        clear_combined_runtime_resources();
+        m_combined_runtime_dirty = false;
+        return;
+    }
+
+    // Reset per-owner mapping to the "not in a combined group" default state.
+    std::vector<bodyID_t> owner_combined_master(nOwnerBodies, NULL_BODYID);
+    std::vector<float3> owner_combined_rel_pos(nOwnerBodies, make_float3(0));
+    std::vector<float4> owner_combined_rel_oriQ(nOwnerBodies, make_float4(0, 0, 0, 1));
+    std::vector<float> owner_combined_master_mass(nOwnerBodies, 0.f);
+    std::vector<float3> owner_combined_master_moi(nOwnerBodies, make_float3(0));
+
+    bodyID_t n_combined_owners = 0;
+    constexpr float DEFAULT_COMBINED_MASTER_MASS = 1.f;
+    for (const auto& inst : cached_combined_instances) {
+        if (!inst || !inst->owners_resolved || !inst->type) {
+            continue;
+        }
+        const size_t total_members = inst->member_owner_ids.size();
+        const size_t n_members_per_inst = (inst->type->member_type == OWNER_TYPE::CLUMP)
+                                              ? inst->type->clump_templates.size()
+                                              : inst->type->mesh_templates.size();
+        if (total_members == 0 || n_members_per_inst == 0 || inst->type->master_member >= n_members_per_inst) {
+            continue;
+        }
+
+        for (size_t k = 0; k < inst->n_instances; k++) {
+            const bodyID_t master = inst->master_owner_ids[k];
+            if (master == NULL_BODYID || master >= nOwnerBodies) {
+                continue;
+            }
+
+            // Cache equivalent group mass/MOI on the master owner slot for device-side aggregation.
+            const float safe_mass = (inst->master_equiv_mass[k] > DEME_TINY_FLOAT) ? inst->master_equiv_mass[k]
+                                                                                   : DEFAULT_COMBINED_MASTER_MASS;
+            owner_combined_master_mass[master] = safe_mass;
+
+            for (size_t i = 0; i < n_members_per_inst; i++) {
+                const size_t flat_idx = k * n_members_per_inst + i;
+                const bodyID_t member = inst->member_owner_ids[flat_idx];
+                if (member == NULL_BODYID || member >= nOwnerBodies) {
+                    continue;
+                }
+                // Membership map: every member points to its master; this is the key used by contact suppression.
+                owner_combined_master[member] = master;
+                owner_combined_master_moi[master] +=
+                    rotateDiagonalMOIToFrame(inst->member_moi[flat_idx], inst->type->rel_oriQ[i]) +
+                    parallelAxisDiagonal(inst->member_mass[flat_idx], inst->type->rel_pos[i]);
+                if (member != master) {
+                    // Only non-master members need fixed transforms for rigid re-imposition.
+                    owner_combined_rel_pos[member] = inst->type->rel_pos[i];
+                    owner_combined_rel_oriQ[member] = inst->type->rel_oriQ[i];
+                    n_combined_owners++;
+                }
+            }
+        }
+    }
+
+    if (n_combined_owners == 0) {
+        clear_combined_runtime_resources();
+        m_combined_runtime_dirty = false;
+        return;
+    }
+
+    // DualArray uses the current CUDA device for allocation and migration. Scope each worker's runtime resources to its
+    // own device so the kT contact-suppression kernel never receives a dT-device membership pointer.
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->ownerCombinedMaster.resize(nOwnerBodies, NULL_BODYID);
+        dT->ownerCombinedRelPos.resize(nOwnerBodies, make_float3(0));
+        dT->ownerCombinedRelOriQ.resize(nOwnerBodies, make_float4(0, 0, 0, 1));
+        dT->ownerCombinedMasterMass.resize(nOwnerBodies, 0.f);
+        dT->ownerCombinedMasterMOI.resize(nOwnerBodies, make_float3(0));
+        dT->granData.toDevice();
+
+        dT->ownerCombinedMaster.setVal(owner_combined_master, 0);
+        dT->ownerCombinedRelPos.setVal(owner_combined_rel_pos, 0);
+        dT->ownerCombinedRelOriQ.setVal(owner_combined_rel_oriQ, 0);
+        dT->ownerCombinedMasterMass.setVal(owner_combined_master_mass, 0);
+        dT->ownerCombinedMasterMOI.setVal(owner_combined_master_moi, 0);
+    }
+    {
+        // kT only needs the membership mapping for contact suppression.
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->ownerCombinedMaster.resize(nOwnerBodies, NULL_BODYID);
+        kT->granData.toDevice();
+        kT->ownerCombinedMaster.setVal(owner_combined_master, 0);
+    }
+
+    // Enable/disable combined-specific device logic by count. Zero count means no extra overhead in kernels.
+    dT->simParams->nCombinedOwners = n_combined_owners;
+    kT->simParams->nCombinedOwners = n_combined_owners;
+    dT->simParams->allowIntraCombinedOwnerContacts = m_allow_intra_combined_owner_contacts ? 1 : 0;
+    kT->simParams->allowIntraCombinedOwnerContacts = m_allow_intra_combined_owner_contacts ? 1 : 0;
+    dT->simParams.toDevice();
+    kT->simParams.toDevice();
+
+    m_combined_runtime_dirty = false;
+}
+
+void DEMSolver::Update() {
+    ++dT->visualizationRevision;
+    if (!sys_initialized) {
+        DEME_ERROR(std::string(
+            "Please call Update only after the system is initialized, because it is for adding additional clumps "
+            "to an initialized DEM system."));
     }
     if (nLastTimeExtObjLoad != nExtObjLoad) {
         DEME_ERROR(
-            "UpdateClumps cannot be used after loading new analytical objects. Consider re-initializing at this "
+            "Update cannot be used after loading new analytical objects. Consider re-initializing at this "
             "point.\nNumber of analytical objects at last initialization: %u\nNumber of analytical objects now: %u",
             nLastTimeExtObjLoad, nExtObjLoad);
     }
     if (nLastTimeClumpTemplateLoad != nClumpTemplateLoad) {
         DEME_ERROR(
-            "UpdateClumps cannot be used after loading new clump templates. Consider re-initializing at this "
+            "Update cannot be used after loading new clump templates. Consider re-initializing at this "
             "point.\nNumber of clump templates at last initialization: %zu\nNumber of clump templates now: %zu",
             nLastTimeClumpTemplateLoad, nClumpTemplateLoad);
     }
     // DEME_WARNING(
-    //     "UpdateClumps will add all currently cached clumps to the simulation.\nYou may want to ClearCache first,"
+    //     "Update will add all currently cached clumps to the simulation.\nYou may want to ClearCache first,"
     //     "then AddClumps, then call this method, so the clumps cached earlier are forgotten before this method takes"
     //     "place.");
 
     // This method requires kT and dT are sync-ed
     // resetWorkerThreads();
 
-    // NOTE!!! This step in UpdateClumps is extremely important, as we'll soon modify device-major arrays on host!
+    // NOTE!!! This step in Update is extremely important, as we'll soon modify device-major arrays on host!
     migrateArrayDataToHost();
 
     // Record the number of entities, before adding to the system
@@ -2379,6 +4364,8 @@ void DEMSolver::UpdateClumps() {
     size_t nSpheres_old = nSpheresGM;
     size_t nTriMesh_old = nTriMeshes;
     size_t nFacets_old = nTriGM;
+    size_t nTriNeighbors_old = nTriNeighbors;
+    size_t nPatch_old = nMeshPatches;
     unsigned int nAnalGM_old = nAnalGM;
     unsigned int nExtObj_old = nExtObj;
 
@@ -2388,7 +4375,8 @@ void DEMSolver::UpdateClumps() {
     updateTotalEntityNum();
     allocateGPUArrays();
     // `Update' method needs to know the number of existing clumps and spheres (before this addition)
-    updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old, nExtObj_old, nAnalGM_old);
+    updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old, nTriNeighbors_old,
+                          nPatch_old, nExtObj_old, nAnalGM_old);
     packDataPointers();
 
     // Now that all params prepared, and all data pointers packed on host side, we need to migrate that imformation to
@@ -2403,38 +4391,17 @@ void DEMSolver::UpdateClumps() {
     // This method should not introduce new material or clump template or family prescription, let's check that
     if (nLastTimeMatNum != m_loaded_materials.size() || nLastTimeFamilyPreNum != m_input_family_prescription.size()) {
         DEME_ERROR(
-            "UpdateClumps should not be used if you introduce new material types or family prescription (which will "
+            "Update should not be used if you introduce new material types or family prescription (which will "
             "need re-jitification).\nWe used to have %u materials, now we have %zu.\nWe used to have %u family "
             "prescription, now we have %zu.",
             nLastTimeMatNum, m_loaded_materials.size(), nLastTimeFamilyPreNum, m_input_family_prescription.size());
     }
 
-    // After Initialize or UpdateClumps, we should clear host-side initialization object cache
+    m_combined_runtime_dirty = true;
+    resolveCombinedOwners(nOwners_old);
+
+    // After Initialize or Update, we should clear host-side initialization object cache
     ClearCache();
-}
-
-void DEMSolver::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {
-    if (!sys_initialized) {
-        DEME_ERROR(
-            "ChangeClumpSizes operates on device-side arrays directly, so it requires the system to be initialized "
-            "first.");
-    }
-    if (jitify_clump_templates || jitify_mass_moi) {
-        DEME_ERROR(
-            "ChangeClumpSizes only works when the clump components are flattened (not jitified).\nConsider calling "
-            "SetJitifyClumpTemplates(false) and SetJitifyMassProperties(false).");
-    }
-
-    // This method requires kT and dT are sync-ed
-    // resetWorkerThreads();
-
-    std::thread dThread = std::move(std::thread([this, IDs, factors]() { this->dT->changeOwnerSizes(IDs, factors); }));
-    std::thread kThread = std::move(std::thread([this, IDs, factors]() { this->kT->changeOwnerSizes(IDs, factors); }));
-    dThread.join();
-    kThread.join();
-
-    // Size changes are critical
-    dT->announceCritical();
 }
 
 /// Removes all entities associated with a family from the arrays (to save memory space). This method should only be
@@ -2447,6 +4414,13 @@ void DEMSolver::DoDynamics(double thisCallDuration) {
     if (!sys_initialized) {
         Initialize();
     }
+    if (m_combined_runtime_dirty) {
+        DEME_ERROR(
+            "Combined-owner runtime metadata is marked dirty before DoDynamics.\n"
+            "Combined templates/instances are setup data and must be resolved by Initialize or Update before "
+            "dynamics.");
+    }
+    const double sim_time_start = dT->getSimTime();
 
     // Tell dT how long this call is
     dT->setCycleDuration(thisCallDuration);
@@ -2464,6 +4438,9 @@ void DEMSolver::DoDynamics(double thisCallDuration) {
         // since that's only used when kT and dT sync.
         dTMain_InteractionManager->userCallDone = false;
     }
+
+    const double sim_time_end = dT->getSimTime();
+    updateMeshWearModels(sim_time_start, sim_time_end);
 }
 
 void DEMSolver::DoDynamicsThenSync(double thisCallDuration) {
@@ -2506,13 +4483,14 @@ void DEMSolver::ShowThreadCollaborationStats() {
 
 void DEMSolver::ShowAnomalies() {
     DEME_PRINTF("\n~~ Simulation anomaly report ~~\n");
-    bool there_is_anomaly = goThroughWorkerAnomalies();
-    if (!there_is_anomaly) {
-        DEME_PRINTF("There is no simulation anomalies on record.\n");
-    }
+    Logger::GetInstance().PrintStatusMessages(std::cerr);
     DEME_PRINTF("-----------------------------\n");
-    kT->anomalies.Clear();
-    dT->anomalies.Clear();
+}
+
+void DEMSolver::ShowWarnings() {
+    DEME_PRINTF("\n~~ Simulation warning report ~~\n");
+    Logger::GetInstance().PrintWarningsAndErrors(std::cerr);
+    DEME_PRINTF("-----------------------------\n");
 }
 
 void DEMSolver::ClearThreadCollaborationStats() {
@@ -2526,25 +4504,55 @@ void DEMSolver::ClearThreadCollaborationStats() {
     dT->nTotalSteps = 0;
 }
 
-float DEMSolver::dTInspectReduce(const std::shared_ptr<deme::jit::Program>& inspection_kernel,
+float DEMSolver::dTInspectReduce(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                                  const std::string& kernel_name,
                                  INSPECT_ENTITY_TYPE thing_to_insp,
                                  CUB_REDUCE_FLAVOR reduce_flavor,
-                                 bool all_domain) {
-    // Note they are currently running in the device associated with the main, but it's not a big issue
-    //// TODO: Think about the implication on using more than 2 GPUs
-    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+                                 bool all_domain,
+                                 DualArray<scratch_t>& reduceResArr,
+                                 DualArray<scratch_t>& reduceRes) {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
+                                  reduceResArr, reduceRes, false);
     return (float)(*pRes);
 }
 
-float* DEMSolver::dTInspectNoReduce(const std::shared_ptr<deme::jit::Program>& inspection_kernel,
+float* DEMSolver::dTInspectNoReduce(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
                                     const std::string& kernel_name,
                                     INSPECT_ENTITY_TYPE thing_to_insp,
                                     CUB_REDUCE_FLAVOR reduce_flavor,
-                                    bool all_domain) {
-    // Note they are currently running in the device associated with the main, but it's not a big issue
-    //// TODO: Think about the implication on using more than 2 GPUs
-    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+                                    bool all_domain,
+                                    DualArray<scratch_t>& reduceResArr,
+                                    DualArray<scratch_t>& reduceRes) {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
+                                  reduceResArr, reduceRes, false);
+    return pRes;
+}
+
+float DEMSolver::dTInspectReduceDevice(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
+                                       const std::string& kernel_name,
+                                       INSPECT_ENTITY_TYPE thing_to_insp,
+                                       CUB_REDUCE_FLAVOR reduce_flavor,
+                                       bool all_domain,
+                                       DualArray<scratch_t>& reduceResArr,
+                                       DualArray<scratch_t>& reduceRes) {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
+                                  reduceResArr, reduceRes, true);
+    return (float)(*pRes);
+}
+
+float* DEMSolver::dTInspectNoReduceDevice(const std::shared_ptr<JitHelper::CachedProgram>& inspection_kernel,
+                                          const std::string& kernel_name,
+                                          INSPECT_ENTITY_TYPE thing_to_insp,
+                                          CUB_REDUCE_FLAVOR reduce_flavor,
+                                          bool all_domain,
+                                          DualArray<scratch_t>& reduceResArr,
+                                          DualArray<scratch_t>& reduceRes) {
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
+                                  reduceResArr, reduceRes, true);
     return pRes;
 }
 

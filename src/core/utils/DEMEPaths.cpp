@@ -7,6 +7,7 @@
 #include <cstring>
 
 #include "DEMEPaths.h"
+#include "JitHelper.h"
 
 namespace deme {
 
@@ -14,13 +15,13 @@ namespace deme {
 // Functions for manipulating the DEME data directory
 // -----------------------------------------------------------------------------
 
-// Set the path to the DEME data directory (ATTENTION: not thread safe)
-void SetDEMEDataPath(const std::string& path) {
-    DEME_data_path = path;
+// Set the path to the DEME data directory (usually reserved for the solver's own usage)
+void SetDEMEDataPath() {
+    DEME_data_path = DEMERuntimeDataHelper::data_path / "data";
 }
 
 // Obtain the current path to the DEME data directory (thread safe)
-const std::filesystem::path& GetDEMEDataPath() {
+std::filesystem::path& GetDEMEDataPath() {
     return DEME_data_path;
 }
 
@@ -28,6 +29,16 @@ const std::filesystem::path& GetDEMEDataPath() {
 // DEME data directory (thread safe)
 std::string GetDEMEDataFile(const std::string& filename) {
     return (DEME_data_path / filename).string();
+}
+
+// Set the path to the DEME data kernel directory (usually reserved for the solver's own usage)
+void SetDEMEKernelPath() {
+    JitHelper::KERNEL_DIR = DEMERuntimeDataHelper::data_path / "kernel";
+}
+
+// Set the path to the DEME include directory (usually reserved for the solver's own usage)
+void SetDEMEIncludePath() {
+    JitHelper::KERNEL_INCLUDE_DIR = DEMERuntimeDataHelper::include_path;
 }
 
 }  // namespace deme

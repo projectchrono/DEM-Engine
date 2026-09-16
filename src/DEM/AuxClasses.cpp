@@ -7,7 +7,7 @@
 
 #include "API.h"
 #include "AuxClasses.h"
-#include "HostSideHelpers.hpp"
+#include "utils/HostSideHelpers.hpp"
 #include "Models.h"
 
 namespace deme {
@@ -58,6 +58,27 @@ const std::string INSP_CODE_EVERYTHING_ABSV = R"V0G0N(
     double myABSV = sqrt(myVX * myVX + myVY * myVY + myVZ * myVZ);
 
     quantity[myOwner] = myABSV;
+)V0G0N";
+
+const std::string INSP_CODE_EVERYTHING_ABSANGVEL = R"V0G0N(
+    double myOmegaX = granData->omgBarX[myOwner];
+    double myOmegaY = granData->omgBarY[myOwner];
+    double myOmegaZ = granData->omgBarZ[myOwner];
+    double myABSANGVEL = sqrt(myOmegaX * myOmegaX + myOmegaY * myOmegaY + myOmegaZ * myOmegaZ);
+
+    quantity[myOwner] = myABSANGVEL;
+)V0G0N";
+
+const std::string INSP_CODE_ANGVEL_X = R"V0G0N(
+    quantity[myOwner] = granData->omgBarX[myOwner];
+)V0G0N";
+
+const std::string INSP_CODE_ANGVEL_Y = R"V0G0N(
+    quantity[myOwner] = granData->omgBarY[myOwner];
+)V0G0N";
+
+const std::string INSP_CODE_ANGVEL_Z = R"V0G0N(
+    quantity[myOwner] = granData->omgBarZ[myOwner];
 )V0G0N";
 
 const std::string INSP_CODE_CLUMP_KE = R"V0G0N(
@@ -116,8 +137,8 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
         //     reduce_flavor = CUB_REDUCE_FLAVOR::MAX;
         //     kernel_name = "inspectOwnerProperty";
         //     break;
-        //// TODO: Void ration here is a very rough approximation and should only work when domain is large and
-        /// particles are small
+        //// TODO: Void ratio here is a very rough approximation and should only work when domain is large and particles
+        /// are small
         case ("clump_volume"_):
             inspection_code = INSP_CODE_CLUMP_APPROX_VOL;
             reduce_flavor = CUB_REDUCE_FLAVOR::SUM;
@@ -148,6 +169,41 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
             thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
             index_name = "myOwner";
             break;
+        case ("absangvel"_):
+            inspection_code = INSP_CODE_EVERYTHING_ABSANGVEL;
+            reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
+            index_name = "myOwner";
+            break;
+        case ("absangvelx"_):
+            inspection_code = INSP_CODE_ANGVEL_X;
+            reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
+            index_name = "myOwner";
+            break;
+        case ("absangvely"_):
+            inspection_code = INSP_CODE_ANGVEL_Y;
+            reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
+            index_name = "myOwner";
+            break;
+        case ("absangvelz"_):
+            inspection_code = INSP_CODE_ANGVEL_Z;
+            reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
+            index_name = "myOwner";
+            break;
+        case ("max_absangvel"_):
+            inspection_code = INSP_CODE_EVERYTHING_ABSANGVEL;
+            reduce_flavor = CUB_REDUCE_FLAVOR::MAX;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
+            index_name = "myOwner";
+            break;
         case ("clump_kinetic_energy"_):
             inspection_code = INSP_CODE_CLUMP_KE;
             reduce_flavor = CUB_REDUCE_FLAVOR::SUM;
@@ -157,23 +213,35 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
             all_domain = false;  // Only clumps, so not all domain owners
             break;
         default:
-            std::stringstream ss;
-            ss << quantity << " is not a known query type." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("%s is not a known query type.", quantity.c_str());
     }
 }
 
 float DEMInspector::GetValue() {
     assertInit();
-    float reduce_result =
-        sys->dTInspectReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+    float reduce_result = sys->dTInspectReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
+                                               m_reduceResArr, m_reduceRes);
     return reduce_result;
 }
 
 float* DEMInspector::GetValues() {
     assertInit();
-    float* reduce_result =
-        sys->dTInspectNoReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+    float* reduce_result = sys->dTInspectNoReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor,
+                                                  all_domain, m_reduceResArr, m_reduceRes);
+    return reduce_result;
+}
+
+float DEMInspector::GetDeviceValue() {
+    assertInit();
+    float reduce_result = sys->dTInspectReduceDevice(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor,
+                                                     all_domain, m_reduceResArr, m_reduceRes);
+    return reduce_result;
+}
+
+float* DEMInspector::GetDeviceValues() {
+    assertInit();
+    float* reduce_result = sys->dTInspectNoReduceDevice(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor,
+                                                        all_domain, m_reduceResArr, m_reduceRes);
     return reduce_result;
 }
 
@@ -181,13 +249,19 @@ float* DEMInspector::dT_GetValue() {
     // assertInit(); // This one the user should not use
     // Also, this call breaks the chain-that-bind, but I'm not too worried, as it's used in dT's workerThread only,
     // meaning the device number is well-defined.
-    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, m_reduceResArr,
+                           m_reduceRes, false);
 }
 
-float* DEMInspector::dT_GetDeviceValue() {
-    // assertInit(); // This one the user should not use
-    // This returns a device pointer instead of a host pointer
-    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain, true);
+float* DEMInspector::dT_GetDeviceValues() {
+    // Device-only inspection path to avoid host syncs in dT's worker thread.
+    return dT->inspectCallDeviceNoReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain,
+                                         m_reduceResArr, m_reduceRes);
+}
+
+void DEMInspector::ReleaseData() {
+    m_reduceResArr.free();
+    m_reduceRes.free();
 }
 
 void DEMInspector::assertInit() {
@@ -200,11 +274,9 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
                               const std::vector<std::string>& options,
                               bool force) {
     if (!(sys->GetInitStatus()) && !force) {
-        std::stringstream ss;
-        ss << "Inspector should only be initialized or used after the simulation system is initialized (because it "
-              "uses device-side data)!"
-           << std::endl;
-        throw std::runtime_error(ss.str());
+        DEME_ERROR(std::string(
+            "Inspector should only be initialized or used after the simulation system is initialized (because "
+            "it uses device-side data)!"));
     }
     // We want to make sure if the in_region_code is legit, if it is not an all_domain query
     std::string in_region_specifier = in_region_code, placeholder;
@@ -212,12 +284,11 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
     if ((!all_domain) && (!is_all_spaces(in_region_code))) {
         if (!any_whole_word_match(in_region_code, {"X", "Y", "Z"}) ||
             !all_whole_word_match(in_region_code, {"return"}, placeholder)) {
-            std::stringstream ss;
-            ss << "One of your insepctors is set to query a specific region, but the domian is not properly "
-                  "defined.\nIt needs to return a bool variable that is a result of logical operations involving X, Y "
-                  "and Z.\nYou can remove the region argument if all simulation entities should be considered."
-               << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(std::string(
+                "One of your insepctors is set to query a specific region, but the domian is not properly "
+                "defined.\nIt needs to return a bool variable that is a result of logical operations involving "
+                "X, Y and Z.\nYou can remove the region argument if all simulation entities should be "
+                "considered."));
         }
         // Replace the return with our own variable
         in_region_specifier = replace_pattern(in_region_specifier, "return", "bool isInRegion = ");
@@ -229,17 +300,15 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
     my_subs["_inRegionPolicy_"] = in_region_specifier;
     my_subs["_quantityQueryProcess_"] = inspection_code;
     if (thing_to_insp == INSPECT_ENTITY_TYPE::SPHERE) {
-        inspection_kernel = std::make_shared<deme::jit::Program>(std::move(JitHelper::buildProgram(
+        inspection_kernel = std::make_shared<JitHelper::CachedProgram>(std::move(JitHelper::buildProgram(
             "DEMSphereQueryKernels", JitHelper::KERNEL_DIR / "DEMSphereQueryKernels.cu", my_subs, options)));
     } else if (thing_to_insp == INSPECT_ENTITY_TYPE::CLUMP || thing_to_insp == INSPECT_ENTITY_TYPE::EVERYTHING) {
-        inspection_kernel = std::make_shared<deme::jit::Program>(std::move(JitHelper::buildProgram(
+        inspection_kernel = std::make_shared<JitHelper::CachedProgram>(std::move(JitHelper::buildProgram(
             "DEMOwnerQueryKernels", JitHelper::KERNEL_DIR / "DEMOwnerQueryKernels.cu", my_subs, options)));
     } else {
-        std::stringstream ss;
-        ss << "Sorry, an inspector object you are using is not implemented yet.\nConsider letting the developers know "
-              "this and they may help you."
-           << std::endl;
-        throw std::runtime_error(ss.str());
+        DEME_ERROR(std::string(
+            "Sorry, an inspector object you are using is not implemented yet.\nConsider letting the developers "
+            "know this and they may help you."));
     }
     initialized = true;
 }
@@ -250,56 +319,48 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
 
 void DEMTracker::assertThereIsForcePairs(const std::string& name) {
     if (sys->GetWhetherForceCollectInKernel()) {
-        std::stringstream ss;
-        ss << "The solver is currently set to not record force pair info, so you cannot query force pairs using "
-           << name
-           << ".\nYou can call SetCollectAccRightAfterForceCalc(false) before system initialization and try "
-              "again."
-           << std::endl;
-        throw std::runtime_error(ss.str());
+        DEME_ERROR(
+            "The solver is currently set to not record force pair info, so you cannot query force pairs using "
+            "%s.\nYou can call SetCollectAccRightAfterForceCalc(false) before system initialization and try "
+            "again.",
+            name.c_str());
     }
 }
 void DEMTracker::assertMesh(const std::string& name) {
     if (obj->obj_type != OWNER_TYPE::MESH) {
-        std::stringstream ss;
-        ss << name << " is only callable for trackers tracking a mesh!" << std::endl;
-        throw std::runtime_error(ss.str());
+        DEME_ERROR("%s is only callable for trackers tracking a mesh!", name.c_str());
     }
 }
 void DEMTracker::assertGeoSize(size_t input_length, const std::string& name, const std::string& geo_type) {
     if (input_length != obj->nGeos) {
-        std::stringstream ss;
-        ss << name << " is called with an input not the same size (number of " << geo_type
-           << ") as the original tracked object!\nThe input has " << input_length << " " << geo_type
-           << " while the tracked object has " << obj->nGeos << "." << std::endl;
-        throw std::runtime_error(ss.str());
+        DEME_ERROR(
+            "%s is called with an input not the same size (number of %s) as the original tracked object!\nThe "
+            "input has %zu %s while the tracked object has %zu.",
+            name.c_str(), geo_type.c_str(), input_length, geo_type.c_str(), obj->nGeos);
     }
 }
 void DEMTracker::assertOwnerSize(size_t input_length, const std::string& name) {
     if (input_length != obj->nSpanOwners) {
-        std::stringstream ss;
-        ss << name << " is called with an input not the same size of the number of owners it tracks!\nThe input has "
-           << input_length << " elements while the tracker tracks " << obj->nSpanOwners << " entities." << std::endl;
-        throw std::runtime_error(ss.str());
+        DEME_ERROR(
+            "%s is called with an input not the same size of the number of owners it tracks!\nThe input has "
+            "%zu elements while the tracker tracks %zu entities.",
+            name.c_str(), input_length, obj->nSpanOwners);
     }
 }
 void DEMTracker::assertOwnerOffsetValid(size_t offset, const std::string& name) {
     if (offset >= obj->nSpanOwners) {
-        std::stringstream ss;
-        ss << name
-           << " is called with an offset larger than the number of owners (minus 1, to be precise) it tracks!\nThe "
-              "offset is "
-           << offset << " while the tracker tracks " << obj->nSpanOwners << " entities." << std::endl;
-        throw std::runtime_error(ss.str());
+        DEME_ERROR(
+            "%s is called with an offset larger than the number of owners (minus 1, to be precise) it "
+            "tracks!\nThe offset is %zu while the tracker tracks %zu entities.",
+            name.c_str(), offset, obj->nSpanOwners);
     }
 }
 void DEMTracker::assertGeoOffsetValid(size_t offset, const std::string& name, const std::string& geo_type) {
     if (offset >= obj->nGeos) {
-        std::stringstream ss;
-        ss << name << " is called with an offset larger than the number of " << geo_type
-           << " (minus 1, to be precise) it tracks!\nThe offset is " << offset << " " << geo_type
-           << " while the tracked object has " << obj->nGeos << "." << std::endl;
-        throw std::runtime_error(ss.str());
+        DEME_ERROR(
+            "%s is called with an offset larger than the number of %s (minus 1, to be precise) it tracks!\nThe "
+            "offset is %zu %s while the tracked object has %zu.",
+            name.c_str(), geo_type.c_str(), offset, geo_type.c_str(), obj->nGeos);
     }
 }
 
@@ -334,6 +395,12 @@ std::vector<std::vector<float>> DEMTracker::GetPositions() {
     std::vector<float3> res = Positions();
     return Real3VectorToVecOfVec<float, float3>(res);
 }
+void DEMTracker::PositionsToDevice(float3* destination, size_t capacity, int destination_device, bool validate) {
+    sys->GetOwnerPositionToDevice(destination, capacity, destination_device, obj->ownerID, obj->nSpanOwners, validate);
+}
+void DEMTracker::SetPositionsFromDevice(const float3* source, int source_device, bool validate) {
+    sys->SetOwnerPositionFromDevice(obj->ownerID, source, source_device, obj->nSpanOwners, validate);
+}
 
 float3 DEMTracker::AngVelLocal(size_t offset) {
     assertOwnerOffsetValid(offset, "AngVelLocal");
@@ -349,6 +416,16 @@ std::vector<float3> DEMTracker::AngularVelocitiesLocal() {
 std::vector<std::vector<float>> DEMTracker::GetAngularVelocitiesLocal() {
     std::vector<float3> res = AngularVelocitiesLocal();
     return Real3VectorToVecOfVec<float, float3>(res);
+}
+void DEMTracker::AngularVelocitiesLocalToDevice(float3* destination,
+                                                size_t capacity,
+                                                int destination_device,
+                                                bool validate) {
+    sys->GetOwnerAngVelLocalToDevice(destination, capacity, destination_device, obj->ownerID, obj->nSpanOwners,
+                                     validate);
+}
+void DEMTracker::SetAngularVelocitiesFromDevice(const float3* source, int source_device, bool validate) {
+    sys->SetOwnerAngVelFromDevice(obj->ownerID, source, source_device, obj->nSpanOwners, validate);
 }
 
 float3 DEMTracker::AngVelGlobal(size_t offset) {
@@ -374,6 +451,16 @@ std::vector<std::vector<float>> DEMTracker::GetAngularVelocitiesGlobal() {
     std::vector<float3> res = AngularVelocitiesGlobal();
     return Real3VectorToVecOfVec<float, float3>(res);
 }
+void DEMTracker::AngularVelocitiesGlobalToDevice(float3* destination,
+                                                 size_t capacity,
+                                                 int destination_device,
+                                                 bool validate) {
+    sys->GetOwnerAngVelGlobalToDevice(destination, capacity, destination_device, obj->ownerID, obj->nSpanOwners,
+                                      validate);
+}
+void DEMTracker::SetAngularVelocitiesGlobalFromDevice(const float3* source, int source_device, bool validate) {
+    sys->SetOwnerAngVelGlobalFromDevice(obj->ownerID, source, source_device, obj->nSpanOwners, validate);
+}
 
 float3 DEMTracker::Vel(size_t offset) {
     assertOwnerOffsetValid(offset, "Vel");
@@ -389,6 +476,12 @@ std::vector<float3> DEMTracker::Velocities() {
 std::vector<std::vector<float>> DEMTracker::GetVelocities() {
     std::vector<float3> res = Velocities();
     return Real3VectorToVecOfVec<float, float3>(res);
+}
+void DEMTracker::VelocitiesToDevice(float3* destination, size_t capacity, int destination_device, bool validate) {
+    sys->GetOwnerVelocityToDevice(destination, capacity, destination_device, obj->ownerID, obj->nSpanOwners, validate);
+}
+void DEMTracker::SetVelocitiesFromDevice(const float3* source, int source_device, bool validate) {
+    sys->SetOwnerVelocityFromDevice(obj->ownerID, source, source_device, obj->nSpanOwners, validate);
 }
 
 float4 DEMTracker::OriQ(size_t offset) {
@@ -406,6 +499,15 @@ std::vector<std::vector<float>> DEMTracker::GetOrientationQuaternions() {
     std::vector<float4> res = OrientationQuaternions();
     return Real4VectorToVecOfVec<float, float4>(res);
 }
+void DEMTracker::OrientationQuaternionsToDevice(float4* destination,
+                                                size_t capacity,
+                                                int destination_device,
+                                                bool validate) {
+    sys->GetOwnerOriQToDevice(destination, capacity, destination_device, obj->ownerID, obj->nSpanOwners, validate);
+}
+void DEMTracker::SetOrientationQuaternionsFromDevice(const float4* source, int source_device, bool validate) {
+    sys->SetOwnerOriQFromDevice(obj->ownerID, source, source_device, obj->nSpanOwners, validate);
+}
 
 unsigned int DEMTracker::GetFamily(size_t offset) {
     assertOwnerOffsetValid(offset, "GetFamily");
@@ -414,6 +516,9 @@ unsigned int DEMTracker::GetFamily(size_t offset) {
 std::vector<unsigned int> DEMTracker::GetFamilies() {
     return sys->GetOwnerFamily(obj->ownerID, obj->nSpanOwners);
 }
+void DEMTracker::FamiliesToDevice(unsigned int* destination, size_t capacity, int destination_device, bool validate) {
+    sys->GetOwnerFamilyToDevice(destination, capacity, destination_device, obj->ownerID, obj->nSpanOwners, validate);
+}
 
 float DEMTracker::Mass(size_t offset) {
     assertOwnerOffsetValid(offset, "Mass");
@@ -421,6 +526,9 @@ float DEMTracker::Mass(size_t offset) {
 }
 std::vector<float> DEMTracker::Masses() {
     return sys->GetOwnerMass(obj->ownerID, obj->nSpanOwners);
+}
+void DEMTracker::MassesToDevice(float* destination, size_t capacity, int destination_device, bool validate) {
+    sys->GetOwnerMassToDevice(destination, capacity, destination_device, obj->ownerID, obj->nSpanOwners, validate);
 }
 
 float3 DEMTracker::MOI(size_t offset) {
@@ -437,6 +545,9 @@ std::vector<float3> DEMTracker::MOIs() {
 std::vector<std::vector<float>> DEMTracker::GetMOIs() {
     std::vector<float3> res = MOIs();
     return Real3VectorToVecOfVec<float, float3>(res);
+}
+void DEMTracker::MOIsToDevice(float3* destination, size_t capacity, int destination_device, bool validate) {
+    sys->GetOwnerMOIToDevice(destination, capacity, destination_device, obj->ownerID, obj->nSpanOwners, validate);
 }
 
 // float3 DEMTracker::Acc(size_t offset) {
@@ -465,6 +576,12 @@ std::vector<std::vector<float>> DEMTracker::GetContactAccelerations() {
     std::vector<float3> res = ContactAccelerations();
     return Real3VectorToVecOfVec<float, float3>(res);
 }
+void DEMTracker::ContactAccelerationsToDevice(float3* destination,
+                                              size_t capacity,
+                                              int destination_device,
+                                              bool validate) {
+    sys->GetOwnerAccToDevice(destination, capacity, destination_device, obj->ownerID, obj->nSpanOwners, validate);
+}
 
 float3 DEMTracker::ContactAngAccLocal(size_t offset) {
     assertOwnerOffsetValid(offset, "ContactAngAccLocal");
@@ -480,6 +597,13 @@ std::vector<float3> DEMTracker::ContactAngularAccelerationsLocal() {
 std::vector<std::vector<float>> DEMTracker::GetContactAngularAccelerationsLocal() {
     std::vector<float3> res = ContactAngularAccelerationsLocal();
     return Real3VectorToVecOfVec<float, float3>(res);
+}
+void DEMTracker::ContactAngularAccelerationsLocalToDevice(float3* destination,
+                                                          size_t capacity,
+                                                          int destination_device,
+                                                          bool validate) {
+    sys->GetOwnerAngAccLocalToDevice(destination, capacity, destination_device, obj->ownerID, obj->nSpanOwners,
+                                     validate);
 }
 
 float3 DEMTracker::ContactAngAccGlobal(size_t offset) {
@@ -505,6 +629,23 @@ std::vector<std::vector<float>> DEMTracker::GetContactAngularAccelerationsGlobal
     std::vector<float3> res = ContactAngularAccelerationsGlobal();
     return Real3VectorToVecOfVec<float, float3>(res);
 }
+void DEMTracker::ContactAngularAccelerationsGlobalToDevice(float3* destination,
+                                                           size_t capacity,
+                                                           int destination_device,
+                                                           bool validate) {
+    sys->GetOwnerAngAccGlobalToDevice(destination, capacity, destination_device, obj->ownerID, obj->nSpanOwners,
+                                      validate);
+}
+void DEMTracker::ContactWrenches(std::vector<float3>& forces, std::vector<float3>& torques) {
+    sys->GetOwnerContactWrench(forces, torques, obj->ownerID, obj->nSpanOwners);
+}
+void DEMTracker::ContactWrenchesToDevice(float3* force_destination,
+                                         float3* torque_destination,
+                                         size_t capacity,
+                                         int destination_device) {
+    sys->GetOwnerContactWrenchToDevice(force_destination, torque_destination, capacity, destination_device,
+                                       obj->ownerID, obj->nSpanOwners);
+}
 
 float DEMTracker::GetOwnerWildcardValue(const std::string& name, size_t offset) {
     assertOwnerOffsetValid(offset, "GetOwnerWildcardValue");
@@ -514,40 +655,13 @@ float DEMTracker::GetOwnerWildcardValue(const std::string& name, size_t offset) 
 std::vector<float> DEMTracker::GetOwnerWildcardValues(const std::string& name) {
     return sys->GetOwnerWildcardValue(obj->ownerID, name, obj->nSpanOwners);
 }
-
-float DEMTracker::GetGeometryWildcardValue(const std::string& name, size_t offset) {
-    std::vector<float> res;
-    switch (obj->obj_type) {
-        case (OWNER_TYPE::CLUMP):
-            assertGeoOffsetValid(offset, "GetGeometryWildcardValue", "spheres");
-            res = sys->GetSphereWildcardValue(obj->geoID + offset, name, 1);
-            break;
-        case (OWNER_TYPE::ANALYTICAL):
-            assertGeoOffsetValid(offset, "GetGeometryWildcardValue", "analytical components");
-            res = sys->GetAnalWildcardValue(obj->geoID + offset, name, 1);
-            break;
-        case (OWNER_TYPE::MESH):
-            assertGeoOffsetValid(offset, "GetGeometryWildcardValue", "triangles");
-            res = sys->GetTriWildcardValue(obj->geoID + offset, name, 1);
-            break;
-    }
-    return res[0];
-}
-
-std::vector<float> DEMTracker::GetGeometryWildcardValues(const std::string& name) {
-    std::vector<float> res;
-    switch (obj->obj_type) {
-        case (OWNER_TYPE::CLUMP):
-            res = sys->GetSphereWildcardValue(obj->geoID, name, obj->nGeos);
-            break;
-        case (OWNER_TYPE::ANALYTICAL):
-            res = sys->GetAnalWildcardValue(obj->geoID, name, obj->nGeos);
-            break;
-        case (OWNER_TYPE::MESH):
-            res = sys->GetTriWildcardValue(obj->geoID, name, obj->nGeos);
-            break;
-    }
-    return res;
+void DEMTracker::OwnerWildcardValuesToDevice(const std::string& name,
+                                             float* destination,
+                                             size_t capacity,
+                                             int destination_device,
+                                             bool validate) {
+    sys->GetOwnerWildcardValueToDevice(destination, capacity, destination_device, obj->ownerID, name, obj->nSpanOwners,
+                                       validate);
 }
 
 size_t DEMTracker::GetContactForces(std::vector<float3>& points, std::vector<float3>& forces, size_t offset) {
@@ -557,12 +671,29 @@ size_t DEMTracker::GetContactForces(std::vector<float3>& points, std::vector<flo
     forces.clear();
     return sys->GetOwnerContactForces({obj->ownerID + (bodyID_t)offset}, points, forces);
 }
+size_t DEMTracker::GetContactForcesToDevice(float3* points,
+                                            float3* forces,
+                                            size_t capacity,
+                                            int destination_device,
+                                            size_t offset) {
+    assertThereIsForcePairs("GetContactForcesToDevice");
+    assertOwnerOffsetValid(offset, "GetContactForcesToDevice");
+    return sys->GetOwnerContactForcesToDevice({obj->ownerID + static_cast<bodyID_t>(offset)}, points, forces, capacity,
+                                              destination_device);
+}
 
 size_t DEMTracker::GetContactForcesForAll(std::vector<float3>& points, std::vector<float3>& forces) {
     assertThereIsForcePairs("GetContactForcesForAll");
     points.clear();
     forces.clear();
     return sys->GetOwnerContactForces(GetOwnerIDs(), points, forces);
+}
+size_t DEMTracker::GetContactForcesForAllToDevice(float3* points,
+                                                  float3* forces,
+                                                  size_t capacity,
+                                                  int destination_device) {
+    assertThereIsForcePairs("GetContactForcesForAllToDevice");
+    return sys->GetOwnerContactForcesToDevice(GetOwnerIDs(), points, forces, capacity, destination_device);
 }
 
 size_t DEMTracker::GetContactForcesAndLocalTorque(std::vector<float3>& points,
@@ -576,6 +707,17 @@ size_t DEMTracker::GetContactForcesAndLocalTorque(std::vector<float3>& points,
     torques.clear();
     return sys->GetOwnerContactForces({obj->ownerID + (bodyID_t)offset}, points, forces, torques, true);
 }
+size_t DEMTracker::GetContactForcesAndLocalTorqueToDevice(float3* points,
+                                                          float3* forces,
+                                                          float3* torques,
+                                                          size_t capacity,
+                                                          int destination_device,
+                                                          size_t offset) {
+    assertThereIsForcePairs("GetContactForcesAndLocalTorqueToDevice");
+    assertOwnerOffsetValid(offset, "GetContactForcesAndLocalTorqueToDevice");
+    return sys->GetOwnerContactForcesToDevice({obj->ownerID + static_cast<bodyID_t>(offset)}, points, forces, torques,
+                                              capacity, destination_device, true);
+}
 
 size_t DEMTracker::GetContactForcesAndLocalTorqueForAll(std::vector<float3>& points,
                                                         std::vector<float3>& forces,
@@ -585,6 +727,15 @@ size_t DEMTracker::GetContactForcesAndLocalTorqueForAll(std::vector<float3>& poi
     forces.clear();
     torques.clear();
     return sys->GetOwnerContactForces(GetOwnerIDs(), points, forces, torques, true);
+}
+size_t DEMTracker::GetContactForcesAndLocalTorqueForAllToDevice(float3* points,
+                                                                float3* forces,
+                                                                float3* torques,
+                                                                size_t capacity,
+                                                                int destination_device) {
+    assertThereIsForcePairs("GetContactForcesAndLocalTorqueForAllToDevice");
+    return sys->GetOwnerContactForcesToDevice(GetOwnerIDs(), points, forces, torques, capacity, destination_device,
+                                              true);
 }
 
 size_t DEMTracker::GetContactForcesAndGlobalTorque(std::vector<float3>& points,
@@ -598,6 +749,17 @@ size_t DEMTracker::GetContactForcesAndGlobalTorque(std::vector<float3>& points,
     torques.clear();
     return sys->GetOwnerContactForces({obj->ownerID + (bodyID_t)offset}, points, forces, torques, false);
 }
+size_t DEMTracker::GetContactForcesAndGlobalTorqueToDevice(float3* points,
+                                                           float3* forces,
+                                                           float3* torques,
+                                                           size_t capacity,
+                                                           int destination_device,
+                                                           size_t offset) {
+    assertThereIsForcePairs("GetContactForcesAndGlobalTorqueToDevice");
+    assertOwnerOffsetValid(offset, "GetContactForcesAndGlobalTorqueToDevice");
+    return sys->GetOwnerContactForcesToDevice({obj->ownerID + static_cast<bodyID_t>(offset)}, points, forces, torques,
+                                              capacity, destination_device, false);
+}
 
 size_t DEMTracker::GetContactForcesAndGlobalTorqueForAll(std::vector<float3>& points,
                                                          std::vector<float3>& forces,
@@ -608,6 +770,15 @@ size_t DEMTracker::GetContactForcesAndGlobalTorqueForAll(std::vector<float3>& po
     torques.clear();
     return sys->GetOwnerContactForces(GetOwnerIDs(), points, forces, torques, false);
 }
+size_t DEMTracker::GetContactForcesAndGlobalTorqueForAllToDevice(float3* points,
+                                                                 float3* forces,
+                                                                 float3* torques,
+                                                                 size_t capacity,
+                                                                 int destination_device) {
+    assertThereIsForcePairs("GetContactForcesAndGlobalTorqueForAllToDevice");
+    return sys->GetOwnerContactForcesToDevice(GetOwnerIDs(), points, forces, torques, capacity, destination_device,
+                                              false);
+}
 
 void DEMTracker::AddAcc(float3 acc, size_t offset) {
     assertOwnerOffsetValid(offset, "AddAcc");
@@ -617,6 +788,9 @@ void DEMTracker::AddAcc(const std::vector<float3>& acc) {
     assertOwnerSize(acc.size(), "AddAcc");
     sys->AddOwnerNextStepAcc(obj->ownerID, acc);
 }
+void DEMTracker::AddAccFromDevice(const float3* source, int source_device, bool validate) {
+    sys->AddOwnerNextStepAccFromDevice(obj->ownerID, source, source_device, obj->nSpanOwners, validate);
+}
 
 void DEMTracker::AddAngAcc(float3 angAcc, size_t offset) {
     assertOwnerOffsetValid(offset, "AddAngAcc");
@@ -625,6 +799,9 @@ void DEMTracker::AddAngAcc(float3 angAcc, size_t offset) {
 void DEMTracker::AddAngAcc(const std::vector<float3>& angAcc) {
     assertOwnerSize(angAcc.size(), "AddAngAcc");
     sys->AddOwnerNextStepAngAcc(obj->ownerID, angAcc);
+}
+void DEMTracker::AddAngAccFromDevice(const float3* source, int source_device, bool validate) {
+    sys->AddOwnerNextStepAngAccFromDevice(obj->ownerID, source, source_device, obj->nSpanOwners, validate);
 }
 
 void DEMTracker::SetPos(float3 pos, size_t offset) {
@@ -671,16 +848,8 @@ void DEMTracker::SetFamily(unsigned int fam_num, size_t offset) {
     sys->SetOwnerFamily(obj->ownerID + offset, fam_num);
 }
 
-void DEMTracker::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {
-    std::vector<bodyID_t> offsetted_IDs(IDs);
-    size_t offset = obj->ownerID;
-    std::for_each(offsetted_IDs.begin(), offsetted_IDs.end(), [offset](bodyID_t& x) { x += offset; });
-    sys->ChangeClumpSizes(offsetted_IDs, factors);
-}
-
 void DEMTracker::UpdateMesh(const std::vector<float3>& new_nodes) {
     assertMesh("UpdateMesh");
-    // assertGeoSize(new_mesh->GetNumTriangles(), "UpdateMesh", "triangles");
     // Outsource to API system to handle...
     sys->SetTriNodeRelPos(obj->ownerID, obj->geoID, new_nodes);
 }
@@ -692,7 +861,7 @@ void DEMTracker::UpdateMeshByIncrement(const std::vector<float3>& deformation) {
     sys->UpdateTriNodeRelPos(obj->ownerID, obj->geoID, deformation);
 }
 
-std::shared_ptr<DEMMeshConnected>& DEMTracker::GetMesh() {
+std::shared_ptr<DEMMesh>& DEMTracker::GetMesh() {
     assertMesh("GetMesh");
     return sys->GetCachedMesh(obj->ownerID);
 }
@@ -710,40 +879,6 @@ void DEMTracker::SetOwnerWildcardValue(const std::string& name, float wc, size_t
 void DEMTracker::SetOwnerWildcardValues(const std::string& name, const std::vector<float>& wc) {
     assertOwnerSize(wc.size(), "SetOwnerWildcardValues");
     sys->SetOwnerWildcardValue(obj->ownerID, name, wc);
-}
-
-void DEMTracker::SetGeometryWildcardValue(const std::string& name, float wc, size_t offset) {
-    switch (obj->obj_type) {
-        case (OWNER_TYPE::CLUMP):
-            assertGeoOffsetValid(offset, "SetGeometryWildcardValue", "spheres");
-            sys->SetSphereWildcardValue(obj->geoID + offset, name, std::vector<float>(1, wc));
-            break;
-        case (OWNER_TYPE::ANALYTICAL):
-            assertGeoOffsetValid(offset, "SetGeometryWildcardValue", "analytical components");
-            sys->SetAnalWildcardValue(obj->geoID + offset, name, std::vector<float>(1, wc));
-            break;
-        case (OWNER_TYPE::MESH):
-            assertGeoOffsetValid(offset, "SetGeometryWildcardValue", "triangles");
-            sys->SetTriWildcardValue(obj->geoID + offset, name, std::vector<float>(1, wc));
-            break;
-    }
-}
-
-void DEMTracker::SetGeometryWildcardValues(const std::string& name, const std::vector<float>& wc) {
-    switch (obj->obj_type) {
-        case (OWNER_TYPE::CLUMP):
-            assertGeoSize(wc.size(), "SetGeometryWildcardValues", "spheres");
-            sys->SetSphereWildcardValue(obj->geoID, name, wc);
-            break;
-        case (OWNER_TYPE::ANALYTICAL):
-            assertGeoSize(wc.size(), "SetGeometryWildcardValues", "analytical components");
-            sys->SetAnalWildcardValue(obj->geoID, name, wc);
-            break;
-        case (OWNER_TYPE::MESH):
-            assertGeoSize(wc.size(), "SetGeometryWildcardValues", "triangles");
-            sys->SetTriWildcardValue(obj->geoID, name, wc);
-            break;
-    }
 }
 
 // =============================================================================
@@ -806,9 +941,7 @@ void DEMForceModel::SetPerContactWildcards(const std::set<std::string>& wildcard
     for (const auto& a_str : wildcards) {
         if (match_pattern(a_str, " ")) {
             // Wildcard array names cannot have spaces in them
-            std::stringstream ss;
-            ss << "Contact wildcard " << a_str << " is not valid: no spaces allowed in its name." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("Contact wildcard %s is not valid: no spaces allowed in its name.", a_str.c_str());
         }
     }
     m_contact_wildcards = wildcards;
@@ -817,23 +950,10 @@ void DEMForceModel::SetPerContactWildcards(const std::set<std::string>& wildcard
 void DEMForceModel::SetPerOwnerWildcards(const std::set<std::string>& wildcards) {
     for (const auto& a_str : wildcards) {
         if (match_pattern(a_str, " ")) {
-            std::stringstream ss;
-            ss << "Owner wildcard " << a_str << " is not valid: no spaces allowed in its name." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("Owner wildcard %s is not valid: no spaces allowed in its name.", a_str.c_str());
         }
     }
     m_owner_wildcards = wildcards;
-}
-
-void DEMForceModel::SetPerGeometryWildcards(const std::set<std::string>& wildcards) {
-    for (const auto& a_str : wildcards) {
-        if (match_pattern(a_str, " ")) {
-            std::stringstream ss;
-            ss << "Geometry wildcard " << a_str << " is not valid: no spaces allowed in its name." << std::endl;
-            throw std::runtime_error(ss.str());
-        }
-    }
-    m_geo_wildcards = wildcards;
 }
 
 }  // END namespace deme

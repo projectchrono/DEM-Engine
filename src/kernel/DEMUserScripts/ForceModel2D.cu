@@ -23,12 +23,10 @@ if (overlapDepth > 0.0) {
         rotVelCPA = cross(ARotVel, locCPA);
         rotVelCPB = cross(BRotVel, locCPB);
         // This is mapping from local rotational velocity to global
-        applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x, AOriQ.y,
-                                                AOriQ.z);
-        applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y,
-                                                BOriQ.z);
+        applyOriQToVector3(rotVelCPA, AOriQ);
+        applyOriQToVector3(rotVelCPB, BOriQ);
     }
-    float mass_eff, sqrt_Rd, beta;
+    float mass_eff, cnt_rad, beta;
     float3 vrel_tan;
     float3 delta_tan = make_float3(delta_tan_x, 0.0, delta_tan_z);
 
@@ -53,8 +51,10 @@ if (overlapDepth > 0.0) {
 
     // Normal force part
     {
-        sqrt_Rd = sqrt(overlapDepth * (ARadius * BRadius) / (ARadius + BRadius));
-        const float Sn = 2. * E_cnt * sqrt_Rd;
+        // Derive the equivalent contact radius from the actual overlap geometry. This also supports mesh-mesh
+        // contacts, where the analytical two-sphere effective radius is not representative.
+        cnt_rad = sqrtf(overlapArea / deme::PI);
+        const float Sn = 2. * E_cnt * cnt_rad;
 
         const float loge = (CoR_cnt < DEME_TINY_FLOAT) ? log(DEME_TINY_FLOAT) : log(CoR_cnt);
         beta = loge / sqrt(loge * loge + deme::PI_SQUARED);
@@ -71,7 +71,7 @@ if (overlapDepth > 0.0) {
         // Figure out if we should apply rolling resistance force
         bool should_add_rolling_resistance = true;
         {
-            const float R_eff = sqrtf((ARadius * BRadius) / (ARadius + BRadius));
+            const float R_eff = (cnt_rad * cnt_rad) / overlapDepth;
             const float kn_simple = deme::FOUR_OVER_THREE * E_cnt * sqrtf(R_eff);
             const float gn_simple = -2.f * sqrtf(deme::FIVE_OVER_THREE * mass_eff * E_cnt) * beta * powf(R_eff, 0.25f);
 
@@ -104,7 +104,7 @@ if (overlapDepth > 0.0) {
 
     // Tangential force part
     if (mu_cnt > 0.0) {
-        const float kt = 8. * G_cnt * sqrt_Rd;
+        const float kt = 8. * G_cnt * cnt_rad;
         const float gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
         float3 tangent_force = -kt * delta_tan - gt * vrel_tan;
         const float ft = length(tangent_force);

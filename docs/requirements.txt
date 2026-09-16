@@ -1,0 +1,3 @@
+sphinx>=7.0
+breathe>=4.35
+furo>=2024.1.29

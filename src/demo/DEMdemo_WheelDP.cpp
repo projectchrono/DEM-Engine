@@ -11,7 +11,6 @@
 // =============================================================================
 
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <chrono>
@@ -26,6 +25,8 @@ using namespace deme;
 const double math_PI = 3.1415927;
 
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_WheelDP ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     std::filesystem::path out_dir = std::filesystem::current_path();
     out_dir /= "DemoOutput_WheelDP";
     std::filesystem::create_directory(out_dir);
@@ -36,7 +37,7 @@ int main() {
 
     for (float TR : TRs) {
         DEMSolver DEMSim;
-        DEMSim.SetVerbosity(INFO);
+        DEMSim.SetVerbosity("INFO");
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
         DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
         DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
@@ -74,6 +75,9 @@ int main() {
         wheel->SetMOI(make_float3(wheel_IXX, wheel_IYY, wheel_IXX));
         // Give the wheel a family number so we can potentially add prescription
         wheel->SetFamily(1);
+        // Split it into patches: if angle more than 30 deg, split. This is not strictly needed; but more physically
+        // plausible.
+        wheel->SplitIntoConvexPatches(30.);
         // Track it
         auto wheel_tracker = DEMSim.Track(wheel);
 
@@ -219,16 +223,16 @@ int main() {
         auto total_mass_finder = DEMSim.CreateInspector("clump_mass");
         auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
 
-        DEMSim.SetInitTimeStep(step_size);
+        DEMSim.SetTimeStepSize(step_size);
         DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -G_mag));
-        DEMSim.SetCDUpdateFreq(30);
+        // DEMSim.SetCDUpdateFreq(30);
         // Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
         // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
         // happen anyway and if it does, something already went wrong.
         DEMSim.SetMaxVelocity(50.);
         // Error out vel is used to force the simulation to abort when something goes wrong and sim diverges.
-        DEMSim.SetErrorOutVelocity(60.);
-        DEMSim.SetExpandSafetyMultiplier(1.1);
+        DEMSim.SetErrorOutVelocity(200.);
+        // DEMSim.SetExpandSafetyMultiplier(1.1);
         // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto
         // bin size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case
         // setting init bin size may save the simulation.
@@ -265,7 +269,7 @@ int main() {
         // Switch wheel from free fall into DP test
         DEMSim.ChangeFamily(1, 2);
         step_size *= 2.;
-        DEMSim.UpdateStepSize(step_size);
+        DEMSim.SetTimeStepSize(step_size);
 
         for (double t = 0; t < sim_end; t += step_size, curr_step++) {
             if (curr_step % out_steps == 0) {

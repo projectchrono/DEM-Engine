@@ -1,11 +1,64 @@
-build*
-.vscode/
-*.vtk
-*.csv
+# Local build trees and CMake/Ninja products
+build*/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+Makefile
+*.ninja
+.ninja_*
+
+# Native/CUDA build artifacts
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.ptx
+*.cubin
+*.fatbin
+*.sass
+
+# Python packaging, caches, and local environments
+__pycache__/
+*.py[cod]
 *.egg-info/
 .cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
 dist/
-output/*
-post/*
+wheelhouse/
+docs/_build/
 
+# Demo/test/generated simulation output
+DemoOutput_*/
+modular_test_output/
+output/
+post/
+*.vtk
+*.vtp
+*.vtu
+/*.csv
+Contact_pairs_*.csv
+DEMdemo_output_*.csv
+DEMdemo_forces_*.csv
+
+# CodeQL and other scanner scratch files
 _codeql*
+
+# Editor, OS, and temporary local files
+.vscode/
+.idea/
+.DS_Store
+*~
+*.swp
+*.swo
+*.tmp
+*.log
+*.diff

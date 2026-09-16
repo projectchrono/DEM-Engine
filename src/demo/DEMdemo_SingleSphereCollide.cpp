@@ -10,10 +10,13 @@
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
+#ifdef DEME_HAS_VISUALIZER
+    #include "VisualizerDemoLoop.h"
+#endif
 
 #include <filesystem>
+#include <cmath>
 #include <cstdio>
 #include <time.h>
 #include <filesystem>
@@ -22,12 +25,19 @@ using namespace deme;
 using namespace std::filesystem;
 
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_SingleSphereCollide ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity("STEP_METRIC");
-    DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
+    DEMSim.SetVerbosity("METRIC");
+    // Write component spheres as compact VTK point data for ParaView's Glyph filter.
+    DEMSim.SetOutputFormat(OUTPUT_FORMAT::VTK);
     DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT", "NORMAL", "TORQUE", "CNT_WILDCARD"});
     DEMSim.EnsureKernelErrMsgLineNum();
-    // DEMSim.SetNoForceRecord();
+    DEMSim.SetPersistentContact(true);
+    // Note!! If you want meshes to have contacts, set this to true!!
+    // If not, meshes will not have contacts with each other or analytical boundaries (but still have contacts with
+    // clumps).
+    DEMSim.SetMeshUniversalContact(true);
 
     // srand(time(NULL));
     srand(4150);
@@ -40,6 +50,8 @@ int main() {
     std::shared_ptr<DEMMaterial> mat_type_3 = DEMSim.Duplicate(mat_type_2);
     // If you don't have this line, then CoR between thw 2 materials will take average when they are in contact
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_1, mat_type_2, 0.6);
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_2, mat_type_3, 0.6);
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_1, mat_type_3, 0.6);
     // Even though set elsewhere to be 50, this pairwise value takes precedence when two different materials are in
     // contact.
     DEMSim.SetMaterialPropertyPair("Cohesion", mat_type_1, mat_type_2, 100.);
@@ -101,7 +113,7 @@ int main() {
     my_force_model->SetPerContactWildcards({"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"});
     my_force_model->SetMustPairwiseMatProp({"CoR", "mu", "Crr", "Cohesion"});
 
-    DEMSim.SetInitTimeStep(2e-5);
+    DEMSim.SetTimeStepSize(2e-5);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEMSim.SetCDUpdateFreq(10);
     DEMSim.SetMaxVelocity(6.);
@@ -111,8 +123,9 @@ int main() {
 
     // Testing modifying jitify options and force model prerequisites
     auto jitify_options = DEMSim.GetJitifyOptions();
-    jitify_options.pop_back();  // Remove a warning suppression option
-    // DEMSim.SetJitifyOptions(jitify_options);
+    jitify_options.pop_back();                // Remove C++ std17 option
+    jitify_options.push_back("-std=c++17");   // Then add it back
+    DEMSim.SetJitifyOptions(jitify_options);  // Then set it
     my_force_model->DefineCustomModelPrerequisites(
         "float3 __device__ GetContactForce(float3 AOwner, float3 BOwner, float3 ALinVel, float3 BLinVel, "
         "float3 ARotVel, float3 BRotVel, float delta_time, float delta_tan_x, float delta_tan_y, "
@@ -128,7 +141,16 @@ int main() {
     particles2->SetVel(input_vel2);
     particles2->SetFamily(1);
     auto tracker2 = DEMSim.Track(particles2);
-    DEMSim.UpdateClumps();
+    DEMSim.Update();
+
+#ifdef DEME_HAS_VISUALIZER
+    // Display cadence follows wall time so camera input stays responsive between simulation output frames.
+    DEMVisualizer visualizer(DEMSim);
+    visualizer.SetCameraPosition(make_float3(5.f, 5.f, 3.f));
+    visualizer.SetCameraTarget(make_float3(0.f, 0.f, -0.5f));
+    visualizer.Initialize();
+    VisualizerDemoLoop viewer_loop;
+#endif
 
     // Ready simulation
     path out_dir = current_path();
@@ -150,12 +172,16 @@ int main() {
         // }
 
         char filename[100];
-        sprintf(filename, "DEMdemo_output_%04d.csv", i);
+        sprintf(filename, "DEMdemo_output_%04d.vtk", i);
         DEMSim.WriteSphereFile(out_dir / filename);
 
         char cnt_filename[100];
         sprintf(cnt_filename, "Contact_pairs_%04d.csv", i);
         DEMSim.WriteContactFile(out_dir / cnt_filename);
+
+        char analytical_filename[100];
+        sprintf(analytical_filename, "DEMdemo_analytical_%04d.vtk", i);
+        DEMSim.WriteAnalyticalFile(out_dir / analytical_filename);
 
         char meshfilename[100];
         sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk", i);
@@ -164,7 +190,19 @@ int main() {
         // Testing persistent contact functionality...
         DEMSim.MarkPersistentContact();
 
+#ifdef DEME_HAS_VISUALIZER
+        // Keep each solver call short enough to service mouse input; output remains at frame_time intervals.
+        // Match the float timestep used internally so a rounded-up double does not request an extra step.
+        const float dynamics_step = static_cast<float>(DEMSim.GetTimeStepSize());
+        const int steps_per_frame = static_cast<int>(std::lround(frame_time / dynamics_step));
+        for (int step = 0; step < steps_per_frame; ++step) {
+            viewer_loop.Update(visualizer);
+            DEMSim.DoDynamics(dynamics_step);
+        }
+        DEMSim.DoDynamicsThenSync(0.0);
+#else
         DEMSim.DoDynamicsThenSync(frame_time);
+#endif
         max_z = max_z_finder->GetValue();
         max_v = max_v_finder->GetValue();
         KE = KE_finder->GetValue();
@@ -196,7 +234,7 @@ int main() {
         std::cout << "Particle 2 X coord is " << pos2.x << std::endl;
         std::cout << "Particle 1 family is " << fam1 << std::endl;
         std::cout << "Particle 2 family is " << fam2 << std::endl;
-        std::cout << "Average contacts each sphere has: " << DEMSim.GetAvgSphContacts() << std::endl;
+        std::cout << "Average contacts each sphere has: " << DEMSim.GetAvgPrimitiveContacts() << std::endl;
         if (points_spheres.size() == 1) {
             std::cout << "Two spheres collide, the contact is at (" << points_spheres[0].x << ", "
                       << points_spheres[0].y << ", " << points_spheres[0].z << ")." << std::endl;

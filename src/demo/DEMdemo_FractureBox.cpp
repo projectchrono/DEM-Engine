@@ -8,7 +8,6 @@
 // =============================================================================
 
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <chrono>
@@ -23,15 +22,17 @@ using namespace deme;
 const double math_PI = 3.1415927;
 
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_FractureBox ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::VEL);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
     DEMSim.SetContactOutputContent(OWNER | FORCE | CNT_WILDCARD);
 
     // This demo could lead to large numbers of per-sphere contacts, so to be safe...
-    DEMSim.SetErrorOutAvgContacts(200);
+    DEMSim.SetErrorOutAvgContacts(400);
 
     //  E, nu, CoR, mu, Crr...
     auto mat_type_container =
@@ -67,7 +68,7 @@ int main() {
     double bottom = 0;
     double top = 0.10;
 
-    auto walls = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/funnel_left.obj"), mat_type_container);
+    auto walls = DEMSim.AddWavefrontMeshObject("../data/mesh/funnel_left.obj", mat_type_container);
     float3 move = make_float3(0.05, 0.00, 0 - 2 * sphere_rad);  // z
     float4 rot = make_float4(0.7071, 0, 0, 0.7071);
     walls->Scale(make_float3(0.8, 0.1, 2.0));
@@ -117,7 +118,7 @@ int main() {
 
     std::filesystem::path out_dir = std::filesystem::current_path();
     std::string nameOutFolder = "R" + std::to_string(sphere_rad) + "_Int" + std::to_string(fact_radius) + "";
-    out_dir /= "DemoOutput_FractureBox_" + nameOutFolder;
+    out_dir /= "DemoOutput_Fracture_" + nameOutFolder;
     remove_all(out_dir);
     create_directory(out_dir);
 
@@ -127,7 +128,7 @@ int main() {
 
     DEMSim.SetFamilyExtraMargin(1, fact_radius * sphere_rad);
 
-    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetTimeStepSize(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     // The `dry-run' option is on in this demo, which establishes the initial contact pairs while initializing. This is
     // needed in this demo specifically, as we'll soon modify the contact wildcards associated with these contacts.
@@ -151,7 +152,7 @@ int main() {
     double L0;
     double stress;
     std::string nameOutFile = "data_R" + std::to_string(sphere_rad) + "_Int" + std::to_string(fact_radius) + ".csv";
-    std::ofstream csvFile(out_dir / nameOutFile);
+    std::ofstream csvFile(nameOutFile);
 
     DEMSim.SetFamilyContactWildcardValueBoth(1, "initialLength", 0.0);
     // DEMSim.SetFamilyContactWildcardValueBoth(1, "damage", 0.0);
@@ -217,6 +218,6 @@ int main() {
     DEMSim.ShowMemStats();
     std::cout << "----------------------------------------" << std::endl;
     DEMSim.ShowTimingStats();
-    std::cout << "DEMdemo_FractureBox exiting..." << std::endl;
+    std::cout << "Fracture demo exiting..." << std::endl;
     return 0;
 }

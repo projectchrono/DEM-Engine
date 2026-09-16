@@ -142,7 +142,7 @@ int main(int argc, char** argv) {
     std::filesystem::create_directories(dynamic_dir);
 
     DEMSolver DEMSim(1);
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     DEMSim.SetContactOutputContent({"OWNER", "GEO_ID", "FORCE", "POINT", "NORMAL"});
@@ -216,7 +216,7 @@ int main(int argc, char** argv) {
 
     DEMSim.InstructBoxDomainDimension({-3.35f, 3.35f}, {-0.95f, 0.95f}, {-0.20f, 2.20f});
     DEMSim.InstructBoxDomainBoundingBC("none", mat_wall);
-    DEMSim.SetInitTimeStep(2.0e-5);
+    DEMSim.SetTimeStepSize(2.0e-5);
     DEMSim.SetCDUpdateFreq(10);
     DEMSim.SetGravitationalAcceleration(make_float3(0.0f, 0.0f, -9.81f));
     DEMSim.SetMaxVelocity(80.0f);

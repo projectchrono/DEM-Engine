@@ -1,10 +1,10 @@
-name: Build Python wheels
+name: Build DEME Python wheels
 
 on:
   workflow_dispatch:
     inputs:
       publish_to_pypi:
-        description: Publish the six validated wheels to the deme project on PyPI
+        description: Publish validated wheels (deme on release branches, deme3 on Mesh_Particles_Py)
         required: true
         type: boolean
         default: false
@@ -14,6 +14,9 @@ on:
       - "CMakeLists.txt"
       - "cmake/**"
       - "pyproject.toml"
+      - "README.md"
+      - "docs/prepare_pypi_readme.py"
+      - "python/tests/**"
       - "VERSION"
       - "src/**"
       - "thirdparty/**"
@@ -41,6 +44,33 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
+      # Resolve the distribution at build time so merges cannot redirect preview publication.
+      - name: Select branch distribution
+        env:
+          DISTRIBUTION: ${{ github.ref_name == 'Mesh_Particles_Py' && 'deme3' || 'deme' }}
+        run: |
+          python - <<'PYTHON'
+          import os
+          from pathlib import Path
+          import re
+
+          path = Path("pyproject.toml")
+          source = path.read_text()
+          source, count = re.subn(r'^name = "deme3?"$', 'name = "' + os.environ["DISTRIBUTION"] + '"', source, flags=re.M)
+          if count != 1:
+              raise SystemExit("Expected one DEME distribution name")
+          path.write_text(source)
+          PYTHON
+
+      # PyPI cannot resolve repository-relative links. Rewrite only this build
+      # checkout so the wheel description uses the same README with permanent URLs.
+      - name: Prepare README for PyPI
+        run: |
+          python python/tests/test_pypi_readme.py
+          python docs/prepare_pypi_readme.py README.md \
+            --repository-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --revision "$GITHUB_SHA"
+
       - name: Build and repair wheel
         uses: pypa/cibuildwheel@v4.1.1
         env:
@@ -55,29 +85,65 @@ jobs:
           python -m auditwheel show wheelhouse/*.whl
           python - <<'PY'
           from pathlib import Path
-          from zipfile import ZipFile
 
           wheels = list(Path("wheelhouse").glob("*.whl"))
           if len(wheels) != 1:
               raise SystemExit(f"Expected exactly one wheel, found: {wheels}")
 
-          wheel = wheels[0]
+          name = wheels[0].name
           expected_python = "${{ matrix.python }}"
-          if expected_python not in wheel.name or "manylinux_2_28_x86_64" not in wheel.name:
-              raise SystemExit(f"Unexpected wheel tags: {wheel.name}")
+          distribution = "${{ github.ref_name == 'Mesh_Particles_Py' && 'deme3' || 'deme' }}"
+          if not name.startswith(distribution + "-"):
+              raise SystemExit(f"Expected a {distribution} distribution wheel, found: {name}")
+          if expected_python not in name or "manylinux_2_28_x86_64" not in name:
+              raise SystemExit(f"Unexpected wheel tags: {name}")
 
-          with ZipFile(wheel) as archive:
+          # CUDA comes from NVIDIA pip dependencies or a system toolkit. Auditwheel must not copy its build-time driver
+          # stub or an incomplete NVRTC installation into the repaired artifact.
+          from zipfile import ZipFile
+          from email.parser import BytesParser
+
+          with ZipFile(wheels[0]) as archive:
+              metadata_files = [name for name in archive.namelist() if name.endswith(".dist-info/METADATA")]
+              if len(metadata_files) != 1:
+                  raise SystemExit("Expected one wheel METADATA file")
+              metadata = BytesParser().parsebytes(archive.read(metadata_files[0]))
+              if metadata["Name"] != distribution or "cuda12" not in metadata.get_all("Provides-Extra", []):
+                  raise SystemExit("Unexpected distribution name or missing cuda12 extra")
+              if metadata["Description-Content-Type"] != "text/markdown":
+                  raise SystemExit("Expected a Markdown PyPI description")
+              description = metadata.get_payload(decode=True).decode("utf-8").strip()
+              if description != Path("README.md").read_text(encoding="utf-8").strip():
+                  raise SystemExit("Wheel description does not match the prepared README")
+              standalone_visualizer = [
+                  member for member in archive.namelist() if member.endswith("/libDEMEVisualizer.so")
+              ]
               bundled_cuda = [
                   member
                   for member in archive.namelist()
                   if ".libs/" in member
                   and any(library in member for library in ("libcuda", "libcudart", "libnvrtc"))
               ]
+          if standalone_visualizer:
+              raise SystemExit(
+                  "Python embeds the visualizer and must not package its native C++ facade: "
+                  f"{standalone_visualizer}"
+              )
           if bundled_cuda:
               raise SystemExit(f"CUDA libraries must remain external: {bundled_cuda}")
 
-          print(f"Validated {wheel.name} ({wheel.stat().st_size / 1024 / 1024:.1f} MiB)")
+          print(f"Validated {name} ({wheels[0].stat().st_size / 1024 / 1024:.1f} MiB)")
           PY
+
+      - name: Test cuda12 extra without a system CUDA toolkit
+        env:
+          PYTHON_ABI: ${{ matrix.python }}
+          DISTRIBUTION: ${{ github.ref_name == 'Mesh_Particles_Py' && 'deme3' || 'deme' }}
+        run: |
+          minor="${PYTHON_ABI#cp3}"
+          docker run --rm -v "$PWD:/work:ro" -e DISTRIBUTION "python:3.${minor}-slim-bookworm" \
+            sh -ec 'for wheel in /work/wheelhouse/*.whl; do python -m pip install "$wheel[cuda12]"; done; \
+                    python /work/python/tests/cuda12_smoke.py --distribution "$DISTRIBUTION"'
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
@@ -88,11 +154,14 @@ jobs:
           retention-days: 14
 
   publish-pypi:
-    name: Publish deme wheels to PyPI
-    if: github.event_name == 'workflow_dispatch' && inputs.publish_to_pypi
+    name: Publish branch distribution to PyPI
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.publish_to_pypi &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Mesh_Particles' || github.ref == 'refs/heads/Mesh_Particles_Py')
     needs: build-linux-wheels
     runs-on: ubuntu-24.04
-    environment: pypi
+    environment: ${{ github.ref_name == 'Mesh_Particles_Py' && 'pypi-deme3' || 'pypi' }}
     permissions:
       contents: read
       id-token: write

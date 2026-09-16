@@ -13,17 +13,18 @@
 #include <sstream>
 #include <array>
 #include <cmath>
+#include <cstdint>
 
 #include "../kernel/DEMHelperKernels.cuh"
 #include "Defines.h"
 #include "Structs.h"
 #include "../core/utils/CudaAllocator.hpp"
-#include "HostSideHelpers.hpp"
+#include "utils/HostSideHelpers.hpp"
 
 namespace deme {
 
 /// External object type
-/// Note all of them are `shell', not solid objects. If you need a solid cylinder for example, then use one CYLINDER as
+/// Note all of them are "shell" objects, not solid objects. If you need a solid cylinder, use one CYLINDER as
 /// the side plus 2 CIRCLE as the ends to emulate it. Please be sure to set OUTWARD CYLINDER normal in this case.
 enum class OBJ_COMPONENT { PLANE, SPHERE, PLATE, CIRCLE, CYL, CYL_INF, CONE, CONE_INF, TRIANGLE };
 
@@ -33,8 +34,7 @@ struct DEMSphereParams_t {
     objNormal_t normal;
 };
 
-/// Cone side. `cone_tip' is the apex location, `dir' points from the apex toward the base, and `slope' is radius
-/// growth per unit axial distance.
+/// Cone side. `cone_tip` is the apex, `dir` points toward the base, and `slope` is radial growth per axial distance.
 struct DEMConeParams_t {
     float3 cone_tip;
     float3 dir;
@@ -66,25 +66,20 @@ struct DEMCylinderParams_t {
     objNormal_t normal;
 };
 
+/// Validate the geometric parameters shared by infinite and bounded analytical cones.
 inline void assertConeInputs(const float3 axis,
                              const float slope,
                              const float hmin,
                              const float hmax,
-                             const std::string& func_name) {
+                             const std::string& function_name) {
     if (!std::isfinite(axis.x) || !std::isfinite(axis.y) || !std::isfinite(axis.z) || length(axis) <= DEME_TINY_FLOAT) {
-        std::stringstream out;
-        out << func_name << "'s axis argument must be a finite, non-zero direction.\n";
-        throw std::runtime_error(out.str());
+        DEME_ERROR("%s's axis argument must be a finite, non-zero direction.", function_name.c_str());
     }
     if (!std::isfinite(slope) || slope <= 0.0f) {
-        std::stringstream out;
-        out << func_name << "'s slope argument must be finite and positive.\n";
-        throw std::runtime_error(out.str());
+        DEME_ERROR("%s's slope argument must be finite and positive.", function_name.c_str());
     }
     if (!std::isfinite(hmin) || !std::isfinite(hmax) || hmin < 0.0f || hmax <= hmin) {
-        std::stringstream out;
-        out << func_name << "'s axial bounds must be finite and satisfy 0 <= hmin < hmax.\n";
-        throw std::runtime_error(out.str());
+        DEME_ERROR("%s's axial bounds must be finite and satisfy 0 <= hmin < hmax.", function_name.c_str());
     }
 }
 
@@ -99,7 +94,7 @@ class DEMExternObj : public DEMInitializer {
     // Component object materials
     std::vector<std::shared_ptr<DEMMaterial>> materials;
     // Family code (used in prescribing its motions etc.)
-    unsigned int family_code = RESERVED_FAMILY_NUM;  ///< Means it is default to the `fixed' family
+    unsigned int family_code = RESERVED_FAMILY_NUM;  ///< Means it defaults to the "fixed" family
 
     // // The coordinate of the CoM of this external object, in the frame where all its components' properties are
     // // reported. This is usually all-0 (meaning you should define the object's components in its CoM frame to begin
@@ -130,22 +125,26 @@ class DEMExternObj : public DEMInitializer {
     /// Define object contact family number
     void SetFamily(const unsigned int code) {
         if (code > std::numeric_limits<family_t>::max()) {
-            std::stringstream ss;
-            ss << "An external object is instructed to have family number " << code
-               << ", which is larger than the max allowance " << std::numeric_limits<family_t>::max() << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(
+                "An external object is instructed to have family number %u, which is larger than the max "
+                "allowance %u",
+                code, std::numeric_limits<family_t>::max());
         }
         family_code = code;
     }
 
     /// Set mass
     void SetMass(float mass) { this->mass = mass; }
+    /// Get mass
+    float GetMass() const { return mass; }
     /// Set MOI (in principal frame)
     void SetMOI(float3 MOI) { this->MOI = MOI; }
     void SetMOI(const std::vector<float>& MOI) {
         assertThreeElements(MOI, "SetMOI", "MOI");
         SetMOI(make_float3(MOI[0], MOI[1], MOI[2]));
     }
+    /// Get MOI (in principal frame)
+    float3 GetMOI() const { return MOI; }
 
     /// @brief Set the initial quaternion for this object (before simulation initializes).
     /// @param rotQ Initial quaternion.
@@ -250,11 +249,7 @@ class DEMExternObj : public DEMInitializer {
         AddCylinder(make_float3(pos[0], pos[1], pos[2]), make_float3(axis[0], axis[1], axis[2]), rad, material, normal);
     }
 
-    /// Add a single-nappe cone side that starts at `tip' and extends indefinitely along `axis'.
-    ///
-    /// The cone is an analytical shell, like analytical cylinders. `slope' is radius per unit axial distance from the
-    /// tip. Use ENTITY_NORMAL_INWARD for particles inside the cone and ENTITY_NORMAL_OUTWARD for particles outside a
-    /// solid cone.
+    /// Add an analytical single-nappe cone side extending indefinitely from `tip` along `axis`.
     void AddCone(const float3 tip,
                  const float3 axis,
                  const float slope,
@@ -282,10 +277,7 @@ class DEMExternObj : public DEMInitializer {
         AddCone(make_float3(tip[0], tip[1], tip[2]), make_float3(axis[0], axis[1], axis[2]), slope, material, normal);
     }
 
-    /// Add a height-bounded cone side. The surface is clipped to hmin <= dot(P - tip, axis) <= hmax.
-    ///
-    /// This creates the exact conical side/rim shell only; add analytical planes separately when cap contacts are
-    /// needed. Setting hmin > 0 gives a conical frustum side without introducing mesh facets.
+    /// Add a cone or frustum side clipped to hmin <= dot(point - tip, axis) <= hmax; caps are not included.
     void AddConeSegment(const float3 tip,
                         const float3 axis,
                         const float slope,
@@ -320,21 +312,28 @@ class DEMExternObj : public DEMInitializer {
 };
 
 // DEM mesh object
-class DEMMeshConnected : public DEMInitializer {
+class DEMMesh : public DEMInitializer {
   private:
-    void assertLength(size_t len, const std::string name) {
+    void assertPatchLength(size_t len, const std::string name) {
+        if (len != nPatches) {
+            DEME_ERROR(
+                "%s input argument must have length %u (not %zu), same as the number of convex patches in the "
+                "mesh.",
+                name.c_str(), nPatches, len);
+        }
+    }
+
+    void assertTriLength(size_t len, const std::string name) {
         if (nTri == 0) {
-            std::cerr << "The settings at the " << name << " call were applied to 0 mesh facet.\nPlease consider using "
-                      << name
-                      << " only after loading the mesh file, because mesh utilities are supposed to provide per-facet "
-                         "control of your mesh, so we need to know the mesh first."
-                      << std::endl;
+            DEME_WARNING(
+                "The settings at the %s call were applied to 0 mesh facet.\nPlease consider using "
+                "%s only after loading the mesh file, because mesh utilities are supposed to provide per-facet "
+                "control of your mesh, so we need to know the mesh first.",
+                name.c_str(), name.c_str());
         }
         if (len != nTri) {
-            std::stringstream ss;
-            ss << name << " input argument must have length " << nTri << " (not " << len
-               << "), same as the number of triangle facets in the mesh." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR("%s input argument must have length %zu (not %zu), same as the number of triangles in the mesh.",
+                       name.c_str(), nTri, len);
         }
     }
 
@@ -384,7 +383,7 @@ class DEMMeshConnected : public DEMInitializer {
     std::vector<std::shared_ptr<DEMMaterial>> materials;
     bool isMaterialSet = false;
     // Family code (used in prescribing its motions etc.)
-    unsigned int family_code = RESERVED_FAMILY_NUM;  ///< Means it is default to the `fixed' family
+    unsigned int family_code = RESERVED_FAMILY_NUM;  ///< Means it defaults to the "fixed" family
 
     // // The coordinate of the CoM of this meshed object, in the frame where all the mesh's node coordinates are
     // // reported. This is usually all-0 (meaning you should define the object's components in its CoM frame to begin
@@ -402,33 +401,53 @@ class DEMMeshConnected : public DEMInitializer {
     float mass = 1.f;
     // Mesh's MOI
     float3 MOI = make_float3(1.f);
+    // Whether mass/MOI were explicitly specified by the user.
+    bool mass_specified = false;
+    bool moi_specified = false;
+    // API-level mesh template identity. Mesh instances created from LoadMeshType/AddMeshFromTemplate keep this mark so
+    // mass/MOI jitification can treat repeated mesh particles like repeated clump templates.
+    size_t mesh_template_mark = NULL_MESH_TEMPLATE_MARK;
+    // If true, this mesh is treated as a shell surface with finite thickness in mesh utilities.
+    bool is_shell = false;
+    // Physical shell thickness (full thickness, not half-thickness), in simulation length unit.
+    float shell_thickness = 0.f;
 
     std::string filename;  ///< file string if loading an obj file
 
     // If true, when the mesh is initialized into the system, it will re-order the nodes of each triangle so that the
     // normals derived from right-hand-rule are the same as the normals in the mesh file
     bool use_mesh_normals = false;
+    // If true, this mesh is treated as convex for contact island reduction.
+    bool is_convex = false;
+    // If true, this mesh is never selected as the winner side for island labeling.
+    bool never_winner = false;
 
-    DEMMeshConnected() { obj_type = OWNER_TYPE::MESH; }
-    DEMMeshConnected(std::string input_file) {
+    DEMMesh() { obj_type = OWNER_TYPE::MESH; }
+    DEMMesh(std::string input_file) {
         LoadWavefrontMesh(input_file);
         obj_type = OWNER_TYPE::MESH;
     }
-    DEMMeshConnected(std::string input_file, const std::shared_ptr<DEMMaterial>& mat) {
+    DEMMesh(std::string input_file, const std::shared_ptr<DEMMaterial>& mat) {
         LoadWavefrontMesh(input_file);
         SetMaterial(mat);
         obj_type = OWNER_TYPE::MESH;
     }
-    ~DEMMeshConnected() {}
+    ~DEMMesh() {}
+
+    /// Load a triangle mesh saved as an STL file (ASCII or binary)
+    bool LoadSTLMesh(std::string input_file, bool load_normals = true);
+
+    /// Load a triangle mesh saved as a PLY file (ASCII, triangulated or polygonal)
+    bool LoadPLYMesh(std::string input_file, bool load_normals = true);
 
     /// Load a triangle mesh saved as a Wavefront .obj file
     bool LoadWavefrontMesh(std::string input_file, bool load_normals = true, bool load_uv = false);
 
     /// Write the specified meshes in a Wavefront .obj file
-    static void WriteWavefront(const std::string& filename, std::vector<DEMMeshConnected>& meshes);
+    static void WriteWavefront(const std::string& filename, std::vector<DEMMesh>& meshes);
 
     /// Utility function for merging multiple meshes.
-    static DEMMeshConnected Merge(std::vector<DEMMeshConnected>& meshes);
+    static DEMMesh Merge(std::vector<DEMMesh>& meshes);
 
     /// Get the number of triangles already added to this mesh
     size_t GetNumTriangles() const { return nTri; }
@@ -439,6 +458,33 @@ class DEMMeshConnected : public DEMInitializer {
     /// Instruct that when the mesh is initialized into the system, it will re-order the nodes of each triangle so that
     /// the normals derived from right-hand-rule are the same as the normals in the mesh file
     void UseNormals(bool use = true) { use_mesh_normals = use; }
+    /// Mark this mesh as convex for contact reduction purposes.
+    void SetConvex(bool convex = true) { is_convex = convex; }
+    /// Query whether this mesh is marked convex.
+    bool IsConvex() const { return is_convex; }
+    /// Prevent this mesh from ever being chosen as the winner side in island labeling.
+    void SetNeverWinner(bool never = true) { never_winner = never; }
+    /// Query whether this mesh is marked as never-winner.
+    bool IsNeverWinner() const { return never_winner; }
+    /// Treat this mesh as a shell surface with finite thickness. Thickness must be finite and non-negative.
+    void SetShellThickness(float thickness) {
+        if (!std::isfinite(thickness) || thickness < 0.f) {
+            DEME_ERROR("Shell thickness must be finite and non-negative (got %.9g).", thickness);
+        }
+        shell_thickness = thickness;
+        is_shell = thickness > DEME_TINY_FLOAT;
+    }
+    /// Disable shell mode (fallback to zero-thickness triangle surface behavior).
+    void DisableShell() {
+        is_shell = false;
+        shell_thickness = 0.f;
+    }
+    /// Query whether this mesh is configured as a shell.
+    bool IsShell() const { return is_shell; }
+    /// Get full shell thickness.
+    float GetShellThickness() const { return shell_thickness; }
+    /// Get half shell thickness (used internally by kernels).
+    float GetShellHalfThickness() const { return (is_shell && shell_thickness > 0.f) ? 0.5f * shell_thickness : 0.f; }
 
     /// Access the n-th triangle in mesh
     DEMTriangle GetTriangle(size_t index) const {  // No need to wrap (for Shlok)
@@ -456,36 +502,61 @@ class DEMMeshConnected : public DEMInitializer {
         this->m_face_n_indices.clear();
         this->m_face_uv_indices.clear();
         this->m_face_col_indices.clear();
+        this->m_patch_ids.clear();
+        this->m_patch_locations.clear();
+        this->nPatches = 1;
+        this->patches_explicitly_set = false;
+        this->patch_locations_explicitly_set = false;
         this->owner = NULL_BODYID;
+        this->mesh_template_mark = NULL_MESH_TEMPLATE_MARK;
     }
 
     /// Set mass.
-    void SetMass(float mass) { this->mass = mass; }
+    void SetMass(float mass) {
+        this->mass = mass;
+        this->mass_specified = true;
+    }
+    /// Get mass.
+    float GetMass() const { return mass; }
     /// Set MOI (in principal frame).
-    void SetMOI(float3 MOI) { this->MOI = MOI; }
+    void SetMOI(float3 MOI) {
+        this->MOI = MOI;
+        this->moi_specified = true;
+    }
     /// Set MOI (in principal frame).
     void SetMOI(const std::vector<float>& MOI) {
         assertThreeElements(MOI, "SetMOI", "MOI");
         SetMOI(make_float3(MOI[0], MOI[1], MOI[2]));
     }
+    /// Get MOI (in principal frame).
+    float3 GetMOI() const { return MOI; }
     /// Set mesh family number.
     void SetFamily(unsigned int num) { this->family_code = num; }
 
-    /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
+    /// @brief Set material types for the mesh. The input vector should have the same length as the number of patches in
+    /// the mesh, and each element is the material for that patch.
+    /// @details This allows you to set different materials for different patches of the mesh, which can be useful if
+    /// your mesh has multiple convex patches with different material properties.
     void SetMaterial(const std::vector<std::shared_ptr<DEMMaterial>>& input) {
-        assertLength(input.size(), "SetMaterial");
+        assertPatchLength(input.size(), "SetMaterial");
         materials = input;
         isMaterialSet = true;
     }
-    /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
+    /// @brief Set material types for the mesh. Using this method makes a uniform-materialed mesh.
     void SetMaterial(const std::shared_ptr<DEMMaterial>& input) {
-        SetMaterial(std::vector<std::shared_ptr<DEMMaterial>>(nTri, input));
+        SetMaterial(std::vector<std::shared_ptr<DEMMaterial>>(nPatches, input));
     }
 
-    /*
-    /// Compute barycenter, mass and MOI in CoM frame
-    void ComputeMassProperties(double& mass, float3& center, float3& inertia);
+    /// Compute volume, centroid and MOI in CoM frame (unit density).
+    /// For shells (`SetShellThickness`), uses a centered-thickening shell model: volume = surface area * thickness.
+    void ComputeMassProperties(double& volume, float3& center, float3& inertia) const;
+    /// Compute volume, centroid and full inertia tensor in CoM frame (unit density).
+    /// `inertia_products` stores tensor terms (Ixy, Iyz, Izx).
+    void ComputeMassProperties(double& volume, float3& center, float3& inertia, float3& inertia_products) const;
+    /// Check if mesh is watertight (closed, manifold). Returns true if no boundary/non-manifold edges.
+    bool IsWatertight(size_t* boundary_edges = nullptr, size_t* nonmanifold_edges = nullptr) const;
 
+    /*
     /// Create a map of neighboring triangles, vector of:
     /// [Ti TieA TieB TieC]
     /// (the free sides have triangle id = -1).
@@ -516,6 +587,13 @@ class DEMMeshConnected : public DEMInitializer {
         for (auto& node : m_vertices) {
             applyFrameTransformGlobalToLocal(node, center, prin_Q);
         }
+        for (auto& normal : m_normals) {
+            applyOriQToVector3(normal, make_float4(-prin_Q.x, -prin_Q.y, -prin_Q.z, prin_Q.w));
+            const float n_len = length(normal);
+            if (n_len > DEME_TINY_FLOAT) {
+                normal /= n_len;
+            }
+        }
     }
     void InformCentroidPrincipal(const std::vector<float>& center, const std::vector<float>& prin_Q) {
         assertThreeElements(center, "InformCentroidPrincipal", "center");
@@ -530,6 +608,13 @@ class DEMMeshConnected : public DEMInitializer {
     void Move(float3 vec, float4 rot_Q) {
         for (auto& node : m_vertices) {
             applyFrameTransformLocalToGlobal(node, vec, rot_Q);
+        }
+        for (auto& normal : m_normals) {
+            applyOriQToVector3(normal, rot_Q);
+            const float n_len = length(normal);
+            if (n_len > DEME_TINY_FLOAT) {
+                normal /= n_len;
+            }
         }
     }
     void Move(const std::vector<float>& vec, const std::vector<float>& rot_Q) {
@@ -591,6 +676,9 @@ class DEMMeshConnected : public DEMInitializer {
         for (auto& node : m_vertices) {
             node *= s;
         }
+        if (is_shell) {
+            shell_thickness *= s;
+        }
         double double_s = (double)std::abs(s);
         mass *= double_s * double_s * double_s;
         MOI *= double_s * double_s * double_s * double_s * double_s;
@@ -617,29 +705,156 @@ class DEMMeshConnected : public DEMInitializer {
     }
 
     ////////////////////////////////////////////////////////
+    // Mesh patch information for convex patch splitting
+    ////////////////////////////////////////////////////////
+    // Patch ID for each triangle facet (defaults to 0 for all triangles, assuming convex mesh)
+    std::vector<patchID_t> m_patch_ids;
+    // Number of patches in this mesh
+    unsigned int nPatches = 1;
+    // Whether patch information has been explicitly set (either computed or manually supplied)
+    bool patches_explicitly_set = false;
+    // Relative location (to CoM) of each patch (vector of length nPatches)
+    std::vector<float3> m_patch_locations;
+    // Whether patch locations have been explicitly set
+    bool patch_locations_explicitly_set = false;
+
+    /// @brief Manually set the patch IDs for each triangle.
+    /// @details Allows user to manually specify which patch each triangle belongs to. This is useful when
+    /// the user has pre-computed patch information or wants to define patches based on custom criteria.
+    /// @param patch_ids Vector of patch IDs, one for each triangle. Must have the same length as the number
+    /// of triangles in the mesh. Patch IDs should be non-negative integers starting from 0.
+    void SetPatchIDs(const std::vector<patchID_t>& patch_ids);
+
+    /// @brief Assign every triangle to its own patch.
+    /// @details Patch IDs are assigned in triangle order as 0, 1, ..., GetNumTriangles() - 1. This must be called after
+    /// loading or constructing the mesh, and the triangle count must fit in the patchID_t representation.
+    void SetEachTriangleAsPatch();
+
+    /// @brief Get the patch ID for each triangle.
+    /// @return Vector of patch IDs (one per triangle). By default, all triangles are in patch 0 (assuming convex mesh).
+    const std::vector<patchID_t>& GetPatchIDs() const { return m_patch_ids; }
+
+    /// @brief Get the number of patches in the mesh.
+    /// @return Number of patches. Default is 1 (assuming convex mesh).
+    unsigned int GetNumPatches() const { return nPatches; }
+
+    /// @brief Check if patch information has been explicitly set.
+    /// @return True if patches have been computed via SplitIntoConvexPatches() or set via SetPatchIDs(), false if using
+    /// default (single patch).
+    bool ArePatchesExplicitlySet() const { return patches_explicitly_set; }
+
+    /// @brief Set the relative location (to CoM) of each patch.
+    /// @details Allows user to manually specify the location of each patch relative to the mesh's center of mass.
+    /// @param patch_locations Vector of locations (float3), one for each patch. Must have the same length as the number
+    /// of patches in the mesh.
+    void SetPatchLocations(const std::vector<float3>& patch_locations) {
+        assertPatchLength(patch_locations.size(), "SetPatchLocations");
+        m_patch_locations = patch_locations;
+        patch_locations_explicitly_set = true;
+    }
+
+    /// @brief Get the relative location (to CoM) of each patch.
+    /// @return Vector of locations (one per patch). Will be automatically calculated at initialization if not
+    /// explicitly set.
+    const std::vector<float3>& GetPatchLocations() const { return m_patch_locations; }
+
+    /// @brief Check if patch locations have been explicitly set.
+    /// @return True if locations have been set via SetPatchLocations(), false if they will be auto-calculated.
+    bool ArePatchLocationsExplicitlySet() const { return patch_locations_explicitly_set; }
+
+    /// @brief Compute patch locations relative to the implicit CoM of the mesh.
+    /// @details For single patch: returns (0,0,0). For multiple patches: returns average of triangle centroids per
+    /// patch.
+    /// @return Vector of locations (one per patch).
+    std::vector<float3> ComputePatchLocations() const;
+
+    enum class PatchQualityLevel : uint8_t { SAFE = 0, WARN = 1, CRITICAL = 2 };
+
+    enum class PatchConstraintStatus : uint8_t { SATISFIED = 0, TOO_MANY_UNMERGEABLE = 1, TOO_FEW_UNSPLITTABLE = 2 };
+
+    struct PatchQualityPatch {
+        PatchQualityLevel level = PatchQualityLevel::SAFE;
+        float worst_angle_deg = 0.0f;
+        float coherence_r = 1.0f;
+        unsigned int n_tris = 0;
+        unsigned int hard_crossings = 0;
+        unsigned int concave_crossings = 0;
+        unsigned int unoriented_edges = 0;
+    };
+
+    struct PatchQualityReport {
+        PatchQualityLevel overall = PatchQualityLevel::SAFE;
+        PatchConstraintStatus constraint_status = PatchConstraintStatus::SATISFIED;
+        unsigned int achieved_patches = 0;
+        unsigned int requested_min = 1;
+        unsigned int requested_max = std::numeric_limits<unsigned int>::max();
+        std::vector<PatchQualityPatch> per_patch;
+    };
+
+    struct PatchQualityOptions {
+        float safe_r = 0.85f;
+        float warn_r = 0.65f;
+        float warn_worst_angle_margin_deg = 5.0f;
+        bool hard_crossings_are_critical = true;
+        bool concave_crossings_are_critical = false;
+        unsigned int unoriented_warn_threshold = 10;
+    };
+
+    struct PatchSplitOptions {
+        // `hard_angle_deg` passed to SplitIntoConvexPatches is always the maximum local neighbor angle.
+        // `soft_angle_deg` and `patch_normal_max_deg` add optional stricter checks while preserving the legacy default.
+        float soft_angle_deg = -1.0f;
+        float patch_normal_max_deg = -1.0f;
+        bool block_concave_edges = false;
+        float concave_allow_deg = 0.0f;
+        unsigned int patch_min = 1;
+        unsigned int patch_max = std::numeric_limits<unsigned int>::max();
+        bool seed_largest_first = true;
+    };
+
+    /// @brief Split the mesh into connected patches based on face-normal and optional quality constraints.
+    /// @details The default overload preserves the original angle-threshold region-growing behavior. The extended
+    /// overload can also fill a quality report and apply optional concavity/patch-normal checks.
+    unsigned int SplitIntoConvexPatches(float hard_angle_deg,
+                                        const PatchSplitOptions& opt,
+                                        PatchQualityReport* out_report,
+                                        const PatchQualityOptions& qopt);
+    unsigned int SplitIntoConvexPatches(float hard_angle_deg = 30.0f) {
+        return SplitIntoConvexPatches(hard_angle_deg, PatchSplitOptions(), nullptr, PatchQualityOptions());
+    }
+    unsigned int SplitIntoConvexPatches(float hard_angle_deg, const PatchSplitOptions& opt) {
+        return SplitIntoConvexPatches(hard_angle_deg, opt, nullptr, PatchQualityOptions());
+    }
+    unsigned int SplitIntoConvexPatches(float hard_angle_deg,
+                                        const PatchSplitOptions& opt,
+                                        PatchQualityReport* out_report) {
+        return SplitIntoConvexPatches(hard_angle_deg, opt, out_report, PatchQualityOptions());
+    }
+
+    ////////////////////////////////////////////////////////
     // Some geo wildcard-related stuff
     ////////////////////////////////////////////////////////
-    // Initial geometry wildcard that all triangles should have
+    // Initial geometry wildcard that all triangles should have (one value per triangle facet)
     std::unordered_map<std::string, std::vector<float>> geo_wildcards;
     // Can be used to save mem after initialization
     void ClearWildcards() { deallocate_array(geo_wildcards); }
     void SetGeometryWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
         if (wildcards.begin()->second.size() != nTri) {
-            std::stringstream ss;
-            ss << "Input gemometry wildcard arrays in a SetGeometryWildcards call must all have the same size as the "
-                  "number of triangles in this mesh.\nHere, the input array has length "
-               << wildcards.begin()->second.size() << " but this mesh has " << nTri << " triangles." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(
+                "Input geometry wildcard arrays in a SetGeometryWildcards call must all have the same size as "
+                "the number of triangles in this mesh.\nHere, the input array has length %zu but this mesh has %zu "
+                "triangles.",
+                wildcards.begin()->second.size(), nTri);
         }
         geo_wildcards = wildcards;
     }
     void AddGeometryWildcard(const std::string& name, const std::vector<float>& vals) {
         if (vals.size() != nTri) {
-            std::stringstream ss;
-            ss << "Input gemometry wildcard array in a AddGeometryWildcard call must have the same size as the number "
-                  "of triangles in this mesh.\nHere, the input array has length "
-               << vals.size() << " but this mesh has " << nTri << " triangles." << std::endl;
-            throw std::runtime_error(ss.str());
+            DEME_ERROR(
+                "Input geometry wildcard array in a AddGeometryWildcard call must have the same size as the "
+                "number of triangles in this mesh.\nHere, the input array has length %zu but this mesh has %zu "
+                "triangles.",
+                vals.size(), nTri);
         }
         geo_wildcards[name] = vals;
     }
@@ -648,30 +863,74 @@ class DEMMeshConnected : public DEMInitializer {
     }
 };
 
-/*
-/// GPU-side struct that holds external object component info. Only component, not their parents, so this is the
-/// equivalent of clump templates. External objects themselves (and their position, velocity etc.) are not stored with
-/// this struct; instead, they are considered a general owner (or clump)
-class DEMObjComponent {
+// Backward compatibility alias
+using DEMMeshConnected = DEMMesh;
+
+// Template-level rigid-group definition for combining owner templates with fixed relative poses.
+class DEMCombinedTemplate {
   public:
-    // float3* pSomething;
+    OWNER_TYPE member_type = OWNER_TYPE::CLUMP;
+    size_t master_member = 0;
+    std::vector<std::shared_ptr<DEMClumpTemplate>> clump_templates;
+    std::vector<std::shared_ptr<DEMMesh>> mesh_templates;
+    std::vector<float3> rel_pos;
+    std::vector<float4> rel_oriQ;
+    unsigned int load_order = 0;
+};
 
-    //
-    // std::vector<scratch_t, ManagedAllocator<scratch_t>> something;
+// Runtime metadata for a batch of combined template instantiations.
+// Each element in the per-instance vectors corresponds to one instantiation request.
+class DEMCombinedInstances {
+  public:
+    std::shared_ptr<DEMCombinedTemplate> type;
+    // Flattened member initializer handles: n_instances blocks, each with template member count entries.
+    std::vector<std::shared_ptr<DEMInitializer>> member_objs;
+    std::vector<bodyID_t> member_owner_ids;
+    std::vector<float> member_mass;
+    std::vector<float3> member_moi;
+    // Per-instantiation equivalent mass/MOI.
+    std::vector<float> master_equiv_mass;
+    std::vector<float3> master_equiv_moi;
+    std::vector<bodyID_t> master_owner_ids;
+    bool owners_resolved = false;
+    size_t n_instances = 0;
 
-    union {
-        ManagedAllocator<DEMPlateParams_t> plate;
-        ManagedAllocator<DEMPlaneParams_t> plane;
-    };
+    /// Get total number of member owners in this combined batch.
+    size_t GetNumOwners() const { return member_objs.size(); }
 
-    DEMObjComponent() {
-        // cudaMallocManaged(&pSomething, sizeof(float3));
+    /// Add an owner wildcard to all member owners in this combined batch with the same value.
+    void AddOwnerWildcard(const std::string& name, float val) {
+        for (auto& obj : member_objs) {
+            auto batch = std::dynamic_pointer_cast<DEMClumpBatch>(obj);
+            if (!batch) {
+                DEME_ERROR(
+                    "DEMCombinedInstances::AddOwnerWildcard encountered a member that is not a clump batch.\n"
+                    "Owner wildcards are only supported for combined clump owners.");
+            }
+            batch->AddOwnerWildcard(name, val);
+        }
     }
-    ~DEMObjComponent() {
-        // cudaFree(pSomething);
+
+    /// Add an owner wildcard to all member owners in this combined batch with per-owner values.
+    void AddOwnerWildcard(const std::string& name, const std::vector<float>& vals) {
+        if (vals.size() != member_objs.size()) {
+            DEME_ERROR(
+                "Input owner wildcard array in a DEMCombinedInstances::AddOwnerWildcard call must have the same "
+                "size as the number of member owners.\nHere, the input array has length %zu but this combined "
+                "batch has %zu member owners.",
+                vals.size(), member_objs.size());
+        }
+        for (size_t i = 0; i < member_objs.size(); i++) {
+            auto batch = std::dynamic_pointer_cast<DEMClumpBatch>(member_objs[i]);
+            if (!batch) {
+                DEME_ERROR(
+                    "DEMCombinedInstances::AddOwnerWildcard encountered a member that is not a clump batch.\n"
+                    "Owner wildcards are only supported for combined clump owners.");
+            }
+            batch->AddOwnerWildcard(name, vals[i]);
+        }
     }
 };
-*/
 
 }  // namespace deme
 

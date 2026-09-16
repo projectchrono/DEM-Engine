@@ -1,0 +1,1600 @@
+// DEM collision-related kernel collection
+
+#ifndef DEME_COLLI_KERNELS_ST_TT_CUH
+#define DEME_COLLI_KERNELS_ST_TT_CUH
+
+#include <DEM/Defines.h>
+#include <DEMHelperKernels.cuh>
+
+// ------------------------------------------------------------------
+// Triangle-analytical object collision detection utilities
+// ------------------------------------------------------------------
+
+template <typename T1, typename T2>
+bool __device__ tri_plane_penetration(const T1** tri,
+                                      const T1& entityLoc,
+                                      const float3& entityDir,
+                                      T2& overlapDepth,
+                                      T2& overlapArea,
+                                      T1& contactPnt) {
+    // signed distances
+    T2 d[3];
+    // penetration depth: deepest point in triangle
+    T2 dmin = DEME_HUGE_FLOAT;
+#pragma unroll
+    for (int i = 0; i < 3; ++i) {
+        d[i] = planeSignedDistance<T2>(*tri[i], entityLoc, entityDir);
+        if (d[i] < dmin)
+            dmin = d[i];
+    }
+    // build clipped polygon
+    T1 poly[4];
+    int nNode = 0;                 // max 4 poly nodes
+    bool hasIntersection = false;  // one edge intersecting the plane
+#pragma unroll
+    for (int i = 0; i < 3; ++i) {
+        int j = (i + 1) % 3;  // compare with next vertex
+        bool in_i = (d[i] < 0.0);
+        bool in_j = (d[j] < 0.0);
+
+        // ^ means one is in, the other is out
+        if (in_i ^ in_j) {
+            T2 t = d[i] / (d[i] - d[j]);  // between 0 and 1
+            T1 inter = *tri[i] + (*tri[j] - *tri[i]) * t;
+            // Only register inside points once - project them onto the plane
+            if (in_i) {
+                // Project the submerging node onto the plane
+                T1 projectedNode = *tri[i] - d[i] * to_real3<float3, T1>(entityDir);
+                poly[nNode++] = projectedNode;
+            }
+            poly[nNode++] = inter;
+            hasIntersection = true;
+        }
+    }
+
+    // Handle the case where all three vertices are submerged (no edge crosses the plane)
+    if (!hasIntersection) {
+        // Check if all vertices are below the plane
+        bool allBelow = true;
+#pragma unroll
+        for (int i = 0; i < 3; ++i) {
+            if (d[i] >= 0.0) {
+                allBelow = false;
+                break;
+            }
+        }
+        if (allBelow) {
+            // All vertices are below the plane - project all three onto the plane
+#pragma unroll
+            for (int i = 0; i < 3; ++i) {
+                T1 projectedNode = *tri[i] - d[i] * to_real3<float3, T1>(entityDir);
+                poly[nNode++] = projectedNode;
+            }
+            hasIntersection = true;  // We now have a valid polygon
+        }
+    }
+
+    // centroid of contact
+    T1 centroid;
+    centroid.x = 0.;
+    centroid.y = 0.;
+    centroid.z = 0.;
+    if (hasIntersection) {  // If has intersection, centroid of the (inside) polygon
+        for (int i = 0; i < nNode; i++)
+            centroid = centroid + poly[i];
+        centroid = centroid / T2(nNode);
+    } else {  // If no intersection, centroid is just average of all tri verts
+#pragma unroll
+        for (int i = 0; i < 3; i++)
+            centroid = centroid + *tri[i];
+        centroid = centroid / 3.0;
+    }
+
+    // We use the convention that if in contact, overlapDepth is positive
+    overlapDepth = -dmin;
+    bool in_contact = (overlapDepth >= 0.);
+    // The centroid's projection to the plane
+    T1 projection =
+        centroid - planeSignedDistance<T2>(centroid, entityLoc, entityDir) * to_real3<float3, T1>(entityDir);
+
+    // Calculate the area of the clipping polygon using fan triangulation from centroid
+    overlapArea = 0.0;
+    if (hasIntersection && nNode >= 3) {
+        for (int i = 0; i < nNode; ++i) {
+            T1 v1 = poly[i] - centroid;
+            T1 v2 = poly[(i + 1) % nNode] - centroid;
+            T1 crossProd = cross(v1, v2);
+            overlapArea += sqrt(dot(crossProd, crossProd));
+        }
+        overlapArea *= static_cast<T2>(0.5);
+    }
+
+    // cntPnt is from the projection point, go half penetration depth.
+    // Note this penetration depth is signed, so if no contact, we go positive plane normal; if in contact, we go
+    // negative plane normal. As such, cntPnt always exists and this is important for the cases with extraMargin.
+    contactPnt = projection - (overlapDepth * 0.5) * to_real3<float3, T1>(entityDir);
+    return in_contact;
+}
+
+// Used to approximate tri--cyl contact
+template <typename T1>
+inline __host__ __device__ bool planar_cyl_plane_from_ref(const T1& ref,
+                                                          const T1& entityLoc,
+                                                          const float3& entityDir,
+                                                          const float& radius,
+                                                          const float& normal_sign,
+                                                          T1& plane_point,
+                                                          float3& plane_normal) {
+    T1 radial_vec = cylRadialDistanceVec<T1>(ref, entityLoc, entityDir);
+    const auto dist = length(radial_vec);
+    if (dist <= (decltype(dist))DEME_TINY_FLOAT) {
+        return false;
+    }
+    const T1 radial_dir = radial_vec / dist;
+    const float dist_plane = normal_sign * (radius - (float)dist);
+    if (dist_plane < 0) {
+        return false;
+    }
+    plane_normal = to_real3<T1, float3>(-normal_sign * radial_dir);
+    const T1 axis_point = ref - radial_vec;
+    plane_point = axis_point + radial_dir * radius;
+    return true;
+}
+
+// Check only, no contact point, depth, area output
+template <typename T1>
+__host__ __device__ deme::contact_t checkTriEntityOverlap(const T1& A,
+                                                          const T1& B,
+                                                          const T1& C,
+                                                          const deme::objType_t& typeB,
+                                                          const T1& entityLoc,
+                                                          const float3& entityDir,
+                                                          const float& entitySize1,
+                                                          const float& entitySize2,
+                                                          const float& entitySize3,
+                                                          const float& normal_sign,
+                                                          const float& beta4Entity) {
+    const T1* tri[] = {&A, &B, &C};
+    switch (typeB) {
+        case (deme::ANAL_OBJ_TYPE_PLANE): {
+            for (const T1*& v : tri) {
+                // Always cast to double
+                double d = planeSignedDistance<double>(*v, entityLoc, entityDir);
+                double overlapDepth = beta4Entity - d;
+                // printf("v point %f %f %f, entityLoc %f %f %f\n", v->x, v->y, v->z, entityLoc.x, entityLoc.y,
+                // entityLoc.z);
+                if (overlapDepth >= 0.0)
+                    return deme::TRIANGLE_ANALYTICAL_CONTACT;
+            }
+            return deme::NOT_A_CONTACT;
+        }
+        case (deme::ANAL_OBJ_TYPE_CYL_INF): {
+            // Uses a plane-based approximation
+            T1 centroid = (A + B + C) / 3.0;
+            T1 plane_point;
+            float3 plane_normal;
+            if (!planar_cyl_plane_from_ref(centroid, entityLoc, entityDir, entitySize1, normal_sign, plane_point,
+                                           plane_normal)) {
+                return deme::NOT_A_CONTACT;
+            }
+            for (const T1*& v : tri) {
+                double d = planeSignedDistance<double>(*v, plane_point, plane_normal);
+                double overlapDepth = beta4Entity - d;
+                if (overlapDepth >= 0.0)
+                    return deme::TRIANGLE_ANALYTICAL_CONTACT;
+            }
+            return deme::NOT_A_CONTACT;
+        }
+        default:
+            return deme::NOT_A_CONTACT;
+    }
+}
+
+// Fast FP32-only overlap check for kT contact detection (no penetration/area outputs).
+template <typename T1>
+__host__ __device__ deme::contact_t checkTriEntityOverlapFP32(const T1& A,
+                                                              const T1& B,
+                                                              const T1& C,
+                                                              const deme::objType_t& typeB,
+                                                              const T1& entityLoc,
+                                                              const float3& entityDir,
+                                                              const float& entitySize1,
+                                                              const float& entitySize2,
+                                                              const float& entitySize3,
+                                                              const float& normal_sign,
+                                                              const float& beta4Entity) {
+    const T1* tri[] = {&A, &B, &C};
+    switch (typeB) {
+        case (deme::ANAL_OBJ_TYPE_PLANE): {
+            for (const T1*& v : tri) {
+                const float d = planeSignedDistance<float>(*v, entityLoc, entityDir);
+                const float overlapDepth = beta4Entity - d;
+                if (overlapDepth >= 0.0f)
+                    return deme::TRIANGLE_ANALYTICAL_CONTACT;
+            }
+            return deme::NOT_A_CONTACT;
+        }
+        case (deme::ANAL_OBJ_TYPE_CYL_INF): {
+            // Uses a plane-based approximation
+            T1 centroid = (A + B + C) / 3.0f;
+            T1 plane_point;
+            float3 plane_normal;
+            if (!planar_cyl_plane_from_ref(centroid, entityLoc, entityDir, entitySize1, normal_sign, plane_point,
+                                           plane_normal)) {
+                return deme::NOT_A_CONTACT;
+            }
+            for (const T1*& v : tri) {
+                const float d = planeSignedDistance<float>(*v, plane_point, plane_normal);
+                const float overlapDepth = beta4Entity - d;
+                if (overlapDepth >= 0.0f)
+                    return deme::TRIANGLE_ANALYTICAL_CONTACT;
+            }
+            return deme::NOT_A_CONTACT;
+        }
+        default:
+            return deme::NOT_A_CONTACT;
+    }
+}
+
+// NOTE: Due to our algorithm needs a overlapDepth even in the case of no contact (because of extraMargin; and with
+// extraMargin, negative overlapDepth can be considered in-contact), our tri-anal CD algorithm needs to always return a
+// overlapDepth, even in the case of no contact. This is different from the usual CD algorithms which only return a
+// overlapDepth. Also unlike tri-sph contact which has a unified util function, calcTriEntityOverlap is different from
+// checkTriEntityOverlap.
+template <typename T1, typename T2>
+bool __device__ calcTriEntityOverlap(const T1& A,
+                                     const T1& B,
+                                     const T1& C,
+                                     const deme::objType_t& entityType,
+                                     const T1& entityLoc,
+                                     const float3& entityDir,
+                                     const float& entitySize1,
+                                     const float& entitySize2,
+                                     const float& entitySize3,
+                                     const float& normal_sign,
+                                     T1& contactPnt,
+                                     float3& contact_normal,
+                                     T2& overlapDepth,
+                                     T2& overlapArea) {
+    const T1* tri[] = {&A, &B, &C};
+    bool in_contact;
+    switch (entityType) {
+        case deme::ANAL_OBJ_TYPE_PLANE: {
+            in_contact =
+                tri_plane_penetration<T1, T2>(tri, entityLoc, entityDir, overlapDepth, overlapArea, contactPnt);
+            // Plane contact's normal is always the plane's normal
+            contact_normal = entityDir;
+            return in_contact;
+        }
+        case deme::ANAL_OBJ_TYPE_CYL_INF: {
+            // Uses a plane-based approximation
+            T1 centroid = (A + B + C) / 3.0;
+            T1 plane_point;
+            float3 plane_normal;
+            if (!planar_cyl_plane_from_ref(centroid, entityLoc, entityDir, entitySize1, normal_sign, plane_point,
+                                           plane_normal)) {
+                return false;
+            }
+            in_contact =
+                tri_plane_penetration<T1, T2>(tri, plane_point, plane_normal, overlapDepth, overlapArea, contactPnt);
+            contact_normal = plane_normal;
+            return in_contact;
+        }
+        default:
+            return false;
+    }
+}
+
+// -----------------------------------------------------------------
+// Triangle-sphere collision detection utilities
+// -----------------------------------------------------------------
+
+/// This utility function takes the location 'P' and snaps it to the closest
+/// point on the triangular face with given vertices (A, B, and C). The result
+/// is returned in 'res'. Both 'P' and 'res' are assumed to be specified in
+/// the same frame as the face vertices. This function returns 'true' if the
+/// result is on an edge of this face and 'false' if the result is inside the
+/// triangle.
+/// Code from Ericson, "real-time collision detection", 2005, pp. 141
+template <typename T1 = double3, typename T2 = double>
+__device__ bool snap_to_face(const T1& A, const T1& B, const T1& C, const T1& P, T1& res) {
+    T1 AB = B - A;
+    T1 AC = C - A;
+
+    // Check if P in vertex region outside A
+    T1 AP = P - A;
+    T2 d1 = dot(AB, AP);
+    T2 d2 = dot(AC, AP);
+    if (d1 <= 0 && d2 <= 0) {
+        res = A;  // barycentric coordinates (1,0,0)
+        return true;
+    }
+
+    // Check if P in vertex region outside B
+    T1 BP = P - B;
+    T2 d3 = dot(AB, BP);
+    T2 d4 = dot(AC, BP);
+    if (d3 >= 0 && d4 <= d3) {
+        res = B;  // barycentric coordinates (0,1,0)
+        return true;
+    }
+
+    // Check if P in edge region of AB
+    T2 vc = d1 * d4 - d3 * d2;
+    if (vc <= 0 && d1 >= 0 && d3 <= 0) {
+        // Return projection of P onto AB
+        T2 v = d1 / (d1 - d3);
+        res = A + v * AB;  // barycentric coordinates (1-v,v,0)
+        return true;
+    }
+
+    // Check if P in vertex region outside C
+    T1 CP = P - C;
+    T2 d5 = dot(AB, CP);
+    T2 d6 = dot(AC, CP);
+    if (d6 >= 0 && d5 <= d6) {
+        res = C;  // barycentric coordinates (0,0,1)
+        return true;
+    }
+
+    // Check if P in edge region of AC
+    T2 vb = d5 * d2 - d1 * d6;
+    if (vb <= 0 && d2 >= 0 && d6 <= 0) {
+        // Return projection of P onto AC
+        T2 w = d2 / (d2 - d6);
+        res = A + w * AC;  // barycentric coordinates (1-w,0,w)
+        return true;
+    }
+
+    // Check if P in edge region of BC
+    T2 va = d3 * d6 - d5 * d4;
+    if (va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0) {
+        // Return projection of P onto BC
+        T2 w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+        res = B + w * (C - B);  // barycentric coordinates (0,1-w,w)
+        return true;
+    }
+
+    // P inside face region. Return projection of P onto face
+    // barycentric coordinates (u,v,w)
+    T2 denom = __drcp_ru(va + vb + vc);
+    T2 v = __dmul_ru(vb, denom);
+    T2 w = __dmul_ru(vc, denom);
+    res = A + v * AB + w * AC;  // = u*A + v*B + w*C  where  (u = 1 - v - w)
+    return false;
+}
+
+template <typename T2>
+__device__ __forceinline__ T2 clamp01(const T2& x) {
+    return x < (T2)0 ? (T2)0 : (x > (T2)1 ? (T2)1 : x);
+}
+
+template <typename T2>
+__device__ __forceinline__ T2 clampRange(const T2& x, const T2& lo, const T2& hi) {
+    return x < lo ? lo : (x > hi ? hi : x);
+}
+
+template <typename T1, typename T2>
+__device__ bool checkSphereTriPrismCandidate(const T1& outerA,
+                                             const T1& outerB,
+                                             const T1& outerC,
+                                             const T1& innerA,
+                                             const T1& sphere_pos,
+                                             const T2 radius,
+                                             T2& depth,
+                                             T1& closest) {
+    const T1 n_out = normalize(cross(outerB - outerA, outerC - outerA));
+    const T1 shift = innerA - outerA;
+    const T2 thick = fabs(dot(shift, n_out));
+
+    T1 tri_closest;
+    snap_to_face<T1, T2>(outerA, outerB, outerC, sphere_pos, tri_closest);
+
+    const T2 z = dot(sphere_pos - outerA, n_out);
+    const T2 zc = clampRange<T2>(z, (T2)(-thick), (T2)0);
+    closest = tri_closest + zc * n_out;
+
+    const T1 d = sphere_pos - closest;
+    const T2 dist = length(d);
+    depth = radius - dist;
+    return depth > (T2)0;
+}
+
+template <typename T1, typename T2>
+__device__ bool checkSphereOuterTriPrismBarrier(const T1& A,
+                                                const T1& B,
+                                                const T1& C,
+                                                const T1& sphere_pos,
+                                                const T2 radius,
+                                                const T2 shell_half,
+                                                T1& normal,
+                                                T2& depth,
+                                                T2& overlapArea,
+                                                T1& pt1) {
+    const T1 n_out = normalize(cross(B - A, C - A));
+    const T1 outerA = A + shell_half * n_out;
+    const T1 outerB = B + shell_half * n_out;
+    const T1 outerC = C + shell_half * n_out;
+    const T1 inward = ((T2)-2 * shell_half) * n_out;
+    const T2 inward_len2 = dot(inward, inward);
+
+    bool have_candidate = false;
+    bool best_is_barrier = false;
+    T2 best_metric = DEME_HUGE_FLOAT;
+    T2 best_depth = (T2)(-DEME_HUGE_FLOAT);
+    T1 best_normal = n_out;
+    T1 best_pt = outerA;
+
+    // Outer-face barrier: one-sided, no normal flip. If the sphere center is already inside,
+    // this remains active and pushes it back out.
+    T1 face_loc;
+    const bool face_is_edge = snap_to_face<T1, T2>(outerA, outerB, outerC, sphere_pos, face_loc);
+    if (!face_is_edge) {
+        const T2 h = dot(sphere_pos - outerA, n_out);
+        const T2 cand_depth = radius - h;
+        if (cand_depth > (T2)0) {
+            have_candidate = true;
+            best_is_barrier = true;
+            best_metric = h;
+            best_depth = cand_depth;
+            best_normal = n_out;
+            best_pt = face_loc;
+        }
+    }
+
+    const T1 verts[3] = {outerA, outerB, outerC};
+    for (int i = 0; i < 3; i++) {
+        const T1 base = verts[i];
+        const T1 next = verts[(i + 1) % 3];
+        const T1 edge = next - base;
+        const T2 edge_len2 = dot(edge, edge);
+        if (edge_len2 <= (T2)DEME_TINY_FLOAT) {
+            continue;
+        }
+
+        const T1 rel = sphere_pos - base;
+        const T2 u_raw = dot(rel, edge) / edge_len2;
+        const T2 w_raw = inward_len2 > (T2)DEME_TINY_FLOAT ? dot(rel, inward) / inward_len2 : (T2)0;
+
+        // Side-wall barrier when the orthogonal projection lands inside the rectangle extents.
+        if (u_raw >= (T2)0 && u_raw <= (T2)1 && w_raw >= (T2)0 && w_raw <= (T2)1) {
+            T1 s_out = normalize(cross(edge, n_out));
+            const T2 g = dot(rel, s_out);
+            const T2 cand_depth = radius - g;
+            if (cand_depth > (T2)0) {
+                if (!have_candidate || g < best_metric) {
+                    have_candidate = true;
+                    best_is_barrier = true;
+                    best_metric = g;
+                    best_depth = cand_depth;
+                    best_normal = s_out;
+                    best_pt = base + clampRange<T2>(u_raw, (T2)0, (T2)1) * edge +
+                              clampRange<T2>(w_raw, (T2)0, (T2)1) * inward;
+                }
+            }
+        }
+
+        // Rectangle closest-point candidate for edge/vertex grazing contacts.
+        const T2 u = clampRange<T2>(u_raw, (T2)0, (T2)1);
+        const T2 w = clampRange<T2>(w_raw, (T2)0, (T2)1);
+        const T1 rect_q = base + u * edge + w * inward;
+        const T1 d = sphere_pos - rect_q;
+        const T2 dist = length(d);
+        const T2 cand_depth = radius - dist;
+        if (cand_depth > (T2)0) {
+            const T2 metric = dist;
+            if (!have_candidate || (!best_is_barrier && metric < best_metric)) {
+                have_candidate = true;
+                best_is_barrier = false;
+                best_metric = metric;
+                best_depth = cand_depth;
+                if (dist > (T2)DEME_TINY_FLOAT) {
+                    best_normal = ((T2)1 / dist) * d;
+                } else {
+                    best_normal = normalize(cross(edge, n_out));
+                }
+                best_pt = rect_q;
+            }
+        }
+    }
+
+    if (!have_candidate) {
+        depth = (T2)(-DEME_HUGE_FLOAT);
+        overlapArea = (T2)0;
+        return false;
+    }
+
+    // Cap recovery depth to avoid explosive impulses if a particle already ended up deep inside.
+    // Keep this intentionally conservative so first-time recovery contacts do not inject excessive energy.
+    const T2 max_recovery_depth = (T2)0.02 * radius;
+    const T2 capped_depth = best_depth > max_recovery_depth ? max_recovery_depth : best_depth;
+    depth = capped_depth;
+    normal = best_normal;
+    // Keep the contact point on/near the sphere-side interface midpoint so downstream
+    // lever-arm logic stays bounded even for deep barrier recoveries.
+    const T2 sphere_to_cp = radius - (T2)0.5 * capped_depth;
+    pt1 = sphere_pos - sphere_to_cp * normal;
+
+    const T2 overlap_area = static_cast<T2>(deme::PI * (2.0 * radius * depth - depth * depth));
+    overlapArea = overlap_area > static_cast<T2>(0.0) ? overlap_area : static_cast<T2>(0.0);
+    return true;
+}
+
+template <typename T1, typename T2>
+__device__ __forceinline__ T2
+closestPtSegmentSegment(const T1& p1, const T1& q1, const T1& p2, const T1& q2, T1& c1, T1& c2) {
+    constexpr T2 EPS = (T2)1e-20;
+    const T1 d1 = q1 - p1;
+    const T1 d2 = q2 - p2;
+    const T1 r = p1 - p2;
+    const T2 a = dot(d1, d1);
+    const T2 e = dot(d2, d2);
+    const T2 f = dot(d2, r);
+
+    T2 s = (T2)0;
+    T2 t = (T2)0;
+
+    if (a <= EPS && e <= EPS) {
+        c1 = p1;
+        c2 = p2;
+        return dot(c1 - c2, c1 - c2);
+    }
+    if (a <= EPS) {
+        s = (T2)0;
+        t = clamp01<T2>(f / e);
+    } else {
+        const T2 c = dot(d1, r);
+        if (e <= EPS) {
+            t = (T2)0;
+            s = clamp01<T2>(-c / a);
+        } else {
+            const T2 b = dot(d1, d2);
+            const T2 denom = a * e - b * b;
+            if (denom > EPS) {
+                s = clamp01<T2>((b * f - c * e) / denom);
+            } else {
+                s = (T2)0;
+            }
+            t = (b * s + f) / e;
+            if (t < (T2)0) {
+                t = (T2)0;
+                s = clamp01<T2>(-c / a);
+            } else if (t > (T2)1) {
+                t = (T2)1;
+                s = clamp01<T2>((b - c) / a);
+            }
+        }
+    }
+
+    c1 = p1 + d1 * s;
+    c2 = p2 + d2 * t;
+    return dot(c1 - c2, c1 - c2);
+}
+
+template <typename T1, typename T2>
+__device__ __forceinline__ T2 closestPtTriTriDistance(const T1& A1,
+                                                      const T1& B1,
+                                                      const T1& C1,
+                                                      const T1& A2,
+                                                      const T1& B2,
+                                                      const T1& C2,
+                                                      T1& outA,
+                                                      T1& outB) {
+    const T1 triA[3] = {A1, B1, C1};
+    const T1 triB[3] = {A2, B2, C2};
+
+    T2 best2 = DEME_HUGE_FLOAT;
+    outA = A1;
+    outB = A2;
+
+    // Edge-edge pairs (9)
+    for (int i = 0; i < 3; i++) {
+        const T1 pA = triA[i];
+        const T1 qA = triA[(i + 1) % 3];
+        for (int j = 0; j < 3; j++) {
+            const T1 pB = triB[j];
+            const T1 qB = triB[(j + 1) % 3];
+            T1 cA, cB;
+            const T2 d2 = closestPtSegmentSegment<T1, T2>(pA, qA, pB, qB, cA, cB);
+            if (d2 < best2) {
+                best2 = d2;
+                outA = cA;
+                outB = cB;
+            }
+        }
+    }
+
+    // Vertices of A against face B
+    for (int i = 0; i < 3; i++) {
+        T1 q;
+        snap_to_face<T1, T2>(A2, B2, C2, triA[i], q);
+        const T2 d2 = dot(triA[i] - q, triA[i] - q);
+        if (d2 < best2) {
+            best2 = d2;
+            outA = triA[i];
+            outB = q;
+        }
+    }
+
+    // Vertices of B against face A
+    for (int i = 0; i < 3; i++) {
+        T1 q;
+        snap_to_face<T1, T2>(A1, B1, C1, triB[i], q);
+        const T2 d2 = dot(q - triB[i], q - triB[i]);
+        if (d2 < best2) {
+            best2 = d2;
+            outA = q;
+            outB = triB[i];
+        }
+    }
+
+    if (best2 < (T2)0) {
+        best2 = (T2)0;
+    }
+    return sqrt(best2);
+}
+
+/**
+/brief TRIANGLE FACE--SPHERE COLLISION DETECTION
+
+The triangular face is defined by points A, B, C. The sequence is important as it defines the positive face via a
+right-hand rule.
+The sphere is centered at sphere_pos and has radius.
+The index "1" is associated with the triangle. The index "2" is associated with the sphere.
+The coordinates of the face and sphere are assumed to be provided in the same reference frame.
+
+Output:
+  - pt1:      contact point on triangle
+  - depth:    penetration distance (a positive value means that overlap exists)
+  - normal:     contact normal, from pt2 to pt1
+A return value of "true" signals collision.
+*/
+template <typename T1, typename T2>
+__device__ bool checkTriSphereOverlap(const T1& A,           ///< First vertex of the triangle
+                                      const T1& B,           ///< Second vertex of the triangle
+                                      const T1& C,           ///< Third vertex of the triangle
+                                      const T1& sphere_pos,  ///< Location of the center of the sphere
+                                      const T2 radius,       ///< Sphere radius
+                                      T1& normal,            ///< contact normal
+                                      T2& depth,             ///< penetration (positive if in contact)
+                                      T2& overlapArea,       ///< overlap area
+                                      T1& pt1                ///< contact point on triangle
+) {
+    // Calculate face normal using RHR
+    T1 face_n = normalize(cross(B - A, C - A));
+
+    // Calculate signed height of sphere center above face plane
+    T2 h = dot(sphere_pos - A, face_n);
+
+    // Find the closest point on the face to the sphere center and determine
+    // whether or not this location is inside the face or on an edge.
+    T1 faceLoc;
+
+    // Triangle in contact with sphere or not
+    bool in_contact;
+
+    // Still do the following since we need depth
+    if (!snap_to_face<T1, T2>(A, B, C, sphere_pos, faceLoc)) {
+        // Nearest point on the triangle is on its face
+        // printf("FACE CONTACT\n");
+        depth = radius - h;  // Positive for contact
+        normal.x = face_n.x;
+        normal.y = face_n.y;
+        normal.z = face_n.z;
+        // The contact point is somewhere in the midpoint of the deepest penetration line segment. Go from faceLoc,
+        // backwards wrt normal, half the penetration depth.
+        pt1 = faceLoc - (depth * 0.5) * normal;
+        if (h >= radius || h <= -radius) {
+            in_contact = false;
+        } else {
+            in_contact = true;
+        }
+        // overlapArea = deme::PI * (radius * radius - (radius - depth) * (radius - depth));
+        // Simplify it and assign it at the end of this call
+    } else {
+        // printf("EDGE CONTACT\n");
+        // Nearest point on the triangle is on an edge
+        {
+            T1 normal_d = sphere_pos - faceLoc;
+            normal.x = normal_d.x;
+            normal.y = normal_d.y;
+            normal.z = normal_d.z;
+        }
+        T2 dist = length(normal);
+        depth = radius - dist;  // Positive for contact
+
+        normal = (1.0 / dist) * normal;
+        // Go from faceLoc, backwards wrt normal, half the penetration depth
+        pt1 = faceLoc - (depth * 0.5) * normal;
+        if (depth < 0. || h >= radius || h <= -radius) {
+            in_contact = false;
+        } else {
+            in_contact = true;
+        }
+        // In the edge case, overlapArea is a bit tricky to define accurately.
+        // Here we still just approximate it as a circle area.
+    }
+    overlapArea = static_cast<T2>(deme::PI * (2.0 * radius * depth - depth * depth));
+    return in_contact;
+}
+
+/**
+/brief TRIANGLE FACE--SPHERE COLLISION DETECTION (DIRECTIONAL)
+
+The triangular face is defined by points A, B, C. The sequence is important as it defines the positive face via a
+right-hand rule.
+The sphere is centered at sphere_pos and has radius.
+The index "1" is associated with the triangle. The index "2" is associated with the sphere.
+The coordinates of the face and sphere are assumed to be provided in the same reference frame.
+This flavor is directional, meaning if a sphere is not in (geometric) contact with a triangle, it may still be
+considered in contact, if it is submerged in the (closed) object that this mesh is representing, or say the penetration
+is too deep, large than 2 * sphere rad.
+
+Output:
+  - pt1:      contact point on triangle
+  - depth:    penetration distance (a positive value means that overlap exists)
+  - normal:     contact normal, from pt2 to pt1
+A return value of "true" signals collision.
+*/
+template <typename T1, typename T2>
+__device__ bool checkTriSphereOverlap_directional(const T1& A,           ///< First vertex of the triangle
+                                                  const T1& B,           ///< Second vertex of the triangle
+                                                  const T1& C,           ///< Third vertex of the triangle
+                                                  const T1& sphere_pos,  ///< Location of the center of the sphere
+                                                  const T2 radius,       ///< Sphere radius
+                                                  T1& normal,            ///< contact normal
+                                                  T2& depth,             ///< penetration (positive if in contact)
+                                                  T1& pt1                ///< contact point on triangle
+) {
+    // Calculate face normal using RHR
+    T1 face_n = normalize(cross(B - A, C - A));
+
+    // Calculate signed height of sphere center above face plane
+    T2 h = dot(sphere_pos - A, face_n);
+
+    // Find the closest point on the face to the sphere center and determine
+    // whether or not this location is inside the face or on an edge.
+    T1 faceLoc;
+
+    // Triangle in contact with sphere or not
+    bool in_contact;
+
+    // Still do the following since we need depth
+    if (!snap_to_face<T1, T2>(A, B, C, sphere_pos, faceLoc)) {
+        // Nearest point on the triangle is on its face
+        // printf("FACE CONTACT\n");
+        depth = radius - h;  // Positive for contact
+        normal.x = face_n.x;
+        normal.y = face_n.y;
+        normal.z = face_n.z;
+        // The contact point is somewhere in the midpoint of the deepest penetration line segment. Go from faceLoc,
+        // backwards wrt normal, half the penetration depth.
+        pt1 = faceLoc - (depth * 0.5) * normal;
+        if (depth < 0.) {
+            in_contact = false;
+        } else {
+            in_contact = true;
+        }
+    } else {
+        // printf("EDGE CONTACT\n");
+        // Nearest point on the triangle is on an edge
+        {
+            T1 normal_d = sphere_pos - faceLoc;
+            normal.x = normal_d.x;
+            normal.y = normal_d.y;
+            normal.z = normal_d.z;
+        }
+        T2 dist = length(normal);
+        depth = radius - dist;  // Positive for contact
+
+        normal = (1.0 / dist) * normal;
+        // Go from faceLoc, backwards wrt normal, half the penetration depth
+        pt1 = faceLoc - (depth * 0.5) * normal;
+        if (depth < 0. || h >= radius) {
+            in_contact = false;
+        } else {
+            in_contact = true;
+        }
+    }
+    return in_contact;
+}
+
+// -----------------------------------------------------------------------------
+// Triangle-triangle collision detection utilities
+// -----------------------------------------------------------------------------
+
+////////////////////////////////////////////////////////////////////////////////
+// Prism contact detection using the Separating Axis Theorem (SAT)
+//
+// For the extruded triangle "sandwich" prisms we only have 4 unique edge
+// directions (3 base edges + extrusion). This yields:
+// - 8 face normals (base + 3 side faces per prism)
+// - 16 edge-edge axes
+// Total: 24 axes, evaluated on the fly without normalization.
+////////////////////////////////////////////////////////////////////////////////
+
+__device__ __forceinline__ float invSqrt(float x) {
+    return rsqrtf(x);
+}
+
+__device__ __forceinline__ double invSqrt(double x) {
+    return 1.0 / sqrt(x);
+}
+
+#ifndef DEME_SAT_ENABLE_MIXED_PRECISION
+    #define DEME_SAT_ENABLE_MIXED_PRECISION 0
+#endif
+
+// minimal arithmetic for extruded-triangle prism projection.
+// Key identity: prism projection = [minTri, maxTri] union [minTri+shift, maxTri+shift]
+// => outMin = minTri + min(0,shift), outMax = maxTri + max(0,shift)
+template <typename Vec, typename Scalar>
+__device__ __forceinline__ void projectExtrudedTriPrism(const Vec& v0,
+                                                        const Vec& v1,
+                                                        const Vec& v2,
+                                                        const Vec& d,
+                                                        const Vec& axis,
+                                                        Scalar& outMin,
+                                                        Scalar& outMax) {
+    const Scalar p0 = dot(v0, axis);
+    const Scalar p1 = dot(v1, axis);
+    const Scalar p2 = dot(v2, axis);
+
+    const Scalar triMin = fmin(p0, fmin(p1, p2));
+    const Scalar triMax = fmax(p0, fmax(p1, p2));
+
+    const Scalar shift = dot(d, axis);
+    const Scalar z = Scalar(0);
+
+    outMin = triMin + fmin(z, shift);
+    outMax = triMax + fmax(z, shift);
+}
+
+template <typename Vec, typename Scalar>
+__device__ __forceinline__ Scalar satSeparationOnAxis(const Vec& axis,
+                                                      const Vec& A0,
+                                                      const Vec& A1,
+                                                      const Vec& A2,
+                                                      const Vec& dA,
+                                                      const Vec& B0,
+                                                      const Vec& B1,
+                                                      const Vec& B2,
+                                                      const Vec& dB) {
+    Scalar len2 = dot(axis, axis);
+    if (len2 < Scalar(DEME_TINY_FLOAT))
+        return -Scalar(DEME_HUGE_FLOAT);
+
+    Scalar minA, maxA, minB, maxB;
+    projectExtrudedTriPrism<Vec, Scalar>(A0, A1, A2, dA, axis, minA, maxA);
+    projectExtrudedTriPrism<Vec, Scalar>(B0, B1, B2, dB, axis, minB, maxB);
+
+    Scalar sep1 = minB - maxA;
+    Scalar sep2 = minA - maxB;
+    Scalar sepProj = (sep1 > sep2) ? sep1 : sep2;
+    Scalar invLen = invSqrt(len2);
+    return sepProj * invLen;
+}
+
+/**
+ * @brief Helper function to project one triangle onto another triangle's plane and clip using Sutherland-Hodgman
+ *
+ * @param incTri The incident triangle vertices to be projected
+ * @param refTri The reference triangle vertices (defines the plane and clipping region)
+ * @param refNormal The normal of the reference triangle's plane
+ * @param depth Output: penetration depth (max distance of submerged vertices)
+ * @param area Output: area of the clipping polygon
+ * @param centroid Output: centroid of the clipping polygon
+ * @param minPenetrationFullySubmerged Output: shallowest vertex penetration depth, but ONLY non-zero when all 3
+ *        incident vertices are submerged (i.e., the incident triangle is completely below the reference plane). When
+ *        fewer than 3 vertices are submerged this is set to 0. This value is used by kT margin sizing: a triangle
+ *        that is fully submerged in the reference plane direction cannot be detected by SAT, so its shallowest
+ *        vertex depth tells us the minimum extra margin we must add to keep the contact traceable.
+ * @return true if there is contact (at least one vertex submerged), false otherwise
+ */
+template <typename T1, typename T2>
+__device__ bool projectTriangleOntoTriangle(const T1* incTri,
+                                            const T1* refTri,
+                                            const T1& refNormal,
+                                            T2& depth,
+                                            T2& area,
+                                            T1& centroid,
+                                            T2& minPenetrationFullySubmerged) {
+    // Compute signed distances of incident triangle vertices to reference plane
+    area = T2(0.0);
+    minPenetrationFullySubmerged = T2(0.0);
+    T2 incDists[3];
+    T2 maxPenetration = 0.0;
+    T2 minPenetration = T2(DEME_HUGE_FLOAT);
+    int8_t numSubmerged = 0;
+#pragma unroll
+    for (int8_t i = 0; i < 3; ++i) {
+        incDists[i] = dot(incTri[i] - refTri[0], refNormal);
+        if (incDists[i] < 0.0) {
+            numSubmerged++;
+            T2 pen = -incDists[i];
+            if (pen > maxPenetration)
+                maxPenetration = pen;
+            if (pen < minPenetration)
+                minPenetration = pen;
+        }
+    }
+    // The shallowest penetration is only meaningful when ALL vertices are submerged: that is the only case where the
+    // incident triangle is completely buried and cannot be found by SAT on its own.
+    if (numSubmerged == 3) {
+        minPenetrationFullySubmerged = minPenetration;
+    }
+
+    // If no vertices are submerged, no contact
+    if (numSubmerged == 0) {
+        // Non-contact placeholder contact info is set outside this function
+        // depth = T2(0.0);
+        // area = T2(0.0);
+        // centroid.x = T2(0.0);
+        // centroid.y = T2(0.0);
+        // centroid.z = T2(0.0);
+        return false;
+    }
+
+    // Maximum vertices in a triangle-triangle clipping polygon
+    // Sutherland-Hodgman clipping can produce up to (n+m) vertices where n and m are
+    // the number of vertices in the input polygons. For triangle-triangle clipping,
+    // we conservatively use 9 (more than the theoretical max of 6) for safety.
+    constexpr int8_t SH_MAX_CLIPPING_VERTICES = 9;
+
+    // Build polygon from projected submerged vertices and edge-plane intersections
+    T1 projectedPoly[SH_MAX_CLIPPING_VERTICES];
+    int8_t nPoly = 0;
+
+    // Process each edge of the incident triangle
+#pragma unroll
+    for (int8_t i = 0; i < 3; ++i) {
+        int8_t j = (i + 1) % 3;
+        bool in_i = (incDists[i] < 0.0);
+        bool in_j = (incDists[j] < 0.0);
+
+        // Add submerged vertex (projected onto plane)
+        if (in_i) {
+            projectedPoly[nPoly++] = incTri[i] - refNormal * incDists[i];
+        }
+
+        // Add edge-plane intersection if edge crosses the plane
+        if (in_i != in_j) {
+            T2 denom = incDists[i] - incDists[j];
+            if (denom != 0.0) {  // Avoid division by zero
+                T2 t = incDists[i] / denom;
+                T1 inter = incTri[i] + (incTri[j] - incTri[i]) * t;
+                projectedPoly[nPoly++] = inter;
+            }
+        }
+    }
+
+    // If we don't have at least 3 vertices, no valid polygon
+    if (nPoly < 3) {
+        // Non-contact placeholder contact info is set outside this function
+        // depth = maxPenetration;
+        // area = T2(0.0);
+        // centroid = (incTri[0] + incTri[1] + incTri[2]) / T2(3.0);
+        return false;
+    }
+
+    // Now compute the intersection polygon of the projected triangle and reference triangle
+    // We need bidirectional clipping: clip projectedPoly against refTri, then add refTri vertices inside projectedPoly
+
+    // Step 1: Clip projected polygon against reference triangle (Sutherland-Hodgman)
+    T1 resultPoly[SH_MAX_CLIPPING_VERTICES];
+    for (int8_t i = 0; i < nPoly; ++i) {
+        resultPoly[i] = projectedPoly[i];
+    }
+    int8_t numInputVerts = nPoly;
+
+    T1 intermediatePoly[SH_MAX_CLIPPING_VERTICES];
+    for (int8_t edge = 0; edge < 3; ++edge) {
+        int8_t numOutputVerts = 0;
+        T1 edgeStart = refTri[edge];
+        T1 edgeEnd = refTri[(edge + 1) % 3];
+        T1 edgeDir = edgeEnd - edgeStart;
+        T1 edgeNormal = cross(refNormal, edgeDir);
+        edgeNormal = normalize(edgeNormal);
+
+        // Clip input polygon against this edge
+        for (int8_t i = 0; i < numInputVerts; ++i) {
+            T1 v1 = resultPoly[i];
+            T1 v2 = resultPoly[(i + 1) % numInputVerts];
+            T2 d1 = dot(v1 - edgeStart, edgeNormal);
+            T2 d2 = dot(v2 - edgeStart, edgeNormal);
+            bool in1 = (d1 >= -DEME_TINY_FLOAT);
+            bool in2 = (d2 >= -DEME_TINY_FLOAT);
+
+            if (in1) {
+                intermediatePoly[numOutputVerts++] = v1;
+            }
+            if (in1 != in2) {
+                T2 denom = d1 - d2;
+                if (denom != 0.0) {  // Avoid division by zero
+                    T2 t = d1 / denom;
+                    T1 inter = v1 + (v2 - v1) * t;
+                    intermediatePoly[numOutputVerts++] = inter;
+                }
+            }
+        }
+
+        // Copy output to input for next iteration
+        for (int8_t i = 0; i < numOutputVerts; ++i) {
+            resultPoly[i] = intermediatePoly[i];
+        }
+        numInputVerts = numOutputVerts;
+
+        if (numInputVerts == 0) {
+            break;  // No intersection
+        }
+    }
+
+    // Step 2: Check if any reference triangle vertices are inside the projected polygon
+    // and add them to the intersection polygon if they are
+    int8_t numFinalVerts = numInputVerts;
+
+    // For each reference triangle vertex, check if it's inside the original projected polygon
+    for (int8_t refIdx = 0; refIdx < 3; ++refIdx) {
+        T1 refVertex = refTri[refIdx];
+
+        // Check if refVertex is inside the projected polygon using winding number
+        bool inside = true;
+        for (int8_t i = 0; i < nPoly; ++i) {
+            T1 edgeStart = projectedPoly[i];
+            T1 edgeEnd = projectedPoly[(i + 1) % nPoly];
+            T1 edgeDir = edgeEnd - edgeStart;
+            T1 edgeNormal = cross(refNormal, edgeDir);
+            T2 dist = dot(refVertex - edgeStart, edgeNormal);
+            if (dist < -DEME_TINY_FLOAT) {
+                inside = false;
+                break;
+            }
+        }
+
+        if (inside) {
+            // Check if this vertex is not already in the polygon (avoid duplicates)
+            bool isDuplicate = false;
+            for (int8_t j = 0; j < numFinalVerts; ++j) {
+                T1 diff = resultPoly[j] - refVertex;
+                if (dot(diff, diff) < DEME_TINY_FLOAT * DEME_TINY_FLOAT) {
+                    isDuplicate = true;
+                    break;
+                }
+            }
+            if (!isDuplicate) {
+                resultPoly[numFinalVerts++] = refVertex;
+            }
+        }
+    }
+
+    // If we added reference vertices, we need to reorder the polygon to maintain proper winding
+    if (numFinalVerts > numInputVerts && numFinalVerts >= 3) {
+        // Compute centroid of all vertices
+        T1 tempCentroid;
+        tempCentroid.x = 0.0;
+        tempCentroid.y = 0.0;
+        tempCentroid.z = 0.0;
+        for (int8_t i = 0; i < numFinalVerts; ++i) {
+            tempCentroid = tempCentroid + resultPoly[i];
+        }
+        tempCentroid = tempCentroid / T2(numFinalVerts);
+
+        // Sort vertices by angle around centroid to ensure proper winding order
+        // Use simple bubble sort for small number of vertices
+        for (int8_t i = 0; i < numFinalVerts - 1; ++i) {
+            for (int8_t j = i + 1; j < numFinalVerts; ++j) {
+                T1 vi = resultPoly[i] - tempCentroid;
+                T1 vj = resultPoly[j] - tempCentroid;
+                // Use reference normal to determine consistent orientation
+                T1 cross_ij = cross(vi, vj);
+                if (dot(cross_ij, refNormal) < 0.0) {
+                    // Swap
+                    T1 temp = resultPoly[i];
+                    resultPoly[i] = resultPoly[j];
+                    resultPoly[j] = temp;
+                }
+            }
+        }
+    }
+
+    numInputVerts = numFinalVerts;
+
+    // Compute centroid and area of the intersection polygon
+    centroid.x = 0.0;
+    centroid.y = 0.0;
+    centroid.z = 0.0;
+
+    depth = maxPenetration;
+    if (numInputVerts >= 3) {
+        for (int8_t i = 0; i < numInputVerts; ++i) {
+            centroid = centroid + resultPoly[i];
+        }
+        centroid = centroid / T2(numInputVerts);
+
+        // Calculate area using fan triangulation from centroid
+        area = 0.0;
+        for (int8_t i = 0; i < numInputVerts; ++i) {
+            T1 v1 = resultPoly[i] - centroid;
+            T1 v2 = resultPoly[(i + 1) % numInputVerts] - centroid;
+            T1 crossProd = cross(v1, v2);
+            area += sqrt(dot(crossProd, crossProd));
+        }
+        area *= static_cast<T2>(0.5);
+        return true;
+    } else {
+        // Degenerate intersection polygon
+        // centroid = (incTri[0] + incTri[1] + incTri[2]) / T2(3.0);
+        // Non-contact placeholder contact info is set outside this function
+        return false;
+    }
+}
+
+/**
+ * @brief Fast SAT contact check between two triangular prisms (triangle sandwiches).
+ *
+ * Evaluates 24 axes (8 face normals + 16 edge-edge) without normalization. Uses FP32 by
+ * default with a narrow mixed-precision recheck near zero overlap to avoid false positives.
+ *
+ * OPTIMIZED VERSION:
+ * - Uses fused operations to reduce register pressure
+ * - Inline axis separation test to avoid lambda overhead
+ * - Early termination structure optimized for GPU SIMT execution
+ *
+ * @return true if prisms are in contact (no separating axis found), false otherwise
+ */
+template <typename T1>
+__device__ __forceinline__ bool calc_prism_contact(const T1& prismAFaceANode1,
+                                                   const T1& prismAFaceANode2,
+                                                   const T1& prismAFaceANode3,
+                                                   const T1& prismAFaceBNode1,
+                                                   const T1& prismAFaceBNode2,
+                                                   const T1& prismAFaceBNode3,
+                                                   const T1& prismBFaceANode1,
+                                                   const T1& prismBFaceANode2,
+                                                   const T1& prismBFaceANode3,
+                                                   const T1& prismBFaceBNode1,
+                                                   const T1& prismBFaceBNode2,
+                                                   const T1& prismBFaceBNode3) {
+    // Relative coordinates centered at prismAFaceANode1 reduce FP32 dynamic range issues.
+    const float3 origin = prismAFaceANode1;
+
+    // Prism A base triangle relative to origin (A0 is exactly zero)
+    const float3 A0 = make_float3(0.0f, 0.0f, 0.0f);
+    const float3 A1 = prismAFaceANode2 - origin;
+    const float3 A2 = prismAFaceANode3 - origin;
+
+    // Prism B base triangle relative to origin
+    const float3 B0 = prismBFaceANode1 - origin;
+    const float3 B1 = prismBFaceANode2 - origin;
+    const float3 B2 = prismBFaceANode3 - origin;
+
+    // Extrusion vectors (world differences; origin cancels)
+    const float3 dA = prismAFaceBNode1 - prismAFaceANode1;
+    const float3 dB = prismBFaceBNode1 - prismBFaceANode1;
+
+    // ------------------------------------------------------------------
+    // Cheap AABB overlap test on world axes (X/Y/Z) for the full prisms.
+    // This rejects many non-contacts before the expensive SAT axes.
+    // Prism extents: triMin + min(0,d), triMax + max(0,d).
+    // ------------------------------------------------------------------
+    {
+        const float triMinAx = fminf(0.0f, fminf(A1.x, A2.x));
+        const float triMaxAx = fmaxf(0.0f, fmaxf(A1.x, A2.x));
+        const float triMinAy = fminf(0.0f, fminf(A1.y, A2.y));
+        const float triMaxAy = fmaxf(0.0f, fmaxf(A1.y, A2.y));
+        const float triMinAz = fminf(0.0f, fminf(A1.z, A2.z));
+        const float triMaxAz = fmaxf(0.0f, fmaxf(A1.z, A2.z));
+
+        const float minAx = triMinAx + fminf(0.0f, dA.x);
+        const float maxAx = triMaxAx + fmaxf(0.0f, dA.x);
+        const float minAy = triMinAy + fminf(0.0f, dA.y);
+        const float maxAy = triMaxAy + fmaxf(0.0f, dA.y);
+        const float minAz = triMinAz + fminf(0.0f, dA.z);
+        const float maxAz = triMaxAz + fmaxf(0.0f, dA.z);
+
+        const float triMinBx = fminf(B0.x, fminf(B1.x, B2.x));
+        const float triMaxBx = fmaxf(B0.x, fmaxf(B1.x, B2.x));
+        const float triMinBy = fminf(B0.y, fminf(B1.y, B2.y));
+        const float triMaxBy = fmaxf(B0.y, fmaxf(B1.y, B2.y));
+        const float triMinBz = fminf(B0.z, fminf(B1.z, B2.z));
+        const float triMaxBz = fmaxf(B0.z, fmaxf(B1.z, B2.z));
+
+        const float minBx = triMinBx + fminf(0.0f, dB.x);
+        const float maxBx = triMaxBx + fmaxf(0.0f, dB.x);
+        const float minBy = triMinBy + fminf(0.0f, dB.y);
+        const float maxBy = triMaxBy + fmaxf(0.0f, dB.y);
+        const float minBz = triMinBz + fminf(0.0f, dB.z);
+        const float maxBz = triMaxBz + fmaxf(0.0f, dB.z);
+
+        if (maxAx < minBx || maxBx < minAx)
+            return false;
+        if (maxAy < minBy || maxBy < minAy)
+            return false;
+        if (maxAz < minBz || maxBz < minAz)
+            return false;
+    }
+
+    // Edge vectors (triangle edges only; extrusion edges handled via dA/dB)
+    const float3 eA0 = A1 - A0;
+    const float3 eA1 = A2 - A1;
+    const float3 eA2 = A0 - A2;
+
+    const float3 eB0 = B1 - B0;
+    const float3 eB1 = B2 - B1;
+    const float3 eB2 = B0 - B2;
+
+// Project an extruded triangle prism where the shift along axis is provided (can be forced to 0 cheaply).
+// NOTE: We avoid any rsqrt normalization. Separation sign is invariant to axis scale.
+#define PROJECT_PRISM_WITH_SHIFT(v0, v1, v2, shift, axis, outMin, outMax) \
+    do {                                                                  \
+        const float p0 = dot((v0), (axis));                               \
+        const float p1 = dot((v1), (axis));                               \
+        const float p2 = dot((v2), (axis));                               \
+        const float triMin = fminf(p0, fminf(p1, p2));                    \
+        const float triMax = fmaxf(p0, fmaxf(p1, p2));                    \
+        (outMin) = triMin + fminf(0.0f, (shift));                         \
+        (outMax) = triMax + fmaxf(0.0f, (shift));                         \
+    } while (0)
+
+// Test axis: caller can declare whether shiftA and/or shiftB are guaranteed zero for this axis.
+// This saves a dot(d,axis) on the relevant prism.
+#define TEST_AXIS(axis_expr, shiftA_zero, shiftB_zero)                      \
+    do {                                                                    \
+        const float3 axis = (axis_expr);                                    \
+        const float len2 = dot(axis, axis);                                 \
+        if (len2 > DEME_TINY_FLOAT) {                                       \
+            float minA, maxA, minB, maxB;                                   \
+            const float shiftA = (shiftA_zero) ? 0.0f : dot(dA, axis);      \
+            const float shiftB = (shiftB_zero) ? 0.0f : dot(dB, axis);      \
+            PROJECT_PRISM_WITH_SHIFT(A0, A1, A2, shiftA, axis, minA, maxA); \
+            PROJECT_PRISM_WITH_SHIFT(B0, B1, B2, shiftB, axis, minB, maxB); \
+            if (maxA < minB || maxB < minA)                                 \
+                return false;                                               \
+        }                                                                   \
+    } while (0)
+
+    // Face normals (2 axes): shifts generally non-zero for both prisms
+    TEST_AXIS(cross(eA0, A2 - A0), false, false);
+    TEST_AXIS(cross(eB0, B2 - B0), false, false);
+
+    // Side normals (6 axes):
+    // For axis = cross(eA?, dA): dot(dA, axis) == 0 in exact arithmetic -> shiftA_zero = true.
+    // For axis = cross(eB?, dB): dot(dB, axis) == 0 -> shiftB_zero = true.
+    TEST_AXIS(cross(eA0, dA), true, false);
+    TEST_AXIS(cross(eA1, dA), true, false);
+    TEST_AXIS(cross(eA2, dA), true, false);
+    TEST_AXIS(cross(eB0, dB), false, true);
+    TEST_AXIS(cross(eB1, dB), false, true);
+    TEST_AXIS(cross(eB2, dB), false, true);
+
+    // Edge-edge axes (9 axes): shifts generally non-zero for both prisms
+    TEST_AXIS(cross(eA0, eB0), false, false);
+    TEST_AXIS(cross(eA0, eB1), false, false);
+    TEST_AXIS(cross(eA0, eB2), false, false);
+    TEST_AXIS(cross(eA1, eB0), false, false);
+    TEST_AXIS(cross(eA1, eB1), false, false);
+    TEST_AXIS(cross(eA1, eB2), false, false);
+    TEST_AXIS(cross(eA2, eB0), false, false);
+    TEST_AXIS(cross(eA2, eB1), false, false);
+    TEST_AXIS(cross(eA2, eB2), false, false);
+
+    // Edge-extrusion cross products (6 axes):
+    // axis = cross(eA?, dB) => dot(dB,axis) == 0 -> shiftB_zero = true
+    // axis = cross(dA, eB?) => dot(dA,axis) == 0 -> shiftA_zero = true
+    TEST_AXIS(cross(eA0, dB), false, true);
+    TEST_AXIS(cross(eA1, dB), false, true);
+    TEST_AXIS(cross(eA2, dB), false, true);
+    TEST_AXIS(cross(dA, eB0), true, false);
+    TEST_AXIS(cross(dA, eB1), true, false);
+    TEST_AXIS(cross(dA, eB2), true, false);
+
+    // Extrusion-extrusion (1 axis): dot(dA,cross(dA,dB)) == dot(dB,cross(dA,dB)) == 0
+    TEST_AXIS(cross(dA, dB), true, true);
+
+#undef TEST_AXIS
+#undef PROJECT_PRISM_WITH_SHIFT
+
+    return true;
+}
+
+/// Lightweight SAT check for triangle-triangle contact (physical contact only)
+/// Returns true if triangles are in physical contact (no separating axis found), false otherwise
+/// This is a simplified version that only performs the SAT test without computing contact details
+
+// ---------- helpers
+template <typename T>
+__device__ __forceinline__ T tmin2(T a, T b) {
+    return a < b ? a : b;
+}
+
+template <typename T>
+__device__ __forceinline__ T tmax2(T a, T b) {
+    return a > b ? a : b;
+}
+
+template <typename T>
+__device__ __forceinline__ T tmin3(T a, T b, T c) {
+    return tmin2(a, tmin2(b, c));
+}
+
+template <typename T>
+__device__ __forceinline__ T tmax3(T a, T b, T c) {
+    return tmax2(a, tmax2(b, c));
+}
+
+__device__ __forceinline__ float3 make_zero3_float() {
+    return make_float3(0.f, 0.f, 0.f);
+}
+__device__ __forceinline__ double3 make_zero3_double() {
+    return make_double3(0.0, 0.0, 0.0);
+}
+
+template <typename T1>
+__device__ __forceinline__ T1 make_zero3();
+template <>
+__device__ __forceinline__ float3 make_zero3<float3>() {
+    return make_zero3_float();
+}
+template <>
+__device__ __forceinline__ double3 make_zero3<double3>() {
+    return make_zero3_double();
+}
+
+// axis separation test (no normalization)
+template <typename T1, typename T2>
+__device__ __forceinline__ bool axis_separates_skin(const T1& axis,
+                                                    const T1& a0,
+                                                    const T1& a1,
+                                                    const T1& a2,
+                                                    const T1& b0,
+                                                    const T1& b1,
+                                                    const T1& b2,
+                                                    const T2 skin,
+                                                    const T2 tiny_axis2,
+                                                    const T2 num_eps) {
+    const T2 len2 = (T2)dot(axis, axis);
+    if (len2 <= tiny_axis2)
+        return false;  // ignore degenerate axis
+
+    const T2 pa0 = (T2)dot(a0, axis);
+    const T2 pa1 = (T2)dot(a1, axis);
+    const T2 pa2 = (T2)dot(a2, axis);
+    const T2 minA = tmin3(pa0, pa1, pa2);
+    const T2 maxA = tmax3(pa0, pa1, pa2);
+
+    const T2 pb0 = (T2)dot(b0, axis);
+    const T2 pb1 = (T2)dot(b1, axis);
+    const T2 pb2 = (T2)dot(b2, axis);
+    const T2 minB = tmin3(pb0, pb1, pb2);
+    const T2 maxB = tmax3(pb0, pb1, pb2);
+
+    const T2 sep1 = minB - maxA;
+    const T2 sep2 = minA - maxB;
+    const T2 sep = (sep1 > sep2) ? sep1 : sep2;
+
+    // Separation only if gap is strictly larger than skin (+ numeric cushion)
+    return sep > (skin + num_eps);
+}
+
+template <typename T1, typename T2>
+__device__ __forceinline__ bool checkTriangleTriangleSAT(const T1& A1,
+                                                         const T1& B1,
+                                                         const T1& C1,
+                                                         const T1& A2,
+                                                         const T1& B2,
+                                                         const T1& C2) {
+    // Contact skin in your length unit (e.g., mm)
+    constexpr T2 CONTACT_SKIN = (T2)0.05;  // adjust
+
+    // Degeneracy gate for axes (len^2). Keep very small.
+    //// TODO: Beyond this threshol the presence of degenerated tris should be warned!
+    constexpr T2 TINY_AXIS2 = (T2)1e-20;
+
+    // Small numerical cushion (should be << skin)
+    constexpr T2 NUM_EPS = (T2)1e-12;
+
+    // ---------------------------------------------------------
+    // 1) Pair-local frame: shift by origin to shrink dynamic range
+    // ---------------------------------------------------------
+    const T1 O = A1;
+    const T1 a0 = make_zero3<T1>();
+    const T1 a1 = B1 - O;
+    const T1 a2 = C1 - O;
+
+    const T1 b0 = A2 - O;
+    const T1 b1 = B2 - O;
+    const T1 b2 = C2 - O;
+
+    // ---------------------------------------------------------
+    // 2) AABB early-out on X/Y/Z with skin
+    // ---------------------------------------------------------
+    {
+        const T2 minAx = tmin3((T2)a0.x, (T2)a1.x, (T2)a2.x);
+        const T2 maxAx = tmax3((T2)a0.x, (T2)a1.x, (T2)a2.x);
+        const T2 minBx = tmin3((T2)b0.x, (T2)b1.x, (T2)b2.x);
+        const T2 maxBx = tmax3((T2)b0.x, (T2)b1.x, (T2)b2.x);
+        if (maxAx < (minBx - CONTACT_SKIN) || maxBx < (minAx - CONTACT_SKIN))
+            return false;
+
+        const T2 minAy = tmin3((T2)a0.y, (T2)a1.y, (T2)a2.y);
+        const T2 maxAy = tmax3((T2)a0.y, (T2)a1.y, (T2)a2.y);
+        const T2 minBy = tmin3((T2)b0.y, (T2)b1.y, (T2)b2.y);
+        const T2 maxBy = tmax3((T2)b0.y, (T2)b1.y, (T2)b2.y);
+        if (maxAy < (minBy - CONTACT_SKIN) || maxBy < (minAy - CONTACT_SKIN))
+            return false;
+
+        const T2 minAz = tmin3((T2)a0.z, (T2)a1.z, (T2)a2.z);
+        const T2 maxAz = tmax3((T2)a0.z, (T2)a1.z, (T2)a2.z);
+        const T2 minBz = tmin3((T2)b0.z, (T2)b1.z, (T2)b2.z);
+        const T2 maxBz = tmax3((T2)b0.z, (T2)b1.z, (T2)b2.z);
+        if (maxAz < (minBz - CONTACT_SKIN) || maxBz < (minAz - CONTACT_SKIN))
+            return false;
+    }
+
+    // ---------------------------------------------------------
+    // 3) SAT axes: 2 face normals + 9 edge×edge (no normalization)
+    // ---------------------------------------------------------
+    const T1 eA0 = a1 - a0;
+    const T1 eA1 = a2 - a1;
+    const T1 eA2 = a0 - a2;
+
+    const T1 eB0 = b1 - b0;
+    const T1 eB1 = b2 - b1;
+    const T1 eB2 = b0 - b2;
+
+    // Face normals (unnormalized)
+    const T1 nA = cross(eA0, a2 - a0);
+    if (axis_separates_skin<T1, T2>(nA, a0, a1, a2, b0, b1, b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS))
+        return false;
+
+    const T1 nB = cross(eB0, b2 - b0);
+    if (axis_separates_skin<T1, T2>(nB, a0, a1, a2, b0, b1, b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS))
+        return false;
+
+    // Edge×Edge (9)
+    if (axis_separates_skin<T1, T2>(cross(eA0, eB0), a0, a1, a2, b0, b1, b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS))
+        return false;
+    if (axis_separates_skin<T1, T2>(cross(eA0, eB1), a0, a1, a2, b0, b1, b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS))
+        return false;
+    if (axis_separates_skin<T1, T2>(cross(eA0, eB2), a0, a1, a2, b0, b1, b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS))
+        return false;
+
+    if (axis_separates_skin<T1, T2>(cross(eA1, eB0), a0, a1, a2, b0, b1, b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS))
+        return false;
+    if (axis_separates_skin<T1, T2>(cross(eA1, eB1), a0, a1, a2, b0, b1, b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS))
+        return false;
+    if (axis_separates_skin<T1, T2>(cross(eA1, eB2), a0, a1, a2, b0, b1, b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS))
+        return false;
+
+    if (axis_separates_skin<T1, T2>(cross(eA2, eB0), a0, a1, a2, b0, b1, b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS))
+        return false;
+    if (axis_separates_skin<T1, T2>(cross(eA2, eB1), a0, a1, a2, b0, b1, b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS))
+        return false;
+    if (axis_separates_skin<T1, T2>(cross(eA2, eB2), a0, a1, a2, b0, b1, b2, CONTACT_SKIN, TINY_AXIS2, NUM_EPS))
+        return false;
+
+    return true;  // no axis with gap > skin => treat as contact candidate
+}
+
+/// Triangle-triangle contact detection using projection-based approach:
+/// 1. Project triangle A onto triangle B's plane and clip against B's edges
+/// 2. Project triangle B onto triangle A's plane and clip against A's edges
+/// 3. Average the results for final contact info
+/// This approach uses Sutherland-Hodgman algorithm for clipping and does not require SAT
+template <typename T1, typename T2>
+__device__ bool checkTriangleTriangleOverlap(
+    const T1& A1,
+    const T1& B1,
+    const T1& C1,
+    const T1& A2,
+    const T1& B2,
+    const T1& C2,
+    T1& normal,         ///< contact normal (B2A direction)
+    T2& depth,          ///< penetration (positive if in contact)
+    T2& projectedArea,  ///< projected area of clipping polygon (optional output)
+    T1& point,          ///< contact point
+    T2& minDepthA,      ///< shallowest penetration of triA into triB's plane; non-zero only when triA is fully
+                        ///< submerged below triB's plane. Used only for triA's future contact-detection margin.
+    T2& minDepthB) {    ///< shallowest penetration of triB into triA's plane; non-zero only when triB is fully
+                        ///< submerged below triA's plane. Used only for triB's future contact-detection margin.
+    // Triangle A vertices (tri1)
+    const T1 triA[3] = {A1, B1, C1};
+    // Triangle B vertices (tri2)
+    const T1 triB[3] = {A2, B2, C2};
+
+    // Margin sizing is per triangle and independent of which projection direction supplies the contact force geometry.
+    minDepthA = T2(0.0);
+    minDepthB = T2(0.0);
+
+    // Compute face normal for triangle A first; triangle B normal is only needed if B->A projection hits.
+    T1 nA = normalize(cross(B1 - A1, C1 - A1));
+
+    //// TODO: And degenerated triangles?
+
+    // ========================================================================
+    // Projection-based approach: project each triangle onto the other's plane
+    // and clip using Sutherland-Hodgman algorithm
+    // ========================================================================
+
+    // Project triangle B onto triangle A's plane and clip against A.
+    // minDepthB is non-zero only if all of triB is fully submerged below triA's plane.
+    T2 depthBA, areaBA;
+    T1 centroidBA;
+    const bool contactBA = projectTriangleOntoTriangle<T1, T2>(triB, triA, nA, depthBA, areaBA, centroidBA, minDepthB);
+
+    if (!contactBA) {
+        // No contact detected, Provide separation info
+        T1 centA = (triA[0] + triA[1] + triA[2]) / 3.0;
+        T1 centB = (triB[0] + triB[1] + triB[2]) / 3.0;
+        T1 sep = centA - centB;
+        T2 sepLen2 = dot(sep, sep);
+
+        if (sepLen2 > (DEME_TINY_FLOAT * DEME_TINY_FLOAT)) {
+            T2 sepLen = sqrt(sepLen2);
+            normal = sep / sepLen;
+            depth = -sepLen;  // Negative for separation
+            point = (centA + centB) * 0.5;
+        } else {
+            normal = nA;
+            depth = -DEME_TINY_FLOAT;
+            point = centA;
+        }
+        projectedArea = 0.0;
+        return false;
+    }
+
+    // Project triangle A onto triangle B's plane and clip against B.
+    // minDepthA is non-zero only if all of triA is fully submerged below triB's plane.
+    T1 nB = normalize(cross(B2 - A2, C2 - A2));
+    T2 depthAB, areaAB;
+    T1 centroidAB;
+    const bool contactAB = projectTriangleOntoTriangle<T1, T2>(triA, triB, nB, depthAB, areaAB, centroidAB, minDepthA);
+
+    if (!contactAB) {
+        // No contact detected, Provide separation info
+        T1 centA = (triA[0] + triA[1] + triA[2]) / 3.0;
+        T1 centB = (triB[0] + triB[1] + triB[2]) / 3.0;
+        T1 sep = centA - centB;
+        T2 sepLen2 = dot(sep, sep);
+
+        if (sepLen2 > (DEME_TINY_FLOAT * DEME_TINY_FLOAT)) {
+            T2 sepLen = sqrt(sepLen2);
+            normal = sep / sepLen;
+            depth = -sepLen;  // Negative for separation
+            point = (centA + centB) * 0.5;
+        } else {
+            normal = nA;
+            depth = -DEME_TINY_FLOAT;
+            point = centA;
+        }
+        projectedArea = 0.0;
+        return false;
+    }
+
+    // If both projection yields results, we select the one with less projection distance.
+    // This is important. For example, consider a small surface intersecting with a large surface nearly vertically. The
+    // smaller one projected onto the larger one: nearly 0 area (depending on numerical stability, may actually be 0);
+    // Larger one projected onto the smaller one: almost covers the entire smaller surface. We always want them both
+    // have non-0 projection area, and then select the shorter projection distance one. This is good for stability.
+    if (depthBA < depthAB) {
+        // Use B->A projection results.
+        depth = depthBA;
+        projectedArea = areaBA;
+        normal = -1.0 * nA;  // Pay attention to direction
+
+        // Contact point: centroid on A's plane, moved back by half depth
+        point = centroidBA - nA * (depth * 0.5);
+    } else {
+        // Use A->B projection results.
+        depth = depthAB;
+        projectedArea = areaAB;
+        normal = nB;
+
+        // Contact point: centroid on B's plane, moved back by half depth
+        point = centroidAB - nB * (depth * 0.5);
+    }
+
+    return true;
+}
+
+#endif

@@ -11,7 +11,6 @@
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
@@ -71,8 +70,10 @@ inline void buildContactMap(std::vector<std::vector<bodyID_t>>& map,
 }
 
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_Indentation ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
@@ -158,7 +159,7 @@ int main() {
     std::cout << "Total num of particles: " << num_particles << std::endl;
     auto particle_tracker = DEMSim.Track(particles);
 
-    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetTimeStepSize(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.SetCDUpdateFreq(20);
     // You usually don't have to worry about initial bin size. But sometimes if you can set the init bin size so that

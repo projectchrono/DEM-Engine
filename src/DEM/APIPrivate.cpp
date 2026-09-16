@@ -6,7 +6,8 @@
 #include <core/ApiVersion.h>
 #include "API.h"
 #include "Defines.h"
-#include "HostSideHelpers.hpp"
+#include "utils/HostSideHelpers.hpp"
+#include "utils/MeshUtils.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -15,6 +16,7 @@
 #include <cstring>
 #include <limits>
 #include <algorithm>
+#include <map>
 
 namespace deme {
 
@@ -30,36 +32,41 @@ void DEMSolver::assertSysNotInit(const std::string& method_name) {
     }
 }
 
+// Persistent contact is always primitive contact-based
 void DEMSolver::assignFamilyPersistentContact_impl(
     unsigned int N1,
     unsigned int N2,
     notStupidBool_t is_or_not,
     const std::function<bool(family_t, family_t, unsigned int, unsigned int)>& condition) {
-    if (kT->solverFlags.isHistoryless) {
+    if (!kT->solverFlags.hasPersistentContacts) {
         DEME_ERROR(
-            "You cannot mark persistent contacts when using a wildcard-less/history-less contact model (since "
-            "persistency is a part of the history).\nYou can use a different force model, and if you have to use this "
-            "one, add a placeholder wildcard.");
+            std::string("You must first enable persistent contact support by calling SetPersistentContact(true) before "
+                        "marking persistent contacts."));
     }
     // Get device-major info to host first
-    kT->previous_idGeometryA.toHost();
-    kT->previous_idGeometryB.toHost();
-    kT->previous_contactType.toHost();
-    kT->contactPersistency.toHost();
-    if (dT->solverFlags.canFamilyChangeOnDevice) {
-        dT->familyID.toHost();
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->previous_idPrimitiveA.toHost();
+        kT->previous_idPrimitiveB.toHost();
+        kT->previous_contactTypePrimitive.toHost();
+        kT->contactPersistency.toHost();
+    }
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        if (dT->solverFlags.canFamilyChangeOnDevice) {
+            dT->familyID.toHost();
+        }
     }
 
     // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
     // as persistent but not found in CD, it will be added to the contact array.
-    for (size_t i = 0; i < *(kT->solverScratchSpace.numPrevContacts); i++) {
-        bodyID_t bodyA = kT->previous_idGeometryA[i];
-        bodyID_t bodyB = kT->previous_idGeometryB[i];
-        contact_t c_type = kT->previous_contactType[i];
+    for (size_t i = 0; i < *(kT->solverScratchSpace.numPrevPrimitiveContacts); i++) {
+        bodyID_t bodyA = kT->previous_idPrimitiveA[i];
+        bodyID_t bodyB = kT->previous_idPrimitiveB[i];
+        contact_t c_type = kT->previous_contactTypePrimitive[i];
 
-        bodyID_t ownerA = dT->ownerClumpBody[bodyA];  // ownerClumpBody can't change on device
-        // As for B, it depends on type
-        bodyID_t ownerB = dT->getGeoOwnerID(bodyB, c_type);
+        bodyID_t ownerA = dT->getGeoOwnerID(bodyA, decodeTypeA(c_type));
+        bodyID_t ownerB = dT->getGeoOwnerID(bodyB, decodeTypeB(c_type));
 
         family_t famA = dT->familyID[ownerA];
         family_t famB = dT->familyID[ownerB];
@@ -68,11 +75,10 @@ void DEMSolver::assignFamilyPersistentContact_impl(
         }
     }
 
-    if (is_or_not == CONTACT_IS_PERSISTENT) {
-        kT->solverFlags.hasPersistentContacts = true;
-        dT->solverFlags.hasPersistentContacts = true;
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->contactPersistency.toDevice();
     }
-    kT->contactPersistency.toDevice();
 }
 
 void DEMSolver::assignFamilyPersistentContactEither(unsigned int N, notStupidBool_t is_or_not) {
@@ -95,24 +101,22 @@ void DEMSolver::assignFamilyPersistentContact(unsigned int N1, unsigned int N2, 
                                        });
 }
 void DEMSolver::assignPersistentContact(notStupidBool_t is_or_not) {
-    if (kT->solverFlags.isHistoryless) {
+    if (!kT->solverFlags.hasPersistentContacts) {
         DEME_ERROR(
-            "You cannot mark persistent contacts when using a wildcard-less/history-less contact model (since "
-            "persistency is a part of the history).\nYou can use a different force model, and if you have to use this "
-            "one, add a placeholder wildcard.");
+            std::string("You must first enable persistent contact support by calling SetPersistentContact(true) before "
+                        "marking persistent contacts."));
     }
+    ScopedCudaDevice device_scope(kT->streamInfo.device);
     kT->contactPersistency.toHost();
 
     // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
     // as persistent but not found in CD, it will be added to the contact array.
-    for (size_t i = 0; i < *(kT->solverScratchSpace.numPrevContacts); i++) {
+    // Note: contactPersistency is a part of the primitive contact building process, so it is always existent and has
+    // correct size.
+    for (size_t i = 0; i < *(kT->solverScratchSpace.numPrevPrimitiveContacts); i++) {
         kT->contactPersistency[i] = is_or_not;
     }
 
-    if (is_or_not == CONTACT_IS_PERSISTENT) {
-        kT->solverFlags.hasPersistentContacts = true;
-        dT->solverFlags.hasPersistentContacts = true;
-    }
     kT->contactPersistency.toDevice();
 }
 
@@ -186,6 +190,10 @@ void DEMSolver::generateEntityResources() {
 
     // Count how many triangle tempaltes are there and flatten them
     preprocessTriangleObjs();
+
+    // Mesh-particle mass/MOI jitification is only useful while repeated template instances stay compact. If the compact
+    // table still grows too large, switch to flattened owner-level mass/MOI before kernel source is generated.
+    decideMeshMassJitification();
 }
 
 void DEMSolver::postResourceGen() {
@@ -197,9 +205,33 @@ void DEMSolver::postResourceGen() {
     postResourceGenChecksAndTabKeeping();
 }
 
+void DEMSolver::decideMeshMassJitification() {
+    if (!jitify_mass_moi) {
+        return;
+    }
+    if (m_mesh_mass_jit.size() <= THRESHOLD_CANT_JITIFY_ALL_MESH_TEMPLATES) {
+        return;
+    }
+
+    DEME_WARNING(
+        "There are %zu distinct mesh mass/MOI template entries, but only %u are configured for mass/MOI jitification. "
+        "Falling back to flattened mass/MOI arrays.\nFor mesh-particle runs, use LoadMeshType/AddMeshFromTemplate so "
+        "many particles share template-level mass/MOI entries. If this many distinct mesh mass/MOI entries is "
+        "intentional, calling DisableJitifyMassProperties() before Initialize() will select the same flattened path "
+        "explicitly.",
+        m_mesh_mass_jit.size(), THRESHOLD_CANT_JITIFY_ALL_MESH_TEMPLATES);
+    jitify_mass_moi = false;
+}
+
 void DEMSolver::updateTotalEntityNum() {
     nDistinctClumpBodyTopologies = m_template_clump_mass.size();
-    nDistinctMassProperties = nDistinctClumpBodyTopologies + nExtObj + nTriMeshes;
+    const size_t mesh_mass_entries = jitify_mass_moi ? m_mesh_mass_jit.size() : m_mesh_obj_mass.size();
+    const size_t total_mass_entries = nDistinctClumpBodyTopologies + nExtObj + mesh_mass_entries;
+    if (total_mass_entries > std::numeric_limits<unsigned int>::max()) {
+        DEME_ERROR("The number of mass/MOI entries (%zu) exceeds the supported unsigned int range.",
+                   total_mass_entries);
+    }
+    nDistinctMassProperties = static_cast<unsigned int>(total_mass_entries);
 
     // Also, external objects may introduce more material types
     nMatTuples = m_loaded_materials.size();
@@ -245,9 +277,37 @@ void DEMSolver::postResourceGenChecksAndTabKeeping() {
                 "%u different mass properties (from the contribution of clump templates, analytical objects and meshed "
                 "objects) are loaded, but the max allowance is %u (No.%u is reserved).\nYou may avoid this by calling "
                 "DisableJitifyMassProperties() before system initialization to disable jitification for mass "
-                "properties",
+                "properties. If many mesh particles are present, prefer LoadMeshType/AddMeshFromTemplate so repeated "
+                "instances share mesh-template mass/MOI entries.",
                 nDistinctMassProperties, std::numeric_limits<inertiaOffset_t>::max() - 1,
                 std::numeric_limits<inertiaOffset_t>::max());
+        }
+        // Mass + MOI jitification emits one mass array and three MOI arrays into constant memory. Catch the practical
+        // limit here so mesh-particle users get an API-level fix suggestion instead of a late CUDA_ERROR_INVALID_PTX.
+        {
+            constexpr size_t kBytesPerMassEntry = 4 * sizeof(float);
+            int devices[] = {dT->streamInfo.device, kT->streamInfo.device};
+            size_t min_const_mem = std::numeric_limits<size_t>::max();
+            for (int dev : devices) {
+                cudaDeviceProp prop{};
+                if (cudaGetDeviceProperties(&prop, dev) == cudaSuccess) {
+                    min_const_mem = std::min(min_const_mem, static_cast<size_t>(prop.totalConstMem));
+                }
+            }
+            if (min_const_mem != std::numeric_limits<size_t>::max()) {
+                const size_t needed_bytes = kBytesPerMassEntry * nDistinctMassProperties;
+                constexpr size_t kSafetyMargin = 1024;
+                if (needed_bytes + kSafetyMargin > min_const_mem) {
+                    DEME_ERROR(
+                        "Mass/MOI jitification would require %zu bytes of constant memory for %u entries, exceeding "
+                        "the available device constant memory (%zu bytes with a %zu-byte safety margin).\nIf many mesh "
+                        "particles were added with AddMesh/AddWavefrontMeshObject, load one mesh template with "
+                        "LoadMeshType and instantiate it with AddMeshFromTemplate so repeated particles share "
+                        "template-level mass/MOI entries. If you intentionally need this many distinct mass/MOI "
+                        "entries, call DisableJitifyMassProperties() before Initialize() to use flattened mass/MOI.",
+                        needed_bytes, nDistinctMassProperties, min_const_mem, kSafetyMargin);
+                }
+            }
         }
     }
 
@@ -289,6 +349,9 @@ void DEMSolver::addAnalCompTemplate(const objType_t type,
     m_anal_size_3.push_back(d3);
     float normal_sign = (normal == ENTITY_NORMAL_INWARD) ? 1 : -1;
     m_anal_normals.push_back(normal_sign);
+    // Unlike the flattened arrays, this compact definition persists after Initialize() so current owner transforms can
+    // be combined with the original component geometry for analytical VTK output.
+    m_anal_output_definitions.push_back({type, pos, rot, d1, d2, d3, normal_sign});
 }
 
 void DEMSolver::jitifyKernels() {
@@ -313,19 +376,27 @@ void DEMSolver::jitifyKernels() {
         DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
         dT->jitifyKernels(m_subs, m_jitify_options);
 
-        // Now, inspectors need to be jitified too... but the current design jitify inspector kernels at the first time
-        // they are used. for (auto& insp : m_inspectors) {
-        //     insp->Initialize(m_subs);
-        // }
-
         // Solver system's own max vel inspector should be init-ed. Don't bother init-ing it while using, because it is
         // called at high frequency, let's save an if check. Forced initialization (since doing it before system
         // completes init).
-        m_approx_max_vel_func->Initialize(m_subs, m_jitify_options, true);
-        dT->approxMaxVelFunc = m_approx_max_vel_func;
+        m_approx_vel_func->Initialize(m_subs, m_jitify_options, true);
+        dT->approxVelFunc = m_approx_vel_func;
+        // Initialize angular velocity magnitude inspector
+        m_approx_angvel_func->Initialize(m_subs, m_jitify_options, true);
+        dT->approxAngVelFunc = m_approx_angvel_func;
     });
     kT_build.join();
     dT_build.join();
+
+    // Eagerly initialize user-created inspectors so their kernels compile before first use.
+    for (auto& insp : m_inspectors) {
+        if (insp) {
+            insp->Initialize(m_subs, m_jitify_options, true);
+            if (insp->inspection_kernel) {
+                insp->inspection_kernel->kernel(insp->kernel_name).instantiate();
+            }
+        }
+    }
 }
 
 void DEMSolver::getContacts_impl(std::vector<bodyID_t>& idA,
@@ -335,12 +406,13 @@ void DEMSolver::getContacts_impl(std::vector<bodyID_t>& idA,
                                  std::vector<family_t>& famB,
                                  std::function<bool(contact_t)> type_func) const {
     // Get device-major info to host first
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
     if (dT->solverFlags.canFamilyChangeOnDevice) {
         dT->familyID.toHostAsync(dT->streamInfo.stream);
     }
-    dT->idGeometryA.toHostAsync(dT->streamInfo.stream);
-    dT->idGeometryB.toHostAsync(dT->streamInfo.stream);
-    dT->contactType.toHostAsync(dT->streamInfo.stream);
+    dT->idPatchA.toHostAsync(dT->streamInfo.stream);
+    dT->idPatchB.toHostAsync(dT->streamInfo.stream);
+    dT->contactTypePatch.toHostAsync(dT->streamInfo.stream);
 
     size_t num_contacts = dT->getNumContacts();
     idA.resize(num_contacts);
@@ -353,10 +425,10 @@ void DEMSolver::getContacts_impl(std::vector<bodyID_t>& idA,
 
     size_t useful_contacts = 0;
     for (size_t i = 0; i < num_contacts; i++) {
-        contact_t this_type = dT->contactType[i];
+        contact_t this_type = dT->contactTypePatch[i];
         if (type_func(this_type)) {
-            idA[useful_contacts] = dT->getGeoOwnerID(dT->idGeometryA[i], this_type);
-            idB[useful_contacts] = dT->getGeoOwnerID(dT->idGeometryB[i], this_type);
+            idA[useful_contacts] = dT->getPatchOwnerID(dT->idPatchA[i], decodeTypeA(this_type));
+            idB[useful_contacts] = dT->getPatchOwnerID(dT->idPatchB[i], decodeTypeB(this_type));
             cnt_type[useful_contacts] = this_type;
             famA[useful_contacts] = dT->familyID[idA[useful_contacts]];
             famB[useful_contacts] = dT->familyID[idB[useful_contacts]];
@@ -380,8 +452,8 @@ void DEMSolver::figureOutNV() {
     for (int i = 0; i < 3 - 1; i++)
         for (int j = i + 1; j < 3; j++)
             if (XYZ[i] > XYZ[j]) {
-                elemSwap(XYZ + i, XYZ + j);
-                elemSwap(rankXYZ + i, rankXYZ + j);
+                std::swap(XYZ[i], XYZ[j]);
+                std::swap(rankXYZ[i], rankXYZ[j]);
             }
     // Record the size ranking
     float userSize321[3] = {XYZ[0], XYZ[1], XYZ[2]};
@@ -516,6 +588,11 @@ void DEMSolver::decideBinSize() {
         }
     }
 
+    // m_binSize sanity check
+    m_binSize = clampBetween<double, double>(m_binSize, 1000. * DEME_TINY_FLOAT, m_boxX);
+    m_binSize = clampBetween<double, double>(m_binSize, 1000. * DEME_TINY_FLOAT, m_boxY);
+    m_binSize = clampBetween<double, double>(m_binSize, 1000. * DEME_TINY_FLOAT, m_boxZ);
+
     m_num_bins = hostCalcBinNum(nbX, nbY, nbZ, m_voxelSize, m_binSize, nvXp2, nvYp2, nvZp2);
     // It's better to compute num of bins this way, rather than...
     // (uint64_t)(m_boxX / m_binSize + 1) * (uint64_t)(m_boxY / m_binSize + 1) * (uint64_t)(m_boxZ / m_binSize + 1);
@@ -571,7 +648,24 @@ void DEMSolver::decideCDMarginStrat() {
             break;
         case (MARGIN_FINDER_TYPE::DEFAULT):
             // Default strategy is to use an inspector
-            m_approx_max_vel_func = this->CreateInspector("absv");
+            m_approx_vel_func = this->CreateInspector("absv");
+            // Also create inspector for angular velocity magnitude
+            m_approx_angvel_func = this->CreateInspector("absangvel");
+            // Validate every owner in the existing dT magnitude kernels, before any reduction or kT handoff.
+            // Unlike the primitive margin checks, these run with fixed margins and with angular margins disabled.
+            // Keep this policy on the internal inspectors so public inspection behavior remains unchanged.
+            m_approx_vel_func->inspection_code += R"V0G0N(
+                if (!isfinite(quantity[myOwner])) {
+                    DEME_ABORT_KERNEL("Non-finite linear velocity (NaN or Inf) for ownerID %llu.\n",
+                                      static_cast<unsigned long long>(myOwner));
+                }
+            )V0G0N";
+            m_approx_angvel_func->inspection_code += R"V0G0N(
+                if (!isfinite(quantity[myOwner])) {
+                    DEME_ABORT_KERNEL("Non-finite angular velocity (NaN or Inf) for ownerID %llu.\n",
+                                      static_cast<unsigned long long>(myOwner));
+                }
+            )V0G0N";
             m_max_v_finder_type = MARGIN_FINDER_TYPE::DEM_INSPECTOR;
             break;
     }
@@ -580,13 +674,14 @@ void DEMSolver::decideCDMarginStrat() {
 void DEMSolver::reportInitStats() const {
     DEME_INFO("\n");
 
-    DEME_INFO("Number of system devices detected: %d", GpuManager::scanNumDevices());
+    DEME_INFO("Number of logical CUDA devices visible to DEME: %d", dTkT_GpuManager->getNumVisibleDevices());
     DEME_INFO("Number of active devices used by DEME: %d", dTkT_GpuManager->getNumDevices());
+    DEME_INFO("Worker device assignments (dT, kT): %d, %d", m_gpu_device_ids[0], m_gpu_device_ids[1]);
 
     DEME_INFO("User-specified X-dimension range: [%.7g, %.7g]", m_user_box_min.x, m_user_box_max.x);
     DEME_INFO("User-specified Y-dimension range: [%.7g, %.7g]", m_user_box_min.y, m_user_box_max.y);
     DEME_INFO("User-specified Z-dimension range: [%.7g, %.7g]", m_user_box_min.z, m_user_box_max.z);
-    DEME_INFO("User-specified dimensions should NOT be larger than the following simulation world.");
+    DEME_INFO(std::string("User-specified dimensions should NOT be larger than the following simulation world."));
     DEME_INFO("The dimension of the simulation world: %.17g, %.17g, %.17g", m_boxX, m_boxY, m_boxZ);
     DEME_INFO("Simulation world X range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_boxX);
     DEME_INFO("Simulation world Y range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_boxY);
@@ -608,16 +703,16 @@ void DEMSolver::reportInitStats() const {
     DEME_INFO("The number of material types: %u", nMatTuples);
     switch (m_force_model->type) {
         case (FORCE_MODEL::HERTZIAN):
-            DEME_INFO("History-based Hertzian contact model is in use.");
+            DEME_INFO(std::string("History-based Hertzian contact model is in use."));
             break;
         case (FORCE_MODEL::HERTZIAN_FRICTIONLESS):
-            DEME_INFO("Frictionless Hertzian contact model is in use.");
+            DEME_INFO(std::string("Frictionless Hertzian contact model is in use."));
             break;
         case (FORCE_MODEL::CUSTOM):
-            DEME_INFO("A user-custom force model is in use.");
+            DEME_INFO(std::string("A user-custom force model is in use."));
             break;
         default:
-            DEME_INFO("An unknown force model is in use, this is probably not going well...");
+            DEME_INFO(std::string("An unknown force model is in use, this is probably not going well..."));
     }
 
     if (use_user_defined_expand_factor) {
@@ -628,19 +723,17 @@ void DEMSolver::reportInitStats() const {
         DEME_INFO("This in the case of the smallest sphere, means enlarging radius by %.6g%%.",
                   (m_expand_factor / m_smallest_radius) * 100.0);
     } else {
-        DEME_INFO("The solver to set to adaptively change the contact margin size.");
+        DEME_INFO(std::string("The solver to set to adaptively change the contact margin size."));
         float initFutureDrift = (m_suggestedFutureDrift < 0.) ? 10.0 : m_suggestedFutureDrift;
         float expand_factor = (m_expand_safety_multi * AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE + m_expand_base_vel) *
                               initFutureDrift * m_ts_size;
-        DEME_STEP_METRIC(
+        DEME_DEBUG_PRINTF(
             "To give an example, all geometries may be enlarged/thickened by around %.6g (estimated with the initial "
             "step size, initial update frequency and velocity %.4g) for contact detection purpose.",
             expand_factor, AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE);
-        DEME_STEP_METRIC("This in the case of the smallest sphere, means enlarging radius by %.6g%%.",
-                         (expand_factor / m_smallest_radius) * 100.0);
+        DEME_DEBUG_PRINTF("This in the case of the smallest sphere, means enlarging radius by %.6g%%.",
+                          (expand_factor / m_smallest_radius) * 100.0);
     }
-
-    DEME_INFO("\n");
 
     // Debug outputs
     DEME_DEBUG_EXEC(printf("These owners are tracked: ");
@@ -654,7 +747,9 @@ void DEMSolver::reportInitStats() const {
 void DEMSolver::preprocessAnalyticalObjs() {
     // nExtObj can increase in mid-simulation if the user re-initialize using an `Add' flavor
     nExtObj += cached_extern_objs.size();
-    unsigned int thisExtObj = 0;
+    unsigned int thisLoadExtObj =
+        0;  // In preprocessing, this starts from 0 since if this is an update, the previous ext objs are already loaded
+            // and processed. This is the offset for the new ones being added in this update.
     for (const auto& ext_obj : cached_extern_objs) {
         // Load mass and MOI properties into arrays waiting to be transfered to kTdT
         m_ext_obj_mass.push_back(ext_obj->mass);
@@ -672,34 +767,34 @@ void DEMSolver::preprocessAnalyticalObjs() {
             this_num_anal_ent++;
             switch (ext_obj->types.at(i)) {
                 case OBJ_COMPONENT::PLANE:
-                    addAnalCompTemplate(ANAL_OBJ_TYPE_PLANE, comp_mat.at(i), thisExtObj, param.plane.position,
+                    addAnalCompTemplate(ANAL_OBJ_TYPE_PLANE, comp_mat.at(i), thisLoadExtObj, param.plane.position,
                                         param.plane.normal);
                     break;
                 case OBJ_COMPONENT::PLATE:
-                    addAnalCompTemplate(ANAL_OBJ_TYPE_PLATE, comp_mat.at(i), thisExtObj, param.plate.center,
+                    addAnalCompTemplate(ANAL_OBJ_TYPE_PLATE, comp_mat.at(i), thisLoadExtObj, param.plate.center,
                                         param.plate.normal, param.plate.h_dim_x, param.plate.h_dim_y);
                     break;
                 case OBJ_COMPONENT::CYL_INF:
-                    addAnalCompTemplate(ANAL_OBJ_TYPE_CYL_INF, comp_mat.at(i), thisExtObj, param.cyl.center,
+                    addAnalCompTemplate(ANAL_OBJ_TYPE_CYL_INF, comp_mat.at(i), thisLoadExtObj, param.cyl.center,
                                         param.cyl.dir, param.cyl.radius, 0, 0, param.cyl.normal);
                     break;
                 case OBJ_COMPONENT::CONE_INF:
-                    addAnalCompTemplate(ANAL_OBJ_TYPE_CONE_INF, comp_mat.at(i), thisExtObj, param.cone.cone_tip,
+                    addAnalCompTemplate(ANAL_OBJ_TYPE_CONE_INF, comp_mat.at(i), thisLoadExtObj, param.cone.cone_tip,
                                         param.cone.dir, param.cone.slope, param.cone.hmin, param.cone.hmax,
                                         param.cone.normal);
                     break;
                 case OBJ_COMPONENT::CONE:
-                    addAnalCompTemplate(ANAL_OBJ_TYPE_CONE, comp_mat.at(i), thisExtObj, param.cone.cone_tip,
+                    addAnalCompTemplate(ANAL_OBJ_TYPE_CONE, comp_mat.at(i), thisLoadExtObj, param.cone.cone_tip,
                                         param.cone.dir, param.cone.slope, param.cone.hmin, param.cone.hmax,
                                         param.cone.normal);
                     break;
                 default:
-                    DEME_ERROR("There is at least one analytical boundary that has a type not supported.");
+                    DEME_ERROR(std::string("There is at least one analytical boundary that has a type not supported."));
             }
         }
         nAnalGM += this_num_anal_ent;
         m_ext_obj_comp_num.push_back(this_num_anal_ent);
-        thisExtObj++;
+        thisLoadExtObj++;
     }
 }
 
@@ -765,12 +860,18 @@ void DEMSolver::preprocessClumps() {
 
 void DEMSolver::preprocessTriangleObjs() {
     nTriMeshes += cached_mesh_objs.size();
-    unsigned int thisMeshObj = 0;
+    std::map<MeshMassJitKey, inertiaOffset_t> mesh_mass_map;
+    bodyID_t thisMeshObj =
+        0;  // In preprocessing, this starts from 0 since if this is an update, the previous mesh objects are already
+            // loaded and processed. This is the offset for the new ones being added in this update.
+    bodyID_t thisLoadPatchCount =
+        0;  // In preprocessing, this starts from 0 since if this is an update, the previous patches are already loaded
+            // and processed. This is the offset for the new ones being added in this update.
     for (const auto& mesh_obj : cached_mesh_objs) {
         if (!(mesh_obj->isMaterialSet)) {
-            DEME_ERROR(
+            DEME_ERROR(std::string(
                 "A meshed object is loaded but does not have associated material.\nPlease assign material to meshes "
-                "via SetMaterial.");
+                "via SetMaterial."));
         }
         // Put the mesh into the host-side cache
         m_meshes.push_back(mesh_obj);
@@ -785,13 +886,66 @@ void DEMSolver::preprocessTriangleObjs() {
         }
         m_mesh_obj_mass.push_back(mesh_obj->mass);
         m_mesh_obj_moi.push_back(mesh_obj->MOI);
+        const MeshMassJitKey mass_moi_key{mesh_obj->mesh_template_mark, mesh_obj->mass, mesh_obj->MOI.x,
+                                          mesh_obj->MOI.y, mesh_obj->MOI.z};
+        auto it = mesh_mass_map.find(mass_moi_key);
+        if (it != mesh_mass_map.end()) {
+            m_mesh_mass_offsets.push_back(it->second);
+        } else if (m_mesh_mass_jit.size() >= THRESHOLD_CANT_JITIFY_ALL_MESH_TEMPLATES) {
+            if (m_mesh_mass_jit.size() == THRESHOLD_CANT_JITIFY_ALL_MESH_TEMPLATES) {
+                m_mesh_mass_jit.push_back(mesh_obj->mass);
+                m_mesh_moi_jit.push_back(mesh_obj->MOI);
+            }
+            // Offsets are ignored once decideMeshMassJitification switches to flattened mass/MOI.
+            m_mesh_mass_offsets.push_back(0);
+        } else {
+            const inertiaOffset_t offset = static_cast<inertiaOffset_t>(mesh_mass_map.size());
+            mesh_mass_map.emplace(mass_moi_key, offset);
+            m_mesh_mass_jit.push_back(mesh_obj->mass);
+            m_mesh_moi_jit.push_back(mesh_obj->MOI);
+            m_mesh_mass_offsets.push_back(offset);
+        }
 
         m_input_mesh_obj_xyz.push_back(mesh_obj->init_pos);
         m_input_mesh_obj_rot.push_back(mesh_obj->init_oriQ);
         m_input_mesh_obj_family.push_back(mesh_obj->family_code);
+        m_input_mesh_obj_convex.push_back(mesh_obj->IsConvex() ? 1 : 0);
+        m_input_mesh_obj_never_winner.push_back(mesh_obj->IsNeverWinner() ? 1 : 0);
         m_mesh_facet_owner.insert(m_mesh_facet_owner.end(), mesh_obj->GetNumTriangles(), thisMeshObj);
+
+        const bodyID_t tri_offset = static_cast<bodyID_t>(m_mesh_facets.size());
+        std::vector<std::array<bodyID_t, 3>> local_neighbors;
+        if (mesh_obj->IsConvex() && mesh_obj->IsNeverWinner()) {
+            local_neighbors.assign(mesh_obj->GetNumTriangles(), {NULL_BODYID, NULL_BODYID, NULL_BODYID});
+        } else {
+            local_neighbors = buildTriangleEdgeNeighbors(mesh_obj->m_face_v_indices, mesh_obj->m_vertices);
+        }
+
+        // Initialize patch IDs if not already set (default: all facets in patch 0)
+        if (!mesh_obj->patches_explicitly_set && mesh_obj->m_patch_ids.empty()) {
+            mesh_obj->SetPatchIDs(std::vector<patchID_t>(mesh_obj->GetNumTriangles(), 0));
+        }
+
+        // Populate patch owner and material arrays (one entry per patch in this mesh)
+        // Note patch_id in a mesh is always 0-based, and contiguous
+        std::vector<materialsOffset_t> patch_materials(mesh_obj->GetNumPatches());
+        for (size_t facet_idx = 0; facet_idx < mesh_obj->GetNumPatches(); facet_idx++) {
+            // patch_id is per-triangle
+            bodyID_t patch_id = mesh_obj->m_patch_ids.at(facet_idx);
+            // Assign this facet's material to its patch (will overwrite for each facet, but they should be consistent
+            // per patch)
+            patch_materials[patch_id] = mesh_obj->materials.at(patch_id)->load_order;
+        }
+
+        for (size_t patch_idx = 0; patch_idx < mesh_obj->GetNumPatches(); patch_idx++) {
+            m_mesh_patch_owner.push_back(thisMeshObj);
+            m_mesh_patch_materials.push_back(patch_materials[patch_idx]);
+        }
+
         for (unsigned int i = 0; i < mesh_obj->GetNumTriangles(); i++) {
-            m_mesh_facet_materials.push_back(mesh_obj->materials.at(i)->load_order);
+            // Store which patch this facet belongs to
+            m_mesh_facet_patch.push_back(mesh_obj->m_patch_ids.at(i) + thisLoadPatchCount);
+
             DEMTriangle tri = mesh_obj->GetTriangle(i);
             // If we wish to correct surface orientation based on given vertex normals, rather than using RHR...
             if (mesh_obj->use_mesh_normals) {
@@ -811,11 +965,21 @@ void DEMSolver::preprocessTriangleObjs() {
                 }
             }
             m_mesh_facets.push_back(tri);
+
+            const auto& nb = local_neighbors[i];
+            m_mesh_facet_neighbor1.push_back(nb[0] == NULL_BODYID ? NULL_BODYID : nb[0] + tri_offset);
+            m_mesh_facet_neighbor2.push_back(nb[1] == NULL_BODYID ? NULL_BODYID : nb[1] + tri_offset);
+            m_mesh_facet_neighbor3.push_back(nb[2] == NULL_BODYID ? NULL_BODYID : nb[2] + tri_offset);
         }
+        thisLoadPatchCount += mesh_obj->GetNumPatches();
 
         nTriGM += mesh_obj->GetNumTriangles();
+        nMeshPatches += mesh_obj->GetNumPatches();  // This is used to keep track of the total number of patches across
+                                                    // all meshes, potentially multiple mesh loads
         thisMeshObj++;
     }
+    DEME_DEBUG_PRINTF("Total number of mesh patches after this update: %zu", nMeshPatches);
+    DEME_DEBUG_PRINTF("Total number of mesh triangles after this update: %zu", nTriGM);
 }
 
 void DEMSolver::figureOutMaterialProxies() {
@@ -1029,24 +1193,23 @@ void DEMSolver::setSolverParams() {
     kT->verbosity = verbosity;
     dT->verbosity = verbosity;
 
-    // Whether there are meshes in the simulation
-    kT->solverFlags.hasMeshes = (nTriObjLoad > 0);
-    dT->solverFlags.hasMeshes = (nTriObjLoad > 0);
-
     // I/O policies (only output content, not file format, matters for worker threads)
     auto output_level = m_out_content;
     if (m_is_out_owner_wildcards) {
         output_level = output_level | OUTPUT_CONTENT::OWNER_WILDCARD;
     }
-    if (m_is_out_geo_wildcards) {
-        output_level = output_level | OUTPUT_CONTENT::GEO_WILDCARD;
-    }
     dT->solverFlags.outputFlags = output_level;
+    dT->solverFlags.meshOutFlags = m_mesh_out_content;
     output_level = m_cnt_out_content;
     if (m_is_out_cnt_wildcards) {
         output_level = output_level | CNT_OUTPUT_CONTENT::CNT_WILDCARD;
     }
     dT->solverFlags.cntOutFlags = output_level;
+    // Contact normals are a contact-output field, so the internal storage flag follows the output content instead of a
+    // separate user-facing toggle. This keeps the write-back kernel enabled exactly when normal output can read it.
+    const bool store_contact_normals = (output_level & CNT_OUTPUT_CONTENT::NORMAL) != 0;
+    kT->simParams->storeNormal = store_contact_normals;
+    dT->simParams->storeNormal = store_contact_normals;
 
     // Transfer historyless-ness
     kT->solverFlags.isHistoryless = (m_force_model->m_contact_wildcards.size() == 0);
@@ -1084,25 +1247,26 @@ void DEMSolver::setSolverParams() {
     dT->solverFlags.canFamilyChangeOnDevice = famnum_can_change_conditionally;
 
     // Force reduction strategy
-    kT->solverFlags.useCubForceCollect = use_cub_to_reduce_force;
-    dT->solverFlags.useCubForceCollect = use_cub_to_reduce_force;
     dT->solverFlags.useNoContactRecord = no_recording_contact_forces;
     dT->solverFlags.useForceCollectInPlace = collect_force_in_force_kernel;
 
-    // Whether sorts contact before using them (not implemented)
-    kT->solverFlags.should_sort_pairs = should_sort_contacts;
-    dT->solverFlags.should_sort_pairs = should_sort_contacts;
+    // Whether sorts contact before using them.
+    // NOTE: The current logic requires this to be true. We cannot set it to false now.
+    // kT->solverFlags.should_sort_pairs = should_sort_contacts;
+    // dT->solverFlags.should_sort_pairs = should_sort_contacts;
 
     // Error out policies
-    kT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
-    dT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
+    kT->solverFlags.errOutAvgPrimitiveCnts = threshold_error_out_num_cnts;
+    dT->solverFlags.errOutAvgPrimitiveCnts = threshold_error_out_num_cnts;
     // simParams-stored variables need to be sync-ed to device
     kT->simParams->errOutBinSphNum = threshold_too_many_spheres_in_bin;
     dT->simParams->errOutBinSphNum = threshold_too_many_spheres_in_bin;
     kT->simParams->errOutBinTriNum = threshold_too_many_tri_in_bin;
     dT->simParams->errOutBinTriNum = threshold_too_many_tri_in_bin;
     kT->simParams->errOutVel = threshold_error_out_vel;
+    kT->simParams->errOutAngVel = threshold_error_out_angvel;
     dT->simParams->errOutVel = threshold_error_out_vel;
+    dT->simParams->errOutAngVel = threshold_error_out_angvel;
 
     // Whether the solver should auto-update bin sizes
     kT->solverFlags.autoBinSize = auto_adjust_bin_size;
@@ -1125,7 +1289,7 @@ void DEMSolver::setSolverParams() {
     dT->solverFlags.upperBoundFutureDrift = upper_bound_future_drift;
     dT->solverFlags.targetDriftMoreThanAvg = max_drift_ahead_of_avg_drift;
     dT->solverFlags.targetDriftMultipleOfAvg = max_drift_multiple_of_avg_drift;
-    dT->accumStepUpdater.SetCacheSize(max_drift_gauge_history_size);
+    dT->futureDriftRegulator.SetCacheSize(max_drift_gauge_history_size);
 }
 
 void DEMSolver::setSimParams() {
@@ -1149,11 +1313,9 @@ void DEMSolver::setSimParams() {
     // Compute the number of wildcards in our force model
     unsigned int nContactWildcards = m_force_model->m_contact_wildcards.size();
     unsigned int nOwnerWildcards = m_force_model->m_owner_wildcards.size();
-    unsigned int nGeoWildcards = m_force_model->m_geo_wildcards.size();
-    if (nContactWildcards > DEME_MAX_WILDCARD_NUM || nOwnerWildcards > DEME_MAX_WILDCARD_NUM ||
-        nGeoWildcards > DEME_MAX_WILDCARD_NUM) {
+    if (nContactWildcards > DEME_MAX_WILDCARD_NUM || nOwnerWildcards > DEME_MAX_WILDCARD_NUM) {
         DEME_ERROR(
-            "You defined too many contact/owner/geometry wildcards! Currently the max amount is %u for each of "
+            "You defined too many contact/owner wildcards! Currently the max amount is %u for each of "
             "them.\nYou can change constant DEME_MAX_WILDCARD_NUM and re-compile, if you indeed would like more "
             "wildcards.",
             DEME_MAX_WILDCARD_NUM);
@@ -1166,29 +1328,123 @@ void DEMSolver::setSimParams() {
         m_approx_max_vel = threshold_error_out_vel;
     }
 
+    // Beta adaptive timestep mode: compute one fixed Hertzian timestep at setup time. The other adaptive modes are
+    // accepted by the public API for compatibility but do not have behavior yet.
+    if (adapt_ts_type == ADAPT_TS_TYPE::HERTZ_CONST) {
+        auto sqr = [](double x) { return x * x; };
+        auto effective_E = [&](double E1, double nu1, double E2, double nu2) -> double {
+            if (E1 <= 0.0 || E2 <= 0.0) {
+                return 0.0;
+            }
+            return 1.0 / (((1.0 - sqr(nu1)) / E1) + ((1.0 - sqr(nu2)) / E2));
+        };
+
+        double max_eff_E = 0.0;
+        for (size_t i = 0; i < m_loaded_materials.size(); ++i) {
+            const auto& mat_a = m_loaded_materials[i]->mat_prop;
+            const double E1 = mat_a.count("E") ? static_cast<double>(mat_a.at("E")) : 0.0;
+            const double nu1 = mat_a.count("nu") ? static_cast<double>(mat_a.at("nu")) : 0.3;
+            for (size_t j = i; j < m_loaded_materials.size(); ++j) {
+                const auto& mat_b = m_loaded_materials[j]->mat_prop;
+                const double E2 = mat_b.count("E") ? static_cast<double>(mat_b.at("E")) : 0.0;
+                const double nu2 = mat_b.count("nu") ? static_cast<double>(mat_b.at("nu")) : 0.3;
+                max_eff_E = std::max(max_eff_E, effective_E(E1, nu1, E2, nu2));
+            }
+        }
+
+        double min_mass = std::numeric_limits<double>::infinity();
+        for (double mass : m_template_clump_mass) {
+            if (mass > 0.0 && mass < min_mass) {
+                min_mass = mass;
+            }
+        }
+
+        const double min_radius = static_cast<double>(m_smallest_radius);
+        if (std::isfinite(min_mass) && min_radius > 0.0 && max_eff_E > 0.0) {
+            const double effective_radius = 0.5 * min_radius;
+            const double effective_mass = 0.5 * min_mass;
+            const double hertz_stiffness = FOUR_OVER_THREE * std::sqrt(0.1) * max_eff_E * effective_radius;
+            const double hertz_dt = (PI / (2.0 * N_DT)) * std::sqrt(effective_mass / hertz_stiffness);
+            if (hertz_dt > 0.0 && std::isfinite(hertz_dt)) {
+                m_ts_size = hertz_dt;
+                DEME_INFO(
+                    "Adaptive timestep hertz_const selected dt %.9g from min mass %.6g, min radius %.6g, max "
+                    "effective E %.6g, and N_DT %.1f.",
+                    m_ts_size, min_mass, min_radius, max_eff_E, N_DT);
+            } else {
+                DEME_WARNING("Adaptive timestep hertz_const produced invalid dt; keeping existing timestep %.9g.",
+                             m_ts_size);
+            }
+        } else {
+            DEME_WARNING(
+                "Adaptive timestep hertz_const could not compute dt because setup data is incomplete or invalid "
+                "(min mass %.6g, min radius %.6g, max effective E %.6g); keeping existing timestep %.9g.",
+                min_mass, min_radius, max_eff_E, m_ts_size);
+        }
+    }
+
+    if (!m_use_angvel_margin_user_set) {
+        bool has_multi_sphere_clump = false;
+        for (const auto& radii : m_template_sp_radii) {
+            if (radii.size() > 1) {
+                has_multi_sphere_clump = true;
+                break;
+            }
+        }
+        m_use_angvel_margin = has_multi_sphere_clump || nTriGM > 0;
+    }
+
+    // Geometry wildcards historically had no output consumer. Allocate the mesh-provided names when explicitly
+    // requested so VTK CELL_DATA can preserve their per-triangle values.
+    std::set<std::string> mesh_output_geo_wildcards;
+    if (m_mesh_out_content & static_cast<unsigned int>(MESH_OUTPUT_CONTENT::GEO_WILDCARD)) {
+        // Cached meshes are cleared after initialization, so retain the worker's established names on later
+        // UpdateSimParams calls and merge names from any setup-time mesh cache.
+        if (sys_initialized) {
+            mesh_output_geo_wildcards = dT->m_geo_wildcard_names;
+        }
+        for (const auto& mesh : cached_mesh_objs) {
+            for (const auto& wildcard : mesh->geo_wildcards) {
+                mesh_output_geo_wildcards.insert(wildcard.first);
+            }
+        }
+    }
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
-                     m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_expand_safety_multi,
-                     m_expand_base_vel, m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards,
-                     m_force_model->m_geo_wildcards);
+                     m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_max_tritri_penetration,
+                     m_triTriContactRejectionRatio, m_expand_safety_multi, m_expand_base_vel, m_use_angvel_margin,
+                     m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards, mesh_output_geo_wildcards);
     kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
-                     m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_expand_safety_multi,
-                     m_expand_base_vel, m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards,
-                     m_force_model->m_geo_wildcards);
+                     m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_max_tritri_penetration,
+                     m_triTriContactRejectionRatio, m_expand_safety_multi, m_expand_base_vel, m_use_angvel_margin,
+                     m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards, mesh_output_geo_wildcards);
 }
 
 void DEMSolver::allocateGPUArrays() {
+    size_t tri_neighbors = 0;
+    for (const auto& mesh_obj : cached_mesh_objs) {
+        if (!mesh_obj) {
+            continue;
+        }
+        if (!(mesh_obj->IsConvex() && mesh_obj->IsNeverWinner())) {
+            tri_neighbors += mesh_obj->GetNumTriangles();
+        }
+    }
+    nTriNeighbors = tri_neighbors;
+
     // Resize arrays based on the statistical data we have
     std::thread dThread = std::move(std::thread([this]() {
         this->dT->allocateGPUArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
-                                    this->nSpheresGM, this->nTriGM, this->nAnalGM, this->nExtraContacts,
-                                    this->nDistinctMassProperties, this->nDistinctClumpBodyTopologies,
-                                    this->nDistinctClumpComponents, this->nJitifiableClumpComponents, this->nMatTuples);
+                                    this->nSpheresGM, this->nTriGM, this->nTriNeighbors, this->nMeshPatches,
+                                    this->nAnalGM, this->nExtraContacts, this->nDistinctMassProperties,
+                                    this->nDistinctClumpBodyTopologies, this->nDistinctClumpComponents,
+                                    this->nJitifiableClumpComponents, this->nMatTuples);
     }));
     std::thread kThread = std::move(std::thread([this]() {
         this->kT->allocateGPUArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
-                                    this->nSpheresGM, this->nTriGM, this->nAnalGM, this->nExtraContacts,
-                                    this->nDistinctMassProperties, this->nDistinctClumpBodyTopologies,
-                                    this->nDistinctClumpComponents, this->nJitifiableClumpComponents, this->nMatTuples);
+                                    this->nSpheresGM, this->nTriGM, this->nTriNeighbors, this->nAnalGM,
+                                    this->nExtraContacts, this->nDistinctMassProperties,
+                                    this->nDistinctClumpBodyTopologies, this->nDistinctClumpComponents,
+                                    this->nJitifiableClumpComponents, this->nMatTuples);
     }));
     dThread.join();
     kThread.join();
@@ -1200,40 +1456,51 @@ void DEMSolver::initializeGPUArrays() {
                                                    m_template_sp_radii, m_template_sp_relPos, m_template_clump_volume);
 
     // Now we can feed those GPU-side arrays with the cached API-level simulation info
-    dT->initGPUArrays(
-        // Clump batchs' initial stats
-        cached_input_clump_batches,
-        // Analytical objects' initial stats
-        m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
-        // Meshed objects' initial stats
-        cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner,
-        m_mesh_facet_materials, m_mesh_facets,
-        // Clump template name mapping
-        m_template_number_name_map,
-        // Clump template info (mass, sphere components, materials etc.)
-        flattened_clump_templates,
-        // Analytical obj `template' properties
-        m_ext_obj_mass, m_ext_obj_moi, m_ext_obj_comp_num,
-        // Meshed obj `template' properties
-        m_mesh_obj_mass, m_mesh_obj_moi,
-        // Universal template info
-        m_loaded_materials,
-        // Family mask
-        m_family_mask_matrix,
-        // I/O and misc.
-        m_no_output_families, m_tracked_objs);
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->initGPUArrays(
+            // Clump batchs' initial stats
+            cached_input_clump_batches,
+            // Analytical objects' initial stats
+            m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
+            // Meshed objects' initial stats
+            cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family,
+            m_input_mesh_obj_convex, m_input_mesh_obj_never_winner, m_mesh_facet_owner, m_mesh_facet_patch,
+            m_mesh_facet_neighbor1, m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets, m_mesh_patch_owner,
+            m_mesh_patch_materials,
+            // Clump template name mapping
+            m_template_number_name_map,
+            // Clump template info (mass, sphere components, materials etc.)
+            flattened_clump_templates,
+            // Analytical obj physics properties
+            m_ext_obj_mass, m_ext_obj_moi, m_ext_obj_comp_num,
+            // Meshed obj physics properties
+            m_mesh_obj_mass, m_mesh_obj_moi, m_mesh_mass_jit, m_mesh_moi_jit, m_mesh_mass_offsets,
+            // Universal template info
+            m_loaded_materials,
+            // Family mask
+            m_family_mask_matrix,
+            // I/O and misc.
+            m_no_output_families, m_tracked_objs);
+    }
 
-    kT->initGPUArrays(
-        // Clump batchs' initial stats
-        cached_input_clump_batches,
-        // Analytical objects' initial stats
-        m_input_ext_obj_family,
-        // Meshed objects' initial stats
-        m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facets,
-        // Family mask
-        m_family_mask_matrix,
-        // Templates and misc.
-        flattened_clump_templates);
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->initGPUArrays(
+            // Clump batchs' initial stats
+            cached_input_clump_batches,
+            // Analytical objects' initial stats
+            m_input_ext_obj_family,
+            // Meshed objects' initial stats
+            m_input_mesh_obj_family, m_input_mesh_obj_convex, m_input_mesh_obj_never_winner, m_mesh_facet_owner,
+            m_mesh_facet_patch, m_mesh_facet_neighbor1, m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets,
+            // Analytical obj physics properties
+            m_ext_obj_comp_num,
+            // Family mask
+            m_family_mask_matrix,
+            // Templates and misc.
+            flattened_clump_templates);
+    }
 }
 
 /// When more clumps/meshed objects got loaded, this method should be called to transfer them to the GPU-side in
@@ -1244,56 +1511,81 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
                                       size_t nSpheres,
                                       size_t nTriMesh,
                                       size_t nFacets,
+                                      size_t nTriNeighbors,
+                                      size_t nMeshPatches,
                                       unsigned int nExtObj,
                                       unsigned int nAnalGM) {
     // Pack clump templates together... that's easier to pass to dT kT
     ClumpTemplateFlatten flattened_clump_templates(m_template_clump_mass, m_template_clump_moi, m_template_sp_mat_ids,
                                                    m_template_sp_radii, m_template_sp_relPos, m_template_clump_volume);
 
-    dT->updateClumpMeshArrays(
-        // Clump batchs' initial stats
-        cached_input_clump_batches,
-        // Analytical objects' initial stats
-        m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
-        // Meshed objects' initial stats
-        cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner,
-        m_mesh_facet_materials, m_mesh_facets,
-        // Clump template info (mass, sphere components, materials etc.)
-        flattened_clump_templates,
-        // Analytical obj `template' properties
-        m_ext_obj_mass, m_ext_obj_moi, m_ext_obj_comp_num,
-        // Meshed obj `template' properties
-        m_mesh_obj_mass, m_mesh_obj_moi,
-        // Universal template info
-        m_loaded_materials,
-        // Family mask
-        m_family_mask_matrix,
-        // I/O and misc.
-        m_no_output_families, m_tracked_objs,
-        // Number of entities, old
-        nOwners, nClumps, nSpheres, nTriMesh, nFacets, nExtObj, nAnalGM);
-    kT->updateClumpMeshArrays(
-        // Clump batchs' initial stats
-        cached_input_clump_batches,
-        // Analytical objects' initial stats
-        m_input_ext_obj_family,
-        // Meshed objects' initial stats
-        m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facets,
-        // Family mask
-        m_family_mask_matrix,
-        // Templates and misc.
-        flattened_clump_templates,
-        // Number of entities, old
-        nOwners, nClumps, nSpheres, nTriMesh, nFacets, nExtObj, nAnalGM);
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->updateClumpMeshArrays(
+            // Clump batchs' initial stats
+            cached_input_clump_batches,
+            // Analytical objects' initial stats
+            m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
+            // Meshed objects' initial stats
+            cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family,
+            m_input_mesh_obj_convex, m_input_mesh_obj_never_winner, m_mesh_facet_owner, m_mesh_facet_patch,
+            m_mesh_facet_neighbor1, m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets, m_mesh_patch_owner,
+            m_mesh_patch_materials,
+            // Clump template info (mass, sphere components, materials etc.)
+            flattened_clump_templates,
+            // Analytical obj physics properties
+            m_ext_obj_mass, m_ext_obj_moi, m_ext_obj_comp_num,
+            // Meshed obj physics properties
+            m_mesh_obj_mass, m_mesh_obj_moi, m_mesh_mass_jit, m_mesh_moi_jit, m_mesh_mass_offsets,
+            // Universal template info
+            m_loaded_materials,
+            // Family mask
+            m_family_mask_matrix,
+            // I/O and misc.
+            m_no_output_families, m_tracked_objs,
+            // Number of entities, old
+            nOwners, nClumps, nSpheres, nTriMesh, nFacets, nTriNeighbors, nMeshPatches, nExtObj, nAnalGM);
+    }
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->updateClumpMeshArrays(
+            // Clump batchs' initial stats
+            cached_input_clump_batches,
+            // Analytical objects' initial stats
+            m_input_ext_obj_family,
+            // Meshed objects' initial stats
+            m_input_mesh_obj_family, m_input_mesh_obj_convex, m_input_mesh_obj_never_winner, m_mesh_facet_owner,
+            m_mesh_facet_patch, m_mesh_facet_neighbor1, m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets,
+            // Analytical obj physics properties
+            m_ext_obj_comp_num,
+            // Family mask
+            m_family_mask_matrix,
+            // Templates and misc.
+            flattened_clump_templates,
+            // Number of entities, old
+            nOwners, nClumps, nSpheres, nTriMesh, nFacets, nTriNeighbors, nMeshPatches, nExtObj, nAnalGM);
+    }
 }
 
 void DEMSolver::packDataPointers() {
-    dT->packDataPointers();
-    kT->packDataPointers();
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->packDataPointers();
+    }
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->packDataPointers();
+    }
     // Each worker thread needs pointers used for data transfering. Note this step must be done after packDataPointers
     // are called, so each thread has its own pointers packed.
-    dT->packTransferPointers(kT.get());
-    kT->packTransferPointers(dT.get());
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->packTransferPointers(kT.get());
+    }
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->packTransferPointers(dT.get());
+    }
     // Finally, the API needs to map all mesh to their owners
     for (const auto& mmesh : m_meshes) {
         m_owner_mesh_map[mmesh->owner] = mmesh->cache_offset;
@@ -1301,21 +1593,38 @@ void DEMSolver::packDataPointers() {
 }
 
 void DEMSolver::migrateSimParamsToDevice() {
-    dT->simParams.toDevice();
-    kT->simParams.toDevice();
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->simParams.toDevice();
+    }
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->simParams.toDevice();
+    }
 }
 
 void DEMSolver::migrateArrayDataToDevice() {
-    dT->granData.toDevice();
-    kT->granData.toDevice();
-    // Then move DualArray data to device
-    dT->migrateDataToDevice();
-    kT->migrateDataToDevice();
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->granData.toDevice();
+        kT->migrateDataToDevice();
+    }
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->granData.toDevice();
+        dT->migrateDataToDevice();
+    }
 }
 
 void DEMSolver::migrateArrayDataToHost() {
-    dT->migrateDeviceModifiableInfoToHost();
-    kT->migrateDeviceModifiableInfoToHost();
+    {
+        ScopedCudaDevice device_scope(dT->streamInfo.device);
+        dT->migrateDeviceModifiableInfoToHost();
+    }
+    {
+        ScopedCudaDevice device_scope(kT->streamInfo.device);
+        kT->migrateDeviceModifiableInfoToHost();
+    }
 }
 
 void DEMSolver::validateUserInputs() {
@@ -1325,21 +1634,21 @@ void DEMSolver::validateUserInputs() {
     //     LoadClumpType.");
     // }
 
-    // // If not 2 GPUs detected, output warnings as needed
-    // int ndevices = dTkT_GpuManager->getNumDevices();
-    // if (ndevices == 0) {
-    //     DEME_ERROR(
-    //         "No GPU device is detected. Try lspci and see what you get.\nIf you indeed have GPU devices, maybe you "
-    //         "should try rebooting or reinstalling cuda components?");
-    //     // } else if (ndevices == 1) {
-    //     //     DEME_WARNING(
-    //     //         "One GPU device is detected. On consumer cards, DEME's performance edge is limited with only one"
-    //     //         "GPU.\nTry allocating 2 GPU devices if possible.");
-    // } else if (ndevices > 2) {
-    //     DEME_WARNING(
-    //         "More than two GPU devices are detected.\nCurrently, DEME can make use of at most two devices.\nMore "
-    //         "devices will not improve the performance.");
-    // }
+    // If not 2 GPUs detected, output warnings as needed
+    int ndevices = dTkT_GpuManager->getNumVisibleDevices();
+    if (ndevices == 0) {
+        DEME_ERROR(std::string(
+            "No GPU device is detected. Try lspci and see what you get.\nIf you indeed have GPU devices, maybe you "
+            "should try rebooting or reinstalling cuda components?"));
+        // } else if (ndevices == 1) {
+        //     DEME_WARNING(
+        //         "One GPU device is detected. On consumer cards, DEME's performance edge is limited with only one"
+        //         "GPU.\nTry allocating 2 GPU devices if possible.");
+    } else if (ndevices > 2) {
+        DEME_WARNING(std::string(
+            "More than two GPU devices are detected.\nCurrently, DEME can make use of at most two devices.\nMore "
+            "devices will not improve the performance."));
+    }
 
     // Box size OK?
     float3 user_box_size = m_user_box_max - m_user_box_min;
@@ -1350,26 +1659,15 @@ void DEMSolver::validateUserInputs() {
     }
 
     if (m_suggestedFutureDrift < 0) {
-        DEME_WARNING(
+        DEME_WARNING(std::string(
             "The physics of the DEM system can drift into the future as much as it wants compared to contact "
             "detections, because SetCDUpdateFreq was called with a negative argument.\nThere is also no guarantee on "
             "the contact margin size to be added, other than it will be no less than 0.\nPlease make sure this is "
-            "intended.");
+            "intended."));
     }
 
     // Fix the reserved family (reserved family number is in user family, not in impl family)
     SetFamilyFixed(RESERVED_FAMILY_NUM);
-}
-
-bool DEMSolver::goThroughWorkerAnomalies() {
-    bool there_is = false;
-    if (kT->anomalies.over_max_vel || dT->anomalies.over_max_vel) {
-        DEME_PRINTF(
-            "Workers reported there are simulation entities reached user-specified maximum velocity.\nDetails can be "
-            "shown by re-running with \"STEP_ANOMALY\" verbosity level.\n");
-        there_is = true;
-    }
-    return there_is;
 }
 
 // inline unsigned int stash_material_in_templates(std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
@@ -1391,33 +1689,21 @@ bool DEMSolver::goThroughWorkerAnomalies() {
 inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::string>& strMap) {
     // Empty ingr list
     auto added_ingredients = force_kernel_ingredient_stats;
-    //// TODO: Reassemble geo and owner wildcards here again in a set is not needed... Since set is ordered.
-    std::set<std::string> added_owner_wildcards, added_geo_wildcards;
+    std::set<std::string> added_owner_wildcards;
     // Analyze this model... what does it require?
     std::string model = m_force_model->m_force_model;
     std::string model_prerequisites = m_force_model->m_model_prerequisites;
     const std::set<std::string> contact_wildcard_names = m_force_model->m_contact_wildcards;
     const std::set<std::string> owner_wildcard_names = m_force_model->m_owner_wildcards;
-    const std::set<std::string> geo_wildcard_names = m_force_model->m_geo_wildcards;
-    std::set<std::string> geo_wildcard_names_error_checking;
-    // geo_wildcard_names needs some treatments: Add _A and _B to them for error checking...
-    if (geo_wildcard_names.size() > 0) {
-        for (const std::string& wc_name : geo_wildcard_names) {
-            geo_wildcard_names_error_checking.insert(wc_name + "_A");
-            geo_wildcard_names_error_checking.insert(wc_name + "_B");
-        }
-    }
 
     // Then clear the wc numbering registering array
     m_owner_wc_num.clear();
-    m_geo_wc_num.clear();
     m_cnt_wc_num.clear();
     // If we spot that the force model requires an ingredient, we make sure that order goes to the ingredient
     // acquisition module
     std::string ingredient_definition = " ", cnt_wildcard_acquisition = " ", ingredient_acquisition_A = " ",
                 ingredient_acquisition_B = " ", owner_geo_wildcard_write_back = " ", cnt_wildcard_write_back = " ",
-                cnt_wildcard_destroy_record = " ", geo_wc_acquisition_B_sph = " ", geo_wc_acquisition_B_tri = " ",
-                geo_wc_acquisition_B_anal = " ";
+                cnt_wildcard_destroy_record = " ";
     scan_force_model_ingr(added_ingredients, model);
     // As our numerical method stands now, AOwnerFamily and BOwnerFamily are always needed.
     add_force_model_ingr(added_ingredients, "AOwnerFamily");
@@ -1429,9 +1715,9 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         add_force_model_ingr(added_ingredients, "AOwnerMOI");
         add_force_model_ingr(added_ingredients, "BOwnerMOI");
     }
-    // Then, owner/geo wildcards should be added to the ingredient list too. But first we check whether a wildcard
+    // Then, owner wildcards should be added to the ingredient list too. But first we check whether a wildcard
     // shares name with existing ingredients. If not, we add them to the list.
-    unsigned int owner_wc_num = 0, geo_wc_num = 0, cnt_wc_num = 0;
+    unsigned int owner_wc_num = 0, cnt_wc_num = 0;
     for (const auto& owner_wildcard_name : owner_wildcard_names) {
         if (added_ingredients.find(owner_wildcard_name) != added_ingredients.end()) {
             DEME_ERROR(
@@ -1444,23 +1730,6 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         // later use.
         m_owner_wc_num[owner_wildcard_name] = owner_wc_num;
         owner_wc_num++;
-    }
-    // For geo wildcard, error checking is separated
-    for (const auto& geo_wildcard_name_error_checking : geo_wildcard_names_error_checking) {
-        if (added_ingredients.find(geo_wildcard_name_error_checking) != added_ingredients.end()) {
-            DEME_ERROR(
-                "Geometry wildcard %s shares its name with a reserved contact force model ingredient.\nPlease select a "
-                "different name for this wildcard and try again.",
-                geo_wildcard_name_error_checking.c_str());
-        }
-    }
-    // Then the "vanilla" names for geo wildcard which go into m_geo_wc_num register
-    for (const auto& geo_wildcard_name : geo_wildcard_names) {
-        added_geo_wildcards.insert(geo_wildcard_name);
-        // Finally, owner wildcards are subject to user modification, so it is better to keep tab of their numbering for
-        // later use.
-        m_geo_wc_num[geo_wildcard_name] = geo_wc_num;
-        geo_wc_num++;
     }
     // Finally the contact wildcard
     for (const auto& contact_wildcard_name : contact_wildcard_names) {
@@ -1479,24 +1748,13 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         add_force_model_ingr(added_ingredients, "AOwner");
         add_force_model_ingr(added_ingredients, "BOwner");
     }
-    // Geo wildcard write-back needs ABGeo number
-    if (geo_wildcard_names.size() > 0) {
-        add_force_model_ingr(added_ingredients, "AGeo");
-        add_force_model_ingr(added_ingredients, "BGeo");
-    }
-
     // Equip those acquisition strategies that need to be there
     equip_force_model_ingr_acq(ingredient_definition, ingredient_acquisition_A, ingredient_acquisition_B,
                                added_ingredients);
     // Then equip acquisition strategies for owner wildcards
     equip_owner_wildcards(ingredient_definition, ingredient_acquisition_A, ingredient_acquisition_B,
                           owner_geo_wildcard_write_back, added_owner_wildcards);
-    // Then equip acquisition strategies for geo wildcards.
-    // geo_wc_acquisition_B_sph, geo_wc_acquisition_B_tri, geo_wc_acquisition_B_anal cannot be incorporated into
-    // ingredient_acquisition_B, since they are different for the 3 cases...
-    equip_geo_wildcards(ingredient_definition, ingredient_acquisition_A, geo_wc_acquisition_B_sph,
-                        geo_wc_acquisition_B_tri, geo_wc_acquisition_B_anal, added_geo_wildcards);
-    // Currently, owner_wildcard_write_back and geo_wildcard_write_back might be blank, since give the write-back
+    // Currently, owner_wildcard_write_back might be blank, since give the write-back
     // control to the user, and they may need to use atomic operations (atomicExch or atomicAdd) to update the
     // wildcards.
 
@@ -1515,13 +1773,6 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         DEME_WARNING(
             "Owner wildcard(s) %s are not used/set in your custom force model. "
             "Your force model will probably not produce what you expect.",
-            non_match.c_str());
-    if (!all_whole_word_match(model, geo_wildcard_names_error_checking, non_match))
-        DEME_WARNING(
-            "Geometry wildcard(s) %s are not used/set in your custom force model. "
-            "Your force model will probably not produce what you expect. "
-            "\nRemember for geometry wildcard you need to append _A and _B to wildcard names "
-            "to distinguish two contact geometries in the custom force model.",
             non_match.c_str());
     if (!all_whole_word_match(model, {"force"}, non_match)) {
         DEME_WARNING(
@@ -1555,25 +1806,25 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         whether_reduce_in_kernel = compact_code(whether_reduce_in_kernel);
         contact_info_write_strat = compact_code(contact_info_write_strat);
     }
-    strMap["_DEMForceModel_"] = model;
+    strMap["_DEMForceModel_;"] = model;
     strMap["_forceModelPrerequisites_;"] = model_prerequisites;
-    strMap["_forceModelIngredientDefinition_"] = ingredient_definition;
-    strMap["_forceModelIngredientAcqForA_"] = ingredient_acquisition_A;
-    strMap["_forceModelIngredientAcqForB_"] = ingredient_acquisition_B;
-    // Geo wildcard acquisition is contact type-dependent.
-    strMap["_forceModelGeoWildcardAcqForSph_"] = geo_wc_acquisition_B_sph;
-    strMap["_forceModelGeoWildcardAcqForTri_"] = geo_wc_acquisition_B_tri;
-    strMap["_forceModelGeoWildcardAcqForAnal_"] = geo_wc_acquisition_B_anal;
+    strMap["_forceModelIngredientDefinition_;"] = ingredient_definition;
+    strMap["_forceModelIngredientAcqForA_;"] = ingredient_acquisition_A;
+    strMap["_forceModelIngredientAcqForB_;"] = ingredient_acquisition_B;
+    // Geometry wildcard acquisition hooks are intentionally not registered for JIT replacement. The corresponding
+    // hook markers are commented out in the force-kernel templates so geo wildcard scaffolding cannot silently enter
+    // performance-critical kernels. Any future replacement must define its indexing semantics explicitly before these
+    // hooks are restored.
 
     // This should be empty as of now...
-    strMap["_forceModelOwnerWildcardWrite_"] = owner_geo_wildcard_write_back;
+    strMap["_forceModelOwnerWildcardWrite_;"] = owner_geo_wildcard_write_back;
 
-    strMap["_forceModelContactWildcardAcq_"] = cnt_wildcard_acquisition;
-    strMap["_forceModelContactWildcardWrite_"] = cnt_wildcard_write_back;
-    strMap["_forceModelContactWildcardDestroy_"] = cnt_wildcard_destroy_record;
+    strMap["_forceModelContactWildcardAcq_;"] = cnt_wildcard_acquisition;
+    strMap["_forceModelContactWildcardWrite_;"] = cnt_wildcard_write_back;
+    strMap["_forceModelContactWildcardDestroy_;"] = cnt_wildcard_destroy_record;
 
-    strMap["_forceCollectInPlaceStrat_"] = whether_reduce_in_kernel;
-    strMap["_contactInfoWrite_"] = contact_info_write_strat;
+    strMap["_forceCollectInPlaceStrat_;"] = whether_reduce_in_kernel;
+    strMap["_contactInfoWrite_;"] = contact_info_write_strat;
 
     DEME_DEBUG_PRINTF("Model ingredient definition:\n%s", ingredient_definition.c_str());
 
@@ -1605,7 +1856,7 @@ inline void DEMSolver::equipFamilyOnFlyChanges(std::unordered_map<std::string, s
     }
 
     strMap["_nRulesOfChange_"] = std::to_string(n_rules);
-    strMap["_familyChangeRules_"] = condStr;
+    strMap["_familyChangeRules_;"] = condStr;
 }
 
 inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::string, std::string>& strMap) {
@@ -1712,9 +1963,9 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
         }
         accStr += "break; }";
     }
-    strMap["_velPrescriptionStrategy_"] = velStr;
-    strMap["_posPrescriptionStrategy_"] = posStr;
-    strMap["_accPrescriptionStrategy_"] = accStr;
+    strMap["_velPrescriptionStrategy_;"] = velStr;
+    strMap["_posPrescriptionStrategy_;"] = posStr;
+    strMap["_accPrescriptionStrategy_;"] = accStr;
 }
 
 // Family mask is no longer jitified... but stored in global array
@@ -1821,11 +2072,11 @@ inline void DEMSolver::equipMassMoiVolume(std::unordered_map<std::string, std::s
             moiY += to_string_with_precision(m_ext_obj_moi.at(i).y) + ",";
             moiZ += to_string_with_precision(m_ext_obj_moi.at(i).z) + ",";
         }
-        for (unsigned int i = 0; i < m_mesh_obj_mass.size(); i++) {
-            MassProperties += to_string_with_precision(m_mesh_obj_mass.at(i)) + ",";
-            moiX += to_string_with_precision(m_mesh_obj_moi.at(i).x) + ",";
-            moiY += to_string_with_precision(m_mesh_obj_moi.at(i).y) + ",";
-            moiZ += to_string_with_precision(m_mesh_obj_moi.at(i).z) + ",";
+        for (unsigned int i = 0; i < m_mesh_mass_jit.size(); i++) {
+            MassProperties += to_string_with_precision(m_mesh_mass_jit.at(i)) + ",";
+            moiX += to_string_with_precision(m_mesh_moi_jit.at(i).x) + ",";
+            moiY += to_string_with_precision(m_mesh_moi_jit.at(i).y) + ",";
+            moiZ += to_string_with_precision(m_mesh_moi_jit.at(i).z) + ",";
         }
         if (nDistinctMassProperties == 0) {
             MassProperties += "0";
@@ -1858,13 +2109,17 @@ inline void DEMSolver::equipMassMoiVolume(std::unordered_map<std::string, std::s
 
     // Right now we always jitify clump volume info. This is because we don't use volume that often, probably only at
     // void ratio computation. So let's save some memory...
+    //// TODO: Add support for non-jitified volume properties, and for meshes
     std::string volumeDefs = "__constant__ __device__ float volumeProperties[] = {";
     for (unsigned int i = 0; i < m_template_clump_volume.size(); i++) {
         volumeDefs += to_string_with_precision(m_template_clump_volume.at(i)) + ",";
     }
-    if (nDistinctMassProperties == 0) {
+    if (m_template_clump_volume.size() == 0) {
         volumeDefs += "0";
     }
+    // if (nDistinctMassProperties == 0) {
+    //     volumeDefs += "0";
+    // }
     volumeDefs += "};\n";
 
     if (ensure_kernel_line_num) {
@@ -1876,8 +2131,8 @@ inline void DEMSolver::equipMassMoiVolume(std::unordered_map<std::string, std::s
     }
     strMap["_massDefs_;"] = massDefs;
     strMap["_moiDefs_;"] = moiDefs;
-    strMap["_massAcqStrat_"] = massAcqStrat;
-    strMap["_moiAcqStrat_"] = moiAcqStrat;
+    strMap["_massAcqStrat_;"] = massAcqStrat;
+    strMap["_moiAcqStrat_;"] = moiAcqStrat;
     strMap["_volumeDefs_;"] = volumeDefs;
 
     DEME_DEBUG_PRINTF("Volume properties in kernel:");
@@ -2094,7 +2349,7 @@ inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::
         componentAcqStrat = compact_code(componentAcqStrat);
     }
     strMap["_clumpTemplateDefs_;"] = clump_template_arrays;
-    strMap["_componentAcqStrat_"] = componentAcqStrat;
+    strMap["_componentAcqStrat_;"] = componentAcqStrat;
 }
 
 inline void DEMSolver::equipIntegrationScheme(std::unordered_map<std::string, std::string>& strMap) {
@@ -2110,7 +2365,7 @@ inline void DEMSolver::equipIntegrationScheme(std::unordered_map<std::string, st
             strat = VEL_TO_PASS_ON_EXTENDED_TAYLOR();
             break;
     }
-    strMap["_integrationVelocityPassOnStrategy_"] = strat;
+    strMap["_integrationVelocityPassOnStrategy_;"] = strat;
 }
 
 inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::string>& strMap) {
@@ -2131,20 +2386,7 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
 
     // Some constants that we should consider using or not using
     // strMap["_nAnalGM_"] = std::to_string(nAnalGM);
-    // Query device warp size at runtime for correct multi-arch support (wave32 vs wave64)
-    int runtimeWarpSize = DEME_CUDA_WARP_SIZE;  // Compile-time fallback
-#if defined(USE_HIP)
-    {
-        int dev = 0;
-        cudaDeviceProp prop;
-        if (cudaGetDevice(&dev) == cudaSuccess && cudaGetDeviceProperties(&prop, dev) == cudaSuccess) {
-            runtimeWarpSize = prop.warpSize;  // 64 on gfx90a, 32 on gfx1100
-        }
-    }
-#endif
-    clumpComponentOffset_t nActiveLoadingThreads = static_cast<clumpComponentOffset_t>(
-        DEME_MIN(DEME_MIN(runtimeWarpSize, DEME_KT_CD_NTHREADS_PER_BLOCK), DEME_NUM_BODIES_PER_BLOCK));
-    strMap["_nActiveLoadingThreads_"] = std::to_string(nActiveLoadingThreads);
+    strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
     // nTotalBodyTopologies includes clump topologies and ext obj topologies
     strMap["_nDistinctMassProperties_"] = std::to_string(nDistinctMassProperties);
     strMap["_nJitifiableClumpComponents_"] = std::to_string(nJitifiableClumpComponents);
@@ -2161,10 +2403,10 @@ inline void DEMSolver::equipKernelIncludes(std::unordered_map<std::string, std::
 void DEMSolver::setDefaultSolverParams() {
     m_jitify_options = {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(),
                         "-I" + (JitHelper::KERNEL_DIR).string(),
-                        "-I" + std::string(DEME_CUDA_TOOLKIT_HEADERS),
-                        "-std=c++17",
+                        "-diag-suppress=177",
+                        "-diag-suppress=549",
                         "-diag-suppress=550",
-                        "-diag-suppress=177"};
+                        "-std=c++17"};
 }
 
 }  // namespace deme

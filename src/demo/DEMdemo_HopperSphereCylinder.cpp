@@ -11,7 +11,6 @@
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
@@ -23,9 +22,11 @@ using namespace deme;
 using namespace std::filesystem;
 
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_HopperSphereCylinder ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     DEMSolver DEMSim;
     DEMSim.UseFrictionalHertzianModel();
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ | OUTPUT_CONTENT::VEL | OUTPUT_CONTENT::FAMILY);
     DEMSim.EnsureKernelErrMsgLineNum();
@@ -34,7 +35,6 @@ int main() {
     DEMSim.SetCollectAccRightAfterForceCalc(true);
     DEMSim.SetErrorOutAvgContacts(80);
 
-    // DEMSim.SetExpandSafetyAdder(0.5);
     int totalCyl = 10500;
     int totalSph = 7000 + totalCyl;
 
@@ -95,7 +95,7 @@ int main() {
     float step_size = 5.0e-6;
     DEMSim.InstructBoxDomainDimension({-0.10, 0.10}, {-0.02, 0.02}, {-0.50, 1.0});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
-    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetTimeStepSize(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     // Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
@@ -105,16 +105,16 @@ int main() {
 
     // Loaded meshes are by-default fixed
 
-    auto fixed_left = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/funnel_left.obj"), mat_type_flume);
+    auto fixed_left = DEMSim.AddWavefrontMeshObject("../data/mesh/funnel_left.obj", mat_type_flume);
     float3 move = make_float3(-hopperW / 2.0, 0, -0.01);
     float4 rot = make_float4(0.7071, 0, 0, 0.7071);
     fixed_left->Move(move, rot);
 
-    auto fixed_right = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/funnel_left.obj"), mat_type_flume);
+    auto fixed_right = DEMSim.AddWavefrontMeshObject("../data/mesh/funnel_left.obj", mat_type_flume);
     move = make_float3(gateWidth + hopperW / 2.0, 0, -0.01);
     fixed_right->Move(move, rot);
 
-    auto gate = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/funnel_left.obj"), mat_type_flume);
+    auto gate = DEMSim.AddWavefrontMeshObject("../data/mesh/funnel_left.obj", mat_type_flume);
     gate->Move(make_float3(gateWidth / 2, 0, -0.011), rot);
 
     fixed_left->SetFamily(10);
@@ -265,7 +265,7 @@ int main() {
                 the_pile->SetVel(make_float3(-0.00, 0.0, -0.80));
                 the_pile->SetFamily(100);
 
-                DEMSim.UpdateClumps();
+                DEMSim.Update();
 
                 std::cout << "Total num of particles: " << (int)DEMSim.GetNumClumps() << std::endl;
                 actualTotalSpheres = (int)DEMSim.GetNumClumps();
@@ -353,7 +353,7 @@ int main() {
                 the_pile->SetVel(make_float3(-0.00, 0.0, -0.80));
                 the_pile->SetFamily(99);
 
-                DEMSim.UpdateClumps();
+                DEMSim.Update();
 
                 std::cout << "Total num of particles: " << (int)DEMSim.GetNumClumps() << std::endl;
                 actualTotalSpheres = (int)DEMSim.GetNumClumps();

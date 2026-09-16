@@ -13,7 +13,7 @@
 
 #include "Defines.h"
 #include "Structs.h"
-#include "HostSideHelpers.hpp"
+#include "utils/HostSideHelpers.hpp"
 #include "../core/utils/RuntimeData.h"
 #include "../core/utils/DEMEPaths.h"
 
@@ -256,10 +256,10 @@ inline void equip_force_model_ingr_acq(std::string& definition,
                                        std::string& acquisition_B,
                                        std::unordered_map<std::string, bool>& added_ingredients) {
     if (added_ingredients["ts"]) {
-        definition += "float ts = simParams->h;\n";
+        definition += "float ts = simParams->dyn.h;\n";
     }
     if (added_ingredients["time"]) {
-        definition += "float time = simParams->timeElapsed;\n";
+        definition += "float time = simParams->dyn.timeElapsed;\n";
     }
     if (added_ingredients["AOwnerFamily"]) {
         definition += "deme::family_t AOwnerFamily;\n";
@@ -298,9 +298,8 @@ inline void equip_force_model_ingr_acq(std::string& definition,
     }
     if (added_ingredients["AGeo"] || added_ingredients["BGeo"]) {
         definition += "deme::bodyID_t AGeo, BGeo;\n";
-        acquisition_A += "AGeo = sphereID;";
-        // BGeo can be sphere, tri or analytical, but they are all named sphereID in the force kernel.
-        acquisition_B += "BGeo = sphereID;";
+        acquisition_A += "AGeo = myPatchID;";
+        acquisition_B += "BGeo = myPatchID;";
     }
     if (added_ingredients["AOwnerMOI"] || added_ingredients["BOwnerMOI"]) {
         definition += "float3 AOwnerMOI, BOwnerMOI;\n";
@@ -341,24 +340,6 @@ inline void equip_owner_wildcards(std::string& definition,
     }
 }
 
-// Sweep through all ingredients...
-inline void equip_geo_wildcards(std::string& definition,
-                                std::string& acquisition_A,
-                                std::string& acquisition_B_sph,
-                                std::string& acquisition_B_tri,
-                                std::string& acquisition_B_anal,
-                                const std::set<std::string>& added_ingredients) {
-    unsigned int i = 0;
-    for (const auto& name : added_ingredients) {
-        definition += "float* " + name + "_A, *" + name + "_B;\n";
-        acquisition_A += name + "_A = granData->sphereWildcards[" + std::to_string(i) + "];\n";
-        acquisition_B_sph += name + "_B = granData->sphereWildcards[" + std::to_string(i) + "];\n";
-        acquisition_B_tri += name + "_B = granData->triWildcards[" + std::to_string(i) + "];\n";
-        acquisition_B_anal += name + "_B = granData->analWildcards[" + std::to_string(i) + "];\n";
-        i++;
-    }
-}
-
 // Massage contact wildcards (by that I mean those contact history arrays)
 inline void equip_contact_wildcards(std::string& acquisition,
                                     std::string& write_back,
@@ -368,9 +349,10 @@ inline void equip_contact_wildcards(std::string& acquisition,
     for (const auto& name : names) {
         // Rigth now, supports float arrays only...
         // Getting it from global mem
-        acquisition += "float " + name + " = granData->contactWildcards[" + std::to_string(i) + "][myContactID];\n";
+        acquisition +=
+            "float " + name + " = granData->contactWildcards[" + std::to_string(i) + "][myPatchContactID];\n";
         // Write it back to global mem
-        write_back += "granData->contactWildcards[" + std::to_string(i) + "][myContactID] = " + name + ";\n";
+        write_back += "granData->contactWildcards[" + std::to_string(i) + "][myPatchContactID] = " + name + ";\n";
         // Destroy it (set to 0) if it is a fake contact
         destroy_record += name + " = 0;\n";
         i++;

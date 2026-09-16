@@ -12,7 +12,6 @@
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
@@ -23,8 +22,10 @@ using namespace deme;
 using namespace std::filesystem;
 
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_RotatingDrum ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     // You can avoid one warning message by adding this.. No big deal, it just makes the solver not jitify big clumps
@@ -128,15 +129,13 @@ int main() {
     float step_size = 5e-6;
     auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
     DEMSim.InstructBoxDomainDimension(5, 5, 5);
-    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetTimeStepSize(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // For SetCDNumStepsMaxDrift methods, you can just use defaults, and they mean this: the solver will record the
     // average num of steps that dT is ahead of kT, say n steps, then the solver sets the max number of steps allowed
     // for dT to be aahead of kT to be a * n + b, based on the inputs you give using the 2 methods.
     DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1.1);
     DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(3);
-    // User-given max vel with the current version of solver, are only for its reference, since they auto-adapt.
-    DEMSim.SetMaxVelocity(3.);
     DEMSim.SetInitBinNumTarget(5e5);
     // DEMSim.SetInitBinSizeAsMultipleOfSmallestSphere(15);
     DEMSim.Initialize();
@@ -178,8 +177,7 @@ int main() {
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
-    std::cout << (time_sec.count()) / time_end * 10.0 << " seconds (wall time) to finish 10 seconds' simulation"
-              << std::endl;
+    std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
     DEMSim.ShowThreadCollaborationStats();
     DEMSim.ClearThreadCollaborationStats();
 

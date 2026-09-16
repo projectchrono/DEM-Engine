@@ -10,7 +10,6 @@
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
@@ -46,9 +45,11 @@ void AdvanceSimulation(DEMSolver& DEMSim,
 }
 
 int main() {
+    std::cout << "==== DEME demo/test: DEMdemo_Plow ====" << std::endl;
+    std::cout << "========================================" << std::endl;
     DEMSolver DEMSim;
     DEMSim.UseFrictionalHertzianModel();
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity("INFO");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
 
     // Scale-defining numbers of this simulation.
@@ -128,7 +129,7 @@ int main() {
     DEMSim.InstructBoxDomainDimension({-world_halfsize, world_halfsize}, {-world_halfsize, world_halfsize},
                                       {-world_halfsize, world_halfsize});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
-    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetTimeStepSize(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.Initialize();
 
