@@ -1,5 +1,9 @@
 # DEM-Engine documentation
 
+Browse the [online documentation](https://ruochun.github.io/DEM-Engine/), including
+the [Python API and methods](https://ruochun.github.io/DEM-Engine/python/reference.html)
+and [C++ API reference](https://ruochun.github.io/DEM-Engine/cpp-api/index.html).
+
 Start with the [documentation index](index.rst), [installation](installation.rst),
 or [Python quickstart](python/quickstart.rst). Maintainers can find
 [hosting options](developer/hosting.rst) and [wheel packaging](developer/packaging.rst)
