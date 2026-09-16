@@ -9,12 +9,13 @@ an interactive visualizer and host/device data access for co-simulation.
 
 <p>
   <img width="380" src="https://i.imgur.com/DKGlM14.jpg" alt="DEM-Engine granular simulation">
-  <img width="380" src="https://i.imgur.com/A3utANi.gif" alt="DEM-Engine simulation animation">
+  <img width="380" src="https://i.imgur.com/Pt74UFM.gif" alt="DEM-Engine demo animation">
+  
 </p>
 
 <p>
-  <img width="380" src="https://i.imgur.com/YOEbAd8.gif" alt="DEM-Engine demo animation">
-  <img width="380" src="https://i.imgur.com/4R25TPX.gif" alt="DEM-Engine demo animation">
+  <img width="460" src="https://i.imgur.com/A3utANi.gif" alt="DEM-Engine simulation animation">
+  <img width="300" src="https://i.imgur.com/4R25TPX.gif" alt="DEM-Engine demo animation">
 </p>
 
 ## Why use DEME?

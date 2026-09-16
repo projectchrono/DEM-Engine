@@ -64,8 +64,8 @@ int main(int argc, char* argv[]) {
 
     auto mat_flume = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.60}});
     auto mat_walls = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.60}});
-    auto mat_spheres = DEMSim.LoadMaterial({{"E", 1e7}, {"nu", 0.35}, {"CoR", 0.20}, {"mu", 0.40}, {"Crr", 0.04}});
-    auto mat_cylinders = DEMSim.LoadMaterial({{"E", 1e7}, {"nu", 0.35}, {"CoR", 0.20}, {"mu", 0.30}, {"Crr", 0.03}});
+    auto mat_spheres = DEMSim.LoadMaterial({{"E", 1e6}, {"nu", 0.35}, {"CoR", 0.20}, {"mu", 0.40}, {"Crr", 0.04}});
+    auto mat_cylinders = DEMSim.LoadMaterial({{"E", 1e6}, {"nu", 0.35}, {"CoR", 0.20}, {"mu", 0.30}, {"Crr", 0.03}});
     // Apply the wall/flume contact coefficients to both particle materials.
     for (const auto& wall : {mat_walls, mat_flume}) {
         for (const auto& particle : {mat_spheres, mat_cylinders}) {
