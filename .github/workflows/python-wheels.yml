@@ -14,6 +14,8 @@ on:
       - "CMakeLists.txt"
       - "cmake/**"
       - "pyproject.toml"
+      - "README.md"
+      - "docs/prepare_pypi_readme.py"
       - "python/tests/**"
       - "VERSION"
       - "src/**"
@@ -60,6 +62,15 @@ jobs:
           path.write_text(source)
           PYTHON
 
+      # PyPI cannot resolve repository-relative links. Rewrite only this build
+      # checkout so the wheel description uses the same README with permanent URLs.
+      - name: Prepare README for PyPI
+        run: |
+          python python/tests/test_pypi_readme.py
+          python docs/prepare_pypi_readme.py README.md \
+            --repository-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --revision "$GITHUB_SHA"
+
       - name: Build and repair wheel
         uses: pypa/cibuildwheel@v4.1.1
         env:
@@ -99,6 +110,11 @@ jobs:
               metadata = BytesParser().parsebytes(archive.read(metadata_files[0]))
               if metadata["Name"] != distribution or "cuda12" not in metadata.get_all("Provides-Extra", []):
                   raise SystemExit("Unexpected distribution name or missing cuda12 extra")
+              if metadata["Description-Content-Type"] != "text/markdown":
+                  raise SystemExit("Expected a Markdown PyPI description")
+              description = metadata.get_payload(decode=True).decode("utf-8").strip()
+              if description != Path("README.md").read_text(encoding="utf-8").strip():
+                  raise SystemExit("Wheel description does not match the prepared README")
               standalone_visualizer = [
                   member for member in archive.namelist() if member.endswith("/libDEMEVisualizer.so")
               ]

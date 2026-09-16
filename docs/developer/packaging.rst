@@ -193,3 +193,27 @@ in the Python core variant (``core_python``), before any solver workers start.
 The native ``core`` target does not compile that configuration hook and retains
 its original CUDA header search order. No CUDA environment variable is set, so
 executables launched from Python retain their normal native configuration.
+
+PyPI project description
+------------------------
+
+``pyproject.toml`` sets ``readme = "README.md"``. Each wheel embeds that README
+as its Markdown description, so publishing a new DEME 3 release built from this
+source also publishes the DEME 3 front page. Editing GitHub's README alone does
+not update metadata in an already uploaded release; rebuild and publish a new
+version through the release workflow. Older version pages retain their release
+metadata.
+
+Before building wheels, ``python-wheels.yml`` runs
+``docs/prepare_pypi_readme.py`` in its disposable checkout. The script changes
+relative README links into absolute GitHub URLs pinned to the build commit.
+This keeps the installation guides and demo links usable on PyPI while leaving
+the repository README's relative links and remote cover images intact. No
+separate PyPI README needs to be maintained. The workflow checks that each
+wheel's description matches the prepared README and runs ``twine check``.
+
+For a release built outside this workflow, run the same preparation script in
+a disposable source checkout, supplying its repository URL and revision, before
+building. The script rewrites that checkout's README in place. Inspect the wheel
+metadata and rendered description before publication; the documentation-site
+workflow does not update PyPI.
