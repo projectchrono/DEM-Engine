@@ -65,10 +65,11 @@ Build release wheels with cibuildwheel
 --------------------------------------
 
 The Conda commands above are useful for native development builds. Release
-wheels use ``cibuildwheel`` and PyPA's CUDA-enabled
-``manylinux_2_28_x86_64_cuda12_9`` container so the result does not inherit the
-Linux ABI of the maintainer's workstation. The configuration is stored in
-``pyproject.toml``.
+wheels use ``cibuildwheel`` and PyPA's ``manylinux_2_28_x86_64`` container,
+with CUDA 12.8 development components installed from NVIDIA's RHEL 8 repository
+by ``python/scripts/install_cuda128.sh``. This avoids inheriting the Linux ABI of
+the maintainer's workstation. The toolkit selection and component constraints
+are stored in ``pyproject.toml``.
 
 With Docker available, build the same complete matrix locally from the parent
 of the checkout:
@@ -94,7 +95,7 @@ native dependencies into each wheel and assign the
 ``manylinux_2_28_x86_64`` tag. It explicitly excludes ``libcuda.so.1``,
 ``libcudart.so.12``, and ``libnvrtc.so.12``. DEME runtime-compiles CUDA kernels,
 so NVRTC, its builtins, and headers must be supplied by the ``cuda12`` extra
-or a compatible system CUDA 12.9 toolkit. The NVIDIA driver remains a host
+or a compatible system CUDA 12.8 toolkit. The NVIDIA driver remains a host
 requirement. Bundling a driver
 stub is incorrect, while bundling NVRTC without all of its dynamically loaded
 resources produces an incomplete runtime. Before publishing, inspect the
@@ -109,7 +110,7 @@ jobs, one for each CPython ABI. It runs on relevant pull requests, release tags,
 or manual dispatch. Every job:
 
 * checks out Git submodules recursively;
-* builds in the CUDA 12.9 manylinux 2.28 container;
+* installs CUDA 12.8 development components and builds in the manylinux 2.28 container;
 * repairs the wheel with ``auditwheel``;
 * checks package metadata and the expected Python/platform filename tags;
 * installs the ``cuda12`` extra in a clean Python container and compiles CUDA,

@@ -107,7 +107,7 @@ the Python reference must be regenerated and committed when bindings change.
 
 ## Python in brief
 
-On a supported Linux or WSL2 host with a CUDA 12.9-compatible NVIDIA driver:
+On a supported Linux or WSL2 host with a CUDA 12.8-compatible NVIDIA driver:
 
 ```bash
 python -m pip install "deme[cuda12]"

@@ -24,8 +24,8 @@ validated for DEM-Engine 3. A wheel should not be assumed portable across
 CUDA major versions until that matrix is published.
 
 The release-wheel policy currently covers 64-bit x86 Linux with glibc 2.28 or
-newer, CPython 3.9 through 3.14, and CUDA 12.9. The installed machine must
-provide an NVIDIA driver compatible with CUDA 12.9. Source builds can continue
+newer, CPython 3.9 through 3.14, and CUDA 12.8. The installed machine must
+provide an NVIDIA driver compatible with CUDA 12.8. Source builds can continue
 to use other supported CUDA Toolkit versions, but those builds are outside the
 binary-wheel compatibility policy.
 
@@ -43,8 +43,10 @@ private Python extension without changing CUDA environment variables or the
 header discovery used by standalone C++ programs. C++ builds and applications
 continue to use their normal system CUDA Toolkit.
 
-The ``cuda12`` extra installs CUDA 12.9 runtime/compiler libraries and headers
-from NVIDIA wheels. No system CUDA Toolkit is required for binary-wheel users.
+The ``cuda12`` extra installs CUDA 12.8 runtime/compiler libraries and headers
+from NVIDIA wheels. The constraints allow CUDA 12.8 patch updates but exclude
+CUDA 12.9 and CUDA 13; cuRAND uses the corresponding 10.3.9 release family.
+No system CUDA Toolkit is required for binary-wheel users.
 On WSL2, install a compatible NVIDIA driver on Windows; do not install a Linux
 GPU driver inside WSL. A working GPU driver is still required and is not
 installed by pip. Building from source still requires a CUDA development toolkit.

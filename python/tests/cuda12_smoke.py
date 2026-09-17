@@ -28,6 +28,13 @@ def main():
     assert dict(os.environ) == environment_before, "CUDA bootstrap must not change the environment"
     assert includes, "Install the cuda12 extra before running this test"
     nvrtc = bootstrap["_libraries"][-1]
+    # Check the library actually loaded, not just the package metadata. This catches
+    # an accidental return to a different toolkit in the clean-container CI test.
+    major, minor = ctypes.c_int(), ctypes.c_int()
+    result = nvrtc.nvrtcVersion(ctypes.byref(major), ctypes.byref(minor))
+    assert result == 0, result
+    assert (major.value, minor.value) == (12, 8), (major.value, minor.value)
+    print("PASS: loaded pip NVRTC 12.8", flush=True)
     program = ctypes.c_void_p()
     source = b"""
     #include <cuda_runtime.h>

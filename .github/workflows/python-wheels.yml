@@ -17,6 +17,7 @@ on:
       - "README.md"
       - "docs/prepare_pypi_readme.py"
       - "python/tests/**"
+      - "python/scripts/**"
       - "VERSION"
       - "src/**"
       - "thirdparty/**"
@@ -29,7 +30,7 @@ permissions:
 
 jobs:
   build-linux-wheels:
-    name: ${{ matrix.python }} / CUDA 12.9 / manylinux_2_28 x86_64
+    name: ${{ matrix.python }} / CUDA 12.8 / manylinux_2_28 x86_64
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     strategy:
@@ -75,7 +76,6 @@ jobs:
         uses: pypa/cibuildwheel@v4.1.1
         env:
           CIBW_BUILD: ${{ matrix.python }}-manylinux_x86_64
-          CIBW_MANYLINUX_X86_64_IMAGE: quay.io/manylinux_cuda/manylinux_2_28_x86_64_cuda12_9:latest
 
       - name: Validate wheel metadata and native platform tag
         shell: bash
