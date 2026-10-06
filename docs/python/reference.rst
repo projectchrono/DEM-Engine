@@ -81,6 +81,10 @@ DEMSolver
       object alive while using any solver-owned material, template, tracker, or
       inspector handle.
 
+      Fixed-size owner CUDA exchange methods validate ranges, capacities, and pointer metadata by default. Pass
+      ``validate=False`` only when those preconditions are guaranteed and avoiding validation overhead matters. Required
+      device routing and documented transformations still apply.
+
 .. py:method:: DEMSolver.__init__
 
    .. code-block:: text
@@ -209,6 +213,22 @@ DEMSolver
       Add an extra acceleration to a owner for the next time step.
 
 
+.. py:method:: DEMSolver.AddOwnerNextStepAccFromDevice
+
+   .. code-block:: text
+
+      AddOwnerNextStepAccFromDevice(self: deme._deme.DEMSolver, owner_id: typing.SupportsInt | typing.SupportsIndex, source: typing.SupportsInt | typing.SupportsIndex, source_device: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1, validate: bool = True) -> None
+
+      Synchronously queue global-frame linear accelerations for consecutive owners from CUDA memory.
+
+      ``source`` is an integer address containing ``count`` CUDA ``float3`` values. Remote input is copied from
+      ``source_device`` to the dynamic-worker device before unpacking. Values replace any previously queued next-step
+      linear-acceleration contribution. Contact acceleration is accumulated on top during the next force/integration step,
+      gravity is applied separately, and the queued contribution is consumed after one step. Pass ``validate=False`` only
+      when the owner range and pointer metadata are known to be valid. A zero count is a no-op; otherwise the source buffer
+      may be reused when this call returns.
+
+
 .. py:method:: DEMSolver.AddOwnerNextStepAngAcc
 
    .. code-block:: text
@@ -216,6 +236,22 @@ DEMSolver
       AddOwnerNextStepAngAcc(self: deme._deme.DEMSolver, arg0: typing.SupportsInt | typing.SupportsIndex, arg1: collections.abc.Sequence[float3]) -> None
 
       Add an extra angular acceleration to a owner for the next time step.
+
+
+.. py:method:: DEMSolver.AddOwnerNextStepAngAccFromDevice
+
+   .. code-block:: text
+
+      AddOwnerNextStepAngAccFromDevice(self: deme._deme.DEMSolver, owner_id: typing.SupportsInt | typing.SupportsIndex, source: typing.SupportsInt | typing.SupportsIndex, source_device: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1, validate: bool = True) -> None
+
+      Synchronously queue local-frame angular accelerations for consecutive owners from CUDA memory.
+
+      ``source`` is an integer address containing ``count`` CUDA ``float3`` values. Remote input is copied from
+      ``source_device`` to the dynamic-worker device before unpacking. Values use each owner's local principal-axis frame
+      and replace any previously queued next-step angular-acceleration contribution. Contact angular acceleration is
+      accumulated on top during the next force/integration step, and the queued contribution is consumed after one step. Pass
+      ``validate=False`` only when the owner range and pointer metadata are known to be valid. A zero count is a no-op;
+      otherwise the source buffer may be reused when this call returns.
 
 
 .. py:method:: DEMSolver.AddShellMesh
@@ -384,7 +420,7 @@ DEMSolver
 
       DisableAdaptiveBinSize(self: deme._deme.DEMSolver) -> None
 
-      Disable the use of adaptive bin size (always use initial size)
+      Disable adaptive bin size. After initialization, call UpdateSimParams() for this change to take effect in the workers.
 
 
 .. py:method:: DEMSolver.DisableAdaptiveUpdateFreq
@@ -393,7 +429,7 @@ DEMSolver
 
       DisableAdaptiveUpdateFreq(self: deme._deme.DEMSolver) -> None
 
-      Disable the use of adaptive max update step count (always use initial update frequency)
+      Disable adaptive contact-update frequency. After initialization, call UpdateSimParams() for this change to take effect in the workers.
 
 
 .. py:method:: DEMSolver.DisableAllMeshWearModels
@@ -843,6 +879,15 @@ DEMSolver
       Get the acceleration of n consecutive owners.
 
 
+.. py:method:: DEMSolver.GetOwnerAccToDevice
+
+   .. code-block:: text
+
+      GetOwnerAccToDevice(self: deme._deme.DEMSolver, destination: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, destination_device: typing.SupportsInt | typing.SupportsIndex, first_owner_id: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1, validate: bool = True) -> None
+
+      Synchronously write consecutive global contact accelerations as CUDA float3 elements.
+
+
 .. py:method:: DEMSolver.GetOwnerAngAcc
 
    .. code-block:: text
@@ -852,6 +897,24 @@ DEMSolver
       Get the angular acceleration of n consecutive owners.
 
 
+.. py:method:: DEMSolver.GetOwnerAngAccGlobalToDevice
+
+   .. code-block:: text
+
+      GetOwnerAngAccGlobalToDevice(self: deme._deme.DEMSolver, destination: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, destination_device: typing.SupportsInt | typing.SupportsIndex, first_owner_id: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1, validate: bool = True) -> None
+
+      Synchronously write consecutive global contact angular accelerations as CUDA float3 elements.
+
+
+.. py:method:: DEMSolver.GetOwnerAngAccLocalToDevice
+
+   .. code-block:: text
+
+      GetOwnerAngAccLocalToDevice(self: deme._deme.DEMSolver, destination: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, destination_device: typing.SupportsInt | typing.SupportsIndex, first_owner_id: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1, validate: bool = True) -> None
+
+      Synchronously write consecutive local principal-axis-frame contact angular accelerations as CUDA float3 elements.
+
+
 .. py:method:: DEMSolver.GetOwnerAngVel
 
    .. code-block:: text
@@ -859,6 +922,24 @@ DEMSolver
       GetOwnerAngVel(self: deme._deme.DEMSolver, ownerID: typing.SupportsInt | typing.SupportsIndex, n: typing.SupportsInt | typing.SupportsIndex = 1) -> list[float3]
 
       Get angular velocity of n consecutive owners.
+
+
+.. py:method:: DEMSolver.GetOwnerAngVelGlobalToDevice
+
+   .. code-block:: text
+
+      GetOwnerAngVelGlobalToDevice(self: deme._deme.DEMSolver, destination: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, destination_device: typing.SupportsInt | typing.SupportsIndex, first_owner_id: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1, validate: bool = True) -> None
+
+      Synchronously write consecutive global owner angular velocities as CUDA float3 elements.
+
+
+.. py:method:: DEMSolver.GetOwnerAngVelLocalToDevice
+
+   .. code-block:: text
+
+      GetOwnerAngVelLocalToDevice(self: deme._deme.DEMSolver, destination: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, destination_device: typing.SupportsInt | typing.SupportsIndex, first_owner_id: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1, validate: bool = True) -> None
+
+      Synchronously write consecutive local principal-axis-frame owner angular velocities as CUDA float3 elements.
 
 
 .. py:method:: DEMSolver.GetOwnerContactClumps
@@ -886,6 +967,40 @@ DEMSolver
       Get all contact forces and torque that concern a list of owners.
 
 
+.. py:method:: DEMSolver.GetOwnerContactWrench
+
+   .. code-block:: text
+
+      GetOwnerContactWrench(self: deme._deme.DEMSolver, first_owner_id: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1) -> tuple[list[float3], list[float3]]
+
+      Return one reduced contact wrench per consecutive owner.
+
+      The returned tuple is ``(forces, torques)``; each vector is resized to ``count`` and follows consecutive owner order.
+      Force and torque are global-frame resultants, and torque is measured about DEME's current owner position. Torque
+      includes both force-generated moments and force-model-only torque such as rolling resistance. Owners without recorded
+      contact receive zero force and torque. This reads current dT force records and does not trigger contact detection or
+      force evaluation. ``first_owner_id`` selects the first owner in the range. Contact recording must remain enabled. A
+      zero count returns two empty vectors.
+
+
+.. py:method:: DEMSolver.GetOwnerContactWrenchToDevice
+
+   .. code-block:: text
+
+      GetOwnerContactWrenchToDevice(self: deme._deme.DEMSolver, force_destination: typing.SupportsInt | typing.SupportsIndex, torque_destination: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, destination_device: typing.SupportsInt | typing.SupportsIndex, first_owner_id: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1) -> None
+
+      Synchronously write one reduced contact wrench per consecutive owner to CUDA ``float3`` buffers.
+
+      Force and torque are global-frame resultants, and torque is measured about DEME's current owner position. Torque
+      includes both force-generated moments and force-model-only torque such as rolling resistance. ``force_destination``
+      and ``torque_destination`` are integer addresses of writable CUDA ``float3`` storage. ``capacity`` and ``count`` are
+      measured in owners, and ``first_owner_id`` selects the start of the range; owners without contact receive zero force
+      and torque. This reads current dT force records and does not trigger contact detection or force evaluation. Both
+      buffers belong to logical CUDA ``destination_device``; CUDA selects the available inter-device transfer route for
+      remote output. The call is synchronous, so both buffers may be consumed when it returns. Contact recording must remain
+      enabled. A zero count is a no-op.
+
+
 .. py:method:: DEMSolver.GetOwnerFamily
 
    .. code-block:: text
@@ -893,6 +1008,15 @@ DEMSolver
       GetOwnerFamily(self: deme._deme.DEMSolver, ownerID: typing.SupportsInt | typing.SupportsIndex, n: typing.SupportsInt | typing.SupportsIndex = 1) -> list[int]
 
       Get the family number of n consecutive owners.
+
+
+.. py:method:: DEMSolver.GetOwnerFamilyToDevice
+
+   .. code-block:: text
+
+      GetOwnerFamilyToDevice(self: deme._deme.DEMSolver, destination: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, destination_device: typing.SupportsInt | typing.SupportsIndex, first_owner_id: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1, validate: bool = True) -> None
+
+      Synchronously write consecutive owner family numbers as CUDA uint32 elements.
 
 
 .. py:method:: DEMSolver.GetOwnerMass
@@ -904,6 +1028,15 @@ DEMSolver
       Get the mass of n consecutive owners.
 
 
+.. py:method:: DEMSolver.GetOwnerMassToDevice
+
+   .. code-block:: text
+
+      GetOwnerMassToDevice(self: deme._deme.DEMSolver, destination: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, destination_device: typing.SupportsInt | typing.SupportsIndex, first_owner_id: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1, validate: bool = True) -> None
+
+      Synchronously write consecutive owner masses as CUDA float elements.
+
+
 .. py:method:: DEMSolver.GetOwnerMOI
 
    .. code-block:: text
@@ -911,6 +1044,15 @@ DEMSolver
       GetOwnerMOI(self: deme._deme.DEMSolver, ownerID: typing.SupportsInt | typing.SupportsIndex, n: typing.SupportsInt | typing.SupportsIndex = 1) -> list[float3]
 
       Get the moment of inertia (in principal axis frame) of n consecutive owners.
+
+
+.. py:method:: DEMSolver.GetOwnerMOIToDevice
+
+   .. code-block:: text
+
+      GetOwnerMOIToDevice(self: deme._deme.DEMSolver, destination: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, destination_device: typing.SupportsInt | typing.SupportsIndex, first_owner_id: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1, validate: bool = True) -> None
+
+      Synchronously write consecutive owner principal moments of inertia as CUDA float3 elements.
 
 
 .. py:method:: DEMSolver.GetOwnerOriQ
@@ -922,6 +1064,15 @@ DEMSolver
       Get quaternion of n consecutive owners.
 
 
+.. py:method:: DEMSolver.GetOwnerOriQToDevice
+
+   .. code-block:: text
+
+      GetOwnerOriQToDevice(self: deme._deme.DEMSolver, destination: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, destination_device: typing.SupportsInt | typing.SupportsIndex, first_owner_id: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1, validate: bool = True) -> None
+
+      Synchronously write consecutive owner quaternions as CUDA float4 elements in (x, y, z, w) order.
+
+
 .. py:method:: DEMSolver.GetOwnerPosition
 
    .. code-block:: text
@@ -929,6 +1080,15 @@ DEMSolver
       GetOwnerPosition(self: deme._deme.DEMSolver, ownerID: typing.SupportsInt | typing.SupportsIndex, n: typing.SupportsInt | typing.SupportsIndex = 1) -> list[float3]
 
       Get position of n consecutive owners.
+
+
+.. py:method:: DEMSolver.GetOwnerPositionToDevice
+
+   .. code-block:: text
+
+      GetOwnerPositionToDevice(self: deme._deme.DEMSolver, destination: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, destination_device: typing.SupportsInt | typing.SupportsIndex, first_owner_id: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1, validate: bool = True) -> None
+
+      Synchronously write consecutive global owner positions as CUDA float3 elements.
 
 
 .. py:method:: DEMSolver.GetOwnerVelocity
@@ -940,6 +1100,15 @@ DEMSolver
       Get velocity of n consecutive owners.
 
 
+.. py:method:: DEMSolver.GetOwnerVelocityToDevice
+
+   .. code-block:: text
+
+      GetOwnerVelocityToDevice(self: deme._deme.DEMSolver, destination: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, destination_device: typing.SupportsInt | typing.SupportsIndex, first_owner_id: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1, validate: bool = True) -> None
+
+      Synchronously write consecutive global owner velocities as CUDA float3 elements.
+
+
 .. py:method:: DEMSolver.GetOwnerWildcardValue
 
    .. code-block:: text
@@ -947,6 +1116,15 @@ DEMSolver
       GetOwnerWildcardValue(self: deme._deme.DEMSolver, ownerID: typing.SupportsInt | typing.SupportsIndex, name: str, n: typing.SupportsInt | typing.SupportsIndex = 1) -> list[float]
 
       Get the owner wildcard's values of some owners.
+
+
+.. py:method:: DEMSolver.GetOwnerWildcardValueToDevice
+
+   .. code-block:: text
+
+      GetOwnerWildcardValueToDevice(self: deme._deme.DEMSolver, destination: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, destination_device: typing.SupportsInt | typing.SupportsIndex, first_owner_id: typing.SupportsInt | typing.SupportsIndex, name: str, count: typing.SupportsInt | typing.SupportsIndex = 1, validate: bool = True) -> None
+
+      Synchronously write one named owner wildcard for consecutive owners as CUDA float elements.
 
 
 .. py:method:: DEMSolver.GetSimTime
@@ -983,6 +1161,20 @@ DEMSolver
       GetUpdateFreq(self: deme._deme.DEMSolver) -> float
 
       Get the current update frequency used by the solver.
+
+
+.. py:method:: DEMSolver.GetVisualizationFrame
+
+   .. code-block:: text
+
+      GetVisualizationFrame(self: deme._deme.DEMSolver, frame: deme._deme.VisualizationFrame, include_velocities: bool = False) -> None
+
+
+.. py:method:: DEMSolver.GetVisualizationScene
+
+   .. code-block:: text
+
+      GetVisualizationScene(self: deme._deme.DEMSolver) -> deme._deme.VisualizationScene
 
 
 .. py:method:: DEMSolver.GetWhetherForceCollectInKernel
@@ -1267,7 +1459,7 @@ DEMSolver
 
       SetAdaptiveBinSizeAcc(self: deme._deme.DEMSolver, arg0: typing.SupportsFloat | typing.SupportsIndex) -> None
 
-      Set how fast kT changes the direction of bin size adjustmemt when there's a more beneficial direction
+      Set the bin-size adjustment acceleration. After initialization, call UpdateSimParams().
 
 
 .. py:method:: DEMSolver.SetAdaptiveBinSizeDelaySteps
@@ -1276,7 +1468,7 @@ DEMSolver
 
       SetAdaptiveBinSizeDelaySteps(self: deme._deme.DEMSolver, arg0: typing.SupportsInt | typing.SupportsIndex) -> None
 
-      Adjust how frequent kT updates the bin size
+      Adjust how frequently kT updates the bin size. After initialization, call UpdateSimParams().
 
 
 .. py:method:: DEMSolver.SetAdaptiveBinSizeLowerProactivity
@@ -1285,7 +1477,7 @@ DEMSolver
 
       SetAdaptiveBinSizeLowerProactivity(self: deme._deme.DEMSolver, arg0: typing.SupportsFloat | typing.SupportsIndex) -> None
 
-      Set how proactive the solver is in avoiding the bin being too small (leading to too many bins in domain).
+      Set how proactive the solver is in avoiding undersized bins. After initialization, call UpdateSimParams().
 
 
 .. py:method:: DEMSolver.SetAdaptiveBinSizeMaxRate
@@ -1294,7 +1486,7 @@ DEMSolver
 
       SetAdaptiveBinSizeMaxRate(self: deme._deme.DEMSolver, arg0: typing.SupportsFloat | typing.SupportsIndex) -> None
 
-      Set the max rate that the bin size can change in one adjustment
+      Set the maximum bin-size change rate. After initialization, call UpdateSimParams().
 
 
 .. py:method:: DEMSolver.SetAdaptiveBinSizeUpperProactivity
@@ -1303,7 +1495,7 @@ DEMSolver
 
       SetAdaptiveBinSizeUpperProactivity(self: deme._deme.DEMSolver, arg0: typing.SupportsFloat | typing.SupportsIndex) -> None
 
-      Set how proactive the solver is in avoiding the bin being too big (leading to too many geometries in a bin)
+      Set how proactive the solver is in avoiding the bin being too big (leading to too many geometries in a bin). After initialization, call UpdateSimParams().
 
 
 .. py:method:: DEMSolver.SetAdaptiveTimeStepType
@@ -1330,7 +1522,7 @@ DEMSolver
 
       SetCDMaxUpdateFreq(self: deme._deme.DEMSolver, arg0: typing.SupportsInt | typing.SupportsIndex) -> None
 
-      Set the upper bound of kT update frequency (when it is adjusted automatically).
+      Set the upper bound of kT update frequency. After initialization, call UpdateSimParams().
 
 
 .. py:method:: DEMSolver.SetCDNumStepsMaxDriftAheadOfAvg
@@ -1339,7 +1531,7 @@ DEMSolver
 
       SetCDNumStepsMaxDriftAheadOfAvg(self: deme._deme.DEMSolver, arg0: typing.SupportsFloat | typing.SupportsIndex) -> None
 
-      Set the number of steps dT configures its max drift more than average drift steps.
+      Set dT's drift allowance above average. After initialization, call UpdateSimParams().
 
 
 .. py:method:: DEMSolver.SetCDNumStepsMaxDriftHistorySize
@@ -1348,7 +1540,7 @@ DEMSolver
 
       SetCDNumStepsMaxDriftHistorySize(self: deme._deme.DEMSolver, n: typing.SupportsInt | typing.SupportsIndex) -> None
 
-      Set how many past kinematic-worker updates calibrate the maximum future drift limit. The default is recommended for normal use.
+      Set how many past kinematic-worker updates calibrate the maximum future drift limit. The default is recommended for normal use. After initialization, call UpdateSimParams().
 
 
 .. py:method:: DEMSolver.SetCDNumStepsMaxDriftMultipleOfAvg
@@ -1357,7 +1549,7 @@ DEMSolver
 
       SetCDNumStepsMaxDriftMultipleOfAvg(self: deme._deme.DEMSolver, arg0: typing.SupportsFloat | typing.SupportsIndex) -> None
 
-      Set the multiplier which dT configures its max drift to be w.r.t. the average drift steps.
+      Set dT's maximum-drift multiplier. After initialization, call UpdateSimParams().
 
 
 .. py:method:: DEMSolver.SetCDUpdateFreq
@@ -1366,7 +1558,7 @@ DEMSolver
 
       SetCDUpdateFreq(self: deme._deme.DEMSolver, arg0: typing.SupportsInt | typing.SupportsIndex) -> None
 
-      Set the number of dT steps before it waits for a contact-pair info update from kT.
+      Set the number of dT steps before it waits for a contact-pair update. After initialization, call UpdateSimParams() for this change to take effect in the workers.
 
 
 .. py:method:: DEMSolver.SetCollectAccRightAfterForceCalc
@@ -1375,7 +1567,7 @@ DEMSolver
 
       SetCollectAccRightAfterForceCalc(self: deme._deme.DEMSolver, flag: bool = True) -> None
 
-      Reduce contact forces to accelerations right after calculating them, in the same kernel. This may give some performance boost if you have only polydisperse spheres, no clumps.
+      Reduce contact forces to accelerations right after calculating them, in the same kernel. This may give some performance boost if you have only polydisperse spheres, no clumps. After initialization, call UpdateSimParams() for this change to take effect in dT.
 
 
 .. py:method:: DEMSolver.SetContactOutputContent
@@ -1423,6 +1615,15 @@ DEMSolver
       Set the process-wide switch that synchronizes after each CUDA operation that enqueues stream work. Disable for normal asynchronous performance.
 
 
+.. py:method:: DEMSolver.SetDEME2MeshBehavior
+
+   .. code-block:: text
+
+      SetDEME2MeshBehavior(self: deme._deme.DEMSolver, use: bool = True) -> None
+
+      When enabled, assign every triangle of subsequently loaded meshes to its own patch. Disabling restores the normal behavior of leaving new meshes' patch assignments unchanged.
+
+
 .. py:method:: DEMSolver.SetErrorOutAngularVelocity
 
    .. code-block:: text
@@ -1463,7 +1664,7 @@ DEMSolver
 
       SetExpandFactor(self: deme._deme.DEMSolver, beta: typing.SupportsFloat | typing.SupportsIndex, fix: bool = True) -> None
 
-      (Explicitly) set the amount by which the radii of the spheres (and the thickness of the boundaries) are expanded for the purpose of contact detection (safe, and creates false positives). If fix is set to true, then this expand factor does not change even if the user uses variable time step size.
+      (Explicitly) set the amount by which the radii of the spheres (and the thickness of the boundaries) are expanded for the purpose of contact detection (safe, and creates false positives). If fix is set to true, then this expand factor does not change even if the user uses variable time step size. After initialization, call UpdateSimParams() for this change to take effect in the workers.
 
 
 .. py:method:: DEMSolver.SetExpandSafetyAdder
@@ -1472,7 +1673,7 @@ DEMSolver
 
       SetExpandSafetyAdder(self: deme._deme.DEMSolver, arg0: typing.SupportsFloat | typing.SupportsIndex) -> None
 
-      Set a `base' velocity, which we will always add to our estimated maximum system velocity, when deriving the thickness of the contact `safety' margin
+      Set a `base' velocity, which we will always add to our estimated maximum system velocity, when deriving the thickness of the contact `safety' margin. After initialization, call UpdateSimParams() for this change to take effect in the workers.
 
 
 .. py:method:: DEMSolver.SetExpandSafetyMultiplier
@@ -1481,7 +1682,7 @@ DEMSolver
 
       SetExpandSafetyMultiplier(self: deme._deme.DEMSolver, arg0: typing.SupportsFloat | typing.SupportsIndex) -> None
 
-      Assign a multiplier to our estimated maximum system velocity, when deriving the thinckness of the contact `safety' margin.
+      Assign a multiplier to our estimated maximum system velocity, when deriving the thinckness of the contact `safety' margin. After initialization, call UpdateSimParams() for this change to take effect in the workers.
 
 
 .. py:method:: DEMSolver.SetExpandSafetyType
@@ -1490,7 +1691,7 @@ DEMSolver
 
       SetExpandSafetyType(self: deme._deme.DEMSolver, arg0: str) -> None
 
-      A string. If 'auto': the solver automatically derives.
+      Select the contact-margin velocity strategy. After initialization, call UpdateSimParams() for this change to take effect in the workers.
 
 
 .. py:method:: DEMSolver.SetFamilyClumpMaterial
@@ -1741,7 +1942,7 @@ DEMSolver
 
       SetGravitationalAcceleration(self: deme._deme.DEMSolver, acc: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex]) -> None
 
-      Set the global gravitational acceleration as ``[x, y, z]`` in length/time^2 units.
+      Set the global gravitational acceleration as ``[x, y, z]`` in length/time^2 units. This takes effect immediately after initialization when called while the solver is synchronized.
 
 
 .. py:method:: DEMSolver.SetInitBinNumTarget
@@ -1777,7 +1978,7 @@ DEMSolver
 
       SetInitTimeStep(self: deme._deme.DEMSolver, ts: typing.SupportsFloat | typing.SupportsIndex) -> None
 
-      Set the initial timestep in seconds before ``Initialize``. A constant-step simulation uses it throughout; an adaptive strategy may update it later.
+      Legacy name for SetTimeStepSize, kept for backward compatibility.
 
 
 .. py:method:: DEMSolver.SetIntegrator
@@ -1789,11 +1990,11 @@ DEMSolver
 
       1. SetIntegrator(self: deme._deme.DEMSolver, arg0: str) -> None
 
-      Set the time integrator for this simulator.
+      Set the time integrator. After initialization, call UpdateSimParams() for this change to take effect.
 
       2. SetIntegrator(self: deme._deme.DEMSolver, arg0: deme::TIME_INTEGRATOR) -> None
 
-      Set the time integrator for this simulator.
+      Set the time integrator. After initialization, call UpdateSimParams() for this change to take effect.
 
 
 .. py:method:: DEMSolver.SetJitifyClumpTemplates
@@ -1874,7 +2075,23 @@ DEMSolver
 
       SetMaxVelocity(self: deme._deme.DEMSolver, arg0: typing.SupportsFloat | typing.SupportsIndex) -> None
 
-      Set the maximum expected particle velocity. The solver will not use a velocity larger than this for determining the margin thickness, and velocity larger than this will be considered a system anomaly.
+      Set the maximum expected particle velocity. The solver will not use a velocity larger than this for determining the margin thickness, and velocity larger than this will be considered a system anomaly. After initialization, call UpdateSimParams() for this change to take effect in the workers.
+
+
+.. py:method:: DEMSolver.SetMeshOutputContent
+
+   .. code-block:: text
+
+      SetMeshOutputContent(*args, **kwargs)
+      Overloaded function.
+
+      1. SetMeshOutputContent(self: deme._deme.DEMSolver, content: collections.abc.Sequence[str]) -> None
+
+      Specify per-triangle fields to include in mesh VTK output.
+
+      2. SetMeshOutputContent(self: deme._deme.DEMSolver, content: deme::MESH_OUTPUT_CONTENT) -> None
+
+      Specify one per-triangle field to include in mesh VTK output.
 
 
 .. py:method:: DEMSolver.SetMeshOutputFormat
@@ -1895,6 +2112,24 @@ DEMSolver
       Declare that all meshed particles have a low polygon count (e.g. box, tetrahedron). When enabled, the per-triangle maxTriTriPenetration array is neither computed, transferred to kT, nor used to inflate contact-detection margins, saving compute time. Toggle this on only when you are confident that no triangle from one mesh will ever be completely submerged inside another mesh.
 
 
+.. py:method:: DEMSolver.SetMeshPatchLocations
+
+   .. code-block:: text
+
+      SetMeshPatchLocations(self: deme._deme.DEMSolver, owner: typing.SupportsInt | typing.SupportsIndex, centers: collections.abc.Sequence[float3]) -> None
+
+      Set one local center per patch at runtime and select user-managed centers.
+
+
+.. py:method:: DEMSolver.SetMeshPatchLocationsFromDevice
+
+   .. code-block:: text
+
+      SetMeshPatchLocationsFromDevice(self: deme._deme.DEMSolver, owner: typing.SupportsInt | typing.SupportsIndex, source: typing.SupportsInt | typing.SupportsIndex, source_device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously set user-managed local patch centers from one CUDA float3 per patch.
+
+
 .. py:method:: DEMSolver.SetMeshUniversalContact
 
    .. code-block:: text
@@ -1910,7 +2145,7 @@ DEMSolver
 
       SetNoForceRecord(self: deme._deme.DEMSolver, flag: bool = True) -> None
 
-      Instruct the solver that there is no need to record the contact force (and contact point location etc.) in an array.
+      Instruct the solver that there is no need to record the contact force (and contact point location etc.) in an array. After initialization, call UpdateSimParams() for this change to take effect in dT.
 
 
 .. py:method:: DEMSolver.SetOutputContent
@@ -1926,9 +2161,16 @@ DEMSolver
 
    .. code-block:: text
 
-      SetOutputFormat(self: deme._deme.DEMSolver, arg0: str) -> None
+      SetOutputFormat(*args, **kwargs)
+      Overloaded function.
 
-      Choose sphere and clump output file format.
+      1. SetOutputFormat(self: deme._deme.DEMSolver, format: str) -> None
+
+      Choose sphere and clump output file format by name.
+
+      2. SetOutputFormat(self: deme._deme.DEMSolver, format: deme::OUTPUT_FORMAT) -> None
+
+      Choose sphere and clump output file format. VTK is supported by WriteSphereFile.
 
 
 .. py:method:: DEMSolver.SetOwnerAngVel
@@ -1938,6 +2180,32 @@ DEMSolver
       SetOwnerAngVel(self: deme._deme.DEMSolver, arg0: typing.SupportsInt | typing.SupportsIndex, arg1: collections.abc.Sequence[float3]) -> None
 
       Set angular velocity of consecutive owners starting from ownerID, based on input angular velocity vector. N (the size of the input vector) elements will be modified.
+
+
+.. py:method:: DEMSolver.SetOwnerAngVelFromDevice
+
+   .. code-block:: text
+
+      SetOwnerAngVelFromDevice(self: deme._deme.DEMSolver, owner_id: typing.SupportsInt | typing.SupportsIndex, source: typing.SupportsInt | typing.SupportsIndex, source_device: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1, validate: bool = True) -> None
+
+      Synchronously set consecutive local-frame angular velocities from CUDA ``float3`` elements.
+
+      This has the same frame semantics as ``SetOwnerAngVel``. ``source_device`` identifies the CUDA-accessible source
+      allocation; remote input is copied to the dynamic-worker device before unpacking. When this call returns the source
+      buffer may be reused.
+
+
+.. py:method:: DEMSolver.SetOwnerAngVelGlobalFromDevice
+
+   .. code-block:: text
+
+      SetOwnerAngVelGlobalFromDevice(self: deme._deme.DEMSolver, owner_id: typing.SupportsInt | typing.SupportsIndex, source: typing.SupportsInt | typing.SupportsIndex, source_device: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1, validate: bool = True) -> None
+
+      Synchronously set consecutive global angular velocities from ``count`` CUDA ``float3`` elements.
+
+      Each value is converted to the owner's local principal-axis frame using that owner's orientation at call time.
+      ``source_device`` identifies the CUDA-accessible source allocation; remote input is copied to the dynamic-worker
+      device before unpacking. When this call returns the source buffer may be reused.
 
 
 .. py:method:: DEMSolver.SetOwnerFamily
@@ -1958,6 +2226,20 @@ DEMSolver
       Set quaternion of consecutive owners starting from ownerID, based on input quaternion vector. N (the size of the input vector) elements will be modified.
 
 
+.. py:method:: DEMSolver.SetOwnerOriQFromDevice
+
+   .. code-block:: text
+
+      SetOwnerOriQFromDevice(self: deme._deme.DEMSolver, owner_id: typing.SupportsInt | typing.SupportsIndex, source: typing.SupportsInt | typing.SupportsIndex, source_device: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1, validate: bool = True) -> None
+
+      Synchronously set consecutive owner orientations from ``count`` CUDA ``float4`` elements.
+
+      Quaternion elements use public DEME ordering ``(x, y, z, w)``. ``source_device`` identifies the CUDA-accessible source
+      allocation; remote input is copied to the dynamic-worker device before validation and unpacking. With
+      ``validate=True``, non-finite and zero-length quaternions are rejected. Every finite, nonzero quaternion is normalized
+      before storage even when validation is disabled. When this call returns the source buffer may be reused.
+
+
 .. py:method:: DEMSolver.SetOwnerPosition
 
    .. code-block:: text
@@ -1967,6 +2249,18 @@ DEMSolver
       Set position of consecutive owners starting from ownerID, based on input position vector. N (the size of the input vector) elements will be modified.
 
 
+.. py:method:: DEMSolver.SetOwnerPositionFromDevice
+
+   .. code-block:: text
+
+      SetOwnerPositionFromDevice(self: deme._deme.DEMSolver, owner_id: typing.SupportsInt | typing.SupportsIndex, source: typing.SupportsInt | typing.SupportsIndex, source_device: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1, validate: bool = True) -> None
+
+      Synchronously set consecutive owner positions from ``count`` CUDA ``float3`` elements.
+
+      Positions are global-frame values. ``source_device`` identifies the CUDA-accessible source allocation; remote input is
+      copied to the dynamic-worker device before unpacking. When this call returns the source buffer may be reused.
+
+
 .. py:method:: DEMSolver.SetOwnerVelocity
 
    .. code-block:: text
@@ -1974,6 +2268,18 @@ DEMSolver
       SetOwnerVelocity(self: deme._deme.DEMSolver, arg0: typing.SupportsInt | typing.SupportsIndex, arg1: collections.abc.Sequence[float3]) -> None
 
       Set velocity of consecutive owners starting from ownerID, based on input velocity vector. N (the size of the input vector) elements will be modified.
+
+
+.. py:method:: DEMSolver.SetOwnerVelocityFromDevice
+
+   .. code-block:: text
+
+      SetOwnerVelocityFromDevice(self: deme._deme.DEMSolver, owner_id: typing.SupportsInt | typing.SupportsIndex, source: typing.SupportsInt | typing.SupportsIndex, source_device: typing.SupportsInt | typing.SupportsIndex, count: typing.SupportsInt | typing.SupportsIndex = 1, validate: bool = True) -> None
+
+      Synchronously set consecutive global linear velocities from ``count`` CUDA ``float3`` elements.
+
+      ``source_device`` identifies the CUDA-accessible source allocation; remote input is copied to the dynamic-worker
+      device before unpacking. When this call returns the source buffer may be reused.
 
 
 .. py:method:: DEMSolver.SetOwnerWildcards
@@ -2046,6 +2352,15 @@ DEMSolver
       Stabilize flooded patch-island IDs across contact-detection steps.
 
 
+.. py:method:: DEMSolver.SetTimeStepSize
+
+   .. code-block:: text
+
+      SetTimeStepSize(self: deme._deme.DEMSolver, ts: typing.SupportsFloat | typing.SupportsIndex) -> None
+
+      Set the timestep in seconds before or after initialization. A post-initialization call takes effect on the next step and must be made while the solver is synchronized.
+
+
 .. py:method:: DEMSolver.SetTrianglePVTrackingOwners
 
    .. code-block:: text
@@ -2059,9 +2374,18 @@ DEMSolver
 
    .. code-block:: text
 
-      SetTriNodeRelPos(self: deme._deme.DEMSolver, arg0: typing.SupportsInt | typing.SupportsIndex, arg1: typing.SupportsInt | typing.SupportsIndex, arg2: collections.abc.Sequence[float3]) -> None
+      SetTriNodeRelPos(self: deme._deme.DEMSolver, owner: typing.SupportsInt | typing.SupportsIndex, triID: typing.SupportsInt | typing.SupportsIndex, new_nodes: collections.abc.Sequence[float3], update_patch_centers: bool = True) -> None
 
-      Rewrite the relative positions of the flattened triangle soup.
+      Rewrite local mesh node coordinates. update_patch_centers refreshes automatic centers from all accumulated deformation; false preserves current centers. It has no effect for user-supplied centers. Automatic single-patch centers remain at the local origin.
+
+
+.. py:method:: DEMSolver.SetTriNodeRelPosFromDevice
+
+   .. code-block:: text
+
+      SetTriNodeRelPosFromDevice(self: deme._deme.DEMSolver, owner: typing.SupportsInt | typing.SupportsIndex, source: typing.SupportsInt | typing.SupportsIndex, source_device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True, update_patch_centers: bool = True) -> None
+
+      Synchronous local-node device update: one float3 per node, fixed topology. Finish producing source before calling. validate checks pointer and finite values. update_patch_centers refreshes automatic centers only and has no effect for user-supplied centers. Single-patch automatic centers stay at the local origin. Tracker GetMesh/GetMeshNodesGlobal synchronize the lazy CPU geometry cache.
 
 
 .. py:method:: DEMSolver.SetTriTriContactRejectionRatio
@@ -2185,16 +2509,25 @@ DEMSolver
 
       UpdateStepSize(self: deme._deme.DEMSolver, ts: typing.SupportsFloat | typing.SupportsIndex = -1.0) -> None
 
-      Update the time step size. Used after system initialization.
+      Legacy name for SetTimeStepSize, kept for backward compatibility.
 
 
 .. py:method:: DEMSolver.UpdateTriNodeRelPos
 
    .. code-block:: text
 
-      UpdateTriNodeRelPos(self: deme._deme.DEMSolver, arg0: typing.SupportsInt | typing.SupportsIndex, arg1: typing.SupportsInt | typing.SupportsIndex, arg2: collections.abc.Sequence[float3]) -> None
+      UpdateTriNodeRelPos(self: deme._deme.DEMSolver, owner: typing.SupportsInt | typing.SupportsIndex, triID: typing.SupportsInt | typing.SupportsIndex, updates: collections.abc.Sequence[float3], update_patch_centers: bool = True) -> None
 
-      Update the relative positions of the flattened triangle soup.
+      Update local mesh node coordinates. update_patch_centers refreshes automatic centers from all accumulated deformation; false preserves current centers. It has no effect for user-supplied centers. Automatic single-patch centers remain at the local origin.
+
+
+.. py:method:: DEMSolver.UpdateTriNodeRelPosFromDevice
+
+   .. code-block:: text
+
+      UpdateTriNodeRelPosFromDevice(self: deme._deme.DEMSolver, owner: typing.SupportsInt | typing.SupportsIndex, source: typing.SupportsInt | typing.SupportsIndex, source_device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True, update_patch_centers: bool = True) -> None
+
+      Synchronous local-node displacement increment: one float3 per node, fixed topology. Finish producing source before calling. validate checks pointer and finite values. update_patch_centers refreshes automatic centers only and has no effect for user-supplied centers. Single-patch automatic centers stay at the local origin. A later enabled refresh includes skipped deformation. Tracker GetMesh/GetMeshNodesGlobal synchronize the lazy CPU geometry cache.
 
 
 .. py:method:: DEMSolver.UseAdaptiveBinSize
@@ -2203,7 +2536,7 @@ DEMSolver
 
       UseAdaptiveBinSize(self: deme._deme.DEMSolver, use: bool = True) -> None
 
-      Enable or disable the use of adaptive bin size (by default it is on)
+      Enable or disable adaptive bin size. After initialization, call UpdateSimParams() for this change to take effect in the workers.
 
 
 .. py:method:: DEMSolver.UseAdaptiveUpdateFreq
@@ -2212,7 +2545,16 @@ DEMSolver
 
       UseAdaptiveUpdateFreq(self: deme._deme.DEMSolver, use: bool = True) -> None
 
-      Enable or disable the use of adaptive max update step count (by default it is on)
+      Enable or disable adaptive contact-update frequency. After initialization, call UpdateSimParams() for this change to take effect in the workers.
+
+
+.. py:method:: DEMSolver.UseAutomaticMeshPatchLocations
+
+   .. code-block:: text
+
+      UseAutomaticMeshPatchLocations(self: deme._deme.DEMSolver, owner: typing.SupportsInt | typing.SupportsIndex) -> None
+
+      Resume automatic centers and immediately recompute from current geometry.
 
 
 .. py:method:: DEMSolver.UseFrictionalHertzianModel
@@ -2249,6 +2591,15 @@ DEMSolver
       WaitForPendingOutput(self: deme._deme.DEMSolver) -> None
 
       Wait for any in-flight async output to finish.
+
+
+.. py:method:: DEMSolver.WriteAnalyticalFile
+
+   .. code-block:: text
+
+      WriteAnalyticalFile(self: deme._deme.DEMSolver, outfilename: str, circumferential_resolution: typing.SupportsInt | typing.SupportsIndex = 32) -> None
+
+      Write analytical boundary surfaces as VTK clipped to the user-specified domain.
 
 
 .. py:method:: DEMSolver.WriteClumpFile
@@ -2291,643 +2642,236 @@ DEMSolver
 
    .. code-block:: text
 
-      WriteSphereFile(self: deme._deme.DEMSolver, arg0: str) -> None
+      WriteSphereFile(self: deme._deme.DEMSolver, outfilename: str) -> None
 
-      Writes the current status of clumps (but decomposed as spheres) file.
+      Write clumps as component spheres using the selected CSV or VTK output format.
 
 
 
-Tracker
--------
+DEMVisualizer
+-------------
 
-.. py:class:: Tracker
-
-   .. code-block:: text
-
-      Access and modify owners associated with a tracked batch or object.
-
-      Create trackers with ``DEMSolver.Track`` during setup. Most state queries and
-      updates require the solver to be initialized and synchronized. ``offset``
-      selects an owner within the tracked collection, starting at zero. Keep the
-      parent solver alive while using a tracker.
-
-.. py:method:: Tracker.__init__
+.. py:class:: DEMVisualizer
 
    .. code-block:: text
 
-      __init__(self: deme._deme.Tracker, solver: deme::DEMSolver) -> None
+      Step-wise interactive viewer. Render() draws the current solver state without advancing the simulation.
 
-      Create a tracker associated with ``solver``. Prefer ``DEMSolver.Track`` so the tracked owner range is configured correctly.
-
-
-.. py:method:: Tracker.AddAcc
+.. py:method:: DEMVisualizer.__init__
 
    .. code-block:: text
 
-      AddAcc(*args, **kwargs)
-      Overloaded function.
+      __init__(self: deme._deme.DEMVisualizer, solver: deme._deme.DEMSolver) -> None
 
-      1. AddAcc(self: deme._deme.Tracker, acc: float3, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> None
-
-      Add an extra acc to the tracked body, for the next time step. Note if the user intends to add a persistent external force, then using family prescription is the better method.
-
-      2. AddAcc(self: deme._deme.Tracker, acc: collections.abc.Sequence[float3]) -> None
-
-      Add an extra acc to consecutive tracked objects, (only) for the next time step. Note if the user intends to add a persistent external force, then using family prescription is the better method.
+      Create a visualizer and keep its solver alive for the lifetime of the viewer.
 
 
-.. py:method:: Tracker.AddAngAcc
+.. py:method:: DEMVisualizer.Close
 
    .. code-block:: text
 
-      AddAngAcc(*args, **kwargs)
-      Overloaded function.
+      Close(self: deme._deme.DEMVisualizer) -> None
 
-      1. AddAngAcc(self: deme._deme.Tracker, angAcc: float3, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> None
-
-      Add an extra angular acceleration to the tracked body, for the next time step. Note if the user intends to add a persistent external torque, then using family prescription is the better method.
-
-      2. AddAngAcc(self: deme._deme.Tracker, angAcc: collections.abc.Sequence[float3]) -> None
-
-      Add an extra angular acceleration to consecutive tracked objects, (only) for the next time step. Note if the user intends to add a persistent external torque, then using family prescription is the better method.
+      Close the visualization window.
 
 
-.. py:method:: Tracker.AngularVelocitiesGlobal
+.. py:method:: DEMVisualizer.FrameAll
 
    .. code-block:: text
 
-      AngularVelocitiesGlobal(self: deme._deme.Tracker) -> list[list[float]]
-
-      Return global-frame angular velocities for all tracked owners.
+      FrameAll(self: deme._deme.DEMVisualizer) -> None
 
 
-.. py:method:: Tracker.AngularVelocitiesGlobalToDevice
+.. py:method:: DEMVisualizer.FrameSelected
 
    .. code-block:: text
 
-      AngularVelocitiesGlobalToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex) -> None
-
-      Synchronously copy all tracked global-frame angular velocities to caller-owned CUDA ``float3`` storage. ``capacity`` is in elements; ``device`` is the allocation's logical CUDA device.
+      FrameSelected(self: deme._deme.DEMVisualizer) -> None
 
 
-.. py:method:: Tracker.AngularVelocitiesLocal
+.. py:method:: DEMVisualizer.GetSelectedGeometryID
 
    .. code-block:: text
 
-      AngularVelocitiesLocal(self: deme._deme.Tracker) -> list[list[float]]
-
-      Return local principal-axis-frame angular velocities for all tracked owners.
+      GetSelectedGeometryID(self: deme._deme.DEMVisualizer) -> int
 
 
-.. py:method:: Tracker.AngularVelocitiesLocalToDevice
+.. py:method:: DEMVisualizer.GetSelectedOwner
 
    .. code-block:: text
 
-      AngularVelocitiesLocalToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex) -> None
-
-      Synchronously copy all tracked local-frame angular velocities to caller-owned CUDA ``float3`` storage. ``capacity`` is in elements; ``device`` is the allocation's logical CUDA device.
+      GetSelectedOwner(self: deme._deme.DEMVisualizer) -> int
 
 
-.. py:method:: Tracker.AngVelGlobal
+.. py:method:: DEMVisualizer.Initialize
 
    .. code-block:: text
 
-      AngVelGlobal(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[float]
+      Initialize(self: deme._deme.DEMVisualizer) -> None
 
-      Return the global-frame angular velocity of the owner at ``offset``.
-
-
-.. py:method:: Tracker.AngVelLocal
-
-   .. code-block:: text
-
-      AngVelLocal(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[float]
-
-      Return the angular velocity of the owner at ``offset`` in its local principal-axis frame. Rotate it by ``OriQ(offset)`` to obtain the global-frame value.
+      Create the visualization window and graphics resources.
 
 
-.. py:method:: Tracker.ContactAcc
+.. py:method:: DEMVisualizer.IsPaused
 
    .. code-block:: text
 
-      ContactAcc(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[float]
-
-      Get the a portion of the acceleration of this tracked object, that is the result of its contact with other simulation entities. In most cases, this means excluding the gravitational acceleration. The acceleration is in global frame.
+      IsPaused(self: deme._deme.DEMVisualizer) -> bool
 
 
-.. py:method:: Tracker.ContactAccelerations
+.. py:method:: DEMVisualizer.IsRenderingSpheres
 
    .. code-block:: text
 
-      ContactAccelerations(self: deme._deme.Tracker) -> list[list[float]]
-
-      Get the acceleration experienced by all objects tracked by this tracker, that is the result of their contact with other simulation entities. The acceleration is in global frame. In most cases, this means excluding the gravitational acceleration. The acceleration is in global frame.
+      IsRenderingSpheres(self: deme._deme.DEMVisualizer) -> bool
 
 
-.. py:method:: Tracker.ContactAccelerationsToDevice
+.. py:method:: DEMVisualizer.IsRenderingTriangles
 
    .. code-block:: text
 
-      ContactAccelerationsToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex) -> None
-
-      Synchronously copy all tracked global-frame contact accelerations to caller-owned CUDA ``float3`` storage. Gravity and other non-contact acceleration are excluded.
+      IsRenderingTriangles(self: deme._deme.DEMVisualizer) -> bool
 
 
-.. py:method:: Tracker.ContactAngAccGlobal
+.. py:method:: DEMVisualizer.IsSelectedSphere
 
    .. code-block:: text
 
-      ContactAngAccGlobal(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[float]
-
-      Get the a portion of the angular acceleration of this tracked object, that is the result of its contact with other simulation entities. The acceleration is in this object's global frame.
+      IsSelectedSphere(self: deme._deme.DEMVisualizer) -> bool
 
 
-.. py:method:: Tracker.ContactAngAccLocal
+.. py:method:: DEMVisualizer.PickAt
 
    .. code-block:: text
 
-      ContactAngAccLocal(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[float]
-
-      Get the a portion of the angular acceleration of this tracked object, that is the result of its contact with other simulation entities. The acceleration is in this object's local frame.
+      PickAt(self: deme._deme.DEMVisualizer, x: typing.SupportsInt | typing.SupportsIndex, y: typing.SupportsInt | typing.SupportsIndex) -> None
 
 
-.. py:method:: Tracker.ContactAngularAccelerationsGlobal
+.. py:method:: DEMVisualizer.Render
 
    .. code-block:: text
 
-      ContactAngularAccelerationsGlobal(self: deme._deme.Tracker) -> list[list[float]]
+      Render(self: deme._deme.DEMVisualizer) -> None
 
-      Get the angular acceleration experienced by all objects tracked by this tracker, that is the result of their contact with other simulation entities. The acceleration is in this object's global frame.
-
-
-.. py:method:: Tracker.ContactAngularAccelerationsGlobalToDevice
-
-   .. code-block:: text
-
-      ContactAngularAccelerationsGlobalToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex) -> None
-
-      Synchronously copy all tracked global-frame contact angular accelerations to caller-owned CUDA ``float3`` storage.
+      Synchronously capture the current solver state and draw one frame without advancing the solver.
 
 
-.. py:method:: Tracker.ContactAngularAccelerationsLocal
+.. py:method:: DEMVisualizer.RequestScreenshot
 
    .. code-block:: text
 
-      ContactAngularAccelerationsLocal(self: deme._deme.Tracker) -> list[list[float]]
-
-      Get the angular acceleration experienced by all objects tracked by this tracker, that is the result of their contact with other simulation entities. The acceleration is in this object's local frame.
+      RequestScreenshot(self: deme._deme.DEMVisualizer, path: str) -> None
 
 
-.. py:method:: Tracker.ContactAngularAccelerationsLocalToDevice
+.. py:method:: DEMVisualizer.RequestStep
 
    .. code-block:: text
 
-      ContactAngularAccelerationsLocalToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex) -> None
-
-      Synchronously copy all tracked local-frame contact angular accelerations to caller-owned CUDA ``float3`` storage.
+      RequestStep(self: deme._deme.DEMVisualizer) -> None
 
 
-.. py:method:: Tracker.FamiliesToDevice
+.. py:method:: DEMVisualizer.Run
 
    .. code-block:: text
 
-      FamiliesToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex) -> None
+      Run(self: deme._deme.DEMVisualizer) -> bool
 
-      Synchronously copy all tracked family numbers to caller-owned CUDA ``uint32`` storage. ``capacity`` is in elements; ``device`` is the allocation's logical CUDA device.
-
-
-.. py:method:: Tracker.GetContactClumps
-
-   .. code-block:: text
-
-      GetContactClumps(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[int]
-
-      Get the clumps that are in contact with this tracked owner as a vector.
+      Return true while the initialized window remains open.
 
 
-.. py:method:: Tracker.GetContactForces
+.. py:method:: DEMVisualizer.SetBackgroundColor
 
    .. code-block:: text
 
-      GetContactForces(self: deme._deme.Tracker, points: collections.abc.Sequence[float3], forces: collections.abc.Sequence[float3], offset: typing.SupportsInt | typing.SupportsIndex = 0) -> int
-
-      Get all contact forces that concern this tracked object. Returns number of force pairs.
+      SetBackgroundColor(self: deme._deme.DEMVisualizer, color: deme._deme.VisualizerColor) -> None
 
 
-.. py:method:: Tracker.GetContactForcesAndGlobalTorque
+.. py:method:: DEMVisualizer.SetCameraPosition
 
    .. code-block:: text
 
-      GetContactForcesAndGlobalTorque(self: deme._deme.Tracker, points: collections.abc.Sequence[float3], forces: collections.abc.Sequence[float3], torques: collections.abc.Sequence[float3], offset: typing.SupportsInt | typing.SupportsIndex = 0) -> int
-
-      Get all contact forces and global torques that concern this tracked object. Returns number of force pairs.
+      SetCameraPosition(self: deme._deme.DEMVisualizer, position: float3) -> None
 
 
-.. py:method:: Tracker.GetContactForcesAndGlobalTorqueForAll
+.. py:method:: DEMVisualizer.SetCameraTarget
 
    .. code-block:: text
 
-      GetContactForcesAndGlobalTorqueForAll(self: deme._deme.Tracker, points: collections.abc.Sequence[float3], forces: collections.abc.Sequence[float3], torques: collections.abc.Sequence[float3]) -> int
-
-      Get all contact forces and global torques that concern all objects tracked by this tracker. Returns number of force pairs.
+      SetCameraTarget(self: deme._deme.DEMVisualizer, target: float3) -> None
 
 
-.. py:method:: Tracker.GetContactForcesAndGlobalTorqueForAllToDevice
+.. py:method:: DEMVisualizer.SetColorMode
 
    .. code-block:: text
 
-      GetContactForcesAndGlobalTorqueForAllToDevice(self: deme._deme.Tracker, points: typing.SupportsInt | typing.SupportsIndex, forces: typing.SupportsInt | typing.SupportsIndex, torques: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex) -> int
-
-      Synchronously compact contact points, forces, and global-frame extra torques into caller-owned CUDA ``float3`` arrays. Capacity must cover the total recorded-contact count; the return value is the number of valid rows.
+      SetColorMode(self: deme._deme.DEMVisualizer, mode: deme._deme.VisualizerColorMode) -> None
 
 
-.. py:method:: Tracker.GetContactForcesAndLocalTorque
+.. py:method:: DEMVisualizer.SetFamilyColor
 
    .. code-block:: text
 
-      GetContactForcesAndLocalTorque(self: deme._deme.Tracker, points: collections.abc.Sequence[float3], forces: collections.abc.Sequence[float3], torques: collections.abc.Sequence[float3], offset: typing.SupportsInt | typing.SupportsIndex = 0) -> int
-
-      Get all contact forces and local torques that concern this tracked object. Returns number of force pairs.
+      SetFamilyColor(self: deme._deme.DEMVisualizer, family: typing.SupportsInt | typing.SupportsIndex, color: deme._deme.VisualizerColor) -> None
 
 
-.. py:method:: Tracker.GetContactForcesAndLocalTorqueForAll
+.. py:method:: DEMVisualizer.SetFamilyVisible
 
    .. code-block:: text
 
-      GetContactForcesAndLocalTorqueForAll(self: deme._deme.Tracker, points: collections.abc.Sequence[float3], forces: collections.abc.Sequence[float3], torques: collections.abc.Sequence[float3]) -> int
-
-      Get all contact forces and local torques that concern all objects tracked by this tracker. Returns number of force pairs.
+      SetFamilyVisible(self: deme._deme.DEMVisualizer, family: typing.SupportsInt | typing.SupportsIndex, visible: bool) -> None
 
 
-.. py:method:: Tracker.GetContactForcesAndLocalTorqueForAllToDevice
+.. py:method:: DEMVisualizer.SetPaused
 
    .. code-block:: text
 
-      GetContactForcesAndLocalTorqueForAllToDevice(self: deme._deme.Tracker, points: typing.SupportsInt | typing.SupportsIndex, forces: typing.SupportsInt | typing.SupportsIndex, torques: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex) -> int
-
-      Synchronously compact contact points, forces, and owner-local extra torques into caller-owned CUDA ``float3`` arrays. Capacity must cover the total recorded-contact count; the return value is the number of valid rows.
+      SetPaused(self: deme._deme.DEMVisualizer, paused: bool) -> None
 
 
-.. py:method:: Tracker.GetContactForcesForAll
+.. py:method:: DEMVisualizer.SetRenderSpheres
 
    .. code-block:: text
 
-      GetContactForcesForAll(self: deme._deme.Tracker, points: collections.abc.Sequence[float3], forces: collections.abc.Sequence[float3]) -> int
+      SetRenderSpheres(self: deme._deme.DEMVisualizer, render: bool = True) -> None
 
-      Get all contact forces that concern all objects tracked by this tracker. Returns number of force pairs.
-
-
-.. py:method:: Tracker.GetContactForcesForAllToDevice
-
-   .. code-block:: text
-
-      GetContactForcesForAllToDevice(self: deme._deme.Tracker, points: typing.SupportsInt | typing.SupportsIndex, forces: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex) -> int
+      Enable or disable component-sphere rendering; enabled by default.
 
 
-      Synchronously compact contact points and forces for all tracked owners into CUDA ``float3`` arrays.
-
-      Each pointer must address ``capacity`` elements on logical CUDA ``device``.
-      Capacity must cover the simulation's total recorded-contact count. The return
-      value is the number of valid compacted rows. Contact force recording must be
-      enabled.
-
-
-.. py:method:: Tracker.GetFamilies
+.. py:method:: DEMVisualizer.SetRenderTriangles
 
    .. code-block:: text
 
-      GetFamilies(self: deme._deme.Tracker) -> list[int]
+      SetRenderTriangles(self: deme._deme.DEMVisualizer, render: bool = True) -> None
 
-      Get the family numbers of all the tracked object.
-
-
-.. py:method:: Tracker.GetFamily
-
-   .. code-block:: text
-
-      GetFamily(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> int
-
-      Get the family number of the tracked object.
+      Enable or disable triangle rendering; enabled by default.
 
 
-.. py:method:: Tracker.GetMesh
+.. py:method:: DEMVisualizer.SetTargetFPS
 
    .. code-block:: text
 
-      GetMesh(self: deme._deme.Tracker) -> deme::DEMMesh
-
-      Get a handle for the mesh this tracker is tracking.
+      SetTargetFPS(self: deme._deme.DEMVisualizer, fps: typing.SupportsInt | typing.SupportsIndex) -> None
 
 
-.. py:method:: Tracker.GetMeshNodesGlobal
+.. py:method:: DEMVisualizer.SetWindowSize
 
    .. code-block:: text
 
-      GetMeshNodesGlobal(self: deme._deme.Tracker) -> list[float3]
-
-      Get the current locations of all the nodes in the mesh being tracked.
+      SetWindowSize(self: deme._deme.DEMVisualizer, width: typing.SupportsInt | typing.SupportsIndex, height: typing.SupportsInt | typing.SupportsIndex) -> None
 
 
-.. py:method:: Tracker.GetOwnerID
+.. py:method:: DEMVisualizer.SetWindowTitle
 
    .. code-block:: text
 
-      GetOwnerID(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> int
-
-      Return the simulation-wide owner ID at ``offset`` within this tracker.
+      SetWindowTitle(self: deme._deme.DEMVisualizer, title: str) -> None
 
 
-.. py:method:: Tracker.GetOwnerIDs
+.. py:method:: DEMVisualizer.ShouldStep
 
    .. code-block:: text
 
-      GetOwnerIDs(self: deme._deme.Tracker) -> list[int]
-
-      Return simulation-wide owner IDs for every owner covered by this tracker.
-
-
-.. py:method:: Tracker.GetOwnerWildcardValue
-
-   .. code-block:: text
-
-      GetOwnerWildcardValue(self: deme._deme.Tracker, name: str, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> float
-
-      Get the owner's wildcard value.
-
-
-.. py:method:: Tracker.GetOwnerWildcardValues
-
-   .. code-block:: text
-
-      GetOwnerWildcardValues(self: deme._deme.Tracker, name: str) -> list[float]
-
-      Get the owner wildcard values for all the owners entities tracked by this tracker.
-
-
-.. py:method:: Tracker.Mass
-
-   .. code-block:: text
-
-      Mass(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> float
-
-      Get the mass of the tracked object.
-
-
-.. py:method:: Tracker.Masses
-
-   .. code-block:: text
-
-      Masses(self: deme._deme.Tracker) -> list[float]
-
-      Get the masses of all the tracked objects.
-
-
-.. py:method:: Tracker.MassesToDevice
-
-   .. code-block:: text
-
-      MassesToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex) -> None
-
-      Synchronously copy all tracked masses to caller-owned CUDA ``float32`` storage. ``capacity`` is in elements; ``device`` is the allocation's logical CUDA device.
-
-
-.. py:method:: Tracker.MOI
-
-   .. code-block:: text
-
-      MOI(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[float]
-
-      Get the moment of inertia (in principal axis frame) of the tracked object.
-
-
-.. py:method:: Tracker.MOIs
-
-   .. code-block:: text
-
-      MOIs(self: deme._deme.Tracker) -> list[list[float]]
-
-      Get the moment of inertia (in principal axis frame) of all the tracked objects.
-
-
-.. py:method:: Tracker.MOIsToDevice
-
-   .. code-block:: text
-
-      MOIsToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex) -> None
-
-      Synchronously copy all tracked principal moments of inertia to caller-owned CUDA ``float3`` storage. ``capacity`` is in elements; ``device`` is the allocation's logical CUDA device.
-
-
-.. py:method:: Tracker.OrientationQuaternions
-
-   .. code-block:: text
-
-      OrientationQuaternions(self: deme._deme.Tracker) -> list[list[float]]
-
-      Return local-to-global orientation quaternions for all tracked owners. Each quaternion uses Python ordering ``(x, y, z, w)``.
-
-
-.. py:method:: Tracker.OrientationQuaternionsToDevice
-
-   .. code-block:: text
-
-      OrientationQuaternionsToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex) -> None
-
-      Synchronously copy all tracked local-to-global quaternions to caller-owned CUDA ``float4`` storage in ``(x, y, z, w)`` order. ``capacity`` is in elements.
-
-
-.. py:method:: Tracker.OriQ
-
-   .. code-block:: text
-
-      OriQ(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[float]
-
-      Return the quaternion rotating the owner-local frame to the global frame. Python ordering is ``(x, y, z, w)`` (Chrono ``(e1, e2, e3, e0)``).
-
-
-.. py:method:: Tracker.OwnerWildcardValuesToDevice
-
-   .. code-block:: text
-
-      OwnerWildcardValuesToDevice(self: deme._deme.Tracker, name: str, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex) -> None
-
-      Synchronously copy the named ``float32`` owner wildcard for every tracked owner to caller-owned CUDA storage. ``capacity`` is in owner elements.
-
-
-.. py:method:: Tracker.Pos
-
-   .. code-block:: text
-
-      Pos(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[float]
-
-      Return the global-frame center-of-mass position of the tracked owner at ``offset``.
-
-
-.. py:method:: Tracker.Positions
-
-   .. code-block:: text
-
-      Positions(self: deme._deme.Tracker) -> list[list[float]]
-
-      Return global-frame center-of-mass positions for all owners covered by this tracker.
-
-
-.. py:method:: Tracker.PositionsToDevice
-
-   .. code-block:: text
-
-      PositionsToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex) -> None
-
-
-      Synchronously copy all tracked global positions to caller-owned CUDA memory.
-
-      ``pointer`` is an integer address to writable, CUDA-accessible ``float3``
-      storage on logical CUDA ``device``. ``capacity`` is measured in ``float3``
-      elements and must cover every owner in this tracker. The caller owns the
-      allocation and must keep it alive through the call.
-
-
-.. py:method:: Tracker.SetAngVel
-
-   .. code-block:: text
-
-      SetAngVel(*args, **kwargs)
-      Overloaded function.
-
-      1. SetAngVel(self: deme._deme.Tracker, angVel: float3, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> None
-
-      Set the angular velocity of this tracked object in its own local coordinate system.
-
-      2. SetAngVel(self: deme._deme.Tracker, angVel: collections.abc.Sequence[float3]) -> None
-
-      Set the angular velocity of consecutive tracked objects in their own local coordinate systems.
-
-
-.. py:method:: Tracker.SetFamily
-
-   .. code-block:: text
-
-      SetFamily(*args, **kwargs)
-      Overloaded function.
-
-      1. SetFamily(self: deme._deme.Tracker, fam_num: typing.SupportsInt | typing.SupportsIndex) -> None
-
-      Change the family numbers of all the entities tracked by this tracker.
-
-      2. SetFamily(self: deme._deme.Tracker, fam_num: typing.SupportsInt | typing.SupportsIndex, offset: typing.SupportsInt | typing.SupportsIndex) -> None
-
-      Change the family number of one entities tracked by this tracker.
-
-
-.. py:method:: Tracker.SetOriQ
-
-   .. code-block:: text
-
-      SetOriQ(*args, **kwargs)
-      Overloaded function.
-
-      1. SetOriQ(self: deme._deme.Tracker, oriQ: float4, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> None
-
-      Set the quaternion which represents the orientation of this tracked object's coordinate system.
-
-      2. SetOriQ(self: deme._deme.Tracker, oriQ: collections.abc.Sequence[float4]) -> None
-
-      Set the quaternion which represents the orientation of consecutive tracked objects' coordinate systems.
-
-
-.. py:method:: Tracker.SetOwnerWildcardValue
-
-   .. code-block:: text
-
-      SetOwnerWildcardValue(self: deme._deme.Tracker, name: str, wc: typing.SupportsFloat | typing.SupportsIndex, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> None
-
-      Set a wildcard value of the owner this tracker is tracking.
-
-
-.. py:method:: Tracker.SetOwnerWildcardValues
-
-   .. code-block:: text
-
-      SetOwnerWildcardValues(self: deme._deme.Tracker, name: str, wc: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex]) -> None
-
-      Set a wildcard value of the owner this tracker is tracking.
-
-
-.. py:method:: Tracker.SetPos
-
-   .. code-block:: text
-
-      SetPos(*args, **kwargs)
-      Overloaded function.
-
-      1. SetPos(self: deme._deme.Tracker, pos: float3, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> None
-
-      Set the position of this tracked object.
-
-      2. SetPos(self: deme._deme.Tracker, pos: collections.abc.Sequence[float3]) -> None
-
-      Set the positions of consecutive tracked objects.
-
-
-.. py:method:: Tracker.SetVel
-
-   .. code-block:: text
-
-      SetVel(*args, **kwargs)
-      Overloaded function.
-
-      1. SetVel(self: deme._deme.Tracker, vel: float3, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> None
-
-      Set the velocity of this tracked object in global frame.
-
-      2. SetVel(self: deme._deme.Tracker, vel: collections.abc.Sequence[float3]) -> None
-
-      Set the velocity of consecutive tracked objects in global frame.
-
-
-.. py:method:: Tracker.UpdateMesh
-
-   .. code-block:: text
-
-      UpdateMesh(self: deme._deme.Tracker, new_nodes: collections.abc.Sequence[float3]) -> None
-
-      Apply the new mesh node positions such that the tracked mesh is replaced by the new_nodes.
-
-
-.. py:method:: Tracker.UpdateMeshByIncrement
-
-   .. code-block:: text
-
-      UpdateMeshByIncrement(self: deme._deme.Tracker, deformation: collections.abc.Sequence[float3]) -> None
-
-      Change the coordinates of each mesh node by the given amount.
-
-
-.. py:method:: Tracker.Vel
-
-   .. code-block:: text
-
-      Vel(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[float]
-
-      Return the global-frame linear velocity of the owner at ``offset``.
-
-
-.. py:method:: Tracker.Velocities
-
-   .. code-block:: text
-
-      Velocities(self: deme._deme.Tracker) -> list[list[float]]
-
-      Return global-frame linear velocities for all tracked owners.
-
-
-.. py:method:: Tracker.VelocitiesToDevice
-
-   .. code-block:: text
-
-      VelocitiesToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex) -> None
-
-      Synchronously copy all tracked global linear velocities to caller-owned CUDA ``float3`` storage. ``capacity`` is in elements; ``device`` is the allocation's logical CUDA device.
+      ShouldStep(self: deme._deme.DEMVisualizer) -> bool
 
 
 
@@ -3781,6 +3725,24 @@ DEMExternObj
       Create an empty analytical external object.
 
 
+.. py:method:: DEMExternObj.AddCone
+
+   .. code-block:: text
+
+      AddCone(self: deme._deme.DEMExternObj, tip: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex], axis: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex], slope: typing.SupportsFloat | typing.SupportsIndex, material: deme._deme.DEMMaterial, normal: bool = False) -> None
+
+      Add an analytical cone side extending indefinitely from its tip.
+
+
+.. py:method:: DEMExternObj.AddConeSegment
+
+   .. code-block:: text
+
+      AddConeSegment(self: deme._deme.DEMExternObj, tip: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex], axis: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex], slope: typing.SupportsFloat | typing.SupportsIndex, hmin: typing.SupportsFloat | typing.SupportsIndex, hmax: typing.SupportsFloat | typing.SupportsIndex, material: deme._deme.DEMMaterial, normal: bool = False) -> None
+
+      Add an analytical cone or frustum side clipped between two axial distances.
+
+
 .. py:method:: DEMExternObj.AddCylinder
 
    .. code-block:: text
@@ -4129,6 +4091,13 @@ DEMMesh
       Return whether patch IDs were explicitly supplied or computed.
 
 
+.. py:method:: DEMMesh.ArePatchLocationsExplicitlySet
+
+   .. code-block:: text
+
+      ArePatchLocationsExplicitlySet(self: deme._deme.DEMMesh) -> bool
+
+
 .. py:method:: DEMMesh.Clear
 
    .. code-block:: text
@@ -4208,6 +4177,15 @@ DEMMesh
       GetPatchIDs(self: deme._deme.DEMMesh) -> list[int]
 
       Get one patch ID per triangle.
+
+
+.. py:method:: DEMMesh.GetPatchLocations
+
+   .. code-block:: text
+
+      GetPatchLocations(self: deme._deme.DEMMesh) -> list[float3]
+
+      Read cached patch centers; call tracker GetMesh first after device updates to synchronize.
 
 
 .. py:method:: DEMMesh.GetShellThickness
@@ -4307,6 +4285,15 @@ DEMMesh
       Scale mesh vertices independently along X, Y, and Z.
 
 
+.. py:method:: DEMMesh.SetEachTriangleAsPatch
+
+   .. code-block:: text
+
+      SetEachTriangleAsPatch(self: deme._deme.DEMMesh) -> None
+
+      Assign every triangle to its own patch using consecutive patch IDs.
+
+
 .. py:method:: DEMMesh.SetFamily
 
    .. code-block:: text
@@ -4375,6 +4362,15 @@ DEMMesh
       SetPatchIDs(self: deme._deme.DEMMesh, patch_ids: collections.abc.Sequence[typing.SupportsInt | typing.SupportsIndex]) -> None
 
       Set one patch ID per triangle.
+
+
+.. py:method:: DEMMesh.SetPatchLocations
+
+   .. code-block:: text
+
+      SetPatchLocations(self: deme._deme.DEMMesh, centers: collections.abc.Sequence[float3]) -> None
+
+      Set local patch centers before initialization. Use tracker UpdateMeshPatchLocations at runtime.
 
 
 .. py:method:: DEMMesh.SetShellThickness
@@ -4733,6 +4729,663 @@ MESH_FORMAT
       STL
 
       PLY
+
+
+MESH_OUTPUT_CONTENT
+-------------------
+
+.. py:class:: MESH_OUTPUT_CONTENT
+
+   .. code-block:: text
+
+      Members:
+
+      XYZ
+
+      QUAT
+
+      ABSV
+
+      VEL
+
+      ANG_VEL
+
+      ABS_ACC
+
+      ACC
+
+      ANG_ACC
+
+      FAMILY
+
+      MAT
+
+      OWNER_WILDCARD
+
+      GEO_WILDCARD
+
+      OWNER
+
+      MESH_ID
+
+      TRI_ID
+
+      PATCH_ID
+
+.. py:method:: MESH_OUTPUT_CONTENT.__init__
+
+   .. code-block:: text
+
+      __init__(self: deme._deme.MESH_OUTPUT_CONTENT, value: typing.SupportsInt | typing.SupportsIndex) -> None
+
+
+.. py:attribute:: MESH_OUTPUT_CONTENT.ABS_ACC
+
+   .. code-block:: text
+
+      Members:
+
+      XYZ
+
+      QUAT
+
+      ABSV
+
+      VEL
+
+      ANG_VEL
+
+      ABS_ACC
+
+      ACC
+
+      ANG_ACC
+
+      FAMILY
+
+      MAT
+
+      OWNER_WILDCARD
+
+      GEO_WILDCARD
+
+      OWNER
+
+      MESH_ID
+
+      TRI_ID
+
+      PATCH_ID
+
+.. py:attribute:: MESH_OUTPUT_CONTENT.ABSV
+
+   .. code-block:: text
+
+      Members:
+
+      XYZ
+
+      QUAT
+
+      ABSV
+
+      VEL
+
+      ANG_VEL
+
+      ABS_ACC
+
+      ACC
+
+      ANG_ACC
+
+      FAMILY
+
+      MAT
+
+      OWNER_WILDCARD
+
+      GEO_WILDCARD
+
+      OWNER
+
+      MESH_ID
+
+      TRI_ID
+
+      PATCH_ID
+
+.. py:attribute:: MESH_OUTPUT_CONTENT.ACC
+
+   .. code-block:: text
+
+      Members:
+
+      XYZ
+
+      QUAT
+
+      ABSV
+
+      VEL
+
+      ANG_VEL
+
+      ABS_ACC
+
+      ACC
+
+      ANG_ACC
+
+      FAMILY
+
+      MAT
+
+      OWNER_WILDCARD
+
+      GEO_WILDCARD
+
+      OWNER
+
+      MESH_ID
+
+      TRI_ID
+
+      PATCH_ID
+
+.. py:attribute:: MESH_OUTPUT_CONTENT.ANG_ACC
+
+   .. code-block:: text
+
+      Members:
+
+      XYZ
+
+      QUAT
+
+      ABSV
+
+      VEL
+
+      ANG_VEL
+
+      ABS_ACC
+
+      ACC
+
+      ANG_ACC
+
+      FAMILY
+
+      MAT
+
+      OWNER_WILDCARD
+
+      GEO_WILDCARD
+
+      OWNER
+
+      MESH_ID
+
+      TRI_ID
+
+      PATCH_ID
+
+.. py:attribute:: MESH_OUTPUT_CONTENT.ANG_VEL
+
+   .. code-block:: text
+
+      Members:
+
+      XYZ
+
+      QUAT
+
+      ABSV
+
+      VEL
+
+      ANG_VEL
+
+      ABS_ACC
+
+      ACC
+
+      ANG_ACC
+
+      FAMILY
+
+      MAT
+
+      OWNER_WILDCARD
+
+      GEO_WILDCARD
+
+      OWNER
+
+      MESH_ID
+
+      TRI_ID
+
+      PATCH_ID
+
+.. py:attribute:: MESH_OUTPUT_CONTENT.FAMILY
+
+   .. code-block:: text
+
+      Members:
+
+      XYZ
+
+      QUAT
+
+      ABSV
+
+      VEL
+
+      ANG_VEL
+
+      ABS_ACC
+
+      ACC
+
+      ANG_ACC
+
+      FAMILY
+
+      MAT
+
+      OWNER_WILDCARD
+
+      GEO_WILDCARD
+
+      OWNER
+
+      MESH_ID
+
+      TRI_ID
+
+      PATCH_ID
+
+.. py:attribute:: MESH_OUTPUT_CONTENT.GEO_WILDCARD
+
+   .. code-block:: text
+
+      Members:
+
+      XYZ
+
+      QUAT
+
+      ABSV
+
+      VEL
+
+      ANG_VEL
+
+      ABS_ACC
+
+      ACC
+
+      ANG_ACC
+
+      FAMILY
+
+      MAT
+
+      OWNER_WILDCARD
+
+      GEO_WILDCARD
+
+      OWNER
+
+      MESH_ID
+
+      TRI_ID
+
+      PATCH_ID
+
+.. py:attribute:: MESH_OUTPUT_CONTENT.MAT
+
+   .. code-block:: text
+
+      Members:
+
+      XYZ
+
+      QUAT
+
+      ABSV
+
+      VEL
+
+      ANG_VEL
+
+      ABS_ACC
+
+      ACC
+
+      ANG_ACC
+
+      FAMILY
+
+      MAT
+
+      OWNER_WILDCARD
+
+      GEO_WILDCARD
+
+      OWNER
+
+      MESH_ID
+
+      TRI_ID
+
+      PATCH_ID
+
+.. py:attribute:: MESH_OUTPUT_CONTENT.MESH_ID
+
+   .. code-block:: text
+
+      Members:
+
+      XYZ
+
+      QUAT
+
+      ABSV
+
+      VEL
+
+      ANG_VEL
+
+      ABS_ACC
+
+      ACC
+
+      ANG_ACC
+
+      FAMILY
+
+      MAT
+
+      OWNER_WILDCARD
+
+      GEO_WILDCARD
+
+      OWNER
+
+      MESH_ID
+
+      TRI_ID
+
+      PATCH_ID
+
+.. py:attribute:: MESH_OUTPUT_CONTENT.OWNER
+
+   .. code-block:: text
+
+      Members:
+
+      XYZ
+
+      QUAT
+
+      ABSV
+
+      VEL
+
+      ANG_VEL
+
+      ABS_ACC
+
+      ACC
+
+      ANG_ACC
+
+      FAMILY
+
+      MAT
+
+      OWNER_WILDCARD
+
+      GEO_WILDCARD
+
+      OWNER
+
+      MESH_ID
+
+      TRI_ID
+
+      PATCH_ID
+
+.. py:attribute:: MESH_OUTPUT_CONTENT.OWNER_WILDCARD
+
+   .. code-block:: text
+
+      Members:
+
+      XYZ
+
+      QUAT
+
+      ABSV
+
+      VEL
+
+      ANG_VEL
+
+      ABS_ACC
+
+      ACC
+
+      ANG_ACC
+
+      FAMILY
+
+      MAT
+
+      OWNER_WILDCARD
+
+      GEO_WILDCARD
+
+      OWNER
+
+      MESH_ID
+
+      TRI_ID
+
+      PATCH_ID
+
+.. py:attribute:: MESH_OUTPUT_CONTENT.PATCH_ID
+
+   .. code-block:: text
+
+      Members:
+
+      XYZ
+
+      QUAT
+
+      ABSV
+
+      VEL
+
+      ANG_VEL
+
+      ABS_ACC
+
+      ACC
+
+      ANG_ACC
+
+      FAMILY
+
+      MAT
+
+      OWNER_WILDCARD
+
+      GEO_WILDCARD
+
+      OWNER
+
+      MESH_ID
+
+      TRI_ID
+
+      PATCH_ID
+
+.. py:attribute:: MESH_OUTPUT_CONTENT.QUAT
+
+   .. code-block:: text
+
+      Members:
+
+      XYZ
+
+      QUAT
+
+      ABSV
+
+      VEL
+
+      ANG_VEL
+
+      ABS_ACC
+
+      ACC
+
+      ANG_ACC
+
+      FAMILY
+
+      MAT
+
+      OWNER_WILDCARD
+
+      GEO_WILDCARD
+
+      OWNER
+
+      MESH_ID
+
+      TRI_ID
+
+      PATCH_ID
+
+.. py:attribute:: MESH_OUTPUT_CONTENT.TRI_ID
+
+   .. code-block:: text
+
+      Members:
+
+      XYZ
+
+      QUAT
+
+      ABSV
+
+      VEL
+
+      ANG_VEL
+
+      ABS_ACC
+
+      ACC
+
+      ANG_ACC
+
+      FAMILY
+
+      MAT
+
+      OWNER_WILDCARD
+
+      GEO_WILDCARD
+
+      OWNER
+
+      MESH_ID
+
+      TRI_ID
+
+      PATCH_ID
+
+.. py:attribute:: MESH_OUTPUT_CONTENT.VEL
+
+   .. code-block:: text
+
+      Members:
+
+      XYZ
+
+      QUAT
+
+      ABSV
+
+      VEL
+
+      ANG_VEL
+
+      ABS_ACC
+
+      ACC
+
+      ANG_ACC
+
+      FAMILY
+
+      MAT
+
+      OWNER_WILDCARD
+
+      GEO_WILDCARD
+
+      OWNER
+
+      MESH_ID
+
+      TRI_ID
+
+      PATCH_ID
+
+.. py:attribute:: MESH_OUTPUT_CONTENT.XYZ
+
+   .. code-block:: text
+
+      Members:
+
+      XYZ
+
+      QUAT
+
+      ABSV
+
+      VEL
+
+      ANG_VEL
+
+      ABS_ACC
+
+      ACC
+
+      ANG_ACC
+
+      FAMILY
+
+      MAT
+
+      OWNER_WILDCARD
+
+      GEO_WILDCARD
+
+      OWNER
+
+      MESH_ID
+
+      TRI_ID
+
+      PATCH_ID
 
 
 OUTPUT_CONTENT
@@ -5095,6 +5748,8 @@ OUTPUT_FORMAT
 
       BINARY
 
+      VTK
+
 .. py:method:: OUTPUT_FORMAT.__init__
 
    .. code-block:: text
@@ -5112,6 +5767,8 @@ OUTPUT_FORMAT
 
       BINARY
 
+      VTK
+
 .. py:attribute:: OUTPUT_FORMAT.CSV
 
    .. code-block:: text
@@ -5121,6 +5778,20 @@ OUTPUT_FORMAT
       CSV
 
       BINARY
+
+      VTK
+
+.. py:attribute:: OUTPUT_FORMAT.VTK
+
+   .. code-block:: text
+
+      Members:
+
+      CSV
+
+      BINARY
+
+      VTK
 
 
 OWNER_TYPE
@@ -5433,3 +6104,1058 @@ TIME_INTEGRATOR
       EXTENDED_TAYLOR
 
       CHUNG
+
+
+Tracker
+-------
+
+.. py:class:: Tracker
+
+   .. code-block:: text
+
+      Access and modify owners associated with a tracked batch or object.
+
+      Create trackers with ``DEMSolver.Track`` during setup. Most state queries and
+      updates require the solver to be initialized and synchronized. ``offset``
+      selects an owner within the tracked collection, starting at zero. Keep the
+      parent solver alive while using a tracker.
+
+      Fixed-size CUDA exchange methods validate ranges, capacities, and pointer metadata by default. Pass
+      ``validate=False`` only when those preconditions are guaranteed and avoiding validation overhead matters. Required
+      device routing and documented transformations, including quaternion normalization, still apply.
+
+.. py:method:: Tracker.__init__
+
+   .. code-block:: text
+
+      __init__(self: deme._deme.Tracker, solver: deme::DEMSolver) -> None
+
+      Create a tracker associated with ``solver``. Prefer ``DEMSolver.Track`` so the tracked owner range is configured correctly.
+
+
+.. py:method:: Tracker.AddAcc
+
+   .. code-block:: text
+
+      AddAcc(*args, **kwargs)
+      Overloaded function.
+
+      1. AddAcc(self: deme._deme.Tracker, acc: float3, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> None
+
+      Add an extra acc to the tracked body, for the next time step. Note if the user intends to add a persistent external force, then using family prescription is the better method.
+
+      2. AddAcc(self: deme._deme.Tracker, acc: collections.abc.Sequence[float3]) -> None
+
+      Add an extra acc to consecutive tracked objects, (only) for the next time step. Note if the user intends to add a persistent external force, then using family prescription is the better method.
+
+
+.. py:method:: Tracker.AddAccFromDevice
+
+   .. code-block:: text
+
+      AddAccFromDevice(self: deme._deme.Tracker, source: typing.SupportsInt | typing.SupportsIndex, source_device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously queue one global-frame linear acceleration per tracked owner from CUDA memory.
+
+      ``source`` is an integer address containing one CUDA ``float3`` per tracked owner in tracker order. Remote input is
+      copied from ``source_device`` to the dynamic-worker device before unpacking. Values replace any previously queued
+      next-step linear-acceleration contribution. Contact acceleration is accumulated on top during the next
+      force/integration step, gravity is applied separately, and the queued contribution is consumed after one step. Pass
+      ``validate=False`` only when the range and pointer metadata are known to be valid. The source buffer may be reused when
+      this call returns.
+
+
+.. py:method:: Tracker.AddAngAcc
+
+   .. code-block:: text
+
+      AddAngAcc(*args, **kwargs)
+      Overloaded function.
+
+      1. AddAngAcc(self: deme._deme.Tracker, angAcc: float3, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> None
+
+      Add an extra angular acceleration to the tracked body, for the next time step. Note if the user intends to add a persistent external torque, then using family prescription is the better method.
+
+      2. AddAngAcc(self: deme._deme.Tracker, angAcc: collections.abc.Sequence[float3]) -> None
+
+      Add an extra angular acceleration to consecutive tracked objects, (only) for the next time step. Note if the user intends to add a persistent external torque, then using family prescription is the better method.
+
+
+.. py:method:: Tracker.AddAngAccFromDevice
+
+   .. code-block:: text
+
+      AddAngAccFromDevice(self: deme._deme.Tracker, source: typing.SupportsInt | typing.SupportsIndex, source_device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously queue one local-frame angular acceleration per tracked owner from CUDA memory.
+
+      ``source`` is an integer address containing one CUDA ``float3`` per tracked owner in tracker order. Remote input is
+      copied from ``source_device`` to the dynamic-worker device before unpacking. Values use each owner's local principal-
+      axis frame and replace any previously queued next-step angular-acceleration contribution. Contact angular acceleration
+      is accumulated on top during the next force/integration step, and the queued contribution is consumed after one step.
+      Pass ``validate=False`` only when the range and pointer metadata are known to be valid. The source buffer may be reused
+      when this call returns.
+
+
+.. py:method:: Tracker.AngularVelocitiesGlobal
+
+   .. code-block:: text
+
+      AngularVelocitiesGlobal(self: deme._deme.Tracker) -> list[list[float]]
+
+      Return global-frame angular velocities for all tracked owners.
+
+
+.. py:method:: Tracker.AngularVelocitiesGlobalToDevice
+
+   .. code-block:: text
+
+      AngularVelocitiesGlobalToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously copy all tracked global-frame angular velocities to caller-owned CUDA ``float3`` storage. ``capacity`` is in elements; ``device`` is the allocation's logical CUDA device.
+
+
+.. py:method:: Tracker.AngularVelocitiesLocal
+
+   .. code-block:: text
+
+      AngularVelocitiesLocal(self: deme._deme.Tracker) -> list[list[float]]
+
+      Return local principal-axis-frame angular velocities for all tracked owners.
+
+
+.. py:method:: Tracker.AngularVelocitiesLocalToDevice
+
+   .. code-block:: text
+
+      AngularVelocitiesLocalToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously copy all tracked local-frame angular velocities to caller-owned CUDA ``float3`` storage. ``capacity`` is in elements; ``device`` is the allocation's logical CUDA device.
+
+
+.. py:method:: Tracker.AngVelGlobal
+
+   .. code-block:: text
+
+      AngVelGlobal(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[float]
+
+      Return the global-frame angular velocity of the owner at ``offset``.
+
+
+.. py:method:: Tracker.AngVelLocal
+
+   .. code-block:: text
+
+      AngVelLocal(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[float]
+
+      Return the angular velocity of the owner at ``offset`` in its local principal-axis frame. Rotate it by ``OriQ(offset)`` to obtain the global-frame value.
+
+
+.. py:method:: Tracker.ContactAcc
+
+   .. code-block:: text
+
+      ContactAcc(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[float]
+
+      Get the a portion of the acceleration of this tracked object, that is the result of its contact with other simulation entities. In most cases, this means excluding the gravitational acceleration. The acceleration is in global frame.
+
+
+.. py:method:: Tracker.ContactAccelerations
+
+   .. code-block:: text
+
+      ContactAccelerations(self: deme._deme.Tracker) -> list[list[float]]
+
+      Get the acceleration experienced by all objects tracked by this tracker, that is the result of their contact with other simulation entities. The acceleration is in global frame. In most cases, this means excluding the gravitational acceleration. The acceleration is in global frame.
+
+
+.. py:method:: Tracker.ContactAccelerationsToDevice
+
+   .. code-block:: text
+
+      ContactAccelerationsToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously copy all tracked global-frame contact accelerations to caller-owned CUDA ``float3`` storage. Gravity and other non-contact acceleration are excluded.
+
+
+.. py:method:: Tracker.ContactAngAccGlobal
+
+   .. code-block:: text
+
+      ContactAngAccGlobal(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[float]
+
+      Get the a portion of the angular acceleration of this tracked object, that is the result of its contact with other simulation entities. The acceleration is in this object's global frame.
+
+
+.. py:method:: Tracker.ContactAngAccLocal
+
+   .. code-block:: text
+
+      ContactAngAccLocal(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[float]
+
+      Get the a portion of the angular acceleration of this tracked object, that is the result of its contact with other simulation entities. The acceleration is in this object's local frame.
+
+
+.. py:method:: Tracker.ContactAngularAccelerationsGlobal
+
+   .. code-block:: text
+
+      ContactAngularAccelerationsGlobal(self: deme._deme.Tracker) -> list[list[float]]
+
+      Get the angular acceleration experienced by all objects tracked by this tracker, that is the result of their contact with other simulation entities. The acceleration is in this object's global frame.
+
+
+.. py:method:: Tracker.ContactAngularAccelerationsGlobalToDevice
+
+   .. code-block:: text
+
+      ContactAngularAccelerationsGlobalToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously copy all tracked global-frame contact angular accelerations to caller-owned CUDA ``float3`` storage.
+
+
+.. py:method:: Tracker.ContactAngularAccelerationsLocal
+
+   .. code-block:: text
+
+      ContactAngularAccelerationsLocal(self: deme._deme.Tracker) -> list[list[float]]
+
+      Get the angular acceleration experienced by all objects tracked by this tracker, that is the result of their contact with other simulation entities. The acceleration is in this object's local frame.
+
+
+.. py:method:: Tracker.ContactAngularAccelerationsLocalToDevice
+
+   .. code-block:: text
+
+      ContactAngularAccelerationsLocalToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously copy all tracked local-frame contact angular accelerations to caller-owned CUDA ``float3`` storage.
+
+
+.. py:method:: Tracker.ContactWrenches
+
+   .. code-block:: text
+
+      ContactWrenches(self: deme._deme.Tracker) -> tuple[list[float3], list[float3]]
+
+      Return ``(forces, torques)`` with one reduced contact wrench per tracked owner.
+
+      Both tuple elements preserve tracker owner order and contain ``float3`` values in the global frame. Torque is measured
+      about each owner's current DEME position and includes both force-generated moments and force-model-only torque. Owners
+      without recorded contact receive zero. This reads current dT force records without triggering contact detection or
+      force evaluation, so callers must advance/synchronize the simulation as needed. Contact recording must remain enabled.
+
+
+.. py:method:: Tracker.ContactWrenchesToDevice
+
+   .. code-block:: text
+
+      ContactWrenchesToDevice(self: deme._deme.Tracker, force_destination: typing.SupportsInt | typing.SupportsIndex, torque_destination: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex) -> None
+
+      Synchronously write one reduced contact wrench per tracked owner to CUDA ``float3`` buffers.
+
+      Outputs preserve tracker owner order. Force and torque are global-frame resultants; torque is measured about each
+      owner's current DEME position and includes force-generated moments and force-model-only torque. Owners without contact
+      receive zero. ``force_destination`` and ``torque_destination`` are integer addresses of writable CUDA ``float3``
+      storage. ``capacity`` is the element capacity of each buffer and must cover every tracked owner. Both buffers must
+      belong to logical CUDA ``device``; CUDA selects the available inter-device transfer route for remote output. The call
+      is synchronous, so both buffers may be consumed when it returns. This reads current recorded dT forces and does not
+      trigger contact detection or force evaluation. Contact recording must remain enabled.
+
+
+.. py:method:: Tracker.FamiliesToDevice
+
+   .. code-block:: text
+
+      FamiliesToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously copy all tracked family numbers to caller-owned CUDA ``uint32`` storage. ``capacity`` is in elements; ``device`` is the allocation's logical CUDA device.
+
+
+.. py:method:: Tracker.GetContactClumps
+
+   .. code-block:: text
+
+      GetContactClumps(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[int]
+
+      Get the clumps that are in contact with this tracked owner as a vector.
+
+
+.. py:method:: Tracker.GetContactForces
+
+   .. code-block:: text
+
+      GetContactForces(self: deme._deme.Tracker, points: collections.abc.Sequence[float3], forces: collections.abc.Sequence[float3], offset: typing.SupportsInt | typing.SupportsIndex = 0) -> int
+
+      Get all contact forces that concern this tracked object. Returns number of force pairs.
+
+
+.. py:method:: Tracker.GetContactForcesAndGlobalTorque
+
+   .. code-block:: text
+
+      GetContactForcesAndGlobalTorque(self: deme._deme.Tracker, points: collections.abc.Sequence[float3], forces: collections.abc.Sequence[float3], torques: collections.abc.Sequence[float3], offset: typing.SupportsInt | typing.SupportsIndex = 0) -> int
+
+      Get all contact forces and global torques that concern this tracked object. Returns number of force pairs.
+
+
+.. py:method:: Tracker.GetContactForcesAndGlobalTorqueForAll
+
+   .. code-block:: text
+
+      GetContactForcesAndGlobalTorqueForAll(self: deme._deme.Tracker, points: collections.abc.Sequence[float3], forces: collections.abc.Sequence[float3], torques: collections.abc.Sequence[float3]) -> int
+
+      Get all contact forces and global torques that concern all objects tracked by this tracker. Returns number of force pairs.
+
+
+.. py:method:: Tracker.GetContactForcesAndGlobalTorqueForAllToDevice
+
+   .. code-block:: text
+
+      GetContactForcesAndGlobalTorqueForAllToDevice(self: deme._deme.Tracker, points: typing.SupportsInt | typing.SupportsIndex, forces: typing.SupportsInt | typing.SupportsIndex, torques: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex) -> int
+
+      Synchronously compact contact points, forces, and global-frame extra torques into caller-owned CUDA ``float3`` arrays. Capacity must cover the total recorded-contact count; the return value is the number of valid rows.
+
+
+.. py:method:: Tracker.GetContactForcesAndLocalTorque
+
+   .. code-block:: text
+
+      GetContactForcesAndLocalTorque(self: deme._deme.Tracker, points: collections.abc.Sequence[float3], forces: collections.abc.Sequence[float3], torques: collections.abc.Sequence[float3], offset: typing.SupportsInt | typing.SupportsIndex = 0) -> int
+
+      Get all contact forces and local torques that concern this tracked object. Returns number of force pairs.
+
+
+.. py:method:: Tracker.GetContactForcesAndLocalTorqueForAll
+
+   .. code-block:: text
+
+      GetContactForcesAndLocalTorqueForAll(self: deme._deme.Tracker, points: collections.abc.Sequence[float3], forces: collections.abc.Sequence[float3], torques: collections.abc.Sequence[float3]) -> int
+
+      Get all contact forces and local torques that concern all objects tracked by this tracker. Returns number of force pairs.
+
+
+.. py:method:: Tracker.GetContactForcesAndLocalTorqueForAllToDevice
+
+   .. code-block:: text
+
+      GetContactForcesAndLocalTorqueForAllToDevice(self: deme._deme.Tracker, points: typing.SupportsInt | typing.SupportsIndex, forces: typing.SupportsInt | typing.SupportsIndex, torques: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex) -> int
+
+      Synchronously compact contact points, forces, and owner-local extra torques into caller-owned CUDA ``float3`` arrays. Capacity must cover the total recorded-contact count; the return value is the number of valid rows.
+
+
+.. py:method:: Tracker.GetContactForcesForAll
+
+   .. code-block:: text
+
+      GetContactForcesForAll(self: deme._deme.Tracker, points: collections.abc.Sequence[float3], forces: collections.abc.Sequence[float3]) -> int
+
+      Get all contact forces that concern all objects tracked by this tracker. Returns number of force pairs.
+
+
+.. py:method:: Tracker.GetContactForcesForAllToDevice
+
+   .. code-block:: text
+
+      GetContactForcesForAllToDevice(self: deme._deme.Tracker, points: typing.SupportsInt | typing.SupportsIndex, forces: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex) -> int
+
+
+      Synchronously compact contact points and forces for all tracked owners into CUDA ``float3`` arrays.
+
+      Each pointer must address ``capacity`` elements on logical CUDA ``device``.
+      Capacity must cover the simulation's total recorded-contact count. The return
+      value is the number of valid compacted rows. Contact force recording must be
+      enabled.
+
+
+.. py:method:: Tracker.GetFamilies
+
+   .. code-block:: text
+
+      GetFamilies(self: deme._deme.Tracker) -> list[int]
+
+      Get the family numbers of all the tracked object.
+
+
+.. py:method:: Tracker.GetFamily
+
+   .. code-block:: text
+
+      GetFamily(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> int
+
+      Get the family number of the tracked object.
+
+
+.. py:method:: Tracker.GetMesh
+
+   .. code-block:: text
+
+      GetMesh(self: deme._deme.Tracker) -> deme::DEMMesh
+
+      Get a handle for the mesh this tracker is tracking.
+
+
+.. py:method:: Tracker.GetMeshNodesGlobal
+
+   .. code-block:: text
+
+      GetMeshNodesGlobal(self: deme._deme.Tracker) -> list[float3]
+
+      Get the current locations of all the nodes in the mesh being tracked.
+
+
+.. py:method:: Tracker.GetOwnerID
+
+   .. code-block:: text
+
+      GetOwnerID(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> int
+
+      Return the simulation-wide owner ID at ``offset`` within this tracker.
+
+
+.. py:method:: Tracker.GetOwnerIDs
+
+   .. code-block:: text
+
+      GetOwnerIDs(self: deme._deme.Tracker) -> list[int]
+
+      Return simulation-wide owner IDs for every owner covered by this tracker.
+
+
+.. py:method:: Tracker.GetOwnerWildcardValue
+
+   .. code-block:: text
+
+      GetOwnerWildcardValue(self: deme._deme.Tracker, name: str, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> float
+
+      Get the owner's wildcard value.
+
+
+.. py:method:: Tracker.GetOwnerWildcardValues
+
+   .. code-block:: text
+
+      GetOwnerWildcardValues(self: deme._deme.Tracker, name: str) -> list[float]
+
+      Get the owner wildcard values for all the owners entities tracked by this tracker.
+
+
+.. py:method:: Tracker.Mass
+
+   .. code-block:: text
+
+      Mass(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> float
+
+      Get the mass of the tracked object.
+
+
+.. py:method:: Tracker.Masses
+
+   .. code-block:: text
+
+      Masses(self: deme._deme.Tracker) -> list[float]
+
+      Get the masses of all the tracked objects.
+
+
+.. py:method:: Tracker.MassesToDevice
+
+   .. code-block:: text
+
+      MassesToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously copy all tracked masses to caller-owned CUDA ``float32`` storage. ``capacity`` is in elements; ``device`` is the allocation's logical CUDA device.
+
+
+.. py:method:: Tracker.MOI
+
+   .. code-block:: text
+
+      MOI(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[float]
+
+      Get the moment of inertia (in principal axis frame) of the tracked object.
+
+
+.. py:method:: Tracker.MOIs
+
+   .. code-block:: text
+
+      MOIs(self: deme._deme.Tracker) -> list[list[float]]
+
+      Get the moment of inertia (in principal axis frame) of all the tracked objects.
+
+
+.. py:method:: Tracker.MOIsToDevice
+
+   .. code-block:: text
+
+      MOIsToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously copy all tracked principal moments of inertia to caller-owned CUDA ``float3`` storage. ``capacity`` is in elements; ``device`` is the allocation's logical CUDA device.
+
+
+.. py:method:: Tracker.OrientationQuaternions
+
+   .. code-block:: text
+
+      OrientationQuaternions(self: deme._deme.Tracker) -> list[list[float]]
+
+      Return local-to-global orientation quaternions for all tracked owners. Each quaternion uses Python ordering ``(x, y, z, w)``.
+
+
+.. py:method:: Tracker.OrientationQuaternionsToDevice
+
+   .. code-block:: text
+
+      OrientationQuaternionsToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously copy all tracked local-to-global quaternions to caller-owned CUDA ``float4`` storage in ``(x, y, z, w)`` order. ``capacity`` is in elements.
+
+
+.. py:method:: Tracker.OriQ
+
+   .. code-block:: text
+
+      OriQ(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[float]
+
+      Return the quaternion rotating the owner-local frame to the global frame. Python ordering is ``(x, y, z, w)`` (Chrono ``(e1, e2, e3, e0)``).
+
+
+.. py:method:: Tracker.OwnerWildcardValuesToDevice
+
+   .. code-block:: text
+
+      OwnerWildcardValuesToDevice(self: deme._deme.Tracker, name: str, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously copy the named ``float32`` owner wildcard for every tracked owner to caller-owned CUDA storage. ``capacity`` is in owner elements.
+
+
+.. py:method:: Tracker.Pos
+
+   .. code-block:: text
+
+      Pos(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[float]
+
+      Return the global-frame center-of-mass position of the tracked owner at ``offset``.
+
+
+.. py:method:: Tracker.Positions
+
+   .. code-block:: text
+
+      Positions(self: deme._deme.Tracker) -> list[list[float]]
+
+      Return global-frame center-of-mass positions for all owners covered by this tracker.
+
+
+.. py:method:: Tracker.PositionsToDevice
+
+   .. code-block:: text
+
+      PositionsToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+
+      Synchronously copy all tracked global positions to caller-owned CUDA memory.
+
+      ``pointer`` is an integer address to writable, CUDA-accessible ``float3``
+      storage on logical CUDA ``device``. ``capacity`` is measured in ``float3``
+      elements and must cover every owner in this tracker. The caller owns the
+      allocation and must keep it alive through the call.
+
+
+.. py:method:: Tracker.SetAngularVelocitiesFromDevice
+
+   .. code-block:: text
+
+      SetAngularVelocitiesFromDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously set every tracked local-frame angular velocity from CUDA ``float3`` storage. The buffer must contain one element per tracked owner; remote input is copied to the dynamic-worker device before unpacking.
+
+
+.. py:method:: Tracker.SetAngularVelocitiesGlobalFromDevice
+
+   .. code-block:: text
+
+      SetAngularVelocitiesGlobalFromDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously set every tracked global angular velocity from CUDA ``float3`` storage. Each value is converted to the owner's local principal-axis frame using its orientation at call time. The buffer must contain one element per tracked owner; remote input is copied to the dynamic-worker device before unpacking.
+
+
+.. py:method:: Tracker.SetAngVel
+
+   .. code-block:: text
+
+      SetAngVel(*args, **kwargs)
+      Overloaded function.
+
+      1. SetAngVel(self: deme._deme.Tracker, angVel: float3, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> None
+
+      Set the angular velocity of this tracked object in its own local coordinate system.
+
+      2. SetAngVel(self: deme._deme.Tracker, angVel: collections.abc.Sequence[float3]) -> None
+
+      Set the angular velocity of consecutive tracked objects in their own local coordinate systems.
+
+
+.. py:method:: Tracker.SetFamily
+
+   .. code-block:: text
+
+      SetFamily(*args, **kwargs)
+      Overloaded function.
+
+      1. SetFamily(self: deme._deme.Tracker, fam_num: typing.SupportsInt | typing.SupportsIndex) -> None
+
+      Change the family numbers of all the entities tracked by this tracker.
+
+      2. SetFamily(self: deme._deme.Tracker, fam_num: typing.SupportsInt | typing.SupportsIndex, offset: typing.SupportsInt | typing.SupportsIndex) -> None
+
+      Change the family number of one entities tracked by this tracker.
+
+
+.. py:method:: Tracker.SetOrientationQuaternionsFromDevice
+
+   .. code-block:: text
+
+      SetOrientationQuaternionsFromDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously set every tracked local-to-global quaternion from CUDA ``float4`` storage in ``(x, y, z, w)`` order. With validation enabled, non-finite and zero-length inputs are rejected; finite, nonzero inputs are always normalized. The buffer must contain one element per tracked owner; remote input is copied to the dynamic-worker device before validation and unpacking.
+
+
+.. py:method:: Tracker.SetOriQ
+
+   .. code-block:: text
+
+      SetOriQ(*args, **kwargs)
+      Overloaded function.
+
+      1. SetOriQ(self: deme._deme.Tracker, oriQ: float4, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> None
+
+      Set the quaternion which represents the orientation of this tracked object's coordinate system.
+
+      2. SetOriQ(self: deme._deme.Tracker, oriQ: collections.abc.Sequence[float4]) -> None
+
+      Set the quaternion which represents the orientation of consecutive tracked objects' coordinate systems.
+
+
+.. py:method:: Tracker.SetOwnerWildcardValue
+
+   .. code-block:: text
+
+      SetOwnerWildcardValue(self: deme._deme.Tracker, name: str, wc: typing.SupportsFloat | typing.SupportsIndex, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> None
+
+      Set a wildcard value of the owner this tracker is tracking.
+
+
+.. py:method:: Tracker.SetOwnerWildcardValues
+
+   .. code-block:: text
+
+      SetOwnerWildcardValues(self: deme._deme.Tracker, name: str, wc: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex]) -> None
+
+      Set a wildcard value of the owner this tracker is tracking.
+
+
+.. py:method:: Tracker.SetPos
+
+   .. code-block:: text
+
+      SetPos(*args, **kwargs)
+      Overloaded function.
+
+      1. SetPos(self: deme._deme.Tracker, pos: float3, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> None
+
+      Set the position of this tracked object.
+
+      2. SetPos(self: deme._deme.Tracker, pos: collections.abc.Sequence[float3]) -> None
+
+      Set the positions of consecutive tracked objects.
+
+
+.. py:method:: Tracker.SetPositionsFromDevice
+
+   .. code-block:: text
+
+      SetPositionsFromDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously set every tracked global position from CUDA ``float3`` storage. The buffer must contain one element per tracked owner; remote input is copied to the dynamic-worker device before unpacking.
+
+
+.. py:method:: Tracker.SetVel
+
+   .. code-block:: text
+
+      SetVel(*args, **kwargs)
+      Overloaded function.
+
+      1. SetVel(self: deme._deme.Tracker, vel: float3, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> None
+
+      Set the velocity of this tracked object in global frame.
+
+      2. SetVel(self: deme._deme.Tracker, vel: collections.abc.Sequence[float3]) -> None
+
+      Set the velocity of consecutive tracked objects in global frame.
+
+
+.. py:method:: Tracker.SetVelocitiesFromDevice
+
+   .. code-block:: text
+
+      SetVelocitiesFromDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously set every tracked global linear velocity from CUDA ``float3`` storage. The buffer must contain one element per tracked owner; remote input is copied to the dynamic-worker device before unpacking.
+
+
+.. py:method:: Tracker.UpdateMesh
+
+   .. code-block:: text
+
+      UpdateMesh(self: deme._deme.Tracker, new_nodes: collections.abc.Sequence[float3], update_patch_centers: bool = True) -> None
+
+      Replace local mesh node coordinates. update_patch_centers refreshes automatic centers from all accumulated deformation; false preserves current centers. It has no effect for user-supplied centers. Automatic single-patch centers remain at the local origin.
+
+
+.. py:method:: Tracker.UpdateMeshByIncrement
+
+   .. code-block:: text
+
+      UpdateMeshByIncrement(self: deme._deme.Tracker, deformation: collections.abc.Sequence[float3], update_patch_centers: bool = True) -> None
+
+      Add local mesh node displacements. update_patch_centers refreshes automatic centers from all accumulated deformation; false preserves current centers. It has no effect for user-supplied centers. Automatic single-patch centers remain at the local origin.
+
+
+.. py:method:: Tracker.UpdateMeshByIncrementFromDevice
+
+   .. code-block:: text
+
+      UpdateMeshByIncrementFromDevice(self: deme._deme.Tracker, source: typing.SupportsInt | typing.SupportsIndex, source_device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True, update_patch_centers: bool = True) -> None
+
+      Synchronous local-node displacement increment: one float3 per node, fixed topology. Finish producing source before calling. validate checks pointer and finite values. update_patch_centers refreshes automatic centers only and has no effect for user-supplied centers. Single-patch automatic centers stay at the local origin. A later enabled refresh includes skipped deformation. Tracker GetMesh/GetMeshNodesGlobal synchronize the lazy CPU geometry cache.
+
+
+.. py:method:: Tracker.UpdateMeshFromDevice
+
+   .. code-block:: text
+
+      UpdateMeshFromDevice(self: deme._deme.Tracker, source: typing.SupportsInt | typing.SupportsIndex, source_device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True, update_patch_centers: bool = True) -> None
+
+      Synchronous local-node device update: one float3 per node, fixed topology. Finish producing source before calling. validate checks pointer and finite values. update_patch_centers refreshes automatic centers only and has no effect for user-supplied centers. Single-patch automatic centers stay at the local origin. Tracker GetMesh/GetMeshNodesGlobal synchronize the lazy CPU geometry cache.
+
+
+.. py:method:: Tracker.UpdateMeshPatchLocations
+
+   .. code-block:: text
+
+      UpdateMeshPatchLocations(self: deme._deme.Tracker, centers: collections.abc.Sequence[float3]) -> None
+
+      Set one local center per patch at runtime and select user-managed centers.
+
+
+.. py:method:: Tracker.UpdateMeshPatchLocationsFromDevice
+
+   .. code-block:: text
+
+      UpdateMeshPatchLocationsFromDevice(self: deme._deme.Tracker, source: typing.SupportsInt | typing.SupportsIndex, source_device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously set user-managed local patch centers from one CUDA float3 per patch.
+
+
+.. py:method:: Tracker.UseAutomaticMeshPatchLocations
+
+   .. code-block:: text
+
+      UseAutomaticMeshPatchLocations(self: deme._deme.Tracker) -> None
+
+      Resume automatic centers and immediately recompute from current geometry.
+
+
+.. py:method:: Tracker.Vel
+
+   .. code-block:: text
+
+      Vel(self: deme._deme.Tracker, offset: typing.SupportsInt | typing.SupportsIndex = 0) -> list[float]
+
+      Return the global-frame linear velocity of the owner at ``offset``.
+
+
+.. py:method:: Tracker.Velocities
+
+   .. code-block:: text
+
+      Velocities(self: deme._deme.Tracker) -> list[list[float]]
+
+      Return global-frame linear velocities for all tracked owners.
+
+
+.. py:method:: Tracker.VelocitiesToDevice
+
+   .. code-block:: text
+
+      VelocitiesToDevice(self: deme._deme.Tracker, pointer: typing.SupportsInt | typing.SupportsIndex, capacity: typing.SupportsInt | typing.SupportsIndex, device: typing.SupportsInt | typing.SupportsIndex, validate: bool = True) -> None
+
+      Synchronously copy all tracked global linear velocities to caller-owned CUDA ``float3`` storage. ``capacity`` is in elements; ``device`` is the allocation's logical CUDA device.
+
+
+
+VisualizationFrame
+------------------
+
+.. py:class:: VisualizationFrame
+
+   .. code-block:: text
+
+      No class description is currently available.
+
+.. py:method:: VisualizationFrame.__init__
+
+   .. code-block:: text
+
+      __init__(self: deme._deme.VisualizationFrame) -> None
+
+
+.. py:attribute:: VisualizationFrame.families
+
+   .. code-block:: text
+
+      Bound attribute.
+
+.. py:attribute:: VisualizationFrame.orientations
+
+   .. code-block:: text
+
+      Bound attribute.
+
+.. py:attribute:: VisualizationFrame.positions
+
+   .. code-block:: text
+
+      Bound attribute.
+
+.. py:attribute:: VisualizationFrame.revision
+
+   .. code-block:: text
+
+      Bound attribute.
+
+.. py:attribute:: VisualizationFrame.simulation_time
+
+   .. code-block:: text
+
+      Bound attribute.
+
+.. py:attribute:: VisualizationFrame.velocities
+
+   .. code-block:: text
+
+      Bound attribute.
+
+
+VisualizationScene
+------------------
+
+.. py:class:: VisualizationScene
+
+   .. code-block:: text
+
+      No class description is currently available.
+
+.. py:method:: VisualizationScene.__init__
+
+   .. code-block:: text
+
+      Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:attribute:: VisualizationScene.revision
+
+   .. code-block:: text
+
+      Bound attribute.
+
+.. py:attribute:: VisualizationScene.spheres
+
+   .. code-block:: text
+
+      Bound attribute.
+
+.. py:attribute:: VisualizationScene.triangles
+
+   .. code-block:: text
+
+      Bound attribute.
+
+
+VisualizationSphere
+-------------------
+
+.. py:class:: VisualizationSphere
+
+   .. code-block:: text
+
+      No class description is currently available.
+
+.. py:method:: VisualizationSphere.__init__
+
+   .. code-block:: text
+
+      Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:attribute:: VisualizationSphere.offset
+
+   .. code-block:: text
+
+      Bound attribute.
+
+.. py:attribute:: VisualizationSphere.owner
+
+   .. code-block:: text
+
+      Bound attribute.
+
+.. py:attribute:: VisualizationSphere.radius
+
+   .. code-block:: text
+
+      Bound attribute.
+
+
+VisualizationTriangle
+---------------------
+
+.. py:class:: VisualizationTriangle
+
+   .. code-block:: text
+
+      No class description is currently available.
+
+.. py:method:: VisualizationTriangle.__init__
+
+   .. code-block:: text
+
+      Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:attribute:: VisualizationTriangle.a
+
+   .. code-block:: text
+
+      Bound attribute.
+
+.. py:attribute:: VisualizationTriangle.b
+
+   .. code-block:: text
+
+      Bound attribute.
+
+.. py:attribute:: VisualizationTriangle.c
+
+   .. code-block:: text
+
+      Bound attribute.
+
+.. py:attribute:: VisualizationTriangle.owner
+
+   .. code-block:: text
+
+      Bound attribute.
+
+
+VisualizerColor
+---------------
+
+.. py:class:: VisualizerColor
+
+   .. code-block:: text
+
+      RGBA color used by DEMVisualizer.
+
+.. py:method:: VisualizerColor.__init__
+
+   .. code-block:: text
+
+      __init__(self: deme._deme.VisualizerColor, r: typing.SupportsInt | typing.SupportsIndex = 255, g: typing.SupportsInt | typing.SupportsIndex = 255, b: typing.SupportsInt | typing.SupportsIndex = 255, a: typing.SupportsInt | typing.SupportsIndex = 255) -> None
+
+
+.. py:attribute:: VisualizerColor.a
+
+   .. code-block:: text
+
+      Bound attribute.
+
+.. py:attribute:: VisualizerColor.b
+
+   .. code-block:: text
+
+      Bound attribute.
+
+.. py:attribute:: VisualizerColor.g
+
+   .. code-block:: text
+
+      Bound attribute.
+
+.. py:attribute:: VisualizerColor.r
+
+   .. code-block:: text
+
+      Bound attribute.
+
+
+VisualizerColorMode
+-------------------
+
+.. py:class:: VisualizerColorMode
+
+   .. code-block:: text
+
+      Members:
+
+      FAMILY
+
+      HEIGHT
+
+      SPEED
+
+.. py:method:: VisualizerColorMode.__init__
+
+   .. code-block:: text
+
+      __init__(self: deme._deme.VisualizerColorMode, value: typing.SupportsInt | typing.SupportsIndex) -> None
+
+
+.. py:attribute:: VisualizerColorMode.FAMILY
+
+   .. code-block:: text
+
+      Members:
+
+      FAMILY
+
+      HEIGHT
+
+      SPEED
+
+.. py:attribute:: VisualizerColorMode.HEIGHT
+
+   .. code-block:: text
+
+      Members:
+
+      FAMILY
+
+      HEIGHT
+
+      SPEED
+
+.. py:attribute:: VisualizerColorMode.SPEED
+
+   .. code-block:: text
+
+      Members:
+
+      FAMILY
+
+      HEIGHT
+
+      SPEED
