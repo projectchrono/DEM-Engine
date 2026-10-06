@@ -848,17 +848,45 @@ void DEMTracker::SetFamily(unsigned int fam_num, size_t offset) {
     sys->SetOwnerFamily(obj->ownerID + offset, fam_num);
 }
 
-void DEMTracker::UpdateMesh(const std::vector<float3>& new_nodes) {
+void DEMTracker::UpdateMesh(const std::vector<float3>& new_nodes, bool update_patch_centers) {
     assertMesh("UpdateMesh");
     // Outsource to API system to handle...
-    sys->SetTriNodeRelPos(obj->ownerID, obj->geoID, new_nodes);
+    sys->SetTriNodeRelPos(obj->ownerID, obj->geoID, new_nodes, update_patch_centers);
 }
 
 // Deformation is per-node, yet UpdateTriNodeRelPos need per-triangle info.
-void DEMTracker::UpdateMeshByIncrement(const std::vector<float3>& deformation) {
+void DEMTracker::UpdateMeshByIncrement(const std::vector<float3>& deformation, bool update_patch_centers) {
     assertMesh("UpdateMeshByIncrement");
     // Outsource to API system to handle...
-    sys->UpdateTriNodeRelPos(obj->ownerID, obj->geoID, deformation);
+    sys->UpdateTriNodeRelPos(obj->ownerID, obj->geoID, deformation, update_patch_centers);
+}
+
+// Tracker forwarding keeps mesh validation and device/cache ownership in the solver.
+void DEMTracker::UpdateMeshFromDevice(const float3* source,
+                                      int source_device,
+                                      bool validate,
+                                      bool update_patch_centers) {
+    assertMesh("UpdateMeshFromDevice");
+    sys->SetTriNodeRelPosFromDevice(obj->ownerID, source, source_device, validate, update_patch_centers);
+}
+void DEMTracker::UpdateMeshByIncrementFromDevice(const float3* source,
+                                                 int source_device,
+                                                 bool validate,
+                                                 bool update_patch_centers) {
+    assertMesh("UpdateMeshByIncrementFromDevice");
+    sys->UpdateTriNodeRelPosFromDevice(obj->ownerID, source, source_device, validate, update_patch_centers);
+}
+void DEMTracker::UpdateMeshPatchLocations(const std::vector<float3>& centers) {
+    assertMesh("UpdateMeshPatchLocations");
+    sys->SetMeshPatchLocations(obj->ownerID, centers);
+}
+void DEMTracker::UpdateMeshPatchLocationsFromDevice(const float3* source, int source_device, bool validate) {
+    assertMesh("UpdateMeshPatchLocationsFromDevice");
+    sys->SetMeshPatchLocationsFromDevice(obj->ownerID, source, source_device, validate);
+}
+void DEMTracker::UseAutomaticMeshPatchLocations() {
+    assertMesh("UseAutomaticMeshPatchLocations");
+    sys->UseAutomaticMeshPatchLocations(obj->ownerID);
 }
 
 std::shared_ptr<DEMMesh>& DEMTracker::GetMesh() {

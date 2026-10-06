@@ -1624,6 +1624,13 @@ void DEMSolver::migrateArrayDataToHost() {
     {
         ScopedCudaDevice device_scope(kT->streamInfo.device);
         kT->migrateDeviceModifiableInfoToHost();
+        // Mesh deformation is device-major on dT. Update will reload both workers, so seed kT's host geometry
+        // from the synchronized dT cache instead of restoring its original initialization coordinates.
+        for (size_t t = 0; t < dT->relPosNode1.size(); ++t) {
+            kT->relPosNode1[t] = dT->relPosNode1[t];
+            kT->relPosNode2[t] = dT->relPosNode2[t];
+            kT->relPosNode3[t] = dT->relPosNode3[t];
+        }
     }
 }
 

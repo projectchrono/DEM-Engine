@@ -743,7 +743,8 @@ class DEMMesh : public DEMInitializer {
     /// default (single patch).
     bool ArePatchesExplicitlySet() const { return patches_explicitly_set; }
 
-    /// @brief Set the relative location (to CoM) of each patch.
+    /// @brief Set the relative location (to CoM) of each patch before initialization.
+    /// For an initialized mesh use tracker UpdateMeshPatchLocations instead; this setter only changes cached data.
     /// @details Allows user to manually specify the location of each patch relative to the mesh's center of mass.
     /// @param patch_locations Vector of locations (float3), one for each patch. Must have the same length as the number
     /// of patches in the mesh.
