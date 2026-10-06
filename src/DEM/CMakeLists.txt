@@ -40,6 +40,7 @@ set(DEM_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/CombinedOwnerUtils.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/HostSideHelpers.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/MeshUtils.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/MeshDeformation.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/Samplers.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/AuxClasses.h
 )

@@ -890,8 +890,7 @@ void DEMSolver::EnableMeshWearModel(bodyID_t ownerID,
     if (!findOwnerTriangleRange(ownerID, tri_start, tri_count)) {
         DEME_ERROR("Cannot determine triangle range for mesh owner %zu.", (size_t)ownerID);
     }
-    auto mesh_it = m_owner_mesh_map.find(ownerID);
-    auto& mesh = m_meshes.at(mesh_it->second);
+    auto& mesh = GetCachedMesh(ownerID);
     const auto& faces = mesh->GetIndicesVertexes();
     if (faces.size() != tri_count) {
         DEME_ERROR("Wear model triangle count mismatch for owner %zu (range=%zu, mesh=%zu).", (size_t)ownerID,
@@ -1293,60 +1292,126 @@ void DEMSolver::SetOwnerFamily(bodyID_t ownerID, unsigned int fam, bodyID_t n) {
     }
 }
 
-void DEMSolver::SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& new_nodes) {
+// Host updates share the GPU deformation path, then eagerly refresh the cache for backward compatibility.
+void DEMSolver::SetTriNodeRelPos(size_t owner,
+                                 size_t triID,
+                                 const std::vector<float3>& new_nodes,
+                                 bool update_patch_centers) {
+    assertSysInit("SetTriNodeRelPos");
     WaitForPendingOutput();
-    auto& mesh = m_meshes.at(m_owner_mesh_map.at(owner));
-    if (mesh->GetNumNodes() != new_nodes.size()) {
-        DEME_ERROR(
-            "To deform a mesh, provided vector must have the same length as the number of nodes in mesh.\nThe mesh has "
-            "%zu nodes, yet the provided vector has length %zu.",
-            mesh->GetNumNodes(), new_nodes.size());
-    }
-    // We actually modify the cached mesh... since it has implications in output
-    for (size_t i = 0; i < mesh->GetNumNodes(); i++) {
-        mesh->m_vertices[i] = new_nodes[i];
-    }
-    std::vector<DEMTriangle> new_triangles(mesh->GetNumTriangles());
-    for (size_t i = 0; i < mesh->GetNumTriangles(); i++) {
-        new_triangles[i] = mesh->GetTriangle(i);
-    }
     ScopedCudaDevice device_scope(dT->streamInfo.device);
-    dT->setTriNodeRelPos(triID, new_triangles);
-    dT->solverFlags.willMeshDeform = true;
-
-    // kT just receives update from dT, to avoid mem hazards
-    // kT->setTriNodeRelPos(triID, new_triangles);
+    if (!dT->meshDeformation.count(owner))
+        DEME_ERROR("Owner %zu is not an initialized mesh.", (size_t)owner);
+    auto& state = *dT->meshDeformation.at(owner);
+    if (triID != state.tri_start || new_nodes.size() != state.vertices.size()) {
+        DEME_ERROR("Mesh %zu expects triangle start %zu and %zu nodes; received start %zu and %zu nodes.", owner,
+                   state.tri_start, state.vertices.size(), triID, new_nodes.size());
+    }
+    state.prepareDevice();
+    std::copy(new_nodes.begin(), new_nodes.end(), state.input.host());
+    state.input.toDevice(0, new_nodes.size());
+    dT->deformMesh(owner, state.input.data(), dT->streamInfo.device, false, true, update_patch_centers);
+    dT->synchronizeMeshCache(owner);
 }
-void DEMSolver::UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& updates) {
+
+void DEMSolver::UpdateTriNodeRelPos(size_t owner,
+                                    size_t triID,
+                                    const std::vector<float3>& updates,
+                                    bool update_patch_centers) {
+    assertSysInit("UpdateTriNodeRelPos");
     WaitForPendingOutput();
-    auto& mesh = m_meshes.at(m_owner_mesh_map.at(owner));
-    if (mesh->GetNumNodes() != updates.size()) {
-        DEME_ERROR(
-            "To deform a mesh, provided vector must have the same length as the number of nodes in mesh.\nThe mesh has "
-            "%zu nodes, yet the provided vector has length %zu.",
-            mesh->GetNumNodes(), updates.size());
-    }
-    // We actually modify the cached mesh... since it has implications in output
-    for (size_t i = 0; i < mesh->GetNumNodes(); i++) {
-        mesh->m_vertices[i] += updates[i];
-    }
-    // No need to worry about RHR: that's taken care of at init
-    std::vector<DEMTriangle> new_triangles(mesh->GetNumTriangles());
-    for (size_t i = 0; i < mesh->GetNumTriangles(); i++) {
-        new_triangles[i] = mesh->GetTriangle(i);
-    }
-    // This is correct to use setTriNodeRelPos, as mesh is already modified in this method
     ScopedCudaDevice device_scope(dT->streamInfo.device);
-    dT->setTriNodeRelPos(triID, new_triangles);
-    dT->solverFlags.willMeshDeform = true;
-
-    // kT just receives update from dT, to avoid mem hazards
-    // kT->setTriNodeRelPos(triID, new_triangles);
+    if (!dT->meshDeformation.count(owner))
+        DEME_ERROR("Owner %zu is not an initialized mesh.", (size_t)owner);
+    auto& state = *dT->meshDeformation.at(owner);
+    if (triID != state.tri_start || updates.size() != state.vertices.size()) {
+        DEME_ERROR("Mesh %zu expects triangle start %zu and %zu nodes; received start %zu and %zu nodes.", owner,
+                   state.tri_start, state.vertices.size(), triID, updates.size());
+    }
+    state.prepareDevice();
+    std::copy(updates.begin(), updates.end(), state.input.host());
+    state.input.toDevice(0, updates.size());
+    dT->deformMesh(owner, state.input.data(), dT->streamInfo.device, true, true, update_patch_centers);
+    dT->synchronizeMeshCache(owner);
 }
+
+// Device-input setters leave the CPU cache dirty until a supported getter/output path observes it.
+void DEMSolver::SetTriNodeRelPosFromDevice(bodyID_t owner,
+                                           const float3* source,
+                                           int source_device,
+                                           bool validate,
+                                           bool update_patch_centers) {
+    assertSysInit("SetTriNodeRelPosFromDevice");
+    WaitForPendingOutput();
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    if (!dT->meshDeformation.count(owner))
+        DEME_ERROR("Owner %zu is not an initialized mesh.", (size_t)owner);
+    dT->deformMesh(owner, source, source_device, false, validate, update_patch_centers);
+}
+
+void DEMSolver::UpdateTriNodeRelPosFromDevice(bodyID_t owner,
+                                              const float3* source,
+                                              int source_device,
+                                              bool validate,
+                                              bool update_patch_centers) {
+    assertSysInit("UpdateTriNodeRelPosFromDevice");
+    WaitForPendingOutput();
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    if (!dT->meshDeformation.count(owner))
+        DEME_ERROR("Owner %zu is not an initialized mesh.", (size_t)owner);
+    dT->deformMesh(owner, source, source_device, true, validate, update_patch_centers);
+}
+
+// Runtime center setters select user-managed centers without altering geometry or patch membership.
+void DEMSolver::SetMeshPatchLocations(bodyID_t owner, const std::vector<float3>& centers) {
+    assertSysInit("SetMeshPatchLocations");
+    WaitForPendingOutput();
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    if (!dT->meshDeformation.count(owner))
+        DEME_ERROR("Owner %zu is not an initialized mesh.", (size_t)owner);
+    auto& state = *dT->meshDeformation.at(owner);
+    if (centers.size() != state.patch_offsets.size() - 1) {
+        DEME_ERROR("Mesh patch location update requires exactly %zu centers.", state.patch_offsets.size() - 1);
+    }
+    state.prepareDevice();
+    std::copy(centers.begin(), centers.end(), state.input.host());
+    state.input.toDevice(0, centers.size());
+    dT->setMeshPatchLocations(owner, state.input.data(), dT->streamInfo.device, true);
+    dT->synchronizeMeshCache(owner);
+}
+
+void DEMSolver::SetMeshPatchLocationsFromDevice(bodyID_t owner,
+                                                const float3* source,
+                                                int source_device,
+                                                bool validate) {
+    assertSysInit("SetMeshPatchLocationsFromDevice");
+    WaitForPendingOutput();
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    if (!dT->meshDeformation.count(owner))
+        DEME_ERROR("Owner %zu is not an initialized mesh.", (size_t)owner);
+    dT->setMeshPatchLocations(owner, source, source_device, validate);
+}
+
+// Returning to automatic management immediately incorporates every previous deformation.
+void DEMSolver::UseAutomaticMeshPatchLocations(bodyID_t owner) {
+    assertSysInit("UseAutomaticMeshPatchLocations");
+    WaitForPendingOutput();
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    if (!dT->meshDeformation.count(owner))
+        DEME_ERROR("Owner %zu is not an initialized mesh.", (size_t)owner);
+    dT->meshDeformation.at(owner)->mesh->patch_locations_explicitly_set = false;
+    dT->refreshMeshPatchCenters(owner);
+    DEME_GPU_CALL(cudaStreamSynchronize(dT->streamInfo.stream));
+    dT->synchronizeMeshCache(owner);
+}
+
 std::shared_ptr<DEMMesh>& DEMSolver::GetCachedMesh(bodyID_t ownerID) {
     if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
         DEME_ERROR("Owner %zu is not a mesh, you therefore cannot retrive a handle to mesh using it.", (size_t)ownerID);
     }
+    WaitForPendingOutput();
+    ScopedCudaDevice device_scope(dT->streamInfo.device);
+    dT->synchronizeMeshCache(ownerID);
     return m_meshes.at(m_owner_mesh_map.at(ownerID));
 }
 std::vector<float3> DEMSolver::GetMeshNodesGlobal(bodyID_t ownerID) {
@@ -1354,6 +1419,8 @@ std::vector<float3> DEMSolver::GetMeshNodesGlobal(bodyID_t ownerID) {
     if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
         DEME_ERROR("Owner %zu is not a mesh, you therefore cannot get its nodes' coordinates.", (size_t)ownerID);
     }
+    WaitForPendingOutput();
+    dT->synchronizeMeshCache(ownerID);
     float3 mesh_pos = dT->getOwnerPos(ownerID)[0];
     float4 mesh_oriQ = dT->getOwnerOriQ(ownerID)[0];
     std::vector<float3> nodes(m_meshes.at(m_owner_mesh_map.at(ownerID))->GetCoordsVertices());
@@ -1379,6 +1446,8 @@ DEMVisualizationScene DEMSolver::GetVisualizationScene() const {
         DEME_ERROR("GetVisualizationScene requires Initialize() first.");
     }
     ScopedCudaDevice device_scope(dT->streamInfo.device);
+    WaitForPendingOutput();
+    dT->synchronizeMeshCaches();
     DEMVisualizationScene scene;
     scene.revision = dT->visualizationRevision;
     scene.spheres.reserve(dT->simParams->nSpheresGM);
@@ -1435,10 +1504,13 @@ DEMVisualizationSnapshot DEMSolver::GetVisualizationSnapshot(bool include_sphere
         DEME_ERROR("DEMSolver's method GetVisualizationSnapshot can only be called after calling Initialize()");
     }
 
+    WaitForPendingOutput();
     ScopedCudaDevice device_scope(dT->streamInfo.device);
     dT->migrateFamilyToHost();
     dT->migrateClumpPosInfoToHost();
 
+    if (include_triangles)
+        dT->synchronizeMeshCaches();
     DEMVisualizationSnapshot snapshot;
     snapshot.simulation_time = GetSimTime();
 
@@ -3413,6 +3485,7 @@ void DEMSolver::WriteContactFile(const std::string& outfilename, float force_thr
 void DEMSolver::WriteMeshFile(const std::string& outfilename) const {
     ScopedCudaDevice device_scope(dT->streamInfo.device);
     WaitForPendingOutput();
+    dT->synchronizeMeshCaches();
     switch (m_mesh_out_format) {
         case (MESH_FORMAT::VTK): {
             dT->migrateFamilyToHost();
@@ -3894,7 +3967,7 @@ bool DEMSolver::applyMeshWearModel(bodyID_t ownerID, MeshWearModelState& model) 
     if (mesh_it == m_owner_mesh_map.end()) {
         DEME_ERROR("Wear model owner %zu is not a mesh owner.", (size_t)ownerID);
     }
-    auto& mesh = m_meshes.at(mesh_it->second);
+    auto& mesh = GetCachedMesh(ownerID);
     const auto& faces = mesh->GetIndicesVertexes();
     const size_t n_tri = faces.size();
     if (n_tri != model.tri_count) {
@@ -4329,6 +4402,7 @@ void DEMSolver::refreshCombinedRuntimeResources() {
 }
 
 void DEMSolver::Update() {
+    WaitForPendingOutput();
     ++dT->visualizationRevision;
     if (!sys_initialized) {
         DEME_ERROR(std::string(

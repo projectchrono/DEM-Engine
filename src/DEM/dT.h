@@ -25,6 +25,7 @@
 #include "Structs.h"
 #include "AuxClasses.h"
 #include "utils/DynamicThreadHelpers.hpp"
+#include "utils/MeshDeformation.hpp"
 
 namespace deme {
 
@@ -74,6 +75,7 @@ class DEMDynamicThread {
     DEMSolverScratchData solverScratchSpace = DEMSolverScratchData(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // Reuses pinned staging storage only when a requested destination GPU cannot access dT's GPU directly.
     device_data::TransferBuffer ownerDataTransferBuffer;
+    std::unordered_map<bodyID_t, std::unique_ptr<MeshDeformationState>> meshDeformation;
 
     // The number of for iterations dT does for a specific user "run simulation" call
     double cycleDuration;
@@ -510,6 +512,18 @@ class DEMDynamicThread {
     /// @brief Add an extra angular acceleration to consecutive owners for the next time step.
     void addOwnerNextStepAngAcc(bodyID_t ownerID, const std::vector<float3>& angAcc);
 
+    // Fixed-topology deformation and lazy CPU cache synchronization, shared by host/device APIs.
+    void initializeMeshDeformation(const std::shared_ptr<DEMMesh>& mesh, size_t tri_start, size_t patch_start);
+    void deformMesh(bodyID_t owner,
+                    const float3* source,
+                    int source_device,
+                    bool increment,
+                    bool validate,
+                    bool update_patch_centers);
+    void refreshMeshPatchCenters(bodyID_t owner);
+    void setMeshPatchLocations(bodyID_t owner, const float3* source, int source_device, bool validate);
+    void synchronizeMeshCache(bodyID_t owner);
+    void synchronizeMeshCaches();
     /// Rewrite the relative positions of the flattened triangle soup, starting from `start', using triangle nodal
     /// positions in `triangles'.
     void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles);

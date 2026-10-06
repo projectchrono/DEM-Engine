@@ -392,7 +392,10 @@ class DEMTracker {
     /// deformation), then you should then use tracker to further update the mesh's CoM.
     /// @param new_nodes New locations of mesh nodes. The length of the argument vector must agree with the number of
     /// nodes in the tracked mesh.
-    void UpdateMesh(const std::vector<float3>& new_nodes);
+    /// @param update_patch_centers Refresh automatic centers from all accumulated deformation (default true).
+    /// False preserves the current centers. This option has no effect for user-supplied centers, which are
+    /// never overwritten. Automatic single-patch centers remain at the local origin.
+    void UpdateMesh(const std::vector<float3>& new_nodes, bool update_patch_centers = true);
 
     /// @brief Change the coordinates of each mesh node by the given amount.
     /// @details This affects triangle facets' relative positions wrt the mesh center (CoM) only; mesh's overall
@@ -402,7 +405,36 @@ class DEMTracker {
     /// use tracker to further update the mesh's CoM.
     /// @param deformation Deformation of mesh nodes. The length of the argument vector must agree with the number of
     /// nodes in the tracked mesh.
-    void UpdateMeshByIncrement(const std::vector<float3>& deformation);
+    /// @param update_patch_centers Refresh automatic centers from all accumulated deformation (default true).
+    /// False preserves the current centers. This option has no effect for user-supplied centers, which are
+    /// never overwritten. Automatic single-patch centers remain at the local origin.
+    void UpdateMeshByIncrement(const std::vector<float3>& deformation, bool update_patch_centers = true);
+
+    /// @brief Replace local mesh node coordinates from a CUDA float3 array in original node order.
+    /// @details Topology and owner pose are unchanged. The call is synchronous; source may be reused on return.
+    /// Finish producing source on its CUDA stream before calling. Remote-device input is copied to dT.
+    /// CPU geometry is synchronized by GetMesh/GetMeshNodesGlobal and solver output/visualization. A previously
+    /// retained raw mesh handle can remain stale until one of these readers is called.
+    /// @param validate Check pointer metadata and finite coordinates/results; disable only for trusted input.
+    /// @param update_patch_centers Recompute automatic centers from the full current geometry. False skips only
+    /// this call; a later true call includes accumulated deformation. This option has NO effect for user-supplied
+    /// centers, which are never overwritten. Automatic single-patch centers remain at the local origin; multiple
+    /// patches use the unweighted mean of triangle centroids. This does not change the contact-rejection heuristic.
+    void UpdateMeshFromDevice(const float3* source,
+                              int source_device,
+                              bool validate = true,
+                              bool update_patch_centers = true);
+    /// @brief Add local node displacements from device memory. All other semantics match UpdateMeshFromDevice.
+    void UpdateMeshByIncrementFromDevice(const float3* source,
+                                         int source_device,
+                                         bool validate = true,
+                                         bool update_patch_centers = true);
+    /// Set local patch centers at runtime (one per patch), selecting user-managed centers.
+    void UpdateMeshPatchLocations(const std::vector<float3>& centers);
+    /// Device counterpart: one CUDA float3 per patch. Synchronous; validate checks pointer and finite values.
+    void UpdateMeshPatchLocationsFromDevice(const float3* source, int source_device, bool validate = true);
+    /// Resume automatic center updates and immediately recompute from all current geometry.
+    void UseAutomaticMeshPatchLocations();
 
     /// @brief Get a handle for the mesh this tracker is tracking.
     /// @return Pointer to the mesh.
