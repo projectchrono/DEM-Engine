@@ -1,6 +1,7 @@
 // Copyright (c) 2026, SBEL GPU Development Team
 // SPDX-License-Identifier: BSD-3-Clause
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -8,6 +9,7 @@
 #include <stdexcept>
 
 #include "DEM/API.h"
+#include "core/utils/CudaDebugSync.hpp"
 
 using namespace deme;
 namespace {
@@ -52,6 +54,9 @@ void checkAutomatic(const std::shared_ptr<DEMTracker>& tracker, const std::vecto
 // centers left at the cube's previous local position admit them. The open plane cannot mask that mistake with its
 // own center guard. Compare deformation against loading the target geometry directly, without changing the rule.
 float contactForceAfterDeformation(bool deform, bool refresh) {
+    const bool trace = std::getenv("DEME_MESH_TRACE") != nullptr;
+    if (trace)
+        std::cerr << "CONTACT CASE deform=" << deform << " refresh=" << refresh << ": construct\n";
     DEMSolver solver(1);
     solver.SetVerbosity("ERROR");
     solver.InstructBoxDomainDimension(8, 8, 8);
@@ -91,19 +96,27 @@ float contactForceAfterDeformation(bool deform, bool refresh) {
         input.upload(target);
         tracker->UpdateMeshFromDevice(input.data, device, true, refresh);
     }
+    if (trace)
+        std::cerr << "CONTACT CASE: initialized and deformed; starting dynamics\n";
     solver.SetTriTriPenetration(0.4f);
     solver.DoDynamicsThenSync(1.e-4);
+    if (trace)
+        std::cerr << "CONTACT CASE: dynamics complete; reading forces\n";
     std::vector<float3> points, forces;
     tracker->GetContactForces(points, forces);
     float total = 0;
     for (const auto& force : forces)
         total += length(force);
+    if (trace)
+        std::cerr << "CONTACT CASE: force=" << total << "; destroying solver\n";
     return total;
 }
 }  // namespace
 
 // Cover shared-node increments, deferred centers, manual policy, lazy readers, and host/device interleaving.
 int main() try {
+    // Opt-in diagnostics preserve ordinary asynchronous execution for reproducing timing-sensitive failures.
+    deme::SetCudaDebugSyncEnabled(std::getenv("DEME_MESH_DEBUG_SYNC") != nullptr);
     DEMSolver solver(1);
     solver.SetVerbosity("ERROR");
     solver.InstructBoxDomainDimension(40, 40, 40);

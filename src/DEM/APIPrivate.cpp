@@ -1492,8 +1492,9 @@ void DEMSolver::initializeGPUArrays() {
             // Analytical objects' initial stats
             m_input_ext_obj_family,
             // Meshed objects' initial stats
-            m_input_mesh_obj_family, m_input_mesh_obj_convex, m_input_mesh_obj_never_winner, m_mesh_facet_owner,
-            m_mesh_facet_patch, m_mesh_facet_neighbor1, m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets,
+            cached_mesh_objs, m_input_mesh_obj_family, m_input_mesh_obj_convex, m_input_mesh_obj_never_winner,
+            m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facet_neighbor1, m_mesh_facet_neighbor2,
+            m_mesh_facet_neighbor3, m_mesh_facets,
             // Analytical obj physics properties
             m_ext_obj_comp_num,
             // Family mask
@@ -1554,8 +1555,9 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
             // Analytical objects' initial stats
             m_input_ext_obj_family,
             // Meshed objects' initial stats
-            m_input_mesh_obj_family, m_input_mesh_obj_convex, m_input_mesh_obj_never_winner, m_mesh_facet_owner,
-            m_mesh_facet_patch, m_mesh_facet_neighbor1, m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets,
+            cached_mesh_objs, m_input_mesh_obj_family, m_input_mesh_obj_convex, m_input_mesh_obj_never_winner,
+            m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facet_neighbor1, m_mesh_facet_neighbor2,
+            m_mesh_facet_neighbor3, m_mesh_facets,
             // Analytical obj physics properties
             m_ext_obj_comp_num,
             // Family mask

@@ -509,6 +509,7 @@ void DEMKinematicThread::packDataPointers() {
     ownerTriMesh.bindDevicePointer(&(granData->ownerTriMesh));
     ownerMeshConvex.bindDevicePointer(&(granData->ownerMeshConvex));
     ownerMeshNeverWinner.bindDevicePointer(&(granData->ownerMeshNeverWinner));
+    ownerMeshShellHalfThickness.bindDevicePointer(&(granData->ownerMeshShellHalfThickness));
     triPatchID.bindDevicePointer(&(granData->triPatchID));
     triNeighborIndex.bindDevicePointer(&(granData->triNeighborIndex));
     triNeighbor1.bindDevicePointer(&(granData->triNeighbor1));
@@ -564,6 +565,7 @@ void DEMKinematicThread::migrateDataToDevice() {
     ownerTriMesh.toDeviceAsync(streamInfo.stream);
     ownerMeshConvex.toDeviceAsync(streamInfo.stream);
     ownerMeshNeverWinner.toDeviceAsync(streamInfo.stream);
+    ownerMeshShellHalfThickness.toDeviceAsync(streamInfo.stream);
     triPatchID.toDeviceAsync(streamInfo.stream);
     triNeighborIndex.toDeviceAsync(streamInfo.stream);
     triNeighbor1.toDeviceAsync(streamInfo.stream);
@@ -710,6 +712,7 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(oriQz, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(ownerMeshConvex, nOwnerBodies, 0);
     DEME_DUAL_ARRAY_RESIZE(ownerMeshNeverWinner, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerMeshShellHalfThickness, nOwnerBodies, 0.f);
     DEME_DEVICE_ARRAY_RESIZE(marginSizeSphere, nSpheresGM);
     DEME_DEVICE_ARRAY_RESIZE(marginSizeAnalytical, nAnalGM);
     DEME_DEVICE_ARRAY_RESIZE(marginSizeTriangle, nTriGM);
@@ -828,6 +831,7 @@ void DEMKinematicThread::registerPolicies(const std::vector<notStupidBool_t>& fa
 
 void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                               const std::vector<unsigned int>& input_ext_obj_family,
+                                              const std::vector<std::shared_ptr<DEMMesh>>& input_mesh_objs,
                                               const std::vector<unsigned int>& input_mesh_obj_family,
                                               const std::vector<notStupidBool_t>& input_mesh_obj_convex,
                                               const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
@@ -978,6 +982,8 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
         familyID[owner_id] = this_family_num;
         ownerMeshConvex[owner_id] = input_mesh_obj_convex.at(i);
         ownerMeshNeverWinner[owner_id] = input_mesh_obj_never_winner.at(i);
+        // Broad-phase triangle prisms must include the same shell half-thickness used by dT's force kernels.
+        ownerMeshShellHalfThickness[owner_id] = std::max(input_mesh_objs.at(i)->GetShellHalfThickness(), 0.f);
         // DEME_DEBUG_PRINTF("kT just loaded a mesh in family %u", +(this_family_num));
         // DEME_DEBUG_PRINTF("Number of triangle facets loaded thus far: %zu", k);
     }
@@ -985,6 +991,7 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
 
 void DEMKinematicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                        const std::vector<unsigned int>& input_ext_obj_family,
+                                       const std::vector<std::shared_ptr<DEMMesh>>& input_mesh_objs,
                                        const std::vector<unsigned int>& input_mesh_obj_family,
                                        const std::vector<notStupidBool_t>& input_mesh_obj_convex,
                                        const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
@@ -1002,14 +1009,16 @@ void DEMKinematicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClum
 
     registerPolicies(family_mask_matrix);
 
-    populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, input_mesh_obj_convex,
-                         input_mesh_obj_never_winner, input_mesh_facet_owner, input_mesh_facet_patch,
-                         input_mesh_facet_neighbor1, input_mesh_facet_neighbor2, input_mesh_facet_neighbor3,
-                         input_mesh_facets, clump_templates, ext_obj_comp_num, 0, 0, 0, 0, 0);
+    populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_objs, input_mesh_obj_family,
+                         input_mesh_obj_convex, input_mesh_obj_never_winner, input_mesh_facet_owner,
+                         input_mesh_facet_patch, input_mesh_facet_neighbor1, input_mesh_facet_neighbor2,
+                         input_mesh_facet_neighbor3, input_mesh_facets, clump_templates, ext_obj_comp_num, 0, 0, 0, 0,
+                         0);
 }
 
 void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                                const std::vector<unsigned int>& input_ext_obj_family,
+                                               const std::vector<std::shared_ptr<DEMMesh>>& input_mesh_objs,
                                                const std::vector<unsigned int>& input_mesh_obj_family,
                                                const std::vector<notStupidBool_t>& input_mesh_obj_convex,
                                                const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
@@ -1031,11 +1040,11 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
                                                size_t nExistingPatches,
                                                unsigned int nExistingObj,
                                                unsigned int nExistingAnalGM) {
-    populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, input_mesh_obj_convex,
-                         input_mesh_obj_never_winner, input_mesh_facet_owner, input_mesh_facet_patch,
-                         input_mesh_facet_neighbor1, input_mesh_facet_neighbor2, input_mesh_facet_neighbor3,
-                         input_mesh_facets, clump_templates, ext_obj_comp_num, nExistingOwners, nExistingSpheres,
-                         nExistingFacets, nExistingPatches, nExistingTriNeighbors);
+    populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_objs, input_mesh_obj_family,
+                         input_mesh_obj_convex, input_mesh_obj_never_winner, input_mesh_facet_owner,
+                         input_mesh_facet_patch, input_mesh_facet_neighbor1, input_mesh_facet_neighbor2,
+                         input_mesh_facet_neighbor3, input_mesh_facets, clump_templates, ext_obj_comp_num,
+                         nExistingOwners, nExistingSpheres, nExistingFacets, nExistingPatches, nExistingTriNeighbors);
 }
 
 void DEMKinematicThread::updatePrevContactArrays(DualStruct<DEMDataDT>& dT_data, size_t nContacts) {

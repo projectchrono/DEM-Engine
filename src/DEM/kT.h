@@ -65,7 +65,8 @@ class DEMKinematicThread {
     DualStruct<DEMSimParams> simParams = DualStruct<DEMSimParams>();
 
     // Pointers to those data arrays defined below, stored in a struct
-    DualStruct<DEMDataKT> granData = DualStruct<DEMDataKT>();
+    // DualStruct's default constructor allocates raw storage without applying DEMDataKT's member initializers.
+    DualStruct<DEMDataKT> granData = DualStruct<DEMDataKT>(DEMDataKT{});
 
     // Buffer arrays for storing info from the dT side.
     // dT modifies these arrays; kT uses them only.
@@ -208,6 +209,9 @@ class DEMKinematicThread {
     DualArray<notStupidBool_t> ownerMeshNeverWinner =
         DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
+    // Per-owner shell extent used when constructing the contact-detection triangle prisms.
+    DualArray<float> ownerMeshShellHalfThickness = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+
     // Mesh patch information: each facet belongs to a patch
     // Patch ID for each triangle facet (maps facet to patch)
     DualArray<bodyID_t> triPatchID = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
@@ -339,6 +343,7 @@ class DEMKinematicThread {
     void registerPolicies(const std::vector<notStupidBool_t>& family_mask_matrix);
     void populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                               const std::vector<unsigned int>& input_ext_obj_family,
+                              const std::vector<std::shared_ptr<DEMMesh>>& input_mesh_objs,
                               const std::vector<unsigned int>& input_mesh_obj_family,
                               const std::vector<notStupidBool_t>& input_mesh_obj_convex,
                               const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
@@ -359,6 +364,7 @@ class DEMKinematicThread {
     /// Initialize arrays
     void initGPUArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                        const std::vector<unsigned int>& input_ext_obj_family,
+                       const std::vector<std::shared_ptr<DEMMesh>>& input_mesh_objs,
                        const std::vector<unsigned int>& input_mesh_obj_family,
                        const std::vector<notStupidBool_t>& input_mesh_obj_convex,
                        const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,
@@ -376,6 +382,7 @@ class DEMKinematicThread {
     /// no other changes to the system.
     void updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                const std::vector<unsigned int>& input_ext_obj_family,
+                               const std::vector<std::shared_ptr<DEMMesh>>& input_mesh_objs,
                                const std::vector<unsigned int>& input_mesh_obj_family,
                                const std::vector<notStupidBool_t>& input_mesh_obj_convex,
                                const std::vector<notStupidBool_t>& input_mesh_obj_never_winner,

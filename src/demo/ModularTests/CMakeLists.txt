@@ -24,6 +24,7 @@ SET(MODULAR_TESTS
 		DEMTest_DeviceDataRetrieval
 		DEMTest_DeviceSelection
 		DEMTest_MeshDeformation
+		DEMTest_MeshShellContact
 		DEMTest_MeshBox1Particle
 		DEMTest_MeshSlidingOnSlope
 		DEMTest_MeshTemplate
