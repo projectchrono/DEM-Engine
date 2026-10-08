@@ -3004,8 +3004,16 @@ inline void save_persistent_header_cache_if_needed(const std::string& signature)
     }
     out.close();
     if (out) {
-        std::rename(tmp_path.c_str(), path.c_str());
-        persistent_header_cache_saved_count() = source_cache.size();
+        // Windows CRT rename cannot replace an existing file. Publish the completed temporary file without
+        // deleting the old cache first, and leave the saved count unchanged on failure so later saves can retry.
+#if defined(_WIN32) || defined(_WIN64)
+        const bool saved = ::MoveFileExA(tmp_path.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING) != 0;
+#else
+        const bool saved = std::rename(tmp_path.c_str(), path.c_str()) == 0;
+#endif
+        if (saved) {
+            persistent_header_cache_saved_count() = source_cache.size();
+        }
     }
 }
 

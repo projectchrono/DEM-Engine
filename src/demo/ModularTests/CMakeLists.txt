@@ -23,6 +23,7 @@ SET(MODULAR_TESTS
 		DEMTest_CylinderCrossRotation
 		DEMTest_CudaHeaderDiscovery
 		DEMTest_JitReflection
+		DEMTest_JitHeaderCache
 		DEMTest_JitSourceLoading
 		DEMTest_DeviceDataRetrieval
 		DEMTest_DeviceSelection

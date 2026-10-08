@@ -81,6 +81,19 @@ startup work. Set ``DEME_PERSISTENT_JITIFY_CACHE`` to a writable cache-file path
    export DEME_PERSISTENT_JITIFY_CACHE="$HOME/.cache/deme/jitify_header_cache.bin"
    mkdir -p "$(dirname "$DEME_PERSISTENT_JITIFY_CACHE")"
 
+On Windows, set the variable in the PowerShell session that launches the executable:
+
+.. code-block:: powershell
+
+   $cacheDirectory = Join-Path $env:LOCALAPPDATA "deme"
+   New-Item -ItemType Directory -Force -Path $cacheDirectory | Out-Null
+   $env:DEME_PERSISTENT_JITIFY_CACHE = Join-Path $cacheDirectory "jitify_header_cache.bin"
+
+The first run still discovers headers and compiles kernels. Later fresh processes can reuse the saved headers when
+compiling new kernels, while matching compiled kernels are reused separately through ``DEME_JIT_CACHE_DIR``. To measure
+the header cache's benefit, keep its file but select an empty compiled-kernel cache for each comparison run. A fully
+populated compiled-kernel cache can hide the header-discovery cost.
+
 
 Values such as ``1``, ``true``, ``on``, and ``yes`` select an automatic temporary path. Values such as ``0``, ``false``, ``off``, and
 ``no``, as well as an unset variable, disable the persistent cache. The cache is opt-in because an automatic shared
