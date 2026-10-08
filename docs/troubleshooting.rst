@@ -52,6 +52,16 @@ Build with compilers compatible with the target Conda environment. A wheel
 built against a newer system ``libstdc++`` may import on the build host but fail
 inside another environment.
 
+Cannot open or read a JIT source file
+-------------------------------------
+
+JIT source-loading errors report the attempted absolute path. Check that the
+runtime kernel/header resources exist there and are readable. On Windows, also
+check which ``DEMERuntimeDataHelper.dll`` the application loads: a stale copy can
+point to resources from another build. Refresh the helper library and runtime
+resources together. Files that exist but contain older source code are not
+identified by the file-read check; see the stale-kernel guidance below.
+
 Stale runtime kernels
 ---------------------
 

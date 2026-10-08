@@ -17,13 +17,13 @@ void require(bool condition, const char* message) {
     if (!condition)
         throw std::runtime_error(message);
 }
-bool near(float3 a, float3 b) {
+bool approxEqual(float3 a, float3 b) {
     return std::abs(a.x - b.x) < 2.e-5f && std::abs(a.y - b.y) < 2.e-5f && std::abs(a.z - b.z) < 2.e-5f;
 }
 void compare(const std::vector<float3>& actual, const std::vector<float3>& expected, const char* message) {
     require(actual.size() == expected.size(), message);
     for (size_t i = 0; i < actual.size(); ++i)
-        require(near(actual[i], expected[i]), message);
+        require(approxEqual(actual[i], expected[i]), message);
 }
 
 // Keep input allocations alive across calls, as an external GPU solid-mechanics solver would.
@@ -262,7 +262,8 @@ int main() try {
                     "deformation lost initialization's winding correction");
         }
     }
-    require(near(scene.triangles.front().a, expected[mesh->GetIndicesVertexes()[0].x]), "stale visualization geometry");
+    require(approxEqual(scene.triangles.front().a, expected[mesh->GetIndicesVertexes()[0].x]),
+            "stale visualization geometry");
     tracker->UpdateMeshByIncrementFromDevice(input.data, device);
     for (auto& v : expected)
         v += increment[0];

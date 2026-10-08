@@ -12,7 +12,7 @@ void require(bool condition, const char* message) {
     if (!condition)
         throw std::runtime_error(message);
 }
-bool near(float a, float b) {
+bool approxEqual(float a, float b) {
     return std::abs(a - b) < 1.e-4f;
 }
 
@@ -23,8 +23,8 @@ float3 transform(float3 p, float3 position, float4 q) {
                        position.y + p.y + q.w * t.y + q.z * t.x - q.x * t.z,
                        position.z + p.z + q.w * t.z + q.x * t.y - q.y * t.x);
 }
-bool near(float3 a, float3 b) {
-    return near(a.x, b.x) && near(a.y, b.y) && near(a.z, b.z);
+bool approxEqual(float3 a, float3 b) {
+    return approxEqual(a.x, b.x) && approxEqual(a.y, b.y) && approxEqual(a.z, b.z);
 }
 void compare(DEMSolver& solver, const DEMVisualizationScene& scene, DEMVisualizationFrame& frame) {
     solver.GetVisualizationFrame(frame, true);
@@ -33,10 +33,10 @@ void compare(DEMSolver& solver, const DEMVisualizationScene& scene, DEMVisualiza
     require(scene.spheres.size() == snapshot.spheres.size(), "sphere count mismatch");
     for (size_t i = 0; i < scene.spheres.size(); ++i) {
         const auto& s = scene.spheres[i];
-        require(near(transform(s.offset, frame.positions[s.owner], frame.orientations[s.owner]),
-                     snapshot.spheres[i].position),
+        require(approxEqual(transform(s.offset, frame.positions[s.owner], frame.orientations[s.owner]),
+                            snapshot.spheres[i].position),
                 "cached sphere transform mismatch");
-        require(near(s.radius, snapshot.spheres[i].radius), "sphere radius mismatch");
+        require(approxEqual(s.radius, snapshot.spheres[i].radius), "sphere radius mismatch");
         require(frame.families[s.owner] == snapshot.spheres[i].family, "family mismatch");
     }
     require(scene.triangles.size() == snapshot.triangles.size(), "triangle count mismatch");
@@ -44,9 +44,9 @@ void compare(DEMSolver& solver, const DEMVisualizationScene& scene, DEMVisualiza
         const auto& t = scene.triangles[i];
         auto p = frame.positions[t.owner];
         auto q = frame.orientations[t.owner];
-        require(near(transform(t.a, p, q), snapshot.triangles[i].a) &&
-                    near(transform(t.b, p, q), snapshot.triangles[i].b) &&
-                    near(transform(t.c, p, q), snapshot.triangles[i].c),
+        require(approxEqual(transform(t.a, p, q), snapshot.triangles[i].a) &&
+                    approxEqual(transform(t.b, p, q), snapshot.triangles[i].b) &&
+                    approxEqual(transform(t.c, p, q), snapshot.triangles[i].c),
                 "cached triangle transform mismatch");
     }
 }
@@ -87,7 +87,7 @@ int main() try {
     compare(solver, scene, frame);
     require(frame.positions.data() == storage, "unchanged frame reallocated owner storage");
     auto owner = track->GetOwnerID();
-    require(near(frame.velocities[owner], make_float3(0.1f, 0.2f, 0.3f)), "velocity field mismatch");
+    require(approxEqual(frame.velocities[owner], make_float3(0.1f, 0.2f, 0.3f)), "velocity field mismatch");
     solver.GetVisualizationFrame(frame, false);
     require(frame.velocities.empty(), "unrequested velocities retained");
     solver.DoDynamicsThenSync(1.e-4);

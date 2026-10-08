@@ -101,6 +101,34 @@ std::filesystem::path JitHelper::KERNEL_DIR = DEMERuntimeDataHelper::data_path /
 std::filesystem::path JitHelper::KERNEL_INCLUDE_DIR = DEMERuntimeDataHelper::include_path;
 std::filesystem::path JitHelper::CACHE_DIR;
 
+// Resolve and read runtime sources before NVRTC sees them. Empty files are valid fragments; failed I/O is not.
+std::string JitHelper::loadSourceFile(const std::filesystem::path& sourcefile) {
+    std::error_code path_error;
+    const auto resolved = std::filesystem::absolute(sourcefile, path_error);
+    if (path_error) {
+        DEME_ERROR("Cannot resolve JIT source file '%s': %s", sourcefile.string().c_str(),
+                   path_error.message().c_str());
+    }
+    std::ifstream input(resolved);
+    if (!input.is_open()) {
+        DEME_ERROR(
+            "Cannot open JIT source file '%s' (missing or unreadable). Check the runtime data path and "
+            "DEMERuntimeDataHelper library location.",
+            resolved.string().c_str());
+    }
+
+    // Read through the stream API so errors are observable and no source byte is mistaken for an EOF delimiter.
+    std::string code;
+    char buffer[8192];
+    while (input.read(buffer, sizeof(buffer)) || input.gcount() > 0) {
+        code.append(buffer, static_cast<size_t>(input.gcount()));
+    }
+    if (input.bad() || !input.eof()) {
+        DEME_ERROR("Cannot read JIT source file '%s': I/O failure.", resolved.string().c_str());
+    }
+    return code;
+}
+
 JitHelper::Header::Header(const std::filesystem::path& sourcefile) {
     this->_source = JitHelper::loadSourceFile(sourcefile);
 }

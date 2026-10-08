@@ -106,7 +106,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#if JITIFY_THREAD_SAFE
+// MSVC also needs this for DbgHelp, independently of the cache thread-safety setting.
+#if JITIFY_THREAD_SAFE || defined(_MSC_VER)
     #include <mutex>
 #endif
 
@@ -771,6 +772,10 @@ inline std::string demangle_cuda_symbol(const char* mangled_name) {
     return mangled_name;
 }
 inline std::string demangle_native_type(const std::type_info& typeinfo) {
+    // DEME serializes DbgHelp across all reflected types and worker threads. Its API is not thread-safe,
+    // independently of Jitify's cache locks. Keep this in the non-template MSVC function so there is one mutex.
+    static std::mutex dbghelp_mutex;
+    std::lock_guard<std::mutex> lock(dbghelp_mutex);
     // Get the decorated name and skip over the leading '.'.
     const char* decorated_name = typeinfo.raw_name() + 1;
     char undecorated_name[4096];

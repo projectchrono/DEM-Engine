@@ -16,7 +16,7 @@ using namespace deme;
 
 namespace {
 
-bool near(float actual, float expected, float tolerance = 1.0e-5f) {
+bool approxEqual(float actual, float expected, float tolerance = 1.0e-5f) {
     return std::abs(actual - expected) <= tolerance;
 }
 
@@ -48,8 +48,8 @@ int main() {
         return 1;
     }
     const auto& rendered_sphere = sphere_snapshot.spheres.front();
-    if (!near(rendered_sphere.position.x, 1.0f) || !near(rendered_sphere.position.y, 2.0f) ||
-        !near(rendered_sphere.position.z, 3.0f) || !near(rendered_sphere.radius, 0.25f)) {
+    if (!approxEqual(rendered_sphere.position.x, 1.0f) || !approxEqual(rendered_sphere.position.y, 2.0f) ||
+        !approxEqual(rendered_sphere.position.z, 3.0f) || !approxEqual(rendered_sphere.radius, 0.25f)) {
         std::cerr << "FAIL: visualization sphere does not match its initialized world transform." << std::endl;
         return 1;
     }

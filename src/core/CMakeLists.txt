@@ -21,10 +21,11 @@ if(NOT EXISTS "${DEMEJitifyHeader}")
 endif()
 
 message(STATUS "${core_message} Extracting Jitify header...")
-configure_file(
+include("${PROJECT_SOURCE_DIR}/cmake/PrepareJitify.cmake")
+deme_prepare_jitify(
 	${DEMEJitifyHeader}
 	${CMAKE_BINARY_DIR}/src/jitify/jitify.hpp
-	COPYONLY
+	"${MSVC}"
 )
 
 add_library(core OBJECT)
