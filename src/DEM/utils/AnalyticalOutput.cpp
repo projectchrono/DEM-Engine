@@ -172,8 +172,8 @@ void appendRoundSurface(std::vector<OutputTriangle>& output,
     float3 basis_u, basis_v;
     orthogonalBasis(axis, basis_u, basis_v);
     for (unsigned int i = 0; i < resolution; i++) {
-        const float angle_0 = 2.f * static_cast<float>(M_PI) * i / resolution;
-        const float angle_1 = 2.f * static_cast<float>(M_PI) * (i + 1) / resolution;
+        const float angle_0 = 2.f * static_cast<float>(PI) * i / resolution;
+        const float angle_1 = 2.f * static_cast<float>(PI) * (i + 1) / resolution;
         const float3 radial_0 = basis_u * std::cos(angle_0) + basis_v * std::sin(angle_0);
         const float3 radial_1 = basis_u * std::cos(angle_1) + basis_v * std::sin(angle_1);
         const float radius_min = is_cylinder ? surface.size_1 : surface.size_1 * axial_min;

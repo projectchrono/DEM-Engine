@@ -172,7 +172,7 @@ PYBIND11_MODULE(_deme, obj) {
             py::arg("spacing") = 1.2,
             "Return points on a cylindrical surface. ``spacing`` scales the nominal particle-diameter separation.");
 
-    obj.attr("PI") = py::float_(M_PI);
+    obj.attr("PI") = py::float_(deme::PI);
     // Export both the precise name and its legacy mesh-oriented spelling. They deliberately carry the same value.
     obj.attr("SPHERE_TRIANGLE_CONTACT") = py::int_(static_cast<unsigned int>(deme::SPHERE_TRIANGLE_CONTACT));
     obj.attr("SPHERE_MESH_CONTACT") = py::int_(static_cast<unsigned int>(deme::SPHERE_MESH_CONTACT));
@@ -691,14 +691,57 @@ when this call returns.)doc",
         .def("SetFamily", static_cast<void (deme::DEMTracker::*)(unsigned int, size_t)>(&deme::DEMTracker::SetFamily),
              "Change the family number of one entities tracked by this tracker.", py::arg("fam_num"), py::arg("offset"))
 
-        .def("UpdateMesh",
-             static_cast<void (deme::DEMTracker::*)(const std::vector<float3>&)>(&deme::DEMTracker::UpdateMesh),
-             "Apply the new mesh node positions such that the tracked mesh is replaced by the new_nodes.",
-             py::arg("new_nodes"))
-        .def("UpdateMeshByIncrement",
-             static_cast<void (deme::DEMTracker::*)(const std::vector<float3>&)>(
-                 &deme::DEMTracker::UpdateMeshByIncrement),
-             "Change the coordinates of each mesh node by the given amount.", py::arg("deformation"))
+        .def("UpdateMesh", &deme::DEMTracker::UpdateMesh,
+             "Replace local mesh node coordinates. update_patch_centers refreshes automatic centers from all "
+             "accumulated deformation; false preserves current centers. It has no effect for user-supplied centers. "
+             "Automatic single-patch centers remain at the local origin.",
+             py::arg("new_nodes"), py::arg("update_patch_centers") = true)
+        .def("UpdateMeshByIncrement", &deme::DEMTracker::UpdateMeshByIncrement,
+             "Add local mesh node displacements. update_patch_centers refreshes automatic centers from all "
+             "accumulated deformation; false preserves current centers. It has no effect for user-supplied centers. "
+             "Automatic single-patch centers remain at the local origin.",
+             py::arg("deformation"), py::arg("update_patch_centers") = true)
+
+        .def(
+            "UpdateMeshFromDevice",
+            [](deme::DEMTracker& self, std::uintptr_t source, int source_device, bool validate,
+               bool update_patch_centers) {
+                self.UpdateMeshFromDevice(reinterpret_cast<const float3*>(source), source_device, validate,
+                                          update_patch_centers);
+            },
+            "Synchronous local-node device update: one float3 per node, fixed topology. Finish producing source "
+            "before calling. validate checks pointer and finite values. update_patch_centers refreshes automatic "
+            "centers only and has no effect for user-supplied centers. Single-patch automatic centers stay at the "
+            "local origin. Tracker GetMesh/GetMeshNodesGlobal synchronize the lazy CPU geometry cache.",
+            py::arg("source"), py::arg("source_device"), py::arg("validate") = true,
+            py::arg("update_patch_centers") = true)
+        .def(
+            "UpdateMeshByIncrementFromDevice",
+            [](deme::DEMTracker& self, std::uintptr_t source, int source_device, bool validate,
+               bool update_patch_centers) {
+                self.UpdateMeshByIncrementFromDevice(reinterpret_cast<const float3*>(source), source_device, validate,
+                                                     update_patch_centers);
+            },
+            "Synchronous local-node displacement increment: one float3 per node, fixed topology. Finish producing "
+            "source "
+            "before calling. validate checks pointer and finite values. update_patch_centers refreshes automatic "
+            "centers only and has no effect for user-supplied centers. Single-patch automatic centers stay at the "
+            "local origin. A later enabled refresh includes skipped deformation. Tracker GetMesh/GetMeshNodesGlobal "
+            "synchronize the lazy CPU geometry cache.",
+            py::arg("source"), py::arg("source_device"), py::arg("validate") = true,
+            py::arg("update_patch_centers") = true)
+        .def("UpdateMeshPatchLocations", &deme::DEMTracker::UpdateMeshPatchLocations,
+             "Set one local center per patch at runtime and select user-managed centers.", py::arg("centers"))
+        .def(
+            "UpdateMeshPatchLocationsFromDevice",
+            [](deme::DEMTracker& self, std::uintptr_t source, int source_device, bool validate) {
+                self.UpdateMeshPatchLocationsFromDevice(reinterpret_cast<const float3*>(source), source_device,
+                                                        validate);
+            },
+            "Synchronously set user-managed local patch centers from one CUDA float3 per patch.", py::arg("source"),
+            py::arg("source_device"), py::arg("validate") = true)
+        .def("UseAutomaticMeshPatchLocations", &deme::DEMTracker::UseAutomaticMeshPatchLocations,
+             "Resume automatic centers and immediately recompute from current geometry.")
 
         .def("GetMeshNodesGlobal",
              static_cast<std::vector<float3> (deme::DEMTracker::*)()>(&deme::DEMTracker::GetMeshNodesGlobal),
@@ -1643,10 +1686,50 @@ enabled. A zero count is a no-op.)doc",
         .def("SetOwnerFamily", &deme::DEMSolver::SetOwnerFamily, "Set the family number of consecutive owners.",
              py::arg("ownerID"), py::arg("fam"), py::arg("n") = 1)
 
+        .def("SetTriNodeRelPosFromDevice",
+             [](deme::DEMSolver& self, deme::bodyID_t owner, std::uintptr_t source, int source_device, bool validate,
+                bool update_patch_centers) {
+                 self.SetTriNodeRelPosFromDevice(owner, reinterpret_cast<const float3*>(source), source_device, validate,
+                             update_patch_centers);
+             },
+             "Synchronous local-node device update: one float3 per node, fixed topology. Finish producing source "
+             "before calling. validate checks pointer and finite values. update_patch_centers refreshes automatic "
+             "centers only and has no effect for user-supplied centers. Single-patch automatic centers stay at the "
+             "local origin. Tracker GetMesh/GetMeshNodesGlobal synchronize the lazy CPU geometry cache.",
+             py::arg("owner"), py::arg("source"), py::arg("source_device"), py::arg("validate") = true,
+             py::arg("update_patch_centers") = true)
+        .def("UpdateTriNodeRelPosFromDevice",
+             [](deme::DEMSolver& self, deme::bodyID_t owner, std::uintptr_t source, int source_device, bool validate,
+                bool update_patch_centers) {
+                 self.UpdateTriNodeRelPosFromDevice(owner, reinterpret_cast<const float3*>(source), source_device, validate,
+                             update_patch_centers);
+             },
+             "Synchronous local-node displacement increment: one float3 per node, fixed topology. Finish producing source "
+             "before calling. validate checks pointer and finite values. update_patch_centers refreshes automatic "
+             "centers only and has no effect for user-supplied centers. Single-patch automatic centers stay at the "
+             "local origin. A later enabled refresh includes skipped deformation. Tracker GetMesh/GetMeshNodesGlobal synchronize the lazy CPU geometry cache.",
+             py::arg("owner"), py::arg("source"), py::arg("source_device"), py::arg("validate") = true,
+             py::arg("update_patch_centers") = true)
+        .def("SetMeshPatchLocations", &deme::DEMSolver::SetMeshPatchLocations,
+             "Set one local center per patch at runtime and select user-managed centers.", py::arg("owner"), py::arg("centers"))
+        .def("SetMeshPatchLocationsFromDevice",
+             [](deme::DEMSolver& self, deme::bodyID_t owner, std::uintptr_t source, int source_device, bool validate) {
+                 self.SetMeshPatchLocationsFromDevice(owner, reinterpret_cast<const float3*>(source), source_device, validate);
+             }, "Synchronously set user-managed local patch centers from one CUDA float3 per patch.",
+             py::arg("owner"), py::arg("source"), py::arg("source_device"), py::arg("validate") = true)
+        .def("UseAutomaticMeshPatchLocations", &deme::DEMSolver::UseAutomaticMeshPatchLocations,
+             "Resume automatic centers and immediately recompute from current geometry.", py::arg("owner"))
+
         .def("SetTriNodeRelPos", &deme::DEMSolver::SetTriNodeRelPos,
-             "Rewrite the relative positions of the flattened triangle soup.")
+             "Rewrite local mesh node coordinates. update_patch_centers refreshes automatic centers from all "
+             "accumulated deformation; false preserves current centers. It has no effect for user-supplied centers. "
+             "Automatic single-patch centers remain at the local origin.",
+             py::arg("owner"), py::arg("triID"), py::arg("new_nodes"), py::arg("update_patch_centers") = true)
         .def("UpdateTriNodeRelPos", &deme::DEMSolver::UpdateTriNodeRelPos,
-             "Update the relative positions of the flattened triangle soup.")
+             "Update local mesh node coordinates. update_patch_centers refreshes automatic centers from all "
+             "accumulated deformation; false preserves current centers. It has no effect for user-supplied centers. "
+             "Automatic single-patch centers remain at the local origin.",
+             py::arg("owner"), py::arg("triID"), py::arg("updates"), py::arg("update_patch_centers") = true)
         .def("GetCachedMesh", &deme::DEMSolver::GetCachedMesh, "Get a handle for the mesh this tracker is tracking.")
         .def("GetMeshNodesGlobal", &deme::DEMSolver::GetMeshNodesGlobal,
              "Get the current locations of all the nodes in the mesh being tracked.")
@@ -2334,6 +2417,12 @@ enabled. A zero count is a no-op.)doc",
              "Assign every triangle to its own patch using consecutive patch IDs.")
         .def("GetPatchIDs", &deme::DEMMeshConnected::GetPatchIDs, "Get one patch ID per triangle.")
         .def("GetNumPatches", &deme::DEMMeshConnected::GetNumPatches, "Get the number of mesh patches.")
+        .def("SetPatchLocations", &deme::DEMMeshConnected::SetPatchLocations,
+             "Set local patch centers before initialization. Use tracker UpdateMeshPatchLocations at runtime.",
+             py::arg("centers"))
+        .def("GetPatchLocations", &deme::DEMMeshConnected::GetPatchLocations,
+             "Read cached patch centers; call tracker GetMesh first after device updates to synchronize.")
+        .def("ArePatchLocationsExplicitlySet", &deme::DEMMeshConnected::ArePatchLocationsExplicitlySet)
         .def("ArePatchesExplicitlySet", &deme::DEMMeshConnected::ArePatchesExplicitlySet,
              "Return whether patch IDs were explicitly supplied or computed.")
         .def("SplitIntoConvexPatches",

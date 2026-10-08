@@ -1492,8 +1492,9 @@ void DEMSolver::initializeGPUArrays() {
             // Analytical objects' initial stats
             m_input_ext_obj_family,
             // Meshed objects' initial stats
-            m_input_mesh_obj_family, m_input_mesh_obj_convex, m_input_mesh_obj_never_winner, m_mesh_facet_owner,
-            m_mesh_facet_patch, m_mesh_facet_neighbor1, m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets,
+            cached_mesh_objs, m_input_mesh_obj_family, m_input_mesh_obj_convex, m_input_mesh_obj_never_winner,
+            m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facet_neighbor1, m_mesh_facet_neighbor2,
+            m_mesh_facet_neighbor3, m_mesh_facets,
             // Analytical obj physics properties
             m_ext_obj_comp_num,
             // Family mask
@@ -1554,8 +1555,9 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
             // Analytical objects' initial stats
             m_input_ext_obj_family,
             // Meshed objects' initial stats
-            m_input_mesh_obj_family, m_input_mesh_obj_convex, m_input_mesh_obj_never_winner, m_mesh_facet_owner,
-            m_mesh_facet_patch, m_mesh_facet_neighbor1, m_mesh_facet_neighbor2, m_mesh_facet_neighbor3, m_mesh_facets,
+            cached_mesh_objs, m_input_mesh_obj_family, m_input_mesh_obj_convex, m_input_mesh_obj_never_winner,
+            m_mesh_facet_owner, m_mesh_facet_patch, m_mesh_facet_neighbor1, m_mesh_facet_neighbor2,
+            m_mesh_facet_neighbor3, m_mesh_facets,
             // Analytical obj physics properties
             m_ext_obj_comp_num,
             // Family mask
@@ -1624,6 +1626,13 @@ void DEMSolver::migrateArrayDataToHost() {
     {
         ScopedCudaDevice device_scope(kT->streamInfo.device);
         kT->migrateDeviceModifiableInfoToHost();
+        // Mesh deformation is device-major on dT. Update will reload both workers, so seed kT's host geometry
+        // from the synchronized dT cache instead of restoring its original initialization coordinates.
+        for (size_t t = 0; t < dT->relPosNode1.size(); ++t) {
+            kT->relPosNode1[t] = dT->relPosNode1[t];
+            kT->relPosNode2[t] = dT->relPosNode2[t];
+            kT->relPosNode3[t] = dT->relPosNode3[t];
+        }
     }
 }
 

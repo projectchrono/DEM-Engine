@@ -58,6 +58,11 @@ DEM-Engine is a performance-sensitive CUDA/C++ DEM solver with a Chrono-like pub
 - Keep Python bindings in sync when changing public C++ APIs that should be exposed to Python.
 - Preserve backward compatibility unless the requested change explicitly breaks it.
 
+## Asynchronous Output
+
+- Background writers must own complete snapshots or have explicit synchronization protecting every shared input until use finishes. Include counts, mappings, output settings and mesh caches in the ownership audit, not just device/host arrays. Follow [the asynchronous-output design](docs/developer/async-output.rst).
+- Keep completion waits needed before reading or deleting output files; snapshot safety does not imply file completion.
+
 ## Tests And Demos
 
 - Prefer modular tests for targeted behavior changes. They should be deterministic, self-checking, and small enough to run as normal build targets.

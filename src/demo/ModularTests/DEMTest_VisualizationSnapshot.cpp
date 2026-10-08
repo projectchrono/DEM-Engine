@@ -16,7 +16,7 @@ using namespace deme;
 
 namespace {
 
-bool near(float actual, float expected, float tolerance = 1.0e-5f) {
+bool approxEqual(float actual, float expected, float tolerance = 1.0e-5f) {
     return std::abs(actual - expected) <= tolerance;
 }
 
@@ -48,8 +48,8 @@ int main() {
         return 1;
     }
     const auto& rendered_sphere = sphere_snapshot.spheres.front();
-    if (!near(rendered_sphere.position.x, 1.0f) || !near(rendered_sphere.position.y, 2.0f) ||
-        !near(rendered_sphere.position.z, 3.0f) || !near(rendered_sphere.radius, 0.25f)) {
+    if (!approxEqual(rendered_sphere.position.x, 1.0f) || !approxEqual(rendered_sphere.position.y, 2.0f) ||
+        !approxEqual(rendered_sphere.position.z, 3.0f) || !approxEqual(rendered_sphere.radius, 0.25f)) {
         std::cerr << "FAIL: visualization sphere does not match its initialized world transform." << std::endl;
         return 1;
     }
@@ -63,6 +63,8 @@ int main() {
     std::ifstream vtk_file(vtk_path);
     std::ostringstream vtk_contents;
     vtk_contents << vtk_file.rdbuf();
+    // Close input streams before removing their files; Windows denies deletion while a stream is open.
+    vtk_file.close();
     std::filesystem::remove(vtk_path);
     const std::string vtk_text = vtk_contents.str();
     if (vtk_text.find("DATASET POLYDATA") == std::string::npos ||
@@ -80,6 +82,7 @@ int main() {
     std::ifstream analytical_vtk_file(analytical_vtk_path);
     std::ostringstream analytical_vtk_contents;
     analytical_vtk_contents << analytical_vtk_file.rdbuf();
+    analytical_vtk_file.close();
     std::filesystem::remove(analytical_vtk_path);
     const std::string analytical_vtk_text = analytical_vtk_contents.str();
     if (analytical_vtk_text.find("DATASET POLYDATA") == std::string::npos ||
@@ -97,6 +100,7 @@ int main() {
     std::ifstream mesh_vtk_file(mesh_vtk_path);
     std::ostringstream mesh_vtk_contents;
     mesh_vtk_contents << mesh_vtk_file.rdbuf();
+    mesh_vtk_file.close();
     std::filesystem::remove(mesh_vtk_path);
     const std::string mesh_vtk_text = mesh_vtk_contents.str();
     const std::vector<std::string> required_mesh_fields = {"CELL_DATA 2",

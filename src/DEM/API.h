@@ -853,9 +853,42 @@ class DEMSolver {
                                           bool validate = true);
 
     /// @brief Rewrite the relative positions of the flattened triangle soup.
-    void SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& new_nodes);
+    /// @param update_patch_centers Refresh automatic centers from all accumulated deformation (default true).
+    /// False preserves current centers. Has no effect for user-supplied centers, which are never overwritten.
+    /// Automatic single-patch centers remain at the local origin.
+    void SetTriNodeRelPos(size_t owner,
+                          size_t triID,
+                          const std::vector<float3>& new_nodes,
+                          bool update_patch_centers = true);
     /// @brief Update the relative positions of the flattened triangle soup.
-    void UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& updates);
+    /// @param update_patch_centers Refresh automatic centers from all accumulated deformation (default true).
+    /// False preserves current centers. Has no effect for user-supplied centers, which are never overwritten.
+    /// Automatic single-patch centers remain at the local origin.
+    void UpdateTriNodeRelPos(size_t owner,
+                             size_t triID,
+                             const std::vector<float3>& updates,
+                             bool update_patch_centers = true);
+    /// Device-input counterparts of the local node setters. Supply one float3 per mesh node, in original order.
+    /// Calls are synchronous; finish producing source on its CUDA stream before calling. Topology is fixed.
+    /// validate=false skips pointer/finite-value checks. update_patch_centers refreshes automatic centers only:
+    /// one patch uses the local origin, multiple patches average triangle centroids. Explicit centers are preserved.
+    /// Device updates lazily synchronize CPU geometry through GetCachedMesh, tracker getters, or solver output.
+    void SetTriNodeRelPosFromDevice(bodyID_t owner,
+                                    const float3* source,
+                                    int source_device,
+                                    bool validate = true,
+                                    bool update_patch_centers = true);
+    void UpdateTriNodeRelPosFromDevice(bodyID_t owner,
+                                       const float3* source,
+                                       int source_device,
+                                       bool validate = true,
+                                       bool update_patch_centers = true);
+    /// Set one local center per patch at runtime and select user-managed centers (preserved during deformation).
+    void SetMeshPatchLocations(bodyID_t owner, const std::vector<float3>& centers);
+    /// Same semantics as SetMeshPatchLocations; source contains one float3 per patch. Synchronous device input.
+    void SetMeshPatchLocationsFromDevice(bodyID_t owner, const float3* source, int source_device, bool validate = true);
+    /// Resume automatic center management and immediately recompute centers from current geometry.
+    void UseAutomaticMeshPatchLocations(bodyID_t owner);
     /// @brief Get a handle for the mesh this tracker is tracking.
     /// @return Pointer to the mesh.
     std::shared_ptr<DEMMesh>& GetCachedMesh(bodyID_t ownerID);
@@ -1668,6 +1701,8 @@ class DEMSolver {
         WriteAnalyticalFile(outfilename.string(), circumferential_resolution);
     }
     /// @brief Write all contact pairs to a file.
+    /// Contact data is captured before this call returns; formatting and disk writing then run asynchronously.
+    /// Subsequent dynamics calls may proceed without waiting for this contact output to finish.
     /// @details The outputted torque using this method is in global, rather than each object's local coordinate system.
     /// @param outfilename Output filename.
     /// @param force_thres Forces with magnitude smaller than this amount will not be outputted.

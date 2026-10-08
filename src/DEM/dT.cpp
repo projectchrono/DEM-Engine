@@ -12,6 +12,8 @@
 #include <core/ApiVersion.h>
 #include <core/utils/JitHelper.h>
 #include <DEM/dT.h>
+#include "utils/ContactOutput.hpp"
+#include "algorithms/DEMMeshDeformation.h"
 #include <DEM/kT.h>
 #include <DEM/utils/HostSideHelpers.hpp>
 #include <DEM/utils/DynamicThreadHelpers.hpp>
@@ -236,6 +238,7 @@ void DEMDynamicThread::migrateDataToDevice() {
 }
 
 void DEMDynamicThread::migrateDeviceModifiableInfoToHost() {
+    synchronizeMeshCaches();
     migrateClumpPosInfoToHost();
     migrateClumpHighOrderInfoToHost();
     migrateFamilyToHost();
@@ -1122,6 +1125,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
 
         // Per-facet info
         //// TODO: This flatten-then-init approach is historical and too ugly.
+        const size_t deformation_tri_start = nExistingFacets + k;
         size_t this_facet_owner = mesh_facet_owner.at(k);
         const bool mesh_needs_neighbors =
             !(input_mesh_obj_convex.at(this_facet_owner) != 0 && input_mesh_obj_never_winner.at(this_facet_owner) != 0);
@@ -1150,6 +1154,8 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
 
         family_t this_family_num = input_mesh_obj_family.at(i);
         familyID[owner_id] = this_family_num;
+
+        initializeMeshDeformation(input_mesh_objs.at(i), deformation_tri_start, nExistingMeshPatches + p_start);
 
         // Cached initial values for wildcards of this mesh is not needed anymore
         m_meshes.back()->ClearWildcards();
@@ -1912,99 +1918,12 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
 }
 
 void DEMDynamicThread::writeContactsAsCsvFromHost(std::ofstream& ptFile, float force_thres) {
-    std::ostringstream outstrstream;
-
-    std::shared_ptr<ContactInfoContainer> contactInfo = generateContactInfoFromHost(force_thres);
-
-    outstrstream << OUTPUT_FILE_CNT_TYPE_NAME;
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::OWNER) {
-        outstrstream << "," + OUTPUT_FILE_OWNER_1_NAME + "," + OUTPUT_FILE_OWNER_2_NAME;
-    }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::GEO_ID) {
-        outstrstream << "," + OUTPUT_FILE_GEO_ID_1_NAME + "," + OUTPUT_FILE_GEO_ID_2_NAME;
-    }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::FORCE) {
-        outstrstream << "," + OUTPUT_FILE_FORCE_X_NAME + "," + OUTPUT_FILE_FORCE_Y_NAME + "," +
-                            OUTPUT_FILE_FORCE_Z_NAME;
-    }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_POINT) {
-        outstrstream << "," + OUTPUT_FILE_X_COL_NAME + "," + OUTPUT_FILE_Y_COL_NAME + "," + OUTPUT_FILE_Z_COL_NAME;
-    }
-    // if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::COMPONENT) {
-    //     outstrstream << ","+OUTPUT_FILE_COMP_1_NAME+","+OUTPUT_FILE_COMP_2_NAME;
-    // }
-    // if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NICKNAME) {
-    //     outstrstream << ","+OUTPUT_FILE_OWNER_NICKNAME_1_NAME+","+OUTPUT_FILE_OWNER_NICKNAME_2_NAME;
-    // }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NORMAL) {
-        outstrstream << "," + OUTPUT_FILE_NORMAL_X_NAME + "," + OUTPUT_FILE_NORMAL_Y_NAME + "," +
-                            OUTPUT_FILE_NORMAL_Z_NAME;
-    }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE) {
-        outstrstream << "," + OUTPUT_FILE_TORQUE_X_NAME + "," + OUTPUT_FILE_TORQUE_Y_NAME + "," +
-                            OUTPUT_FILE_TORQUE_Z_NAME;
-    }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_WILDCARD) {
-        // Write all wildcard names as header
-        for (const auto& w_name : m_contact_wildcard_names) {
-            outstrstream << "," + w_name;
-        }
-    }
-    outstrstream << "\n";
-
-    for (size_t i = 0; i < contactInfo->Size(); i++) {
-        outstrstream << contactInfo->Get<std::string>("ContactType")[i];
-
-        // (Internal) ownerID and/or geometry ID
-        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::OWNER) {
-            outstrstream << "," << contactInfo->Get<bodyID_t>("AOwner")[i] << ","
-                         << contactInfo->Get<bodyID_t>("BOwner")[i];
-        }
-        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::GEO_ID) {
-            outstrstream << "," << contactInfo->Get<bodyID_t>("AGeo")[i] << ","
-                         << contactInfo->Get<bodyID_t>("BGeo")[i];
-        }
-
-        // Force is already in global...
-        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::FORCE) {
-            outstrstream << "," << contactInfo->Get<float3>("Force")[i].x << ","
-                         << contactInfo->Get<float3>("Force")[i].y << "," << contactInfo->Get<float3>("Force")[i].z;
-        }
-
-        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_POINT) {
-            // oriQ is updated already... whereas the contact point is effectively last step's... That's unfortunate.
-            // Should we do somthing ahout it?
-            outstrstream << "," << contactInfo->Get<float3>("Point")[i].x << ","
-                         << contactInfo->Get<float3>("Point")[i].y << "," << contactInfo->Get<float3>("Point")[i].z;
-        }
-
-        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NORMAL) {
-            outstrstream << "," << contactInfo->Get<float3>("Normal")[i].x << ","
-                         << contactInfo->Get<float3>("Normal")[i].y << "," << contactInfo->Get<float3>("Normal")[i].z;
-        }
-
-        // Torque is in global already...
-        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE) {
-            outstrstream << "," << contactInfo->Get<float3>("Torque")[i].x << ","
-                         << contactInfo->Get<float3>("Torque")[i].y << "," << contactInfo->Get<float3>("Torque")[i].z;
-        }
-
-        // Contact wildcards
-        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_WILDCARD) {
-            // The order shouldn't be an issue... the same set is being processed here and in equip_contact_wildcards,
-            // see Model.h
-            for (const auto& name : m_contact_wildcard_names) {
-                outstrstream << "," << contactInfo->Get<float>(name)[i];
-            }
-        }
-
-        outstrstream << "\n";
-    }
-
-    ptFile << outstrstream.str();
+    const auto contact_info = generateContactInfoFromHost(force_thres);
+    writeContactSnapshotAsCsv(ptFile, *contact_info, solverFlags.cntOutFlags, m_contact_wildcard_names);
 }
 
 void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
+    synchronizeMeshCaches();
     migrateFamilyToHost();
     migrateClumpPosInfoToHost();
     writeMeshesAsVtkFromHost(ptFile);
@@ -2233,6 +2152,7 @@ void DEMDynamicThread::writeMeshesAsVtkFromHost(std::ofstream& ptFile) {
 }
 
 void DEMDynamicThread::writeMeshesAsStl(std::ofstream& ptFile) {
+    synchronizeMeshCaches();
     migrateFamilyToHost();
     migrateClumpPosInfoToHost();
     writeMeshesAsStlFromHost(ptFile);
@@ -2302,6 +2222,7 @@ void DEMDynamicThread::writeMeshesAsStlFromHost(std::ofstream& ptFile) {
 }
 
 void DEMDynamicThread::writeMeshesAsPly(std::ofstream& ptFile, bool patch_colors) {
+    synchronizeMeshCaches();
     migrateFamilyToHost();
     migrateClumpPosInfoToHost();
     writeMeshesAsPlyFromHost(ptFile, patch_colors);
@@ -4687,6 +4608,155 @@ void DEMDynamicThread::setOwnerVel(bodyID_t ownerID, const std::vector<float3>& 
 
 void DEMDynamicThread::setOwnerFamily(bodyID_t ownerID, family_t fam, bodyID_t n) {
     familyID.setVal(std::vector<family_t>(n, fam), ownerID);
+}
+
+// Build persistent connectivity and patch reductions once, after initialization has corrected triangle winding.
+void DEMDynamicThread::initializeMeshDeformation(const std::shared_ptr<DEMMesh>& mesh,
+                                                 size_t tri_start,
+                                                 size_t patch_start) {
+    auto state = std::make_unique<MeshDeformationState>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    state->mesh = mesh;
+    state->tri_start = tri_start;
+    state->patch_start = patch_start;
+    state->vertices.resizeHost(mesh->GetNumNodes());
+    std::copy(mesh->m_vertices.begin(), mesh->m_vertices.end(), state->vertices.host());
+    state->input.resizeHost(std::max(mesh->GetNumNodes(), (size_t)mesh->GetNumPatches()));
+    state->faces.resizeHost(mesh->GetNumTriangles());
+    std::copy(mesh->m_face_v_indices.begin(), mesh->m_face_v_indices.end(), state->faces.host());
+    // Initialization may reverse the triangle soup to honor supplied normals without changing mesh face indices.
+    for (size_t t = 0; t < state->faces.size(); ++t) {
+        if (mesh->use_mesh_normals) {
+            const auto tri = mesh->GetTriangle(t);
+            const float3 normal = mesh->m_normals.at(mesh->m_face_n_indices.at(t).x);
+            if (dot(cross(tri.p2 - tri.p1, tri.p3 - tri.p1), normal) < 0) {
+                std::swap(state->faces[t].y, state->faces[t].z);
+            }
+        }
+    }
+    const size_t patches = mesh->GetNumPatches();
+    state->patch_offsets.resizeHost(patches + 1, 0);
+    state->patch_triangles.resizeHost(mesh->GetNumTriangles());
+    for (size_t t = 0; t < mesh->GetNumTriangles(); ++t) {
+        const size_t p = triPatchID[tri_start + t] - patch_start;
+        if (p >= patches)
+            DEME_ERROR("Invalid patch index in mesh deformation connectivity.");
+        ++state->patch_offsets[p + 1];
+    }
+    for (size_t p = 0; p < patches; ++p)
+        state->patch_offsets[p + 1] += state->patch_offsets[p];
+    std::vector<size_t> cursor(state->patch_offsets.host(), state->patch_offsets.host() + patches);
+    for (size_t t = 0; t < mesh->GetNumTriangles(); ++t) {
+        const size_t p = triPatchID[tri_start + t] - patch_start;
+        state->patch_triangles[cursor[p]++] = t;
+    }
+    state->invalid.resizeHost(1, 0u);
+    mesh->m_patch_locations.assign(relPosPatch.host() + patch_start, relPosPatch.host() + patch_start + patches);
+    meshDeformation[mesh->owner] = std::move(state);
+}
+
+// Recompute from all current triangles, including deformation accumulated while refresh was disabled.
+void DEMDynamicThread::refreshMeshPatchCenters(bodyID_t owner) {
+    auto& state = *meshDeformation.at(owner);
+    state.prepareDevice();
+    if (state.mesh->patch_locations_explicitly_set)
+        return;
+    RefreshMeshPatchCenters(state.patch_offsets.data(), state.patch_triangles.data(), state.patch_offsets.size() - 1,
+                            relPosNode1.data() + state.tri_start, relPosNode2.data() + state.tri_start,
+                            relPosNode3.data() + state.tri_start, relPosPatch.data() + state.patch_start,
+                            streamInfo.stream);
+    state.centers_dirty = true;
+}
+
+// Same-device input is consumed directly; remote input uses the persistent staging buffer. Calls are synchronous
+// so the caller can reuse its input immediately, without requiring a stream interoperability contract.
+void DEMDynamicThread::deformMesh(bodyID_t owner,
+                                  const float3* source,
+                                  int source_device,
+                                  bool increment,
+                                  bool validate,
+                                  bool update_patch_centers) {
+    auto& state = *meshDeformation.at(owner);
+    state.prepareDevice();
+    const size_t count = state.vertices.size();
+    if (validate)
+        DEME_GPU_CALL(device_data::ValidateOutputPointer(source, count * sizeof(float3), source_device));
+    if (source_device != streamInfo.device) {
+        DEME_GPU_CALL(ownerDataTransferBuffer.Copy(state.input.data(), streamInfo.device, source, source_device,
+                                                   count * sizeof(float3)));
+        source = state.input.data();
+    }
+    if (validate) {
+        DEME_GPU_CALL(cudaMemsetAsync(state.invalid.data(), 0, sizeof(unsigned int), streamInfo.stream));
+        ValidateMeshVectors(source, increment ? state.vertices.data() : nullptr, count, state.invalid.data(),
+                            streamInfo.stream);
+        state.invalid.toHostAsync(streamInfo.stream);
+        DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        if (state.invalid[0])
+            DEME_ERROR("Mesh deformation requires finite node coordinates and results.");
+    }
+    DeformMeshVertices(source, state.vertices.data(), count, increment, state.faces.data(), state.faces.size(),
+                       relPosNode1.data() + state.tri_start, relPosNode2.data() + state.tri_start,
+                       relPosNode3.data() + state.tri_start, streamInfo.stream);
+    if (update_patch_centers)
+        refreshMeshPatchCenters(owner);
+    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    state.vertices_dirty = true;
+    solverFlags.willMeshDeform = true;
+    ++visualizationRevision;
+}
+
+// Explicit runtime centers update dT storage as well as the mesh cache; subsequent deformations preserve them.
+void DEMDynamicThread::setMeshPatchLocations(bodyID_t owner, const float3* source, int source_device, bool validate) {
+    auto& state = *meshDeformation.at(owner);
+    state.prepareDevice();
+    const size_t count = state.patch_offsets.size() - 1;
+    if (validate)
+        DEME_GPU_CALL(device_data::ValidateOutputPointer(source, count * sizeof(float3), source_device));
+    if (source_device != streamInfo.device) {
+        DEME_GPU_CALL(ownerDataTransferBuffer.Copy(state.input.data(), streamInfo.device, source, source_device,
+                                                   count * sizeof(float3)));
+        source = state.input.data();
+    }
+    if (validate) {
+        DEME_GPU_CALL(cudaMemsetAsync(state.invalid.data(), 0, sizeof(unsigned int), streamInfo.stream));
+        ValidateMeshVectors(source, nullptr, count, state.invalid.data(), streamInfo.stream);
+        state.invalid.toHostAsync(streamInfo.stream);
+        DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        if (state.invalid[0])
+            DEME_ERROR("Mesh patch locations must be finite.");
+    }
+    DEME_GPU_CALL(cudaMemcpyAsync(relPosPatch.data() + state.patch_start, source, count * sizeof(float3),
+                                  cudaMemcpyDeviceToDevice, streamInfo.stream));
+    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    state.mesh->patch_locations_explicitly_set = true;
+    state.centers_dirty = true;
+}
+
+// Download only at CPU observation boundaries. Previously retained raw mesh handles are snapshots until a tracker
+// getter or another solver CPU reader synchronizes them; direct writes to mesh storage are not runtime updates.
+void DEMDynamicThread::synchronizeMeshCache(bodyID_t owner) {
+    auto& state = *meshDeformation.at(owner);
+    if (state.vertices_dirty) {
+        state.vertices.toHost();
+        state.mesh->m_vertices.assign(state.vertices.host(), state.vertices.host() + state.vertices.size());
+        relPosNode1.toHost(state.tri_start, state.faces.size());
+        relPosNode2.toHost(state.tri_start, state.faces.size());
+        relPosNode3.toHost(state.tri_start, state.faces.size());
+        state.vertices_dirty = false;
+    }
+    if (state.centers_dirty) {
+        const size_t count = state.patch_offsets.size() - 1;
+        relPosPatch.toHost(state.patch_start, count);
+        state.mesh->m_patch_locations.assign(relPosPatch.host() + state.patch_start,
+                                             relPosPatch.host() + state.patch_start + count);
+        state.centers_dirty = false;
+    }
+}
+
+// Used before output, visualization, and any full host-to-device state reload.
+void DEMDynamicThread::synchronizeMeshCaches() {
+    for (const auto& entry : meshDeformation)
+        synchronizeMeshCache(entry.first);
 }
 
 void DEMDynamicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles) {

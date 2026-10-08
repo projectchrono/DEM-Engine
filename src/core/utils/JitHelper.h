@@ -58,15 +58,8 @@ class JitHelper {
     static std::string toHex(uint64_t value);
     static std::filesystem::path resolveCacheDir();
 
-    inline static std::string loadSourceFile(const std::filesystem::path& sourcefile) {
-        std::string code;
-        // If the file exists, read in the entire thing.
-        if (std::filesystem::exists(sourcefile)) {
-            std::ifstream input(sourcefile);
-            std::getline(input, code, std::string::traits_type::to_char_type(std::string::traits_type::eof()));
-        }
-        return code;
-    };
+    // Read required runtime source text, reporting the resolved path on open or read failure.
+    static std::string loadSourceFile(const std::filesystem::path& sourcefile);
 };
 
 class JitHelper::CachedProgram {

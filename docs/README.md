@@ -84,10 +84,12 @@ cmake --build build-docs --target docs
 Normal HTML builds use the committed `docs/python/reference.rst` and therefore
 do not import DEME or require a CUDA GPU.
 
-Regenerate that file after changing pybind11 signatures or docstrings. First
-build and stage the Python extension:
+Regenerate that file after changing pybind11 signatures or docstrings. From the
+repository root, activate the Python environment used to build the extension
+and run this complete sequence. Doxygen and Sphinx must also be available:
 
 ```bash
+# Build and stage the current Python extension.
 cmake -S . -B build-python \
     -DDEME_BUILD_PYTHON=ON \
     -DCMAKE_BUILD_TYPE=Release
@@ -95,25 +97,44 @@ cmake --build build-python --target _deme --parallel
 cmake --install build-python \
     --component python \
     --prefix /tmp/deme-python-reference
-```
 
-Then run the generator with the same Python interpreter used to build the
-extension:
-
-```bash
+# Generate the reference using the same Python interpreter.
 PYTHONPATH=/tmp/deme-python-reference \
-    /usr/bin/make -C docs python-reference
-```
+    /usr/bin/make -C docs python-reference PYTHON="$(command -v python)"
 
-Finally, rebuild the site:
-
-```bash
+# Rebuild the documentation (requires Doxygen and Sphinx).
 /usr/bin/make -C docs html
+
+# Review the generated changes.
+git diff -- docs/python/reference.rst
 ```
 
 Do not edit `docs/python/reference.rst` directly. Improve the corresponding
 docstring in `src/DEM/python/bindings.cpp`, rebuild the extension, and
 regenerate the page.
+
+## Publish to GitHub Pages
+
+In **Settings → Secrets and variables → Actions → Variables**, create or update
+the repository variable `DOCS_PUBLISH_BRANCH` to the branch that should publish
+the documentation. Set it to `develop` to publish from `develop` instead of
+`DEME3_docs`. This must be a repository **variable**, not a secret or an
+environment variable: the workflow reads `vars.DOCS_PUBLISH_BRANCH`.
+
+Set **Settings → Pages → Build and deployment → Source** to **GitHub Actions**,
+and allow the selected branch in the `github-pages` environment's deployment
+branch rules under **Settings → Environments**.
+
+Commit the documentation sources, including the regenerated Python reference,
+and push to the selected branch. The **Build and publish documentation** workflow
+builds and publishes the site automatically. Keep generated `docs/_build/`
+files out of Git.
+
+An unset variable or a branch mismatch causes push and manual runs to skip the
+build and deployment. Changing the variable alone does not trigger a build;
+push a new commit or, when **Run workflow** is available, select the matching
+branch and run it manually. Pull requests build for validation without deploying.
+See [hosting options](developer/hosting.rst) for the full setup details.
 
 ## Preview on the same machine
 
