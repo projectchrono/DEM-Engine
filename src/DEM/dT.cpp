@@ -12,6 +12,7 @@
 #include <core/ApiVersion.h>
 #include <core/utils/JitHelper.h>
 #include <DEM/dT.h>
+#include "utils/ContactOutput.hpp"
 #include "algorithms/DEMMeshDeformation.h"
 #include <DEM/kT.h>
 #include <DEM/utils/HostSideHelpers.hpp>
@@ -1917,96 +1918,8 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
 }
 
 void DEMDynamicThread::writeContactsAsCsvFromHost(std::ofstream& ptFile, float force_thres) {
-    std::ostringstream outstrstream;
-
-    std::shared_ptr<ContactInfoContainer> contactInfo = generateContactInfoFromHost(force_thres);
-
-    outstrstream << OUTPUT_FILE_CNT_TYPE_NAME;
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::OWNER) {
-        outstrstream << "," + OUTPUT_FILE_OWNER_1_NAME + "," + OUTPUT_FILE_OWNER_2_NAME;
-    }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::GEO_ID) {
-        outstrstream << "," + OUTPUT_FILE_GEO_ID_1_NAME + "," + OUTPUT_FILE_GEO_ID_2_NAME;
-    }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::FORCE) {
-        outstrstream << "," + OUTPUT_FILE_FORCE_X_NAME + "," + OUTPUT_FILE_FORCE_Y_NAME + "," +
-                            OUTPUT_FILE_FORCE_Z_NAME;
-    }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_POINT) {
-        outstrstream << "," + OUTPUT_FILE_X_COL_NAME + "," + OUTPUT_FILE_Y_COL_NAME + "," + OUTPUT_FILE_Z_COL_NAME;
-    }
-    // if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::COMPONENT) {
-    //     outstrstream << ","+OUTPUT_FILE_COMP_1_NAME+","+OUTPUT_FILE_COMP_2_NAME;
-    // }
-    // if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NICKNAME) {
-    //     outstrstream << ","+OUTPUT_FILE_OWNER_NICKNAME_1_NAME+","+OUTPUT_FILE_OWNER_NICKNAME_2_NAME;
-    // }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NORMAL) {
-        outstrstream << "," + OUTPUT_FILE_NORMAL_X_NAME + "," + OUTPUT_FILE_NORMAL_Y_NAME + "," +
-                            OUTPUT_FILE_NORMAL_Z_NAME;
-    }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE) {
-        outstrstream << "," + OUTPUT_FILE_TORQUE_X_NAME + "," + OUTPUT_FILE_TORQUE_Y_NAME + "," +
-                            OUTPUT_FILE_TORQUE_Z_NAME;
-    }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_WILDCARD) {
-        // Write all wildcard names as header
-        for (const auto& w_name : m_contact_wildcard_names) {
-            outstrstream << "," + w_name;
-        }
-    }
-    outstrstream << "\n";
-
-    for (size_t i = 0; i < contactInfo->Size(); i++) {
-        outstrstream << contactInfo->Get<std::string>("ContactType")[i];
-
-        // (Internal) ownerID and/or geometry ID
-        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::OWNER) {
-            outstrstream << "," << contactInfo->Get<bodyID_t>("AOwner")[i] << ","
-                         << contactInfo->Get<bodyID_t>("BOwner")[i];
-        }
-        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::GEO_ID) {
-            outstrstream << "," << contactInfo->Get<bodyID_t>("AGeo")[i] << ","
-                         << contactInfo->Get<bodyID_t>("BGeo")[i];
-        }
-
-        // Force is already in global...
-        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::FORCE) {
-            outstrstream << "," << contactInfo->Get<float3>("Force")[i].x << ","
-                         << contactInfo->Get<float3>("Force")[i].y << "," << contactInfo->Get<float3>("Force")[i].z;
-        }
-
-        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_POINT) {
-            // oriQ is updated already... whereas the contact point is effectively last step's... That's unfortunate.
-            // Should we do somthing ahout it?
-            outstrstream << "," << contactInfo->Get<float3>("Point")[i].x << ","
-                         << contactInfo->Get<float3>("Point")[i].y << "," << contactInfo->Get<float3>("Point")[i].z;
-        }
-
-        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NORMAL) {
-            outstrstream << "," << contactInfo->Get<float3>("Normal")[i].x << ","
-                         << contactInfo->Get<float3>("Normal")[i].y << "," << contactInfo->Get<float3>("Normal")[i].z;
-        }
-
-        // Torque is in global already...
-        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE) {
-            outstrstream << "," << contactInfo->Get<float3>("Torque")[i].x << ","
-                         << contactInfo->Get<float3>("Torque")[i].y << "," << contactInfo->Get<float3>("Torque")[i].z;
-        }
-
-        // Contact wildcards
-        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_WILDCARD) {
-            // The order shouldn't be an issue... the same set is being processed here and in equip_contact_wildcards,
-            // see Model.h
-            for (const auto& name : m_contact_wildcard_names) {
-                outstrstream << "," << contactInfo->Get<float>(name)[i];
-            }
-        }
-
-        outstrstream << "\n";
-    }
-
-    ptFile << outstrstream.str();
+    const auto contact_info = generateContactInfoFromHost(force_thres);
+    writeContactSnapshotAsCsv(ptFile, *contact_info, solverFlags.cntOutFlags, m_contact_wildcard_names);
 }
 
 void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {

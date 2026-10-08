@@ -1701,6 +1701,8 @@ class DEMSolver {
         WriteAnalyticalFile(outfilename.string(), circumferential_resolution);
     }
     /// @brief Write all contact pairs to a file.
+    /// Contact data is captured before this call returns; formatting and disk writing then run asynchronously.
+    /// Subsequent dynamics calls may proceed without waiting for this contact output to finish.
     /// @details The outputted torque using this method is in global, rather than each object's local coordinate system.
     /// @param outfilename Output filename.
     /// @param force_thres Forces with magnitude smaller than this amount will not be outputted.

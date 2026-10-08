@@ -7,6 +7,7 @@
 #include "API.h"
 #include "Defines.h"
 #include "utils/AnalyticalOutput.hpp"
+#include "utils/ContactOutput.hpp"
 #include "utils/CombinedOwnerUtils.hpp"
 #include "utils/HostSideHelpers.hpp"
 #include "utils/MeshUtils.hpp"
@@ -3453,12 +3454,14 @@ void DEMSolver::WriteContactFile(const std::string& outfilename, float force_thr
     }
     switch (m_cnt_out_format) {
         case (OUTPUT_FORMAT::CSV): {
-            dT->migrateFamilyToHost();
-            dT->migrateClumpPosInfoToHost();
-            dT->migrateContactInfoToHost();
-            m_output_thread = std::thread([this, outfilename, force_thres]() {
+            // Finish reading live solver state before returning to the caller, which may immediately resume dynamics.
+            // Only the owned snapshot and its column configuration are read by the background writer.
+            std::shared_ptr<const ContactInfoContainer> contact_info = dT->generateContactInfo(force_thres);
+            const auto output_flags = dT->solverFlags.cntOutFlags;
+            const auto wildcard_names = dT->m_contact_wildcard_names;
+            m_output_thread = std::thread([outfilename, contact_info, output_flags, wildcard_names]() {
                 std::ofstream ptFile(outfilename, std::ios::out);
-                dT->writeContactsAsCsvFromHost(ptFile, force_thres);
+                writeContactSnapshotAsCsv(ptFile, *contact_info, output_flags, wildcard_names);
             });
             break;
         }
@@ -3466,12 +3469,14 @@ void DEMSolver::WriteContactFile(const std::string& outfilename, float force_thr
             // std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
             //// TODO: Implement it
             DEME_WARNING(std::string("Binary contact pair output is not implemented yet, using CSV..."));
-            dT->migrateFamilyToHost();
-            dT->migrateClumpPosInfoToHost();
-            dT->migrateContactInfoToHost();
-            m_output_thread = std::thread([this, outfilename, force_thres]() {
+            // Finish reading live solver state before returning to the caller, which may immediately resume dynamics.
+            // Only the owned snapshot and its column configuration are read by the background writer.
+            std::shared_ptr<const ContactInfoContainer> contact_info = dT->generateContactInfo(force_thres);
+            const auto output_flags = dT->solverFlags.cntOutFlags;
+            const auto wildcard_names = dT->m_contact_wildcard_names;
+            m_output_thread = std::thread([outfilename, contact_info, output_flags, wildcard_names]() {
                 std::ofstream ptFile(outfilename, std::ios::out);
-                dT->writeContactsAsCsvFromHost(ptFile, force_thres);
+                writeContactSnapshotAsCsv(ptFile, *contact_info, output_flags, wildcard_names);
             });
             break;
         }

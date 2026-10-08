@@ -33,6 +33,7 @@ kernels.
    :caption: Development
 
    developer/architecture
+   developer/async-output
    developer/type-codes
    developer/documentation
    developer/packaging

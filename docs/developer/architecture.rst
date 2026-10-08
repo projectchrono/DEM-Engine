@@ -33,6 +33,9 @@ synchronization. Avoid adding device-wide synchronization to hot paths. When
 cross-device data is transferred, preserve the lifetime of the source storage
 until the destination operation has completed.
 
+File-output ownership, current snapshot coverage and remaining host-memory risks
+are documented in `Asynchronous output <async-output.rst>`__.
+
 Adding Python bindings
 ----------------------
 
