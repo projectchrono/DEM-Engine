@@ -4,6 +4,7 @@
 #define DEME_MESH_DEFORMATION_H
 #include <cuda_runtime.h>
 #include <cstddef>
+#include "algorithms/DEMMeshPatchCenter.h"
 namespace deme {
 // Validate input (and the result of an incremental update) before mutating persistent geometry.
 void ValidateMeshVectors(const float3* input,
@@ -22,7 +23,7 @@ void DeformMeshVertices(const float3* input,
                         float3* node2,
                         float3* node3,
                         cudaStream_t stream);
-// Preserve the historical local-origin convention for a single patch; otherwise average triangle centroids.
+// Preserve the single-patch origin; otherwise apply the shared inward-offset policy using current device geometry.
 void RefreshMeshPatchCenters(const size_t* offsets,
                              const size_t* triangles,
                              size_t patches,
@@ -30,6 +31,10 @@ void RefreshMeshPatchCenters(const size_t* offsets,
                              const float3* node2,
                              const float3* node3,
                              float3* centers,
+                             const float3* vertices,
+                             size_t vertex_count,
+                             double* diagonal,
+                             MeshPatchCenterOptions options,
                              cudaStream_t stream);
 }  // namespace deme
 #endif

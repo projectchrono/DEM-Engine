@@ -419,7 +419,7 @@ class DEMTracker {
     /// @param update_patch_centers Recompute automatic centers from the full current geometry. False skips only
     /// this call; a later true call includes accumulated deformation. This option has NO effect for user-supplied
     /// centers, which are never overwritten. Automatic single-patch centers remain at the local origin; multiple
-    /// patches use the unweighted mean of triangle centroids. This does not change the contact-rejection heuristic.
+    /// patches use inward-offset centroid averages with the solver offset settings. The rejection rule is unchanged.
     void UpdateMeshFromDevice(const float3* source,
                               int source_device,
                               bool validate = true,

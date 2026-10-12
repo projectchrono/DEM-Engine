@@ -1646,6 +1646,28 @@ void DEMSolver::SetMaxTriTriPenetration(double max_margin) {
     }
 }
 
+// Setup-only settings remain on dT for mesh initialization and device deformation refreshes.
+void DEMSolver::SetMeshPatchCenterOffsetAlpha(float alpha) {
+    assertSysNotInit("SetMeshPatchCenterOffsetAlpha");
+    if (!std::isfinite(alpha) || alpha < 0)
+        DEME_ERROR("Patch center offset alpha must be finite and non-negative.");
+    dT->meshPatchCenterOptions.alpha = alpha;
+}
+
+void DEMSolver::SetMeshPatchCenterOffsetBeta(float beta) {
+    assertSysNotInit("SetMeshPatchCenterOffsetBeta");
+    if (!std::isfinite(beta) || beta < 0)
+        DEME_ERROR("Patch center offset beta must be finite and non-negative.");
+    dT->meshPatchCenterOptions.beta = beta;
+}
+
+void DEMSolver::SetMeshPatchCenterOffsetGamma(float gamma) {
+    assertSysNotInit("SetMeshPatchCenterOffsetGamma");
+    if (!std::isfinite(gamma) || gamma < 0)
+        DEME_ERROR("Patch center offset gamma must be finite and non-negative.");
+    dT->meshPatchCenterOptions.gamma = gamma;
+}
+
 void DEMSolver::SetTriTriContactRejectionRatio(float ratio) {
     m_triTriContactRejectionRatio = ratio;
     if (!sys_initialized) {

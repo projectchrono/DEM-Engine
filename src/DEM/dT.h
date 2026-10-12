@@ -382,6 +382,8 @@ class DEMDynamicThread {
     SolverTimers timers = SolverTimers(timer_names);
 
   public:
+    // Setup-only policy reused for mesh initialization and every automatic deformation refresh.
+    MeshPatchCenterOptions meshPatchCenterOptions;
     // Invalidates renderer geometry after initialization, insertion, or mesh deformation (not rigid motion).
     std::uint64_t visualizationRevision = 0;
     friend class DEMSolver;

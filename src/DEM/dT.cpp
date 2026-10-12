@@ -1108,7 +1108,8 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         if (input_mesh_objs.at(i)->patch_locations_explicitly_set) {
             this_mesh_patch_locations = input_mesh_objs.at(i)->m_patch_locations;
         } else {
-            this_mesh_patch_locations = input_mesh_objs.at(i)->ComputePatchLocations();
+            this_mesh_patch_locations = input_mesh_objs.at(i)->ComputePatchLocations(
+                meshPatchCenterOptions.alpha, meshPatchCenterOptions.beta, meshPatchCenterOptions.gamma);
         }
 
         // mesh_patch_owner run length is the num of patches in this mesh entity
@@ -4663,6 +4664,7 @@ void DEMDynamicThread::refreshMeshPatchCenters(bodyID_t owner) {
     RefreshMeshPatchCenters(state.patch_offsets.data(), state.patch_triangles.data(), state.patch_offsets.size() - 1,
                             relPosNode1.data() + state.tri_start, relPosNode2.data() + state.tri_start,
                             relPosNode3.data() + state.tri_start, relPosPatch.data() + state.patch_start,
+                            state.vertices.data(), state.vertices.size(), state.diagonal.data(), meshPatchCenterOptions,
                             streamInfo.stream);
     state.centers_dirty = true;
 }

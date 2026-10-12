@@ -46,6 +46,7 @@
 #include "DEM/BdrsAndObjs.h"
 #include "DEM/utils/HostSideHelpers.hpp"
 #include "DEM/utils/MeshUtils.hpp"
+#include "algorithms/DEMMeshPatchCenter.h"
 #include "core/utils/Logger.hpp"
 #include "core/utils/WavefrontMeshLoader.hpp"
 #include "kernel/DEMHelperKernels.cuh"
@@ -1079,49 +1080,43 @@ void DEMMesh::SetEachTriangleAsPatch() {
     SetPatchIDs(patch_ids);
 }
 
-// Compute patch locations (relative to CoM, which is implicitly at 0,0,0)
-// If not explicitly set, calculates as:
-// - Single patch: (0,0,0)
-// - Multiple patches: average of triangle centroids per patch
-std::vector<float3> DEMMesh::ComputePatchLocations() const {
-    std::vector<float3> patch_locations(nPatches, make_float3(0, 0, 0));
-
-    if (nPatches == 1) {
-        // Single patch: location is just CoM (0,0,0)
-        return patch_locations;
+// Match deformation's corrected winding and shared host/device offset policy. Bounds use all current vertices,
+// including unused ones, so setup and device refresh have the same definition of mesh size.
+std::vector<float3> DEMMesh::ComputePatchLocations(float alpha, float beta, float gamma) const {
+    if (!std::isfinite(alpha) || !std::isfinite(beta) || !std::isfinite(gamma) || alpha < 0 || beta < 0 || gamma < 0)
+        DEME_ERROR("Patch center offset parameters must be finite and non-negative.");
+    std::vector<float3> locations(nPatches, make_float3(0, 0, 0));
+    if (nPatches <= 1)
+        return locations;
+    double lo[3] = {INFINITY, INFINITY, INFINITY}, hi[3] = {-INFINITY, -INFINITY, -INFINITY};
+    for (const auto& v : m_vertices) {
+        const double xyz[3] = {v.x, v.y, v.z};
+        for (int k = 0; k < 3; ++k) {
+            lo[k] = std::min(lo[k], xyz[k]);
+            hi[k] = std::max(hi[k], xyz[k]);
+        }
     }
-
-    // Multiple patches: compute average of triangle centroids per patch
-    std::vector<int> patch_triangle_counts(nPatches, 0);
-
+    double diagonal2 = 0;
+    if (!m_vertices.empty())
+        for (int k = 0; k < 3; ++k)
+            diagonal2 += (hi[k] - lo[k]) * (hi[k] - lo[k]);
+    std::vector<std::array<double, 7>> sums(nPatches, std::array<double, 7>{});
+    std::vector<size_t> counts(nPatches, 0);
     for (size_t i = 0; i < nTri; ++i) {
-        const int3& face = m_face_v_indices[i];
-        const float3& v0 = m_vertices[face.x];
-        const float3& v1 = m_vertices[face.y];
-        const float3& v2 = m_vertices[face.z];
-
-        float3 centroid = triangleCentroid<float3>(v0, v1, v2);
-        patchID_t patch_id = (i < m_patch_ids.size()) ? m_patch_ids[i] : 0;
-
-        // Validate patch_id is within bounds
-        if (patch_id >= 0 && patch_id < static_cast<patchID_t>(nPatches)) {
-            patch_locations[patch_id].x += centroid.x;
-            patch_locations[patch_id].y += centroid.y;
-            patch_locations[patch_id].z += centroid.z;
-            patch_triangle_counts[patch_id]++;
+        const int3 face = m_face_v_indices[i];
+        float3 a = m_vertices[face.x], b = m_vertices[face.y], c = m_vertices[face.z];
+        // Supplied normals correct winding at initialization. The device subsequently keeps this topology.
+        if (use_mesh_normals && dot(cross(b - a, c - a), m_normals.at(m_face_n_indices.at(i).x)) < 0)
+            std::swap(b, c);
+        const patchID_t p = i < m_patch_ids.size() ? m_patch_ids[i] : 0;
+        if (p >= 0 && p < static_cast<patchID_t>(nPatches)) {
+            AccumulatePatchTriangle(sums[p].data(), a, b, c);
+            ++counts[p];
         }
     }
-
-    // Average the accumulated centroids
-    for (unsigned int p = 0; p < nPatches; ++p) {
-        if (patch_triangle_counts[p] > 0) {
-            patch_locations[p].x /= patch_triangle_counts[p];
-            patch_locations[p].y /= patch_triangle_counts[p];
-            patch_locations[p].z /= patch_triangle_counts[p];
-        }
-    }
-
-    return patch_locations;
+    for (unsigned int p = 0; p < nPatches; ++p)
+        locations[p] = FinishPatchCenter(sums[p].data(), counts[p], sqrt(diagonal2), {alpha, beta, gamma});
+    return locations;
 }
 
 // Compute volume, centroid and MOI in CoM frame (unit density).

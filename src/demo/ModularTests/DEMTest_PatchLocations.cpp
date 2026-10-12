@@ -17,6 +17,8 @@
 #include <iostream>
 #include <iomanip>
 #include <cmath>
+#include <limits>
+#include <stdexcept>
 
 using namespace deme;
 
@@ -25,7 +27,78 @@ bool approxEqual(const float3& a, const float3& b, float tolerance = 1e-5f) {
     return std::abs(a.x - b.x) < tolerance && std::abs(a.y - b.y) < tolerance && std::abs(a.z - b.z) < tolerance;
 }
 
+// Analytic geometry checks exercise each term independently, including normals that cannot define an offset.
+// A large number of triangles is not needed to distinguish area-weighting from averaging unit normals.
+void checkOffsetGeometry() {
+    auto require = [](bool ok, const char* message) {
+        if (!ok)
+            throw std::runtime_error(message);
+    };
+    DEMMesh mesh;
+    mesh.m_vertices = {make_float3(0, 0, 2), make_float3(1, 0, 2), make_float3(0, 1, 2)};
+    mesh.m_face_v_indices = {make_int3(0, 1, 2), make_int3(0, 2, 1)};
+    mesh.nTri = 2;
+    mesh.nPatches = 2;
+    mesh.m_patch_ids = {0, 1};
+    auto centers = mesh.ComputePatchLocations();
+    require(approxEqual(centers[0], make_float3(1.f / 3, 1.f / 3, 0.4f)), "exterior offset incorrect");
+    require(approxEqual(centers[1], make_float3(1.f / 3, 1.f / 3, 3.6f)), "interior offset incorrect");
+    centers = mesh.ComputePatchLocations(0.5f, 0, 1);
+    require(std::abs(centers[0].z - 1) < 1.e-5f, "custom alpha/gamma ignored");
+    centers = mesh.ComputePatchLocations(2, 0.25f, 0);
+    require(std::abs(centers[0].z - (2 - 0.5f * std::sqrt(2.f))) < 1.e-5f, "custom beta ignored");
+    centers = mesh.ComputePatchLocations(0);
+    require(std::abs(centers[0].z - 2) < 1.e-5f, "alpha=0 did not restore average");
+    for (float bad : {-1.f, std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()}) {
+        for (int k = 0; k < 3; ++k) {
+            float args[3] = {1, 0.01f, 0.8f};
+            args[k] = bad;
+            bool rejected = false;
+            try {
+                mesh.ComputePatchLocations(args[0], args[1], args[2]);
+            } catch (const std::exception&) {
+                rejected = true;
+            }
+            require(rejected, "non-finite/negative geometry setting accepted");
+        }
+    }
+    // Opposing equal-area faces cancel exactly; an empty patch must remain at zero as well.
+    mesh.m_patch_ids = {0, 0};
+    centers = mesh.ComputePatchLocations();
+    require(approxEqual(centers[0], make_float3(1.f / 3, 1.f / 3, 2)), "cancelling normals shifted center");
+    require(approxEqual(centers[1], make_float3(0, 0, 0)), "empty patch is not zero");
+    mesh.m_face_v_indices = {make_int3(0, 0, 0), make_int3(1, 1, 1)};
+    mesh.m_patch_ids = {0, 1};
+    centers = mesh.ComputePatchLocations();
+    require(approxEqual(centers[0], mesh.m_vertices[0]), "degenerate patch shifted center");
+    // Equal area opposite normals with a tiny residual should also remain unshifted, independent of units.
+    mesh.m_vertices.push_back(make_float3(0, 1.0000001f, 2));
+    mesh.m_face_v_indices = {make_int3(0, 1, 2), make_int3(0, 3, 1)};
+    mesh.m_patch_ids = {0, 0};
+    centers = mesh.ComputePatchLocations();
+    require(std::abs(centers[0].z - 2) < 1.e-5f, "nearly cancelling normals shifted center");
+    // Triangles with +Z area 2 and +X area 1: resultant is proportional to (1,0,2), not (1,0,1).
+    mesh.m_vertices = {make_float3(0, 0, 0), make_float3(2, 0, 0), make_float3(0, 2, 0), make_float3(0, 0, 1)};
+    mesh.m_face_v_indices = {make_int3(0, 1, 2), make_int3(0, 2, 3)};
+    centers = mesh.ComputePatchLocations(1, 0, 1);
+    require(approxEqual(centers[0], make_float3(0.2f, 2.f / 3, -0.1f)), "normal is not area weighted");
+    // Normal correction must agree with initialization when users supply opposite vertex winding.
+    mesh.m_normals = {make_float3(0, 0, -1), make_float3(-1, 0, 0)};
+    mesh.m_face_n_indices = {make_int3(0, 0, 0), make_int3(1, 1, 1)};
+    mesh.UseNormals(true);
+    centers = mesh.ComputePatchLocations(1, 0, 1);
+    require(approxEqual(centers[0], make_float3(7.f / 15, 2.f / 3, 13.f / 30)), "supplied winding ignored");
+    std::cout << "PASS: offset geometry, parameters, winding, degenerate and cancelling normals.\n";
+}
+
 int main() {
+    std::cout << "Negative parameter checks intentionally emit ERROR diagnostics.\n";
+    try {
+        checkOffsetGeometry();
+    } catch (const std::exception& e) {
+        std::cerr << "FAIL: " << e.what() << '\n';
+        return 1;
+    }
     std::cout << "========================================" << std::endl;
     std::cout << "DEM Mesh Patch Location Test" << std::endl;
     std::cout << "========================================" << std::endl;
@@ -55,7 +128,7 @@ int main() {
         test_failures++;
     }
 
-    // Test 2: Multiple patches - should compute centroids
+    // Test 2: Multiple planar patches use a mesh-size fallback behind their centroid plane.
     std::cout << "\n--- Test 2: Multi-Patch Mesh Computed Locations ---" << std::endl;
     auto mesh2 = std::make_shared<DEMMesh>();
 
@@ -75,11 +148,11 @@ int main() {
     auto locations2 = mesh2->ComputePatchLocations();
     std::cout << "Number of patches: " << mesh2->GetNumPatches() << std::endl;
 
-    // Expected centroids:
+    // Expected centers: these centroids shifted by -0.01 * sqrt(10) along Z.
     // Patch 0 triangle centroid: ((0+1+0)/3, (0+0+1)/3, 0) = (0.333, 0.333, 0)
     // Patch 1 triangle centroid: ((2+3+2)/3, (0+0+1)/3, 0) = (2.333, 0.333, 0)
-    float3 expected_loc0 = make_float3(1.0f / 3.0f, 1.0f / 3.0f, 0.0f);
-    float3 expected_loc1 = make_float3(7.0f / 3.0f, 1.0f / 3.0f, 0.0f);
+    float3 expected_loc0 = make_float3(1.0f / 3.0f, 1.0f / 3.0f, -0.01f * std::sqrt(10.f));
+    float3 expected_loc1 = make_float3(7.0f / 3.0f, 1.0f / 3.0f, -0.01f * std::sqrt(10.f));
 
     std::cout << "Computed location for patch 0: (" << locations2[0].x << ", " << locations2[0].y << ", "
               << locations2[0].z << ")" << std::endl;

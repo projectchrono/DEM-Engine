@@ -4,6 +4,7 @@
 #define DEME_MESH_DEFORMATION_HPP
 
 #include <memory>
+#include "algorithms/DEMMeshPatchCenter.h"
 
 #include "core/utils/DataMigrationHelper.hpp"
 #include "DEM/BdrsAndObjs.h"
@@ -18,7 +19,8 @@ struct MeshDeformationState {
           faces(host_bytes, device_bytes),
           patch_offsets(host_bytes, device_bytes),
           patch_triangles(host_bytes, device_bytes),
-          invalid(host_bytes, device_bytes) {}
+          invalid(host_bytes, device_bytes),
+          diagonal(host_bytes, device_bytes) {}
     std::shared_ptr<DEMMesh> mesh;
     size_t tri_start = 0;
     size_t patch_start = 0;
@@ -32,6 +34,7 @@ struct MeshDeformationState {
         patch_offsets.toDevice();
         patch_triangles.toDevice();
         invalid.toDevice();
+        diagonal.resizeDevice(1);
         input.resizeDevice(input.size());
         device_ready = true;
     }
@@ -44,6 +47,8 @@ struct MeshDeformationState {
     DualArray<size_t> patch_offsets;
     DualArray<size_t> patch_triangles;
     DualArray<unsigned int> invalid;
+    // One scalar computed on the same stream before patch reduction; never downloaded during deformation.
+    DualArray<double> diagonal;
 };
 }  // namespace deme
 #endif
