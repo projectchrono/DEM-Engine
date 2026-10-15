@@ -290,6 +290,29 @@ class DEMSolver {
     /// @details A negative value disables this guard when the corresponding contact kernel support is enabled.
     void SetTriTriContactRejectionRatio(float ratio);
 
+    /// @brief Set the overall multiplier for automatic multi-patch center offsets (default 1).
+    /// @details Before Initialize() only. Automatic centers use c - d*n, where c is the unweighted mean of
+    /// triangle centroids, n is the area-weighted unit normal, and d = alpha*max(gamma*h, beta*L).
+    /// h = abs(dot(c,n)) is the normal distance to the implicit local CoM (0,0,0); L is the current mesh-local
+    /// bounding-box diagonal, including unused vertices. Bounds and normals refresh with deformation when requested.
+    /// These advanced heuristic settings apply to mesh initialization and automatic deformation
+    /// refreshes. Single-patch origins, explicit user centers and mass properties are unaffected. Cancelling or
+    /// degenerate normals retain the unshifted average. Larger offsets make the contact rejection guard more
+    /// permissive; this is not a guarantee of valid filtering for arbitrary concave geometry or inconsistent winding.
+    /// @param alpha Finite, non-negative scale. Zero restores the historical unshifted multi-patch averages.
+    void SetMeshPatchCenterOffsetAlpha(float alpha);
+    /// @brief Set the minimum automatic center offset relative to mesh size (default 0.01).
+    /// @details Before Initialize() only. In d = alpha*max(gamma*h, beta*L), beta supplies a fallback when the
+    /// CoM lies near the patch plane. See SetMeshPatchCenterOffsetAlpha for geometry, scope and limitations.
+    /// @param beta Finite, non-negative fraction of the current local mesh bounding-box diagonal. Zero disables
+    /// the mesh-size fallback, so coplanar patches with h=0 remain unshifted.
+    void SetMeshPatchCenterOffsetBeta(float beta);
+    /// @brief Set the multiplier on the CoM normal distance for automatic centers (default 0.8).
+    /// @details Before Initialize() only. In d = alpha*max(gamma*h, beta*L), gamma scales only h, not the
+    /// mesh-size fallback. See SetMeshPatchCenterOffsetAlpha for geometry, scope and limitations.
+    /// @param gamma Finite, non-negative scale. Zero leaves only the beta*L contribution before alpha scaling.
+    void SetMeshPatchCenterOffsetGamma(float gamma);
+
     /// @brief Used to force the solver to error out when there are too many spheres in a bin. A huge number can be used
     /// to discourage this error type.
     /// @param max_sph Max number of spheres in a bin.
@@ -871,8 +894,9 @@ class DEMSolver {
     /// Device-input counterparts of the local node setters. Supply one float3 per mesh node, in original order.
     /// Calls are synchronous; finish producing source on its CUDA stream before calling. Topology is fixed.
     /// validate=false skips pointer/finite-value checks. update_patch_centers refreshes automatic centers only:
-    /// one patch uses the local origin, multiple patches average triangle centroids. Explicit centers are preserved.
-    /// Device updates lazily synchronize CPU geometry through GetCachedMesh, tracker getters, or solver output.
+    /// one patch uses the local origin, multiple patches use inward-offset centroid averages. Explicit centers are
+    /// preserved. Device updates lazily synchronize CPU geometry through GetCachedMesh, tracker getters, or solver
+    /// output.
     void SetTriNodeRelPosFromDevice(bodyID_t owner,
                                     const float3* source,
                                     int source_device,

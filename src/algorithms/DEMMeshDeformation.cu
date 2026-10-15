@@ -52,15 +52,54 @@ __global__ void scatterVertices(const float3* vertices,
     node3[i] = vertices[f.z];
 }
 
-// One block reduces each patch's fixed triangle list. Strided loads keep large patches parallel without atomics;
-// the fixed reduction tree makes repeated updates deterministic.
+// A single strided reduction computes whole-mesh bounds once, rather than rescanning the mesh per patch.
+// The persistent output scalar and same-stream ordering avoid allocations and host synchronization per refresh.
+__global__ void meshDiagonal(const float3* vertices, size_t count, double* diagonal) {
+    __shared__ double bounds[6][MESH_DEFORMATION_BLOCK];
+    const unsigned int lane = threadIdx.x;
+    double lo[3] = {INFINITY, INFINITY, INFINITY}, hi[3] = {-INFINITY, -INFINITY, -INFINITY};
+    for (size_t i = lane; i < count; i += blockDim.x) {
+        const double xyz[3] = {vertices[i].x, vertices[i].y, vertices[i].z};
+        for (int k = 0; k < 3; ++k) {
+            lo[k] = fmin(lo[k], xyz[k]);
+            hi[k] = fmax(hi[k], xyz[k]);
+        }
+    }
+    for (int k = 0; k < 3; ++k) {
+        bounds[k][lane] = lo[k];
+        bounds[k + 3][lane] = hi[k];
+    }
+    __syncthreads();
+    for (unsigned int stride = MESH_DEFORMATION_BLOCK / 2; stride; stride /= 2) {
+        if (lane < stride)
+            for (int k = 0; k < 3; ++k) {
+                bounds[k][lane] = fmin(bounds[k][lane], bounds[k][lane + stride]);
+                bounds[k + 3][lane] = fmax(bounds[k + 3][lane], bounds[k + 3][lane + stride]);
+            }
+        __syncthreads();
+    }
+    if (lane == 0) {
+        double squared = 0;
+        if (count)
+            for (int k = 0; k < 3; ++k) {
+                const double extent = bounds[k + 3][0] - bounds[k][0];
+                squared += extent * extent;
+            }
+        *diagonal = sqrt(squared);
+    }
+}
+
+// One block reduces each patch's fixed triangle list. The fixed tree is deterministic and avoids atomics.
+// The shared helper documents the geometry assumptions and is also used for CPU initialization.
 __global__ void patchCenters(const size_t* offsets,
                              const size_t* triangles,
                              size_t patches,
                              const float3* node1,
                              const float3* node2,
                              const float3* node3,
-                             float3* centers) {
+                             float3* centers,
+                             const double* diagonal,
+                             MeshPatchCenterOptions options) {
     const size_t p = blockIdx.x;
     const unsigned int lane = threadIdx.x;
     const size_t count = offsets[p + 1] - offsets[p];
@@ -69,28 +108,25 @@ __global__ void patchCenters(const size_t* offsets,
             centers[p] = make_float3(0, 0, 0);
         return;
     }
-    __shared__ double sums[3][MESH_DEFORMATION_BLOCK];
-    double x = 0, y = 0, z = 0;
+    __shared__ double sums[7][MESH_DEFORMATION_BLOCK];
+    double local[7] = {};
     for (size_t j = offsets[p] + lane; j < offsets[p + 1]; j += blockDim.x) {
         const size_t t = triangles[j];
-        x += ((double)node1[t].x + node2[t].x + node3[t].x) / 3.;
-        y += ((double)node1[t].y + node2[t].y + node3[t].y) / 3.;
-        z += ((double)node1[t].z + node2[t].z + node3[t].z) / 3.;
+        AccumulatePatchTriangle(local, node1[t], node2[t], node3[t]);
     }
-    sums[0][lane] = x;
-    sums[1][lane] = y;
-    sums[2][lane] = z;
+    for (int k = 0; k < 7; ++k)
+        sums[k][lane] = local[k];
     __syncthreads();
-    for (unsigned int stride = MESH_DEFORMATION_BLOCK / 2; stride > 0; stride /= 2) {
-        if (lane < stride) {
-            sums[0][lane] += sums[0][lane + stride];
-            sums[1][lane] += sums[1][lane + stride];
-            sums[2][lane] += sums[2][lane + stride];
-        }
+    for (unsigned int stride = MESH_DEFORMATION_BLOCK / 2; stride; stride /= 2) {
+        if (lane < stride)
+            for (int k = 0; k < 7; ++k)
+                sums[k][lane] += sums[k][lane + stride];
         __syncthreads();
     }
     if (lane == 0) {
-        centers[p] = make_float3((float)(sums[0][0] / count), (float)(sums[1][0] / count), (float)(sums[2][0] / count));
+        for (int k = 0; k < 7; ++k)
+            local[k] = sums[k][0];
+        centers[p] = FinishPatchCenter(local, count, *diagonal, options);
     }
 }
 }  // namespace
@@ -136,10 +172,18 @@ void RefreshMeshPatchCenters(const size_t* offsets,
                              const float3* node2,
                              const float3* node3,
                              float3* centers,
+                             const float3* vertices,
+                             size_t vertex_count,
+                             double* diagonal,
+                             MeshPatchCenterOptions options,
                              cudaStream_t stream) {
+    if (patches > 1) {
+        meshDiagonal<<<1, MESH_DEFORMATION_BLOCK, 0, stream>>>(vertices, vertex_count, diagonal);
+        DEME_GPU_CALL(cudaGetLastError());
+    }
     if (patches) {
         patchCenters<<<patches, MESH_DEFORMATION_BLOCK, 0, stream>>>(offsets, triangles, patches, node1, node2, node3,
-                                                                     centers);
+                                                                     centers, diagonal, options);
         DEME_GPU_CALL(cudaGetLastError());
     }
 }

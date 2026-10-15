@@ -9,6 +9,7 @@
 #include <stdexcept>
 
 #include "DEM/API.h"
+#include "algorithms/DEMMeshDeformation.h"
 #include "core/utils/CudaDebugSync.hpp"
 
 using namespace deme;
@@ -48,8 +49,50 @@ struct DeviceInput {
 void checkAutomatic(const std::shared_ptr<DEMTracker>& tracker, const std::vector<float3>& expected) {
     auto mesh = tracker->GetMesh();
     compare(mesh->GetCoordsVertices(), expected, "device/host vertex mismatch");
-    compare(mesh->GetPatchLocations(), mesh->ComputePatchLocations(), "automatic GPU patch centers are stale");
+    compare(mesh->GetPatchLocations(), mesh->ComputePatchLocations(0.7f, 0.03f, 1.f),
+            "automatic GPU patch centers are stale");
 }
+// Compare the CUDA reduction to CPU geometry for a patch spanning multiple block strides, opposing normals,
+// and a zero-area patch. Include an unused vertex so both paths must use whole-mesh bounds, not patch bounds.
+void checkCenterReduction(int device) {
+    ScopedCudaDevice scope(device);
+    DEMMesh mesh;
+    mesh.m_vertices = {make_float3(0, 0, 2), make_float3(1, 0, 2), make_float3(0, 1, 2), make_float3(5, 0, 0)};
+    mesh.m_face_v_indices.assign(257, make_int3(0, 1, 2));
+    mesh.m_patch_ids.assign(257, 0);
+    mesh.m_face_v_indices.insert(mesh.m_face_v_indices.end(),
+                                 {make_int3(0, 1, 2), make_int3(0, 2, 1), make_int3(0, 0, 0)});
+    mesh.m_patch_ids.insert(mesh.m_patch_ids.end(), {1, 1, 2});
+    mesh.nTri = mesh.m_face_v_indices.size();
+    mesh.nPatches = 3;
+    DualArray<float3> vertices(mesh.m_vertices), a(mesh.nTri), b(mesh.nTri), c(mesh.nTri), centers(size_t(3));
+    DualArray<size_t> offsets(std::vector<size_t>{0, 257, 259, 260}), triangles(mesh.nTri);
+    DualArray<double> diagonal(size_t(1));
+    for (size_t i = 0; i < mesh.nTri; ++i) {
+        const auto face = mesh.m_face_v_indices[i];
+        a[i] = mesh.m_vertices[face.x];
+        b[i] = mesh.m_vertices[face.y];
+        c[i] = mesh.m_vertices[face.z];
+        triangles[i] = i;
+    }
+    vertices.toDevice();
+    a.toDevice();
+    b.toDevice();
+    c.toDevice();
+    offsets.toDevice();
+    triangles.toDevice();
+    for (MeshPatchCenterOptions options :
+         {MeshPatchCenterOptions{}, {0.f, 0.01f, 0.8f}, {2.f, 0.2f, 0.f}, {0.7f, 0.03f, 1.f}}) {
+        RefreshMeshPatchCenters(offsets.data(), triangles.data(), size_t(3), a.data(), b.data(), c.data(),
+                                centers.data(), vertices.data(), vertices.size(), diagonal.data(), options, nullptr);
+        DEME_GPU_CALL(cudaDeviceSynchronize());
+        centers.toHost();
+        compare(std::vector<float3>(centers.host(), centers.host() + 3),
+                mesh.ComputePatchLocations(options.alpha, options.beta, options.gamma),
+                "CPU/GPU center reduction disagreement");
+    }
+}
+
 // A cube below an upward-facing open plane produces deep back-face triangle pairings. Fresh centers reject these;
 // centers left at the cube's previous local position admit them. The open plane cannot mask that mistake with its
 // own center guard. Compare deformation against loading the target geometry directly, without changing the rule.
@@ -113,12 +156,77 @@ float contactForceAfterDeformation(bool deform, bool refresh) {
 }
 }  // namespace
 
+// A cube resting shallowly on a plane puts each bottom-triangle contact at its old surface centroid.
+// The legacy center guard rejects those valid contacts. Offset centers must keep them while tangential motion
+// across the plane leaves the summed response unchanged. Per-triangle patches exercise the limiting patch size.
+float shallowContactForce(float shift, bool legacy) {
+    DEMSolver solver(1);
+    solver.SetVerbosity("ERROR");
+    if (legacy)
+        solver.SetMeshPatchCenterOffsetAlpha(0);
+    solver.InstructBoxDomainDimension(8, 8, 8);
+    solver.SetGravitationalAcceleration(make_float3(0));
+    solver.SetMeshUniversalContact(true);
+    solver.SetCDUpdateFreq(1);
+    solver.SetInitBinNumTarget(8);
+    solver.SetErrorOutAvgContacts(10000);
+    solver.SetTimeStepSize(1.e-5);
+    solver.DefineContactForceModel("force = make_float3(0.f, 0.f, static_cast<float>(overlapDepth));");
+    auto material = solver.LoadMaterial({{"E", 1.e7}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.4}});
+    auto cube = solver.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/cube.obj").string(), material);
+    cube->Scale(0.2f);
+    cube->SetEachTriangleAsPatch();
+    cube->SetMaterial(material);
+    cube->SetInitPos(make_float3(shift, 0, 0));
+    cube->SetFamily(100);
+    solver.SetFamilyFixed(100);
+    auto tracker = solver.Track(cube);
+    auto plane = solver.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/plane_20by20.obj").string(), material);
+    // One large triangle contains both cube faces' projections completely. A triangulated plane seam would
+    // split the contact polygons and move their centroids away from the cube's patch centers, hiding the bug.
+    plane->m_vertices = {make_float3(-1, -1, 0), make_float3(1, -1, 0), make_float3(0, 1, 0)};
+    plane->m_face_v_indices = {make_int3(0, 1, 2)};
+    plane->nTri = 1;
+    plane->SetPatchIDs({0});
+    plane->SetInitPos(make_float3(0, 0, -0.096f));
+    plane->SetFamily(101);
+    solver.SetFamilyFixed(101);
+    solver.Initialize();
+    solver.SetTriTriPenetration(0.4f);
+    solver.DoDynamicsThenSync(1.e-4);
+    std::vector<float3> points, forces;
+    tracker->GetContactForces(points, forces);
+    float total = 0;
+    for (const auto& force : forces)
+        total += std::abs(force.z);
+    return total;
+}
+
 // Cover shared-node increments, deferred centers, manual policy, lazy readers, and host/device interleaving.
 int main() try {
     // Opt-in diagnostics preserve ordinary asynchronous execution for reproducing timing-sensitive failures.
     deme::SetCudaDebugSyncEnabled(std::getenv("DEME_MESH_DEBUG_SYNC") != nullptr);
     DEMSolver solver(1);
     solver.SetVerbosity("ERROR");
+    // Exercise non-default settings through initialization, every deformation flavor, and later clump insertion.
+    solver.SetMeshPatchCenterOffsetAlpha(0.7f);
+    solver.SetMeshPatchCenterOffsetBeta(0.03f);
+    solver.SetMeshPatchCenterOffsetGamma(1.f);
+    using Setter = void (DEMSolver::*)(float);
+    const Setter setters[] = {&DEMSolver::SetMeshPatchCenterOffsetAlpha, &DEMSolver::SetMeshPatchCenterOffsetBeta,
+                              &DEMSolver::SetMeshPatchCenterOffsetGamma};
+    std::cout << "Negative parameter and coordinate checks intentionally emit ERROR diagnostics.\n";
+    for (auto setter : setters) {
+        for (float invalid : {-1.f, std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN()}) {
+            bool rejected = false;
+            try {
+                (solver.*setter)(invalid);
+            } catch (const std::exception&) {
+                rejected = true;
+            }
+            require(rejected, "invalid solver offset parameter accepted");
+        }
+    }
     solver.InstructBoxDomainDimension(40, 40, 40);
     solver.SetGravitationalAcceleration(make_float3(0));
     solver.SetTimeStepSize(1.e-5);
@@ -127,6 +235,10 @@ int main() try {
     solver.AddClumps(sphere, std::vector<float3>{make_float3(0, 0, 10)});
     auto mesh = solver.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/plane_20by20.obj").string(), material);
     mesh->Scale(0.1f);
+    // Multi-patch automatic centers must use initialization's supplied-normal winding correction too.
+    mesh->UseNormals(true);
+    for (auto& face : mesh->m_face_v_indices)
+        std::swap(face.y, face.z);
     mesh->SetEachTriangleAsPatch();
     mesh->SetMaterial(material);
     mesh->SetFamily(1);
@@ -143,7 +255,18 @@ int main() try {
     single->SetPatchLocations({make_float3(1, 2, 3)});
     auto single_tracker = solver.Track(single);
     solver.Initialize();
+    for (auto setter : setters) {
+        bool rejected = false;
+        try {
+            (solver.*setter)(1.f);
+        } catch (const std::exception&) {
+            rejected = true;
+        }
+        require(rejected, "runtime offset parameter mutation accepted");
+    }
+    checkAutomatic(tracker, mesh->GetCoordsVertices());
     const int device = solver.GetGPUDeviceIDs().front();
+    checkCenterReduction(device);
     const size_t count = mesh->GetNumNodes();
     require(mesh->GetNumPatches() > 1, "test requires multiple triangle patches");
     DeviceInput input(std::max(count, (size_t)mesh->GetNumPatches()), device);
@@ -331,6 +454,13 @@ int main() try {
     require(std::abs(reference_force - refreshed_force) < 1.e-5f, "deformation changed filtered patch forces");
     require(std::abs(stale_force - reference_force) > 1.e-3f,
             "contact regression did not exercise stale-center rejection");
+    const float shallow = shallowContactForce(0.f, false);
+    const float shifted = shallowContactForce(0.2f, false);
+    const float legacy = shallowContactForce(0.f, true);
+    std::cout << "Shallow forces: offset=" << shallow << ", shifted=" << shifted << ", legacy=" << legacy << '\n';
+    require(shallow > 1.e-3f, "offset centers rejected valid shallow contacts");
+    require(std::abs(shallow - shifted) < 1.e-5f, "sliding across the plane changed shallow force");
+    require(legacy < shallow * 0.5f, "shallow regression did not distinguish old center policy");
     std::cout << "PASS: mesh device deformation, center policies, mixed updates, output, and insertion.\n";
     return 0;
 } catch (const std::exception& e) {

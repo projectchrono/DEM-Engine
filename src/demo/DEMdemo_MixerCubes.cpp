@@ -138,7 +138,7 @@ int main() {
     out_dir /= "DemoOutput_MixerCubes";
     create_directory(out_dir);
 
-    float sim_end = 10.0;
+    float sim_end = 5.0;
     unsigned int fps = 20;
     float frame_time = 1.0 / fps;
 

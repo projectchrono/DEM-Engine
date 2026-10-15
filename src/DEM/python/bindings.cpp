@@ -1403,6 +1403,27 @@ enabled. A zero count is a no-op.)doc",
         .def("SetMaxTriTriPenetration", &deme::DEMSolver::SetMaxTriTriPenetration,
              "Set the maximum allowed triangle-triangle penetration used as the margin added in kT contact detection. "
              "This value caps the penetration margin added to prevent excessively large values.")
+        .def("SetMeshPatchCenterOffsetAlpha", &deme::DEMSolver::SetMeshPatchCenterOffsetAlpha,
+             "Before Initialize only. Default 1. Overall scale; zero restores unshifted averages. "
+             "Automatic multi-patch centers use c-d*n, d=alpha*max(gamma*abs(dot(c,n)), beta*L), "
+             "with local CoM at the origin and L the current local mesh bounding-box diagonal. "
+             "Finite non-negative values only. Applies to mesh initialization and deformation refreshes; "
+             "single-patch origins and explicit centers are preserved. Larger offsets admit deeper contacts.",
+             py::arg("alpha"))
+        .def("SetMeshPatchCenterOffsetBeta", &deme::DEMSolver::SetMeshPatchCenterOffsetBeta,
+             "Before Initialize only. Default 0.01. Mesh-size fallback fraction; zero disables the fallback. "
+             "Automatic multi-patch centers use c-d*n, d=alpha*max(gamma*abs(dot(c,n)), beta*L), "
+             "with local CoM at the origin and L the current local mesh bounding-box diagonal. "
+             "Finite non-negative values only. Applies to mesh initialization and deformation refreshes; "
+             "single-patch origins and explicit centers are preserved. Larger offsets admit deeper contacts.",
+             py::arg("beta"))
+        .def("SetMeshPatchCenterOffsetGamma", &deme::DEMSolver::SetMeshPatchCenterOffsetGamma,
+             "Before Initialize only. Default 0.8. CoM normal-distance scale; zero uses only the fallback. "
+             "Automatic multi-patch centers use c-d*n, d=alpha*max(gamma*abs(dot(c,n)), beta*L), "
+             "with local CoM at the origin and L the current local mesh bounding-box diagonal. "
+             "Finite non-negative values only. Applies to mesh initialization and deformation refreshes; "
+             "single-patch origins and explicit centers are preserved. Larger offsets admit deeper contacts.",
+             py::arg("gamma"))
         .def("SetTriTriContactRejectionRatio", &deme::DEMSolver::SetTriTriContactRejectionRatio,
              "Set the ratio threshold for rejecting suspicious tri-tri contacts. A contact is rejected when the "
              "penetration depth exceeds this fraction of the contact-point-to-mesh-center distance for either mesh "
@@ -2417,6 +2438,10 @@ enabled. A zero count is a no-op.)doc",
              "Assign every triangle to its own patch using consecutive patch IDs.")
         .def("GetPatchIDs", &deme::DEMMeshConnected::GetPatchIDs, "Get one patch ID per triangle.")
         .def("GetNumPatches", &deme::DEMMeshConnected::GetNumPatches, "Get the number of mesh patches.")
+        .def("ComputePatchLocations", &deme::DEMMeshConnected::ComputePatchLocations,
+             "Compute automatic local patch centers using explicit offset settings (solver settings are not "
+             "inherited). Single patches return the origin; explicit centers are not modified.",
+             py::arg("alpha") = 1.f, py::arg("beta") = 0.01f, py::arg("gamma") = 0.8f)
         .def("SetPatchLocations", &deme::DEMMeshConnected::SetPatchLocations,
              "Set local patch centers before initialization. Use tracker UpdateMeshPatchLocations at runtime.",
              py::arg("centers"))

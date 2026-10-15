@@ -25,6 +25,7 @@ set(algorithms_interface
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMStaticDeviceSubroutines.h
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMOwnerDataRetrieval.h
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMMeshDeformation.h
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMMeshPatchCenter.h
 )
 
 ### INTERNAL HEADERS ONLY (.h, .hpp, or .cuh) ###

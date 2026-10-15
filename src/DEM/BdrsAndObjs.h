@@ -764,10 +764,17 @@ class DEMMesh : public DEMInitializer {
     bool ArePatchLocationsExplicitlySet() const { return patch_locations_explicitly_set; }
 
     /// @brief Compute patch locations relative to the implicit CoM of the mesh.
-    /// @details For single patch: returns (0,0,0). For multiple patches: returns average of triangle centroids per
-    /// patch.
+    /// @details Single patches return (0,0,0). Multiple patches start at the unweighted mean triangle centroid c,
+    /// then move opposite the area-weighted normal n by alpha*max(gamma*abs(dot(c,n)), beta*L), where L is the
+    /// current local mesh bounding-box diagonal and the implicit CoM is the local origin. Cancelling or degenerate
+    /// normals leave c unchanged. This computes automatic geometry only; it does not overwrite explicit centers.
+    /// @param alpha Overall offset multiplier (default 1); zero restores unshifted averages.
+    /// @param beta Minimum offset as a fraction of L before alpha scaling (default 0.01).
+    /// @param gamma Multiplier on the CoM normal distance (default 0.8).
+    /// All parameters must be finite and non-negative. Pass the solver settings explicitly when previewing custom
+    /// settings; this standalone helper does not inherit settings from a solver.
     /// @return Vector of locations (one per patch).
-    std::vector<float3> ComputePatchLocations() const;
+    std::vector<float3> ComputePatchLocations(float alpha = 1.f, float beta = 0.01f, float gamma = 0.8f) const;
 
     enum class PatchQualityLevel : uint8_t { SAFE = 0, WARN = 1, CRITICAL = 2 };
 
