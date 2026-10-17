@@ -2,8 +2,9 @@ Interactive visualization
 =========================
 
 ``DEMVisualizer`` is a native OpenGL 3.3 simulation inspector with a Dear ImGui
-sidebar and raylib window/input support. It is enabled in ordinary C++ builds
-and Python wheels by default. Existing visualizer calls remain supported.
+sidebar and raylib window/input support. It is optional in ordinary C++ builds
+and included in Python wheels by default. Enable it in a CMake source build with
+``-DDEME_BUILD_VISUALIZER=ON``. Existing visualizer calls remain supported.
 The viewer does not advance simulation time: each call to ``Render``
 synchronously captures and displays the solver state at that moment.
 
@@ -249,7 +250,7 @@ Linux build requirements
 ------------------------
 
 Dear ImGui v1.91.9b is vendored with its MIT license; builds require no additional
-download for the UI. The source build uses raylib's bundled GLFW backend and requires
+download for the UI. When enabled, the source build uses raylib's bundled GLFW backend and requires
 the standard X11 and OpenGL development headers. On Debian or Ubuntu:
 
 .. code-block:: console
@@ -262,11 +263,15 @@ container. At runtime, a graphical display and OpenGL implementation must be
 available. WSL users should run under WSLg or configure ``DISPLAY`` to an X
 server.
 
-The visualizer can be omitted for a headless source build with:
+The visualizer is off by default for ordinary CMake source builds. To enable it:
 
 .. code-block:: console
 
-   cmake -S . -B build -DDEME_BUILD_VISUALIZER=OFF
+   cmake -S . -B build -DDEME_BUILD_VISUALIZER=ON
+
+Existing build directories retain their cached setting. To disable the visualizer
+in a previously configured build, pass ``-DDEME_BUILD_VISUALIZER=OFF`` explicitly.
+Python package builds enable it explicitly through ``pyproject.toml``.
 
 Postprocessing with ParaView
 ----------------------------

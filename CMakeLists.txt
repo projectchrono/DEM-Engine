@@ -79,7 +79,7 @@ endif()
 option(DEME_BUILD_PYTHON "Build Python bindings for DEME" OFF)
 option(DEME_BUILD_DEMOS "Build DEME demos and modular tests" ON)
 option(DEME_BUILD_DOCS "Add the Doxygen and Sphinx documentation target" OFF)
-option(DEME_BUILD_VISUALIZER "Build the native OpenGL/ImGui visualizer" ON)
+option(DEME_BUILD_VISUALIZER "Build the native OpenGL/ImGui visualizer" OFF)
 
 # Find Python and pybind11 if building Python bindings
 if(DEME_BUILD_PYTHON)
