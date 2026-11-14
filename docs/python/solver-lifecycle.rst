@@ -25,6 +25,25 @@ Before initialization:
 Setup methods return native-backed handles. Retain the solver for at least as
 long as any of these handles.
 
+To use synchronized contact detection and dynamics, configure the mode during
+setup:
+
+.. code-block:: python
+
+   solver.SetSynchronizedMode()
+
+This combines ``SetCDUpdateFreq(0)`` and ``DisableAdaptiveUpdateFreq()``. It
+keeps both workers active with zero future drift: each force evaluation uses
+contact pairs computed from the same dynamics state, even within a multi-step
+``DoDynamics()`` call. It does not replace the
+host-side synchronization described below. To enable it after initialization:
+
+.. code-block:: python
+
+   solver.DoDynamicsThenSync(0.0)
+   solver.SetSynchronizedMode()
+   solver.UpdateSimParams()
+
 3. Initialize
 -------------
 

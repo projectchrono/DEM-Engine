@@ -1266,6 +1266,11 @@ enabled. A zero count is a no-op.)doc",
         .def("SetCDUpdateFreq", &deme::DEMSolver::SetCDUpdateFreq,
              "Set the number of dT steps before it waits for a contact-pair update. After initialization, call "
              "UpdateSimParams() for this change to take effect in the workers.")
+        .def("SetSynchronizedMode", &deme::DEMSolver::SetSynchronizedMode,
+             "Configure synchronized contact detection and dynamics with zero future drift. Equivalent to "
+             "SetCDUpdateFreq(0) followed by DisableAdaptiveUpdateFreq(). Both workers remain in use. Call before "
+             "Initialize(), or first synchronize an initialized solver, then call this method and UpdateSimParams(). "
+             "This configures stepping; it does not synchronize outstanding work or replace DoDynamicsThenSync().")
         .def("GetSimTime", &deme::DEMSolver::GetSimTime,
              "Get the simulation time passed since the start of simulation.")
         .def("SetSimTime", &deme::DEMSolver::SetSimTime,

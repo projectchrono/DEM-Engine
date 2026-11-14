@@ -117,6 +117,9 @@ int main() {
     std::cout << "Cube edge length: " << cube_size << " m, mass: " << cube_mass << " kg" << std::endl;
 
     DEMSim.SetTimeStepSize(step_size);
+    // Keep the contact-detection update frequency fixed instead of adapting it during mixing.
+    DEMSim.SetCDUpdateFreq(5);
+    DEMSim.DisableAdaptiveUpdateFreq();
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.SetErrorOutVelocity(40.);
     // Mesh universal contact uses triangle primitives, so let the safety margin follow the measured mesh velocity and

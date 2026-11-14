@@ -380,7 +380,11 @@ void DEMKinematicThread::workerThread() {
                 std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
                 sendToTheirBuffer();
             }
-            pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh.store(true, std::memory_order_release);
+            // Release the buffer lock before publishing. Sharing dT's wait mutex closes the check-to-sleep gap.
+            {
+                std::lock_guard<std::mutex> lock(pSchedSupport->dynamicCanProceed);
+                pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh.store(true, std::memory_order_release);
+            }
             pSchedSupport->schedulingStats.nDynamicUpdates++;
             timers.GetTimer("Send to dT buffer").stop();
 
@@ -429,14 +433,16 @@ void DEMKinematicThread::startThread() {
 }
 
 void DEMKinematicThread::breakWaitingStatus() {
-    // dynamicDone == true and cv_KinematicCanProceed should ensure kT breaks to the outer loop
-    pSchedSupport->dynamicDone = true;
-    // We distrubed kinematicOwned_Cons2ProdBuffer_isFresh and kTShouldReset here, but it matters not, as when
-    // breakWaitingStatus is called, they will always be reset to default soon
-    pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh.store(true, std::memory_order_release);
-    kTShouldReset = true;
-
-    std::lock_guard<std::mutex> lock(pSchedSupport->kinematicCanProceed);
+    // Publish the reset request under kT's wait mutex, including its non-atomic kTShouldReset flag.
+    // The worker reads that flag while holding the same mutex after leaving its predicate loop.
+    {
+        std::lock_guard<std::mutex> lock(pSchedSupport->kinematicCanProceed);
+        // dynamicDone == true and cv_KinematicCanProceed should ensure kT breaks to the outer loop.
+        pSchedSupport->dynamicDone = true;
+        // The synthetic work order and reset flag are cleared after kT acknowledges completion.
+        kTShouldReset = true;
+        pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh.store(true, std::memory_order_release);
+    }
     pSchedSupport->cv_KinematicCanProceed.notify_one();
 }
 

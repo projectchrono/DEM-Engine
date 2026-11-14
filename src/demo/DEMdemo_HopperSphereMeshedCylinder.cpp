@@ -44,7 +44,11 @@ int main(int argc, char* argv[]) {
     // Cylinders collide with spheres, other cylinders, the mesh gate, and analytical bin walls.
     DEMSim.SetMeshUniversalContact(true);
     DEMSim.SetMeshParticlesLowPoly(true);
-    DEMSim.SetErrorOutAvgContacts(80);
+    // In this dense bed of finely tessellated cylinders, velocity-based look-ahead margins can greatly increase
+    // the number of candidate triangle pairs. Force zero drift and disable adaptive update frequency to avoid
+    // that margin growth: dT waits for and consumes contacts computed from its current state before every step.
+    // This trades asynchronous overlap for same-state contact detection throughout settling and discharge.
+    DEMSim.SetSynchronizedMode();
 
     const size_t total_cylinders = smoke_test ? 24 : 5250;
     const size_t total_spheres = smoke_test ? 16 : 3500;
@@ -53,7 +57,7 @@ int main(int argc, char* argv[]) {
     const double density_cylinder = 1128;
     const double radius_sphere = 0.003;
     const double density_sphere = 1592;
-    const float step_size = 5e-6f;
+    const double step_size = 5e-6;
     const double hopper_width = 0.04;
     const double gate_width = 0.1295;
     constexpr unsigned int cylinder_family = 100;
@@ -62,16 +66,18 @@ int main(int argc, char* argv[]) {
     constexpr unsigned int closed_gate_family = 3;
     constexpr unsigned int disabled_gate_family = 4;
 
-    auto mat_flume = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.60}});
-    auto mat_walls = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.60}});
-    auto mat_spheres = DEMSim.LoadMaterial({{"E", 1e6}, {"nu", 0.35}, {"CoR", 0.20}, {"mu", 0.40}, {"Crr", 0.04}});
-    auto mat_cylinders = DEMSim.LoadMaterial({{"E", 1e6}, {"nu", 0.35}, {"CoR", 0.20}, {"mu", 0.30}, {"Crr", 0.03}});
+    const float E = 1e6;
+    const float CoR = 0.3;
+    const float mu = 0.3;
+    auto mat_flume = DEMSim.LoadMaterial({{"E", E}, {"nu", 0.3}, {"CoR", CoR}});
+    auto mat_walls = DEMSim.LoadMaterial({{"E", E}, {"nu", 0.3}, {"CoR", CoR}});
+    auto mat_spheres = DEMSim.LoadMaterial({{"E", E}, {"nu", 0.3}, {"CoR", CoR}, {"mu", mu}});
+    auto mat_cylinders = DEMSim.LoadMaterial({{"E", E}, {"nu", 0.3}, {"CoR", CoR}, {"mu", mu}});
     // Apply the wall/flume contact coefficients to both particle materials.
     for (const auto& wall : {mat_walls, mat_flume}) {
         for (const auto& particle : {mat_spheres, mat_cylinders}) {
-            DEMSim.SetMaterialPropertyPair("CoR", wall, particle, 0.20);
-            DEMSim.SetMaterialPropertyPair("Crr", wall, particle, 0.05);
-            DEMSim.SetMaterialPropertyPair("mu", wall, particle, 0.30);
+            DEMSim.SetMaterialPropertyPair("CoR", wall, particle, CoR);
+            DEMSim.SetMaterialPropertyPair("mu", wall, particle, mu);
         }
     }
 
@@ -109,7 +115,7 @@ int main(int argc, char* argv[]) {
 
     // The template is centered on its principal axes, with its long axis along X.
     // Explicit circular-cylinder mass properties describe the nominal particle dimensions and density.
-    auto cylinder_type = DEMSim.LoadMeshType(GetDEMEDataFile("mesh/cyl_x_r1_h2_8sides.obj"), mat_cylinders, false);
+    auto cylinder_type = DEMSim.LoadMeshType(GetDEMEDataFile("mesh/cyl_x_r1_h2_32sides.obj"), mat_cylinders, false);
     cylinder_type->Scale(make_float3(cylinder_length / 2, radius_cylinder, radius_cylinder));
     const float cylinder_mass = PI * radius_cylinder * radius_cylinder * cylinder_length * density_cylinder;
     const float axial_moi = 0.5 * cylinder_mass * radius_cylinder * radius_cylinder;

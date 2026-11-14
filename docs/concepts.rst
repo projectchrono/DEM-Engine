@@ -29,6 +29,36 @@ DEME uses two cooperating workers:
 Their asynchronous handoff is part of the solver's performance model. User code
 should use the public solver API rather than directly synchronizing worker data.
 
+Synchronized mode
+~~~~~~~~~~~~~~~~~
+
+Use ``DEMSolver::SetSynchronizedMode()`` before ``Initialize()`` to configure
+zero future drift and disable adaptive contact-detection update frequency:
+
+.. code-block:: cpp
+
+   DEMSim.SetSynchronizedMode();
+   DEMSim.Initialize();
+
+This is equivalent to ``SetCDUpdateFreq(0)`` followed by
+``DisableAdaptiveUpdateFreq()``. Both workers remain active, but dynamics cannot
+drift ahead of the contact-detection update budget. Before each force evaluation,
+dT waits for and installs the kT contact result
+computed from that same dynamics state. No next-step work order is sent until
+the preceding integration completes. This trades asynchronous overlap for
+synchronized stepping, including across consecutive ``DoDynamics()`` calls.
+
+The collaboration statistic "Average steps contact detection lags behind"
+measures the age of an incoming result when dT consumes it, averaged over valid
+consumptions. It is zero in synchronized mode. "Average steps per dynamic update"
+is an update interval, so it approaches one rather than zero. Startup and
+explicit synchronization can add extra contact-detection work orders.
+
+For an initialized solver, first synchronize with ``DoDynamicsThenSync(0.0)``,
+then call ``SetSynchronizedMode()`` and ``UpdateSimParams()``. The mode setter
+does not itself wait for outstanding work; continue to use
+``DoDynamicsThenSync()`` where host-side synchronization is required.
+
 Owners and members
 ------------------
 

@@ -18,6 +18,7 @@ class ManagerStatistics {
     std::atomic<uint64_t> nDynamicUpdates;
     std::atomic<uint64_t> nKinematicUpdates;
     std::atomic<uint64_t> accumKinematicLagSteps;
+    std::atomic<uint64_t> nContactAgeSamples;  // Valid incoming-result timestamps consumed by dT.
     // std::atomic<uint64_t> nDynamicReceives;
     // std::atomic<uint64_t> nKinematicReceives;
 
@@ -27,6 +28,7 @@ class ManagerStatistics {
         nDynamicUpdates = 0;
         nKinematicUpdates = 0;
         accumKinematicLagSteps = 0;
+        nContactAgeSamples = 0;
         // nDynamicReceives = 0;
         // nKinematicReceives = 0;
     }
@@ -49,6 +51,10 @@ class ThreadManager {
     std::atomic<int64_t> kinematicMaxFutureDrift;       // kT tags this to its produce before shipping
 
     // Single-producer/single-consumer freshness flags and locks for the legacy dT/kT buffer handoff.
+    // Publish true under the receiver's *CanProceed mutex, then notify after unlocking. Atomic flags alone
+    // cannot prevent a lost wakeup between the receiver's predicate check and its condition-variable wait.
+    // Release buffer-access locks before taking wait mutexes; buffer copies stay outside these short sections.
+    // The consumer clears freshness before allowing the next product/order; reset clears it only after kT stops.
     std::atomic<bool> dynamicOwned_Prod2ConsBuffer_isFresh;
     std::atomic<bool> kinematicOwned_Cons2ProdBuffer_isFresh;
     std::mutex dynamicOwnedBuffer_AccessCoordination;

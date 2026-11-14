@@ -6,6 +6,15 @@ exchange, persistent compiled-kernel caching, and interactive visualization.
 The sections below explain when these capabilities are useful and what to
 consider when moving an existing DEME 2 application.
 
+New in 3.1.0: synchronized mode convenience API
+-----------------------------------------------
+
+``DEMSolver.SetSynchronizedMode()`` in Python and
+``DEMSolver::SetSynchronizedMode()`` in C++ combine ``SetCDUpdateFreq(0)`` and
+``DisableAdaptiveUpdateFreq()``. See `Synchronized mode <concepts.rst>`__ for
+setup and runtime usage. Existing calls to the two individual setters remain
+supported.
+
 Mesh particles and aggregated mesh contacts
 -------------------------------------------
 

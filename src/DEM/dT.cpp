@@ -3322,10 +3322,15 @@ inline void DEMDynamicThread::unpack_impl() {
     }
     // dT got the produce, now mark its buffer to be no longer fresh.
     pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh.store(false, std::memory_order_release);
-    // Used for inspecting on average how stale kT's produce is.
+    // Measure incoming-result age separately from the outgoing set's coverage used by the drift regulator.
     const int64_t current_dynamic_stamp = (pSchedSupport->currentStampOfDynamic).load();
     const int64_t previous_contact_prod_stamp = (pSchedSupport->stampLastDynamicUpdateProdDate).load();
-    pSchedSupport->schedulingStats.accumKinematicLagSteps += current_dynamic_stamp - previous_contact_prod_stamp;
+    const int64_t incoming_contact_prod_stamp = pSchedSupport->kinematicIngredProdDateStamp.load();
+    // A leftover result consumed during restart may have an invalid/reset timestamp; do not count it as a sample.
+    if (incoming_contact_prod_stamp >= 0 && current_dynamic_stamp >= incoming_contact_prod_stamp) {
+        pSchedSupport->schedulingStats.accumKinematicLagSteps += current_dynamic_stamp - incoming_contact_prod_stamp;
+        pSchedSupport->schedulingStats.nContactAgeSamples++;
+    }
     if (previous_contact_prod_stamp >= 0 && current_dynamic_stamp >= previous_contact_prod_stamp) {
         // The contact set just replaced had to cover this many dT steps. This is the safest signal for future-drift
         // tuning because it measures the actual two-thread handoff, not just kT's isolated runtime.
@@ -3335,7 +3340,7 @@ inline void DEMDynamicThread::unpack_impl() {
     }
     // dT needs to know how fresh the contact pair info is, and that is determined by when kT received this batch of
     // ingredients.
-    pSchedSupport->stampLastDynamicUpdateProdDate = (pSchedSupport->kinematicIngredProdDateStamp).load();
+    pSchedSupport->stampLastDynamicUpdateProdDate = incoming_contact_prod_stamp;
 
     // If this is a history-based run, then when contacts are received, we need to migrate the contact
     // history info, to match the structure of the new contact array
@@ -3430,19 +3435,65 @@ inline void DEMDynamicThread::ifProduceFreshThenUseItAndSendNewOrder() {
         timers.GetTimer("Send to kT buffer").start();
         // Acquire lock and refresh the work order for the kinematic
         {
-            // Scheduling safety invariant: consuming one kT product and posting the next work order stay coupled. The
-            // future-drift regulator may change the margin command, but it must not defer this send; deferring it lets
-            // dT and kT span multiple unmatched contact arrays and breaks contact-history migration.
+            // In the asynchronous pipeline, consuming a product and posting the next order stay coupled so kT
+            // keeps working. In both modes, never request another result before consuming the previous one:
+            // skipping a result would break the sequential contact-history mapping.
             calibrateParams();
             std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
             sendToTheirBuffer();
         }
-        pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh.store(true, std::memory_order_release);
+        // Publish under the wait mutex so kT cannot miss the notification between checking and sleeping.
+        {
+            std::lock_guard<std::mutex> lock(pSchedSupport->kinematicCanProceed);
+            pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh.store(true, std::memory_order_release);
+        }
         pSchedSupport->schedulingStats.nKinematicUpdates++;
 
         timers.GetTimer("Send to kT buffer").stop();
         // Signal the kinematic that it has data for a new work order
         pSchedSupport->cv_KinematicCanProceed.notify_all();
+    }
+}
+
+// In forced-zero mode, consume every result before requesting another, but request the next result only
+// after integration. Thus no work is outstanding between steps/calls, and contact history remains sequential.
+inline void DEMDynamicThread::ensureSynchronousContacts() {
+    // Startup may already have produced the current result. Consume it without posting a duplicate order.
+    ifProduceFreshThenUseIt();
+    const int64_t current_stamp = pSchedSupport->currentStampOfDynamic.load();
+    if (pSchedSupport->stampLastDynamicUpdateProdDate.load() != current_stamp) {
+        timers.GetTimer("Send to kT buffer").start();
+        calibrateParams();
+        {
+            std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
+            sendToTheirBuffer();
+        }
+        {
+            std::lock_guard<std::mutex> lock(pSchedSupport->kinematicCanProceed);
+            pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh.store(true, std::memory_order_release);
+        }
+        pSchedSupport->schedulingStats.nKinematicUpdates++;
+        timers.GetTimer("Send to kT buffer").stop();
+        pSchedSupport->cv_KinematicCanProceed.notify_all();
+
+        timers.GetTimer("Wait for kT update").start();
+        {
+            std::unique_lock<std::mutex> lock(pSchedSupport->dynamicCanProceed);
+            if (!pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh.load(std::memory_order_acquire)) {
+                pSchedSupport->schedulingStats.nTimesDynamicHeldBack++;
+            }
+            while (!pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh.load(std::memory_order_acquire)) {
+                pSchedSupport->cv_DynamicCanProceed.wait(lock);
+            }
+        }
+        timers.GetTimer("Wait for kT update").stop();
+        timers.GetTimer("Unpack updates from kT").start();
+        unpack_impl();
+        timers.GetTimer("Unpack updates from kT").stop();
+    }
+    // With no velocity-based look-ahead margin, an older candidate list can omit newly formed contacts.
+    if (pSchedSupport->stampLastDynamicUpdateProdDate.load() != current_stamp) {
+        DEME_ERROR("Synchronized contact update does not match the current dynamics timestamp.");
     }
 }
 
@@ -3500,7 +3551,11 @@ void DEMDynamicThread::workerThread() {
                 std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
                 sendToTheirBuffer();
             }
-            pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh.store(true, std::memory_order_release);
+            // Publish under the wait mutex so kT cannot miss the notification between checking and sleeping.
+            {
+                std::lock_guard<std::mutex> lock(pSchedSupport->kinematicCanProceed);
+                pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh.store(true, std::memory_order_release);
+            }
             contactPairArr_isFresh = true;
             pSchedSupport->schedulingStats.nKinematicUpdates++;
             // Signal the kinematic that it has data for a new work order.
@@ -3523,39 +3578,46 @@ void DEMDynamicThread::workerThread() {
         }
 
         for (double cycle = 0.0; cycle < cycleDuration; cycle += (double)(simParams->dyn.h)) {
-            // If the produce is fresh, use it, and then send kT a new work order.
-            // We used to send work order to kT whenever kT unpacks its buffer. This can lead to a situation where dT
-            // sends a new work order and then immediately bails out (user asks it to do something else). A bit later
-            // on, kT will update dT's buffer, and then kT will spot a new work order and work on the new order.
-            // However! If kT finishes this new order before dT comes back, the persistent contact wildcard map will be
-            // off (across 2 kT updates)! So, dT only send new work orders after kT finishes the old order and it
-            // unpacks it.
-            ifProduceFreshThenUseItAndSendNewOrder();
+            if (!solverFlags.isAsync) {
+                // SetCDUpdateFreq(0) plus disabled adaptation must use same-state contacts on every step.
+                ensureSynchronousContacts();
+            } else {
+                // If the produce is fresh, use it, and then send kT a new work order.
+                // We used to send work order to kT whenever kT unpacks its buffer. This can lead to a situation where
+                // dT sends a new work order and then immediately bails out (user asks it to do something else). A bit
+                // later on, kT will update dT's buffer, and then kT will spot a new work order and work on the new
+                // order. However! If kT finishes this new order before dT comes back, the persistent contact wildcard
+                // map will be off (across 2 kT updates)! So, dT only send new work orders after kT finishes the old
+                // order and it unpacks it.
+                ifProduceFreshThenUseItAndSendNewOrder();
 
-            // Check if we need to wait; i.e., if dynamic drifted too much into future, then we must wait a bit before
-            // the next cycle begins
-            if (pSchedSupport->dynamicShouldWait()) {
-                timers.GetTimer("Wait for kT update").start();
-                // Wait for a signal from kT to indicate that kT has caught up
-                std::unique_lock<std::mutex> lock(pSchedSupport->dynamicCanProceed);
-                while (!pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh.load(std::memory_order_acquire)) {
-                    // Loop to avoid spurious wakeups
-                    pSchedSupport->cv_DynamicCanProceed.wait(lock);
+                // Check if we need to wait; i.e., if dynamic drifted too much into future, then we must wait a bit
+                // before the next cycle begins
+                if (pSchedSupport->dynamicShouldWait()) {
+                    timers.GetTimer("Wait for kT update").start();
+                    // Wait for a signal from kT to indicate that kT has caught up
+                    std::unique_lock<std::mutex> lock(pSchedSupport->dynamicCanProceed);
+                    // kT publishes freshness under this same mutex. A late result either skips the wait or wakes
+                    // it after wait atomically releases the mutex; no extra consume/send is needed here.
+                    // Loop to avoid spurious wakeups.
+                    while (!pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh.load(std::memory_order_acquire)) {
+                        pSchedSupport->cv_DynamicCanProceed.wait(lock);
+                    }
+                    pSchedSupport->schedulingStats.nTimesDynamicHeldBack++;
+                    // If dT waits, it is penalized, since waiting means double-wait, very bad.
+                    if (solverFlags.autoUpdateFreq) {
+                        *perhapsIdealFutureDrift = futureDriftRegulator.BumpAfterWait(
+                            *perhapsIdealFutureDrift, solverFlags.upperBoundFutureDrift, FUTURE_DRIFT_TWEAK_STEP_SIZE);
+                    }
+                    timers.GetTimer("Wait for kT update").stop();
                 }
-                pSchedSupport->schedulingStats.nTimesDynamicHeldBack++;
-                // If dT waits, it is penalized, since waiting means double-wait, very bad.
-                if (solverFlags.autoUpdateFreq) {
-                    *perhapsIdealFutureDrift = futureDriftRegulator.BumpAfterWait(
-                        *perhapsIdealFutureDrift, solverFlags.upperBoundFutureDrift, FUTURE_DRIFT_TWEAK_STEP_SIZE);
-                }
-                timers.GetTimer("Wait for kT update").stop();
+                // NOTE: This ShouldWait check should follow the ifProduceFreshThenUseItAndSendNewOrder call. Because we
+                // need to avoid a scenario where dT is waiting here, and kT is also chilling waiting for an update. But
+                // with this ShouldWait check being here, if dynamicOwned_Prod2ConsBuffer_isFresh is true so
+                // ifProduceFreshThenUseItAndSendNewOrder is executed, then kT is is working for us, no worry; if
+                // dynamicOwned_Prod2ConsBuffer_isFresh is false so ifProduceFreshThenUseItAndSendNewOrder didn't run,
+                // then kT has to be in the process of doing a CD, we still will not be locked here.
             }
-            // NOTE: This ShouldWait check should follow the ifProduceFreshThenUseItAndSendNewOrder call. Because we
-            // need to avoid a scenario where dT is waiting here, and kT is also chilling waiting for an update. But
-            // with this ShouldWait check being here, if dynamicOwned_Prod2ConsBuffer_isFresh is true so
-            // ifProduceFreshThenUseItAndSendNewOrder is executed, then kT is is working for us, no worry; if
-            // dynamicOwned_Prod2ConsBuffer_isFresh is false so ifProduceFreshThenUseItAndSendNewOrder didn't run, then
-            // kT has to be in the process of doing a CD, we still will not be locked here.
 
             // If using variable ts size, only when a step is accepted can we move on
             bool step_accepted = false;

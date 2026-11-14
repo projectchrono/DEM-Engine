@@ -922,6 +922,8 @@ class DEMDynamicThread {
     inline void ifProduceFreshThenUseItAndSendNewOrder();
     inline void ifProduceFreshThenUseIt();
     inline void unpack_impl();
+    // Install same-state contact pairs before force evaluation when future drift is forced to zero.
+    inline void ensureSynchronousContacts();
 
     // Change sim params based on dT's experience, if needed
     inline void calibrateParams();

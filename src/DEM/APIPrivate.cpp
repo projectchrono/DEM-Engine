@@ -1224,9 +1224,8 @@ void DEMSolver::setSolverParams() {
     dT->solverFlags.useMassJitify = jitify_mass_moi;
     kT->solverFlags.useClumpJitify = jitify_clump_templates;
 
-    // Tell kT and dT if and how this run is async.
-    // Note this code doesn't really have async play, since dT is ahead of kT for at least one ts, unless all the user
-    // uses is DoDynamicsThenSync.
+    // Forced zero drift uses same-state contact detection before every force evaluation. Adaptive updates and
+    // nonzero fixed drift retain the asynchronous pipeline.
     kT->solverFlags.isAsync = !((m_suggestedFutureDrift == 0) && !auto_adjust_update_freq);
     dT->solverFlags.isAsync = !((m_suggestedFutureDrift == 0) && !auto_adjust_update_freq);
     // Ideal max drift in solverFlags may not be up-to-date, and only represents what the solver thinks it ought to be.

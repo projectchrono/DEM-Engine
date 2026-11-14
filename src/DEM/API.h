@@ -123,6 +123,16 @@ class DEMSolver {
             DisableAdaptiveUpdateFreq();
         }
     }
+    /// @brief Configure synchronized contact detection and dynamics with zero future drift.
+    /// @details Equivalent to SetCDUpdateFreq(0) followed by DisableAdaptiveUpdateFreq(). Both workers remain in
+    /// use. This configures their stepping policy; it does not synchronize outstanding work or replace
+    /// DoDynamicsThenSync() when host-side synchronization is needed.
+    /// @note Call before Initialize(). To change an initialized solver, first reach a synchronized stance, then
+    /// call this method and UpdateSimParams() to apply the settings to the workers.
+    void SetSynchronizedMode() {
+        SetCDUpdateFreq(0);
+        DisableAdaptiveUpdateFreq();
+    }
     /// Get the simulation time passed since the start of simulation.
     double GetSimTime() const;
     /// Set the simulation time manually.

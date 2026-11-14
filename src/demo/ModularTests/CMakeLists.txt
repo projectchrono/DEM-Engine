@@ -11,6 +11,7 @@ SET(LIBRARIES
 # ------------------------------------------------------------------------------
 
 SET(MODULAR_TESTS
+		DEMTest_ThreadHandoff
 		DEMTest_StateFinite
 		DEMTest_AdaptiveTimestep
 		DEMTest_AnalyticalCone

@@ -2112,6 +2112,33 @@ DEMSolver
       Declare that all meshed particles have a low polygon count (e.g. box, tetrahedron). When enabled, the per-triangle maxTriTriPenetration array is neither computed, transferred to kT, nor used to inflate contact-detection margins, saving compute time. Toggle this on only when you are confident that no triangle from one mesh will ever be completely submerged inside another mesh.
 
 
+.. py:method:: DEMSolver.SetMeshPatchCenterOffsetAlpha
+
+   .. code-block:: text
+
+      SetMeshPatchCenterOffsetAlpha(self: deme._deme.DEMSolver, alpha: typing.SupportsFloat | typing.SupportsIndex) -> None
+
+      Before Initialize only. Default 1. Overall scale; zero restores unshifted averages. Automatic multi-patch centers use c-d*n, d=alpha*max(gamma*abs(dot(c,n)), beta*L), with local CoM at the origin and L the current local mesh bounding-box diagonal. Finite non-negative values only. Applies to mesh initialization and deformation refreshes; single-patch origins and explicit centers are preserved. Larger offsets admit deeper contacts.
+
+
+.. py:method:: DEMSolver.SetMeshPatchCenterOffsetBeta
+
+   .. code-block:: text
+
+      SetMeshPatchCenterOffsetBeta(self: deme._deme.DEMSolver, beta: typing.SupportsFloat | typing.SupportsIndex) -> None
+
+      Before Initialize only. Default 0.01. Mesh-size fallback fraction; zero disables the fallback. Automatic multi-patch centers use c-d*n, d=alpha*max(gamma*abs(dot(c,n)), beta*L), with local CoM at the origin and L the current local mesh bounding-box diagonal. Finite non-negative values only. Applies to mesh initialization and deformation refreshes; single-patch origins and explicit centers are preserved. Larger offsets admit deeper contacts.
+
+
+.. py:method:: DEMSolver.SetMeshPatchCenterOffsetGamma
+
+   .. code-block:: text
+
+      SetMeshPatchCenterOffsetGamma(self: deme._deme.DEMSolver, gamma: typing.SupportsFloat | typing.SupportsIndex) -> None
+
+      Before Initialize only. Default 0.8. CoM normal-distance scale; zero uses only the fallback. Automatic multi-patch centers use c-d*n, d=alpha*max(gamma*abs(dot(c,n)), beta*L), with local CoM at the origin and L the current local mesh bounding-box diagonal. Finite non-negative values only. Applies to mesh initialization and deformation refreshes; single-patch origins and explicit centers are preserved. Larger offsets admit deeper contacts.
+
+
 .. py:method:: DEMSolver.SetMeshPatchLocations
 
    .. code-block:: text
@@ -2350,6 +2377,15 @@ DEMSolver
       SetStablePatchIslandIDs(self: deme._deme.DEMSolver, use: bool = True) -> None
 
       Stabilize flooded patch-island IDs across contact-detection steps.
+
+
+.. py:method:: DEMSolver.SetSynchronizedMode
+
+   .. code-block:: text
+
+      SetSynchronizedMode(self: deme._deme.DEMSolver) -> None
+
+      Configure synchronized contact detection and dynamics with zero future drift. Equivalent to SetCDUpdateFreq(0) followed by DisableAdaptiveUpdateFreq(). Both workers remain in use. Call before Initialize(), or first synchronize an initialized solver, then call this method and UpdateSimParams(). This configures stepping; it does not synchronize outstanding work or replace DoDynamicsThenSync().
 
 
 .. py:method:: DEMSolver.SetTimeStepSize
@@ -4114,6 +4150,15 @@ DEMMesh
       ClearWildcards(self: deme._deme.DEMMesh) -> None
 
       Remove cached triangle wildcard values.
+
+
+.. py:method:: DEMMesh.ComputePatchLocations
+
+   .. code-block:: text
+
+      ComputePatchLocations(self: deme._deme.DEMMesh, alpha: typing.SupportsFloat | typing.SupportsIndex = 1.0, beta: typing.SupportsFloat | typing.SupportsIndex = 0.009999999776482582, gamma: typing.SupportsFloat | typing.SupportsIndex = 0.800000011920929) -> list[float3]
+
+      Compute automatic local patch centers using explicit offset settings (solver settings are not inherited). Single patches return the origin; explicit centers are not modified.
 
 
 .. py:method:: DEMMesh.DisableShell

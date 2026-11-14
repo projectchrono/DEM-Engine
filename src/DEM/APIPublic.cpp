@@ -4567,9 +4567,13 @@ void DEMSolver::ShowThreadCollaborationStats() {
         // The numerator is not currentStampOfDynamic since it got cleared when the user syncs.
         DEME_PRINTF("Average steps per dynamic update: %.7g\n",
                     (double)(dT->nTotalSteps) / (dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load());
-        DEME_PRINTF("Average steps contact detection lags behind: %.7g\n",
-                    (double)(dTkT_InteractionManager->schedulingStats.accumKinematicLagSteps).load() /
-                        (dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load());
+    }
+    const auto contact_age_samples = dTkT_InteractionManager->schedulingStats.nContactAgeSamples.load();
+    if (contact_age_samples > 0) {
+        // Match numerator and denominator at consumption, excluding invalid timestamps during reset.
+        DEME_PRINTF(
+            "Average steps contact detection lags behind: %.7g\n",
+            (double)dTkT_InteractionManager->schedulingStats.accumKinematicLagSteps.load() / contact_age_samples);
     }
     // DEME_PRINTF("Number of times dynamic loads buffer: %zu\n",
     //                 (dTkT_InteractionManager->schedulingStats.nDynamicReceives).load());
@@ -4602,6 +4606,7 @@ void DEMSolver::ClearThreadCollaborationStats() {
     dTkT_InteractionManager->schedulingStats.nTimesDynamicHeldBack = 0;
     dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack = 0;
     dTkT_InteractionManager->schedulingStats.accumKinematicLagSteps = 0;
+    dTkT_InteractionManager->schedulingStats.nContactAgeSamples = 0;
     dT->nTotalSteps = 0;
 }
 
