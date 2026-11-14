@@ -9,7 +9,14 @@ or [Python quickstart](python/quickstart.rst). Maintainers can find
 [hosting options](developer/hosting.rst) and [wheel packaging](developer/packaging.rst)
 in the developer guide.
 
-## Building and previewing
+## Building and publishing documentation
+
+The [documentation index](index.rst) collects the guide sources. The online site
+is currently hosted by the Ruochun fork. GitHub Actions rebuilds and publishes
+it on pushes to the branch selected by that repository's `DOCS_PUBLISH_BRANCH`
+variable. See [Hosting](developer/hosting.rst) for setup and switching publication
+to `main`. The C++ reference is generated from headers; the Python reference must
+be regenerated and committed when bindings change.
 
 The documentation site combines:
 

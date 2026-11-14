@@ -98,12 +98,8 @@ hopper flow, soil penetration, wheel–terrain interaction, and granular impact.
 | Build or host the documentation website | [Build and preview](docs/README.md) · [Hosting](docs/developer/hosting.rst) |
 | Contribute or cite DEME | [Project information](docs/project.rst) · [Architecture](docs/developer/architecture.rst) |
 
-The [documentation index](docs/index.rst) collects the guide sources. The linked
-site is currently hosted by the Ruochun fork. GitHub Actions rebuilds and publishes
-it on pushes to the branch selected by that repository's `DOCS_PUBLISH_BRANCH`
-variable. See [Hosting](docs/developer/hosting.rst) for setup
-and switching publication to `main`. The C++ reference is generated from headers;
-the Python reference must be regenerated and committed when bindings change.
+For instructions on building, updating, and publishing the documentation, see
+the [documentation README](docs/README.md).
 
 ## Python in brief
 
