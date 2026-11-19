@@ -939,20 +939,101 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
             DEME_DEBUG_PRINTF("Loaded a batch of %zu clumps.", a_batch->GetNumClumps());
             DEME_DEBUG_PRINTF("This batch has %zu spheres.", a_batch->GetNumSpheres());
 
-            // Write the extra contact pairs to memory
-            for (size_t jj = 0; jj < a_batch->GetNumContacts(); jj++) {
-                const auto& idPair = a_batch->contact_pairs.at(jj);
-                // idPair.first + n_processed_sp_comp can take into account the sphere components that have been loaded
-                // in previous batches, makes this loading process scalable.
-                idPatchA[cnt_arr_offset] = idPair.first + n_processed_sp_comp + nExistSpheres;
-                idPatchB[cnt_arr_offset] = idPair.second + n_processed_sp_comp + nExistSpheres;
-                contactTypePatch[cnt_arr_offset] = SPHERE_SPHERE_CONTACT;  // Only sph--sph cnt for now
-                unsigned int w_num = 0;
-                for (const auto& w_name : m_contact_wildcard_names) {
-                    (*contactWildcards[w_num])[cnt_arr_offset] = a_batch->contact_wildcards.at(w_name).at(jj);
-                    w_num++;
+            // Write the extra contact pairs to memory.
+            // Pairs may be SS, SA (sphere-analytical) or SM (sphere-mesh); without SetExistingContactTypes all are SS.
+            // kT matches history per contact type, by binary search over the previous (A, B, island) segment, and
+            // derives the per-type segments with a run-length encoding of contactTypePatch. So the loaded contacts
+            // must be contiguous per type, ascending in type code, and sorted by (A, B) within a type. We sort here
+            // instead of trusting the caller's order.
+            if (a_batch->GetNumContacts() > 0) {
+                const size_t nCnt = a_batch->GetNumContacts();
+                const bool typed = !a_batch->contact_types.empty();
+                if (typed && a_batch->contact_types.size() != nCnt) {
+                    DEME_ERROR("Restart contact types (%zu) do not match the number of contact pairs (%zu).",
+                               a_batch->contact_types.size(), nCnt);
                 }
-                cnt_arr_offset++;
+                if (!solverFlags.useSimplePatchCombination) {
+                    // kT's simple patch route labels every patch contact with island 0 and matches history on
+                    // (A, B, island); the flooded-island route has no such stable label to restore.
+                    DEME_ERROR("Restart contact loading is only supported with simple patch combination.");
+                }
+                std::vector<contact_t> loadTypes(nCnt, SPHERE_SPHERE_CONTACT);
+                std::vector<bodyID_t> loadA(nCnt), loadB(nCnt);
+                bool anyNonSS = false;
+                for (size_t jj = 0; jj < nCnt; jj++) {
+                    const auto& idPair = a_batch->contact_pairs.at(jj);
+                    if (typed) {
+                        const std::string& t = a_batch->contact_types.at(jj);
+                        if (t == OUTPUT_FILE_SPH_ANAL_CONTACT_NAME) {
+                            loadTypes[jj] = SPHERE_ANALYTICAL_CONTACT;
+                        } else if (t == OUTPUT_FILE_SPH_MESH_CONTACT_NAME) {
+                            loadTypes[jj] = SPHERE_TRIANGLE_CONTACT;
+                        } else if (t != OUTPUT_FILE_SPH_SPH_CONTACT_NAME) {
+                            DEME_ERROR("Restart contact type %s is not supported (SS, SA, SM only).", t.c_str());
+                        }
+                    }
+                    // idPair.first + n_processed_sp_comp can take into account the sphere components that have been
+                    // loaded in previous batches, makes this loading process scalable.
+                    loadA[jj] = idPair.first + n_processed_sp_comp + nExistSpheres;
+                    if (loadTypes[jj] == SPHERE_SPHERE_CONTACT) {
+                        loadB[jj] = idPair.second + n_processed_sp_comp + nExistSpheres;
+                    } else {
+                        anyNonSS = true;
+                        // Global IDs: SA -> analytical component, SM -> mesh patch (both are patch IDs in kT).
+                        const size_t bound = (loadTypes[jj] == SPHERE_ANALYTICAL_CONTACT)
+                                                 ? (size_t)simParams->nAnalGM
+                                                 : (size_t)simParams->nMeshPatches;
+                        if ((size_t)idPair.second >= bound) {
+                            DEME_ERROR(
+                                "Restart %s contact references geometry %zu, but only %zu exist. Add the "
+                                "same analytical objects and meshes, in the same order, as the saved run.",
+                                a_batch->contact_types.at(jj).c_str(), (size_t)idPair.second, bound);
+                        }
+                        loadB[jj] = idPair.second;
+                    }
+                }
+                if (anyNonSS && (cnt_arr_offset != 0 || nTotalClumpsThisCall != 0)) {
+                    // Contacts already in the arrays (or loaded from an earlier batch) would split a type segment.
+                    DEME_ERROR(
+                        "Typed (SA/SM) restart contacts must be loaded by the first clump batch of a fresh "
+                        "simulation.");
+                }
+                std::vector<size_t> order(nCnt);
+                for (size_t jj = 0; jj < nCnt; jj++) {
+                    order[jj] = jj;
+                }
+                std::stable_sort(order.begin(), order.end(), [&](size_t x, size_t y) {
+                    if (loadTypes[x] != loadTypes[y]) {
+                        return loadTypes[x] < loadTypes[y];
+                    }
+                    if (loadA[x] != loadA[y]) {
+                        return loadA[x] < loadA[y];
+                    }
+                    return loadB[x] < loadB[y];
+                });
+                for (size_t r = 1; r < nCnt; r++) {
+                    const size_t x = order[r - 1], y = order[r];
+                    if (loadTypes[x] == loadTypes[y] && loadA[x] == loadA[y] && loadB[x] == loadB[y]) {
+                        DEME_ERROR("Duplicate restart contact (type %u, A %zu, B %zu).", (unsigned int)loadTypes[x],
+                                   (size_t)loadA[x], (size_t)loadB[x]);
+                    }
+                }
+                for (size_t r = 0; r < nCnt; r++) {
+                    const size_t jj = order[r];
+                    idPatchA[cnt_arr_offset] = loadA[jj];
+                    idPatchB[cnt_arr_offset] = loadB[jj];
+                    contactTypePatch[cnt_arr_offset] = loadTypes[jj];
+                    // Matches the label kT's simple patch route gives every contact. Leaving the resize default
+                    // (NULL_BODYID) here made every loaded pair miss its history match on the first contact detection,
+                    // which silently zeroed the loaded wildcards.
+                    contactPatchIsland[cnt_arr_offset] = 0;
+                    unsigned int w_num = 0;
+                    for (const auto& w_name : m_contact_wildcard_names) {
+                        (*contactWildcards[w_num])[cnt_arr_offset] = a_batch->contact_wildcards.at(w_name).at(jj);
+                        w_num++;
+                    }
+                    cnt_arr_offset++;
+                }
             }
 
             // Make ready for the next batch...

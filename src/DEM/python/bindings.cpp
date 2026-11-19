@@ -2327,8 +2327,14 @@ enabled. A zero count is a no-op.)doc",
         .def("SetFamily", &deme::DEMClumpBatch::SetFamily, "Set the same family number for every clump.",
              py::arg("family"))
         .def("SetExistingContacts", &deme::DEMClumpBatch::SetExistingContacts,
-             "Supply sphere-sphere contact owner-ID pairs relative to this batch when restoring a simulation.",
+             "Supply sphere-sphere contact owner-ID pairs relative to this batch when restoring a simulation. Call "
+             "``SetExistingContactTypes`` afterwards to also restore sphere-analytical or sphere-mesh pairs.",
              py::arg("pairs"))
+        .def("SetExistingContactTypes", &deme::DEMClumpBatch::SetExistingContactTypes,
+             "Supply one contact type (``SS``, ``SA`` or ``SM``) per pair after ``SetExistingContacts``. For ``SA`` "
+             "and ``SM`` the second ID is the global analytical component or mesh patch ID, as reported in ``BGeo`` "
+             "by ``GetContactDetailedInfo``. Without it, all pairs are treated as sphere-sphere.",
+             py::arg("types"))
         .def("SetExistingContactWildcards", &deme::DEMClumpBatch::SetExistingContactWildcards,
              "Supply named restart wildcard arrays after ``SetExistingContacts``. Every array must match the "
              "pre-existing contact count.",

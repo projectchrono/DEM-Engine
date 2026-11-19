@@ -889,9 +889,14 @@ class DEMClumpBatch : public DEMInitializer {
     std::vector<float3> xyz;
     std::vector<float4> oriQ;
     // Existing contact/contact wildcard info. If it is a new simulation, they should be empty; but if it is a restarted
-    // one, it can have some existing contacts/wildcards. Note that all of them are "SS" type of contact. The contact
+    // one, it can have some existing contacts/wildcards. By default all of them are "SS" type of contact. The contact
     // pair IDs are relative to this batch (starting from 0, up to num of this batch - 1, that is).
     std::vector<std::pair<bodyID_t, bodyID_t>> contact_pairs;
+    // Optional per-pair contact type ("SS", "SA" or "SM"), set by SetExistingContactTypes. Empty means every pair is
+    // SS. For SS both IDs are sphere IDs relative to this batch. For SA and SM the first ID is a sphere ID relative to
+    // this batch, and the second ID is the global analytical component ID (SA) or the global mesh patch ID (SM),
+    // exactly as reported in BGeo by GetContactDetailedInfo.
+    std::vector<std::string> contact_types;
     std::unordered_map<std::string, std::vector<float>> contact_wildcards;
     // Initial owner wildcard that this batch of clumps should have
     std::unordered_map<std::string, std::vector<float>> owner_wildcards;
@@ -1012,6 +1017,22 @@ class DEMClumpBatch : public DEMInitializer {
     void SetExistingContacts(const std::vector<std::pair<bodyID_t, bodyID_t>>& pairs) {
         contact_pairs = pairs;
         nExistContacts = pairs.size();
+        contact_types.clear();
+    }
+    // Supply the contact type of each pair given to SetExistingContacts, so sphere-analytical and sphere-mesh contact
+    // histories can be restored too. Must be called after SetExistingContacts, which clears any previous types.
+    void SetExistingContactTypes(const std::vector<std::string>& types) {
+        if (types.size() != nExistContacts) {
+            DEME_ERROR("SetExistingContactTypes needs one type per existing contact pair (%zu given, %zu pairs).",
+                       types.size(), nExistContacts);
+        }
+        for (const auto& t : types) {
+            if (t != OUTPUT_FILE_SPH_SPH_CONTACT_NAME && t != OUTPUT_FILE_SPH_ANAL_CONTACT_NAME &&
+                t != OUTPUT_FILE_SPH_MESH_CONTACT_NAME) {
+                DEME_ERROR("SetExistingContactTypes supports only SS, SA and SM contacts, got %s.", t.c_str());
+            }
+        }
+        contact_types = types;
     }
     void SetExistingContactWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
         if (wildcards.begin()->second.size() != nExistContacts) {
