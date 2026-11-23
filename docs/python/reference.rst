@@ -3428,7 +3428,16 @@ DEMClumpBatch
 
       SetExistingContacts(self: deme._deme.DEMClumpBatch, pairs: collections.abc.Sequence[tuple[typing.SupportsInt | typing.SupportsIndex, typing.SupportsInt | typing.SupportsIndex]]) -> None
 
-      Supply sphere-sphere contact owner-ID pairs relative to this batch when restoring a simulation.
+      Supply sphere-sphere contact owner-ID pairs relative to this batch when restoring a simulation. Call ``SetExistingContactTypes`` afterwards to also restore sphere-analytical or sphere-mesh pairs.
+
+
+.. py:method:: DEMClumpBatch.SetExistingContactTypes
+
+   .. code-block:: text
+
+      SetExistingContactTypes(self: deme._deme.DEMClumpBatch, types: collections.abc.Sequence[str]) -> None
+
+      Supply one contact type (``SS``, ``SA`` or ``SM``) per pair after ``SetExistingContacts``. For ``SA`` and ``SM`` the second ID is the global analytical component or mesh patch ID, as reported in ``BGeo`` by ``GetContactDetailedInfo``. Without it, all pairs are treated as sphere-sphere.
 
 
 .. py:method:: DEMClumpBatch.SetExistingContactWildcards
